@@ -1,0 +1,40 @@
+optimization CartPendulum(objective=finalTime, startTime=0, 
+                          finalTime(free=true, min=0.1, max=10))
+
+	parameter Real l = 0.345;
+	parameter Real lact = 0.4;
+	parameter Real g = 9.81;
+	Real p(start=-0.8, fixed=true);
+	Real p_dot(start=0, fixed=true);
+	Real theta(start=0, fixed=true);
+	Real theta_dot(start=0, fixed=true);
+	Real x_p;
+	Real y_p;
+	input Real a_ref_dot(free=true);
+	Real a_ref(start=0, fixed=true);
+equation
+	der(p) = p_dot;
+	der(p_dot) = a_ref;
+	der(theta) = theta_dot;
+	der(theta_dot) = -g/l*sin(theta) + 1/l*cos(theta)*a_ref;
+
+	x_p = p - lact*sin(theta);
+	y_p = -lact*cos(theta);
+
+	der(a_ref) = a_ref_dot;
+constraint
+	p(finalTime) = 0;
+	p_dot(finalTime) = 0;
+	theta(finalTime) = 0;
+	theta_dot(finalTime) = 0;
+
+	p <= 0.1;
+	p >= -0.9;
+
+	a_ref >= -5;
+	a_ref <= 5;
+	a_ref_dot >= -100;
+	a_ref_dot <= 100;
+
+	((x_p+0.3)/0.05)^2 + ((y_p+0.4)/0.3)^2 >= 1;
+end CartPendulum;

@@ -1,0 +1,694 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<chapter version="5.0" xml:id="ch_models"
+         xmlns="http://docbook.org/ns/docbook"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns:xs="http://www.w3.org/2001/XMLSchema"
+         xmlns:xlink="http://www.w3.org/1999/xlink"
+         xmlns:xi="http://www.w3.org/2001/XInclude"
+         xmlns:svg="http://www.w3.org/2000/svg"
+         xmlns:m="http://www.w3.org/1998/Math/MathML"
+         xmlns:html="http://www.w3.org/1999/xhtml"
+         xmlns:db="http://docbook.org/ns/docbook">
+  <title>Working with Models in Python</title>
+
+  <section xml:id="models_sec_introduction">
+    <title>Introduction to models</title>
+
+    <para>Modelica and Optimica models can be compiled and loaded as model
+    objects using the JModelica.org Python interface. These model objects can
+    be used for both simulation and optimization purposes. This chapter will
+    cover how to compile Modelica and Optimica models, set compiler options,
+    load the compiled model in a Python model object and use the model object
+    to perform model manipulations such as setting and getting
+    parameters.</para>
+
+    <section>
+      <title>The different model objects in JModelica.org</title>
+
+      <para>There are several different kinds of model objects that can be
+      created with JModelica.org: <literal>FMUModel(ME/CS)(1/2)</literal> 
+      (i.e. FMUModelME1, FMUModelCS1, FMUModelME2, and FMUModelCS2) and
+      <literal>OptimizationProblem</literal>. The
+      <literal>FMUModel(ME/CS)(1/2)</literal> is created by loading an
+      <emphasis>FMU</emphasis> (Functional Mock-up Unit), which is a
+      compressed file compliant with the FMI (Functional Mock-up Interface)
+      standard. The <literal>OptimizationProblem</literal> is created by
+      transferring an optimization problem into the <link
+      xlink:href="http://casadi.org">CasADi</link>-based optimization tool
+      chain.</para>
+
+      <para>FMUs are created by compiling Modelica models with JModelica.org,
+      or any other tool supporting FMU export. JModelica.org supports both
+      export and import of FMUs for Model Exchange (FMU-ME) and FMUs for
+      Co-Simulation (FMU-CS), version 1.0 and 2.0. Generated FMUs can be
+      loaded in an <literal>FMUModel(ME/CS) (1/2)</literal> object in Python and
+      then be used for simulation purposes. Optimica models can not be
+      compiled into FMUs.</para>
+
+      <para><literal>OptimizationProblem</literal> objects for CasADi
+      optimization do not currently have a corresponding file format, but are
+      transferred directly from the JModelica.org compiler, based on Modelica
+      and Optimica models. They contain a symbolic representation of the
+      optimization problem, which is used with the automatic differentiation
+      tool CasADi for optimization purposes. Read more about CasADi and how an
+      <literal>OptimizationProblem</literal> object can be used for
+      optimization in <xref linkend="opt-sec-dae-casadi"/> in <xref
+      linkend="ch_optimization"/>.</para>
+    </section>
+  </section>
+
+  <section xml:id="models_sec_compilation">
+    <title>Compilation</title>
+
+    <para>This section brings up how to compile a model to an FMU-ME / FMU-CS.
+    Compiling a model to an FMU-ME / FMU-CS will be demonstrated in <xref
+    linkend="models_sec_simple_fmume_compilation"/> and <xref
+    linkend="models_sec_simple_fmucs_compilation"/> respectively.</para>
+
+    <para>For more advanced usage of the compiler functions, there are
+    compiler options and arguments which can be modified. These will be
+    explained in <xref linkend="models_sec_compiler_settings"/>.</para>
+
+    <section xml:id="models_sec_simple_fmume_compilation">
+      <title>Simple FMU-ME compilation example</title>
+
+      <para>The following steps compile a model to an FMU-ME version
+      2.0:<procedure>
+          <step>
+            <para>Import the JModelica.org compiler function
+            <literal>compile_fmu</literal> from the package
+            <literal>pymodelica</literal>.</para>
+          </step>
+
+          <step>
+            <para>Specify the model and model file.</para>
+          </step>
+
+          <step>
+            <para>Perform the compilation.</para>
+          </step>
+        </procedure></para>
+
+      <para>This is demonstrated in the following code example:<programlisting
+      language="python"># Import the compiler function
+from pymodelica import compile_fmu
+
+# Specify Modelica model and model file (.mo or .mop)
+model_name = 'myPackage.myModel'
+mo_file = 'myModelFile.mo'
+
+# Compile the model and save the return argument, which is the file name of the FMU
+my_fmu = compile_fmu(model_name, mo_file)
+</programlisting></para>
+
+      <para>There is a compiler argument <literal>target</literal> that
+      controls whether the model will be exported as an FMU-ME or FMU-CS. The
+      default is to compile an FMU-ME, so <literal>target</literal> does not
+      need to be set in this example. The compiler argument
+      <literal>version</literal> specifies if the model should be exported as
+      an FMU 1.0 or 2.0. As the default is to compile an FMU 2.0,
+      <literal>version</literal> does not need to be set either in this
+      example. To compile an FMU 1.0, <literal>version</literal> should be set
+      to <literal>'1.0'</literal>.</para>
+
+      <para>Once compilation has completed successfully, an FMU-ME 2.0 will
+      have been created on the file system. The FMU is essentially a
+      compressed file archive containing the files created during compilation
+      that are needed when instantiating a model object. Return argument for
+      <literal>compile_fmu</literal> is the file path of the FMU that has
+      just been created, this will be useful later when we want to create
+      model objects. More about the FMU and loading models can be found in
+      <xref linkend="models_sec_loading_models"/>.</para>
+
+      <para>In the above example, the model is compiled using default
+      arguments and compiler options - the only arguments set are the model
+      class and file name. However, <literal>compile_fmu</literal> has several
+      other named arguments which can be modified. The different arguments,
+      their default values and interpretation will be explained in <xref
+      linkend="models_sec_compiler_settings"/>.</para>
+    </section>
+
+    <section xml:id="models_sec_simple_fmucs_compilation">
+      <title>Simple FMU-CS compilation example</title>
+
+      <para>The following steps compiles a model to an FMU-CS version
+      2.0:</para>
+
+      <procedure>
+        <step>
+          <para>Import the JModelica.org compiler function
+          <literal>compile_fmu</literal> from the package
+          <literal>pymodelica</literal>.</para>
+        </step>
+
+        <step>
+          <para>Specify the model and model file.</para>
+        </step>
+
+        <step>
+          <para>Set the argument <literal>target = 'cs'</literal></para>
+        </step>
+
+        <step>
+          <para>Perform the compilation.</para>
+        </step>
+      </procedure>
+
+      <para>This is demonstrated in the following code example:<programlisting
+      language="python"># Import the compiler function
+from pymodelica import compile_fmu
+
+# Specify Modelica model and model file (.mo or .mop)
+model_name = 'myPackage.myModel'
+mo_file = 'myModelFile.mo'
+
+# Compile the model and save the return argument, which is the file name of the FMU
+my_fmu = compile_fmu(model_name, mo_file, target='cs')
+</programlisting></para>
+
+      <para>In a Co-Simulation FMU, the integrator for solving the system is
+      contained in the model. With an FMU-CS exported with JModelica.org, two
+      different solvers are supported: CVode and Explicit Euler.</para>
+    </section>
+
+    <section>
+      <title>Compiling from libraries</title>
+
+      <para>The model to be compiled might not be in a standalone
+      <literal>.mo</literal> file, but rather part of a library consisting of
+      a directory structure containing several Modelica files. In this case,
+      the file within the library that contains the model should
+      <emphasis>not</emphasis> be given on the command line. Instead, the
+      entire library should to added to the list of libraries that the
+      compiler searches for classes in. This can be done in several ways (here
+      <emphasis>library directory</emphasis> refers to the top directory of
+      the library, which should have the same name as the top package in the
+      library):</para>
+
+      <itemizedlist>
+        <listitem>
+          <para>Adding the directory containing the library directory to the
+          environment variable <code>MODELICAPATH</code>. The compiler will
+          search for classes in all libraries found in any of the directories
+          in <code>MODELICAPATH</code>. In this case the
+          <code>file_name</code> argument of the compilation function can be
+          omitted, assuming no additional Modelica files are needed.</para>
+        </listitem>
+
+        <listitem>
+          <para>Giving the path to the library directory in the
+          <code>file_name</code> argument of the compilation function. This
+          allows adding a specific library to the search list (as opposed to
+          adding all libraries in a specific directory).</para>
+        </listitem>
+      </itemizedlist>
+
+      <para>By default, the script starting a JModelica.org Python shell sets
+      the <code>MODELICAPATH</code> to the directory containing the version of
+      the Modelica Standard Library (MSL) that is included in the
+      installation. Thus, all classes in the MSL are available without any
+      need to specify its location.</para>
+
+      <para>The Python code example below demonstrates these methods:</para>
+
+      <programlisting># Import the compiler function
+from pymodelica import compile_fmu
+
+# Compile an example model from the MSL
+fmu1 = compile_fmu('Modelica.Mechanics.Rotational.Examples.First')
+
+# Compile a model from the library MyLibrary, located in C:\MyLibs
+fmu2 = compile_fmu('MyLibrary.MyModel', 'C:/MyLibs/MyLibrary')
+</programlisting>
+    </section>
+
+    <section xml:id="models_sec_compiler_settings">
+      <title>Compiler settings</title>
+
+      <para>The compiler function arguments can be listed with the interactive
+      help in Python. The arguments are explained in the corresponding Python
+      <emphasis>docstring</emphasis> which is visualized with the interactive
+      help. This is demonstrated for <literal>compile_fmu</literal> below. The
+      docstring for any other Python function for can be displayed in the same
+      way.</para>
+
+      <section>
+        <title>compile_fmu arguments</title>
+
+        <para>The <literal>compile_fmu</literal> arguments can be listed with
+        the interactive help.</para>
+
+        <programlisting language="python"># Display the docstring for compile_fmu with the Python command 'help'
+from pymodelica import compile_fmu
+help(compile_fmu)
+Help on function compile_fmu in module pymodelica.compiler:
+
+compile_fmu(class_name, file_name=[], compiler='auto', target='me', version='2.0', 
+            compiler_options={}, compile_to='.', compiler_log_level='warning', 
+            separate_process=True, jvm_args='')
+Compile a Modelica model to an FMU.
+
+A model class name must be passed, all other arguments have default values.
+The different scenarios are:
+
+* Only class_name is passed:
+    - Class is assumed to be in MODELICAPATH.
+
+* class_name and file_name is passed:
+    - file_name can be a single path as a string or a list of paths
+      (strings). The paths can be file or library paths.
+    - Default compiler setting is 'auto' which means that the appropriate
+      compiler will be selected based on model file ending, i.e.
+      ModelicaCompiler if a .mo file and OptimicaCompiler if a .mop file is
+      found in file_name list.
+
+The compiler target is 'me' by default which means that the shared
+file contains the FMI for Model Exchange API. Setting this parameter to
+'cs' will generate an FMU containing the FMI for Co-Simulation API.
+
+Parameters::
+
+    class_name --
+        The name of the model class.
+
+    file_name --
+        A path (string) or paths (list of strings) to model files and/or
+        libraries.
+        Default: Empty list.
+
+    compiler --
+        The compiler used to compile the model. The different options are:
+          - 'auto': the compiler is selected automatically depending on
+             file ending
+          - 'modelica': the ModelicaCompiler is used
+          - 'optimica': the OptimicaCompiler is used
+        Default: 'auto'
+
+    target --
+        Compiler target. Possible values are 'me', 'cs' or 'me+cs'.
+        Default: 'me'
+
+    version --
+        The FMI version. Valid options are '1.0' and '2.0'.
+        Default: '2.0'
+
+    compiler_options --
+        Options for the compiler.
+        Default: Empty dict.
+
+    compile_to --
+        Specify target file or directory. If file, any intermediate directories 
+        will be created if they don't exist. If directory, the path given must 
+        exist.
+        Default: Current directory.
+
+    compiler_log_level --
+        Set the logging for the compiler. Takes a comma separated list with
+        log outputs. Log outputs start with a flag :'warning'/'w',
+        'error'/'e', 'info'/'i' or 'debug'/'d'. The log can be written to file
+        by appended flag with a colon and file name.
+        Default: 'warning'
+
+    separate_process --
+        Run the compilation of the model in a separate process.
+        Checks the environment variables (in this order):
+            1. SEPARATE_PROCESS_JVM
+            2. JAVA_HOME
+        to locate the Java installation to use.
+        For example (on Windows) this could be:
+            SEPARATE_PROCESS_JVM = C:\Program Files\Java\jdk1.6.0_37
+        Default: True
+
+    jvm_args --
+        String of arguments to be passed to the JVM when compiling in a
+        separate process.
+        Default: Empty string
+
+
+Returns::
+
+    A compilation result, represents the name of the FMU which has been
+    created and a list of warnings that was raised.
+</programlisting>
+      </section>
+
+      <section xml:id="models_sec_compiler_options">
+        <title>Compiler options</title>
+
+        <para>Compiler options can be modified using the
+        <literal>compile_fmu</literal> argument
+        <literal>compiler_options</literal>. This is shown in the example
+        below.</para>
+
+        <programlisting language="python"># Compile with the compiler option 'enable_variable_scaling' set to True
+
+# Import the compiler function
+from pymodelica import compile_fmu
+ 
+# Specify model and model file
+model_name = 'myPackage.myModel'
+mo_file = 'myModelFile.mo'
+
+# Compile
+my_fmu = compile_fmu(model_name, mo_file, compiler_options={"enable_variable_scaling":True})
+</programlisting>
+
+        <para>There are four types of options: <literal>string</literal>,
+        <literal>real</literal>, <literal>integer</literal> and
+        <literal>boolean</literal>. The complete list of options can be found
+        in <xref linkend="app_compiler_options"/>.</para>
+      </section>
+    </section>
+
+  </section>
+
+  <section xml:id="models_sec_loading_models">
+    <title>Loading models</title>
+
+    <para>Compiled models, FMUs, are loaded in the JModelica.org Python
+    interface with the <literal>FMUModel(ME/CS) (1/2)</literal> class from the
+    <literal>pyfmi</literal> module, while optimization problems for the
+    CasADi-based optimization are transferred directly into the
+    <literal>OptimizationProblem</literal> class from the
+    <literal>pyjmi</literal> module . This will be demonstrated in <xref
+    linkend="models_sec_loading_an_fmu"/> and <xref
+    linkend="models_sec_transferring_an_optproblem"/>.</para>
+
+    <para>The model classes contain many methods with which models can be
+    manipulated after instantiation. Among the most important methods are
+    <literal>initialize</literal> and <literal>simulate</literal>, which are
+    used when simulating. These are explained in <xref
+    linkend="ch_simulation"/> and <xref linkend="ch_optimization"/>. For more
+    information on how to use the OptimizationProblem for optimization
+    purposes, see <xref linkend="ch_optimization"/>. The more basic methods
+    for variable and parameter manipulation are explained in <xref
+    linkend="models_sec_variable_and_parameter_manipulation"/>.</para>
+
+    <section xml:id="models_sec_loading_an_fmu">
+      <title>Loading an FMU</title>
+
+      <para>An FMU file can be loaded in JModelica.org with the method
+      <literal>load_fmu</literal> in the <literal>pyfmi</literal> module. The
+      following short example demonstrates how to do this in a Python shell or
+      script.<programlisting language="python"># Import load_fmu from pyfmi
+from pyfmi import load_fmu
+myModel = load_fmu('myFMU.fmu')
+</programlisting></para>
+
+      <para><literal>load_fmu</literal> returns a class instance of the
+      appropriate FMU type which then can be used to set parameters and used
+      for simulations.</para>
+    </section>
+
+    <section xml:id="models_sec_transferring_an_optproblem">
+      <title>Transferring an Optimization Problem</title>
+
+      <para>An optimization problem can be transferred directly from the
+      compiler in JModelica.org into the class
+      <literal>OptimizationProblem</literal> in the <literal>pyjmi</literal>
+      module. The transfer is similar to the combined steps of compiling and
+      then loading an FMU. The following short example demonstrates how to do
+      this in a Python shell or script.<programlisting language="python"># Import transfer_optimization_problem
+from pyjmi import transfer_optimization_problem
+
+# Specify Modelica model and model file
+model_name = 'myPackage.myModel'
+mo_file = 'myModelFile.mo'
+
+# Compile the model, return argument is an OptimizationProblem
+myModel = transfer_optimization_problem(model_name, mo_file)
+</programlisting></para>
+    </section>
+  </section>
+
+  <section xml:id="models_sec_variable_and_parameter_manipulation">
+    <title>Changing model parameters</title>
+
+    <para>Model parameters can be altered with methods in the model classes
+    once the model has been loaded. Some short examples in <xref
+    linkend="models_sec_setting_and_getting_params"/> will demonstrate
+    this.</para>
+
+    <section xml:id="models_sec_setting_and_getting_params">
+      <title>Setting and getting parameters</title>
+
+      <para>The model parameters can be accessed via the model class
+      interfaces. It is possible to set and get one specific parameter at a
+      time or a whole list of parameters.</para>
+
+      <para>The following code example demonstrates how to get and set a
+      specific parameter using an example FMU model from the
+      <literal>pyjmi.examples</literal> package.<programlisting
+      language="python"># Compile and load the model
+from pymodelica import compile_fmu
+from pyfmi import load_fmu
+my_fmu = compile_fmu('RLC_Circuit','RLC_Circuit.mo')
+rlc_circuit = load_fmu(my_fmu)
+
+# Get the value of the parameter 'resistor.R' and save the result in a variable 'resistor_r'
+resistor_r = rlc_circuit.get('resistor.R')
+
+# Give 'resistor.R' a new value
+resistor_r = 2.0
+rlc_circuit.set('resistor.R', resistor_r)
+</programlisting></para>
+
+      <para>The following example demonstrates how to get and set a list of
+      parameters using the same example model as above. The model is assumed
+      to already be compiled and loaded.<programlisting language="python"># Create a list of parameters, get and save the corresponding values in a variable 'values'
+vars = ['resistor.R', 'resistor.v', 'capacitor.C', 'capacitor.v']
+values = rlc_circuit.get(vars)
+
+# Change some of the values
+values[0] = 3.0
+values[3] = 1.0
+rlc_circuit.set(vars, values)
+</programlisting></para>
+    </section>
+  </section>
+
+  <section>
+    <title>Debugging models</title>
+
+    <para>The JModelica.org compilers can generate debugging information in
+    order to facilitate localization of errors. There are three mechanisms for
+    generating such diagnostics: dumping of debug information to the system
+    output, generation of HTML code that can be viewed with a standard web
+    browser or logs in XML format from the non-linear solver.</para>
+
+    <section>
+      <title>Compiler logging</title>
+
+      <para>The amount of logging that should be output by the compiler can be
+      set with the argument <literal>compiler_log_level</literal> to the
+      compile-functions (<literal>compile_fmu</literal> and also
+      <literal>transfer_optimization_problem</literal>). The available log
+      levels are <literal>'warning'</literal> (default),
+      <literal>'error'</literal>,
+      <literal>'info'</literal>,<literal>'verbose'</literal> and
+      <literal>'debug'</literal> which can also be written as
+      <literal>'w'</literal>, <literal>'e'</literal>,
+      <literal>'i'</literal>,<literal>'v'</literal> and <literal>'d'</literal>
+      respectively. The following example demonstrates setting the log level
+      to <literal>'info'</literal>:</para>
+
+      <para><programlisting># Set compiler log level to 'info'
+compile_fmu('myModel', 'myModels.mo', compiler_log_level='info')
+</programlisting>The log is printed to the standard output, normally the
+      terminal window from which the compiler is invoked.</para>
+
+      <para>The log can also be written to file by appending the log level
+      flag with a colon and file name. This is shown in the following
+      example:</para>
+
+      <para><programlisting># Set compiler log level to info and write the log to a file log.txt
+compile_fmu('myModel', 'myModels.mo', compiler_log_level='i:log.txt')
+</programlisting></para>
+
+      <para>It is possible to specify several log outputs by specifying a
+      comma separated list. The following example writes log warnings and
+      errors (log level <literal>'warning'</literal> or
+      <literal>'w'</literal>) to the standard output and a more verbose
+      logging to file (log level<literal> 'info'</literal> or
+      <literal>'i'</literal>):</para>
+
+      <para><programlisting># Write warnings and errors to standard output and the log with log level info to log.txt
+compile_fmu('myModel', 'myModels.mo', compiler_log_level= 'w,i:log.txt')
+</programlisting></para>
+    </section>
+
+    <section xml:id="sec_models_debug_nonlinear">
+      <title>Runtime logging</title>
+
+      <section>
+        <title>Setting log level</title>
+
+        <para>Many events that occur inside of an FMU can generate log
+        messages. The log messages from the runtime are saved in a file with
+        the default name <filename>&lt;FMU name&gt;_log.txt</filename>. A log
+        file name can also be supplied when loading an FMU, this is shown in
+        the example below:</para>
+
+        <programlisting># Load model
+model = load_fmu(fmu_name, log_file_name='MyLog.txt')
+</programlisting>
+
+        <para>How much information that is output to the log file can be
+        controlled by setting the <literal>log_level</literal> argument to
+        <literal>load_fmu</literal>. <literal>log_level</literal> can be any
+        number between 0 and 7, where 0 means no logging and 7 means the most
+        verbose logging. The log level can also be changed after the FMU has
+        been loaded with the function <literal>set_log_level(level)</literal>.
+        Setting the <literal>log_level</literal> is demonstrated in the
+        following example:</para>
+
+        <programlisting># Load model and set log level to 5
+model = load_fmu(fmu_name, log_level=5)
+
+# Change log level to 7
+model.set_log_level(7)</programlisting>
+
+        <para>If the loaded FMU is an FMU exported by JModelica.org, the
+        amount of logging produced by the FMU can also be altered. This is
+        done by setting the parameter <literal>_log_level</literal> in the
+        FMU. This log level ranges from 0 to 7 where 0 represents the least
+        verbose logging and 7 the most verbose. The following example
+        demonstrates this:</para>
+
+        <programlisting># Load model (with default log level)
+model = load_fmu(fmu_name)
+
+# Set amount of logging produced to the most verbose
+model.set('_log_level', 6)
+
+# Change log level to 7 to be able to see everything that is being produced
+model.set_log_level(7)</programlisting>
+      </section>
+
+      <section>
+        <title>Interpreting logs from FMUs produced by JModelica.org</title>
+
+        <para>In JModelica.org, information is logged in XML format, which
+        ends up mixed with FMI Library output in the resulting log file.
+        Example: (the following examples are based on the example
+        <filename>pyjmi.examples.logger_example</filename>.)</para>
+	
+        <programlisting linenumbering="numbered"><?dbfo linenumbering.everyNth="1"?> ...
+FMIL: module = FMICAPI, log level = 5: Calling fmiInitialize
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK] &lt;EquationSolve&gt;Model equations evaluation invoked at&lt;value name="t"&gt;        0.0000000000000000E+00&lt;/value&gt;
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]   &lt;BlockEventIterations&gt;Starting block (local) event iteration at&lt;value name="t"&gt;        0.0000000000000000E+00&lt;/value&gt;in&lt;value name="block"&gt;0&lt;/value&gt;
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]     &lt;vector name="ivs"&gt;        0.0000000000000000E+00,         0.0000000000000000E+00,         0.0000000000000000E+00&lt;/vector&gt;
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]     &lt;vector name="switches"&gt;        0.0000000000000000E+00,         0.0000000000000000E+00,         0.0000000000000000E+00,         0.0000000000000000E+00&lt;/vector&gt;
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]     &lt;vector name="booleans"&gt;&lt;/vector&gt;
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]     &lt;BlockIteration&gt;Local iteration&lt;value name="iter"&gt;1&lt;/value&gt;at&lt;value name="t"&gt;        0.0000000000000000E+00&lt;/value&gt;
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]       &lt;JacobianUpdated&gt;&lt;value name="block"&gt;0&lt;/value&gt;
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         &lt;matrix name="jacobian"&gt;
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]                  -1.0000000000000000E+00,         4.0000000000000000E+00,         0.0000000000000000E+00;
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]                  -1.0000000000000000E+00,        -1.0000000000000000E+00,        -1.0000000000000000E+00;
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]                  -1.0000000000000000E+00,         1.0000000000000000E+00,        -1.0000000000000000E+00;
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         &lt;/matrix&gt;
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]       &lt;/JacobianUpdated&gt;
+...</programlisting>
+
+
+        <para>The log can be inspected manually, using general purpose XML
+        tools, or parsed using the tools in <literal>pyjmi.log</literal>. A
+        pure XML file that can be read by XML tools can be extracted
+        with</para>
+
+        <programlisting># Extract the log file XML contents into a pure XML file
+pyjmi.log.extract_jmi_log(dest_xml_file_name, log_file_name)</programlisting>
+
+        <para>The XML contents in the log file can also be parsed
+        directly:</para>
+
+        <programlisting># Parse the entire XML log
+log = pyjmi.log.parse_jmi_log(log_file_name)</programlisting>
+
+        <para><literal>log</literal> will correspond to the top level log
+        node, containing all other nodes. Log nodes have two kinds of
+        children: named (with a <literal>name</literal> attribute in the XML
+        file) and unnamed (without).</para>
+
+        <itemizedlist>
+          <listitem>
+            <para>Named children are accessed by indexing with a string:
+            <literal>node['t']</literal>, or simply dot notation:
+            <literal>node.t</literal>.</para>
+          </listitem>
+
+          <listitem>
+            <para>Unnamed children are accessed as a list
+            <literal>node.nodes</literal>, or by iterating over the
+            node.</para>
+          </listitem>
+        </itemizedlist>
+
+        <para>There is also a convenience function
+        <literal>gather_solves</literal> to extract common information about
+        equation solves in the log. This function collects nodes of certain
+        types from the log and annotates some of them with additional named
+        children. The following example is from
+        pyjmi.examples.logger_example:</para>
+
+        <programlisting linenumbering="numbered"><?dbfo linenumbering.everyNth="1"?># Parse the entire XML log
+log = pyjmi.log.parse_jmi_log(log_file_name)
+# Gather information pertaining to equation solves
+solves = pyjmi.log.gather_solves(log)
+
+print
+print 'Number of solver invocations:',                      len(solves)
+print 'Time of first solve:',                               solves[0].t
+print 'Number of block solves in first solver invocation:', len(solves[0].block_solves)
+print 'Names of iteration variables in first block solve:', solves[0].block_solves[0].variables
+print 'Min bounds in first block solve:',                   solves[0].block_solves[0].min
+print 'Max bounds in first block solve:',                   solves[0].block_solves[0].max
+print 'Initial residual scaling in first block solve:',     solves[0].block_solves[0].initial_residual_scaling
+print 'Number of iterations in first block solve:',         len(solves[0].block_solves[0].iterations)
+print
+print 'First iteration in first block solve: '
+print '  Iteration variables:',              solves[0].block_solves[0].iterations[0].ivs
+print '  Scaled residuals:',                 solves[0].block_solves[0].iterations[0].residuals
+print '  Jacobian:\n',                       solves[0].block_solves[0].iterations[0].jacobian
+print '  Jacobian updated in iteration:',    solves[0].block_solves[0].iterations[0].jacobian_updated
+print '  Residual scaling factors:',         solves[0].block_solves[0].iterations[0].residual_scaling
+print '  Residual scaling factors_updated:', solves[0].block_solves[0].iterations[0].residual_scaling_updated
+print '  Scaled residual norm:',             solves[0].block_solves[0].iterations[0].scaled_residual_norm</programlisting>
+      </section>
+    </section>
+<section>
+      <title>Compiler Diagnostic Output</title>
+
+      <para>By setting the compiler option
+      <literal>generate_html_diagnostics</literal> to true, a number of HTML
+      pages containing diagnostics are generated. The HTML files are generated
+      in the directory <literal>Model_Name_diagnostics</literal>, where
+      <literal>Model_Name</literal> is the name of the compiled model. As
+      compared to the diagnostics generated by the
+      <literal>compiler_log_level</literal> argument, the HTML diagnostics
+      contains only the most important information, but it also provides a
+      better overview. Opening the file
+      <literal>Model_Name_diagnostics/index.html</literal> in a web browser,
+      results in a page with information on number of variables, parameters
+	  and equations as well as other statistics about the model.</para>
+
+      <para>Note that some of the entries in <literal>Model_Name_diagnostics/index.html</literal>, including
+      <literal>Problems</literal>, <literal>Flattened model</literal>,
+      <literal>Connection sets</literal>, <literal>Transformed
+      model</literal>, <literal>Alias sets</literal>, <literal>BLT diagnostics
+      table</literal>, <literal>BLT for DAE System</literal> and <literal>BLT
+      for Initialization System</literal> are links to sub
+      pages containing additional information. For example, the BLT for DAE
+      System page contains information about in which order the model equations
+      are evaluated and which blocks are present after compilation.</para>
+
+
+      <para>Additionally there is a table view of the <literal>BLT</literal>.
+      It can be found on the <literal>BLT diagnostics table</literal> page. It
+      provides a graphical representation of the <literal>BLT</literal>. The
+      generation of the <literal>BLT diagnostics table</literal> is limited 
+      to 300 equations due to the complexity of the graph.</para>
+    </section>
+    
+  </section>
+</chapter>

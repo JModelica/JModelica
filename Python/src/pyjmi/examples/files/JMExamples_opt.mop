@@ -1,0 +1,382 @@
+package JMExamples_opt
+
+	optimization BangControl_opt (objective = finalTime,
+                            startTime = 0,
+                            finalTime(free=true,min=0))
+      extends JMExamples.BangControl.BangControl(x1(fixed=true),x2(fixed=true));
+														  
+   equation
+   constraint
+	  -2<=u;
+	  u<=1;
+	  x1(finalTime) = 300;
+	  x2(finalTime) = 0;
+   end BangControl_opt;
+   
+   
+   optimization BatchFermentor_opt (objective = -bf.x2(finalTime)*bf.x4(finalTime),
+                            startTime = 0,
+                            finalTime = 150)
+      input Real u = bf.u;
+      JMExamples.BatchFermentor.BatchFermentor bf(x1(fixed=true),x2(fixed=true),
+	  x3(fixed=true),x4(fixed=true),h1,h2,u(fixed=true));
+														  
+   equation
+   constraint
+	  0<=u;
+	  u<=50;
+	  0 <= bf.x1;
+	  bf.x1 <= 40;
+	  0 <= bf.x2;
+	  bf.x2 <= 50;
+	  0 <= bf.x3;
+	  bf.x3 <= 25;
+	  0 <= bf.x4;
+	  bf.x4 <= 10;
+   end BatchFermentor_opt;
+   
+   optimization BatchFermentor_opt2 (objective = J(finalTime),
+                            startTime = 0,
+                            finalTime = 150)
+      input Real du = bf.du;
+      JMExamples.BatchFermentor.BatchFermentor2 bf(x1(fixed=true),x2(fixed=true),
+	  x3(fixed=true),x4(fixed=true),h1,h2,u(fixed=true));
+	  Real J(fixed=true);
+														  
+   equation
+	  der(J) = -bf.x2*bf.x4 + du^2;
+   constraint
+	  0<=bf.u;
+	  bf.u<=50;
+	  0 <= bf.x1;
+	  bf.x1 <= 40;
+	  0 <= bf.x2;
+	  bf.x2 <= 50;
+	  0 <= bf.x3;
+	  bf.x3 <= 25;
+	  0 <= bf.x4;
+	  bf.x4 <= 10;
+   end BatchFermentor_opt2;
+   
+	optimization BloodGlucose_opt(objective=(cost(finalTime)),
+                      startTime=0,
+                      finalTime=400)
+ 
+	  input Real u=bc.dD; 
+	  JMExamples.BloodGlucose.BloodGlucose bc(G,X,I,D);
+
+	  Real cost(start=0,fixed=true);
+	  parameter Real G_ref = 5;
+	  parameter Real D_ref =13;
+	 
+	equation
+	  der(cost) = (G_ref-bc.G)^2 + (D_ref-bc.D)^2;
+
+	constraint
+	  bc.D>=5;
+	  bc.D<=20;
+	end BloodGlucose_opt;
+	
+	
+	optimization BloodGlucose_opt_final(objective=(cost(finalTime)),
+                      startTime=0,
+                      finalTime=400)
+ 
+	  input Real u=bc.dD; 
+	  JMExamples.BloodGlucose.BloodGlucose bc(G,X,I,D);
+
+	  Real cost(start=0,fixed=true);
+	  parameter Real G_ref = 5;
+	 
+	equation
+	  der(cost) = (G_ref-bc.G)^2+u^2;
+
+	constraint
+	  bc.D>=5;
+	  bc.D<=20;
+	end BloodGlucose_opt_final;
+	
+	
+	optimization BloodGlucose_opt_scaled(objective=(cost(finalTime)),
+                      startTime=0,
+                      finalTime=400)
+ 
+	  input Real u=bc.dD; 
+	  JMExamples.BloodGlucose.BloodGlucose_scaled bc(G,X,I,D);
+
+	  Real cost(start=0,fixed=true);
+	  parameter Real G_ref = 5;
+	  parameter Real D_ref =2;
+	 
+	equation
+	  der(cost) = (G_ref-bc.G)^2 + (D_ref-bc.D)^2;
+
+	constraint
+	  0<=bc.G;
+	  bc.G<=10;
+	  bc.D>=1;
+	  bc.D<=4;
+	end BloodGlucose_opt_scaled;
+	
+	
+	optimization BloodGlucose_opt_scaled_final(objective=(cost(finalTime)),
+                      startTime=0,
+                      finalTime=400)
+ 
+	  input Real u=bc.dD; 
+	  JMExamples.BloodGlucose.BloodGlucose_scaled bc(G,X,I,D,dist);
+
+	  Real cost(start=0,fixed=true);
+	  parameter Real G_ref = 5;
+	  parameter Real D_ref = 2;
+	 
+	equation
+	  der(cost) = (G_ref-bc.G)^2 + u^2;
+
+	constraint
+	  0<=bc.G;
+	  bc.G<=10;
+	  bc.D>=1;
+	  bc.D<=4;
+	end BloodGlucose_opt_scaled_final;
+
+
+	optimization CatalystMixing_opt (objective = -1+x1(finalTime)+x2(finalTime),
+                            startTime = 0,
+                            finalTime = 1)                
+      extends JMExamples.CatalystMixing.CatalystMixing(x1(fixed=true),x2(fixed=true));     
+														  
+   equation
+   constraint
+	  0<=u;
+	  u<=1;
+   end CatalystMixing_opt;
+	
+	
+	optimization CatalyticCracking_opt (objective = sum(((sys.y1(t[i]) - y1m[i])^2 + (sys.y2(t[i]) - y2m[i])^2) 
+					   for i in 1:21),
+                       startTime = 0,
+                       finalTime = 1)
+
+	  // Create second order system instance
+	  // Set parameters w and z free and give initial guesses
+	  JMExamples.CatalyticCracking.CatalyticCracking sys(theta1(free=true,initialGuess=1),
+							  theta2(free=true,initialGuess=1),
+							  theta3(free=true,initialGuess=1),
+							  y1(fixed=true),
+							  y2(fixed=true));
+	  
+	  // Measurement data time points and output values
+	  parameter Real y1m[21] = {1, 0.8105, 0.6208, 0.5258, 0.4345, 0.3903,
+					0.3342, 0.3034, 0.2735, 0.2405, 0.2283, 0.2071, 0.1669,
+					0.1530, 0.1339, 0.1265, 0.1200, 0.0990, 0.0870, 0.077, 0.069};
+	  parameter Real y2m[21] = {0, 0.2, 0.2886, 0.301, 0.3215, 0.3123, 0.2716,
+					0.2551, 0.2258, 0.1959, 0.1789, 0.1457, 0.1198, 0.0909,
+					0.0719, 0.0561, 0.0460, 0.0280, 0.0190, 0.0140, 0.01};
+	  parameter Real t[21] = {0, 0.025, 0.05, 0.075, 0.1, 0.125, 
+					0.15, 0.175, 0.2, 0.225, 0.25, 0.3, 0.35, 0.4,
+					0.45, 0.5, 0.55, 0.65, 0.75, 0.85, 0.95};	
+	equation
+	end CatalyticCracking_opt;
+	
+	
+	optimization ColoumbFriction_opt (objective = finalTime,
+                            startTime = 0,
+                            finalTime(free=true,min=0))
+                            
+	  //states
+	  Real q(start = 0, fixed=true);
+	  Real dq(start = 1, fixed=true);
+	  Real sign;
+	  
+	  //control signal 
+	  input Real u(free=true, min=-2, max=2);	
+	  
+    equation 
+	  der(q) = dq;
+	  sign = noEvent(if dq>0 then 1 else if dq<0 then -1 else 0);
+      der(dq)= u- sign;	
+    constraint
+	  q(finalTime) = -1;
+	  dq(finalTime) = 0;
+   end ColoumbFriction_opt;
+
+	
+   optimization ContState_opt (objective = J(finalTime),
+                            startTime = 0,
+                            finalTime = 1)
+                            
+      extends JMExamples.ContState.ContState(x1(fixed=true),x2(fixed=true),p);
+	  Real J(fixed=true);     
+														  
+   equation
+	  der(J) = x1^2+x2^2+0.005*u^2;	
+   constraint
+      -10<=x1;
+	  x1<=10;
+	  -10<=x2;
+	  x2<=10;
+	  -20<=u;
+	  u<=20;
+	  8*(time-0.5).^2-0.5-x2 >= 0;
+   end ContState_opt;
+
+    optimization EliminationExample(finalTime=4, objectiveIntegrand=(x1-0.647)^2+x2^2+(u-0.0595)^2+(y1-0.289)^2)
+	Real x1(start=1, fixed=true);
+	Real x2(start=1, fixed=true);
+	Real y1(start=0.3, max=0.41);
+	Real y2(start=1);
+	Real y3(start=1);
+	Real y4(start=1);
+	Real y5(start=1);
+	input Real u;
+    equation
+	der(x1) = x2;
+	der(x2) + y1 + y2 - y3 = u;
+	x1*y3 + y2 - sqrt(x1) - 2 = 0;
+	2*y1*y2*y4 - sqrt(x1) = 0;
+	y1*y4 + sqrt(y3) - x1 - y4 = u;
+	y4 - sqrt(y5) = 0;
+	y5^2 - x1 = 0;
+    end EliminationExample;
+   
+   optimization Distillation1_opt(objective = cost(finalTime), startTime=0, finalTime=50)
+    extends JMExamples.Distillation.Distillation1Input(rr(min=1,max=5));
+
+    Real cost(start = 0);
+    parameter Real rr_ref = 2.0;
+    parameter Real x1_ref = 0.8;
+
+   equation
+    der(cost)  = 1000*(x[1]-x1_ref)^2 + (rr-rr_ref)^2 ; 
+
+   constraint
+     rr>=0;
+	 rr<=5;
+  end Distillation1_opt;
+  
+  
+  optimization Distillation1_opt2(objective = cost(finalTime), startTime=0, finalTime=50)
+	extends JMExamples.Distillation.Distillation1Inputder(rr(min=1,max=5));
+
+    Real cost(start = 0);
+    parameter Real x1_ref = 0.97;
+
+   equation
+    der(cost) = (x[1]-x1_ref)^2; 
+
+   constraint
+    rr>=0;
+	rr<=5;
+  end Distillation1_opt2;
+  
+  optimization Distillation4_Opt(
+      objectiveIntegrand=((Temp[28] - T_14_ref) / T_14_ref)^2 +
+                         ((Temp[14] - T_28_ref) / T_28_ref)^2 +
+                         (0.02 * (Q_elec - Q_elec_ref) / Q_elec_ref)^2 +
+                         (0.015 * (Vdot_L1 - Vdot_L1_ref) / Vdot_L1_ref)^2,
+      startTime=0, finalTime=5000)
+    
+    extends JMExamples.Distillation.Distillation4;
+  
+  end Distillation4_Opt;
+      
+	optimization MoonLander_opt (objective = J(finalTime),
+                            startTime = 0,
+                            finalTime = 1.5)
+                            
+      extends JMExamples.MoonLander.MoonLander(h(fixed=true),v(fixed=true),m(fixed=true));
+	  Real J(fixed=true);     
+														  
+   equation
+	  der(J) = u;	
+   constraint
+      0   <= finalTime;
+	  finalTime <=1000;
+	  -20 <= h;
+	  h <=20;
+	  -20 <= v;
+	  v <= 20;
+	  0.01 <= m;
+	  m <= 1;
+	  0 <= u;
+	  u <= 1.227;
+	  h(finalTime) = 0;
+	  v(finalTime) = 0;
+   end MoonLander_opt;
+   
+   optimization MoonLander_opttime (objective = finalTime,
+                            startTime = 0,
+                            finalTime(free=true,min=0))
+                            
+      extends JMExamples.MoonLander.MoonLander(h(fixed=true),v(fixed=true),m(fixed=true));
+														  
+   equation
+   constraint
+	  finalTime <=1000;
+	  -20 <= h;
+	  h <=20;
+	  -20 <= v;
+	  v <= 20;
+	  0.01 <= m;
+	  m <= 1;
+	  0 <= u;
+	  u <= 1.227;
+	  h(finalTime) = 0;
+	  v(finalTime) = 0;
+   end MoonLander_opttime;
+
+	optimization Robertson
+		parameter Real p1(free=true)=0.040;
+		parameter Real p2(free=true)=1.0e4;
+		parameter Real p3(free=true)=3.0e7;
+		Real y1(start=1.0, fixed=true);
+		Real y2(start=0.0, fixed=true);
+		Real y3(start=0.0);
+	  equation
+		der(y1) = -p1*y1 + p2*y2*y3;
+		der(y2) = p1*y1 - p2*y2*y3 - p3*(y2*y2);
+		0.0 = y1 + y2 + y3 - 1;
+	end Robertson;
+	
+	
+	optimization VDP_Opt (objective = cost(finalTime),
+                         startTime = 0,
+                         finalTime = 20)
+
+    parameter Real p1 = 2;
+
+    extends JMExamples.VDP.VDP(x1(fixed=true),x2(fixed=true));
+
+    Real cost(start=0,fixed=true);
+
+  equation
+    der(cost) = exp(p1) * (x1^2 + x2^2 + u^2);
+  constraint 
+     u<=0.75;
+  end VDP_Opt;
+
+  optimization VDP_Opt2 (objectiveIntegrand = exp(p1) * (x1^2 + x2^2 + u^2),
+                         startTime = 0,
+                         finalTime = 20)
+
+    parameter Real p1 = 2;
+
+    extends JMExamples.VDP.VDP(x1(fixed=true),x2(fixed=true),u(max=0.75));
+
+  end VDP_Opt2;
+
+  optimization VDP_Opt_Min_Time (objective = finalTime,
+                         startTime = 0,
+                         finalTime(free=true,min=0.2,initialGuess=1)) 
+
+    extends JMExamples.VDP.VDP(x1(fixed=true),x2(fixed=true),u(min=-1,max=1));
+
+  constraint
+    // terminal constraints
+    x1(finalTime)=0;
+    x2(finalTime)=0;
+  end VDP_Opt_Min_Time;
+	
+   
+end JMExamples_opt;

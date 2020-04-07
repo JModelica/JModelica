@@ -1,0 +1,190 @@
+/*
+    Copyright (C) 2014 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintStream;
+
+import org.jmodelica.util.exceptions.CompilerException;
+import org.jmodelica.util.logging.Level;
+import org.jmodelica.util.logging.StreamingLogger;
+
+aspect DebugCompiler {
+    
+@SuppressWarnings("serial")
+public class DebugCompiler extends javax.swing.JFrame {
+
+	private javax.swing.JTextArea code;
+	private javax.swing.JTextField className;
+	
+	private ModelicaCompiler mc;
+    private javax.swing.JComboBox target;
+	private File tempDir;
+	private boolean deleteAll;
+    private javax.swing.JTextArea outText;
+    private javax.swing.JComboBox level;
+
+	public DebugCompiler() {
+		super("Compile Modelica code snippet");
+		javax.swing.Box page = new javax.swing.Box(javax.swing.BoxLayout.Y_AXIS);
+		add(page);
+		
+		page.add(new javax.swing.JLabel("Code:"));
+		code = new javax.swing.JTextArea("model Test\n\nend Test;", 20, 70);
+		page.add(new javax.swing.JScrollPane(code));
+		
+		page.add(new javax.swing.JLabel("Output:"));
+		outText = new javax.swing.JTextArea("", 20, 70);
+		page.add(new javax.swing.JScrollPane(outText));
+		
+		javax.swing.JPanel bottom = new javax.swing.JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT));
+		page.add(bottom);
+        
+        bottom.add(new javax.swing.JLabel("Log level:"));
+        level = new javax.swing.JComboBox(Level.values());
+        level.setSelectedItem(Level.DEBUG);
+        bottom.add(level);
+		
+		bottom.add(new javax.swing.JLabel("Target:"));
+		target = new javax.swing.JComboBox(ModelicaCompiler.TargetObject.values());
+        bottom.add(target);
+		
+        bottom.add(new javax.swing.JLabel("Class to compile:"));
+		className = new javax.swing.JTextField("Test", 20);
+		bottom.add(className);
+		
+		javax.swing.JButton compile = new javax.swing.JButton("Compile");
+		bottom.add(compile);
+		compile.addActionListener(new CompileListener());
+		
+		setDefaultCloseOperation(EXIT_ON_CLOSE);
+		pack();
+		
+		mc = new ModelicaCompiler(ModelicaCompiler.createOptions());
+		tempDir = getTempDir();
+		mc.setTempFileDir(tempDir);
+	}
+	
+	public File getTempDir() {
+		try {
+			File tempDir = File.createTempFile("org.jmodelica.util.", "");
+			tempDir.delete();
+			if (tempDir.mkdir()) {
+				tempDir.deleteOnExit();
+				deleteAll = true;
+				return tempDir;
+			}
+		} catch (IOException e) {
+		} catch (SecurityException e) {
+		}
+		deleteAll = false;
+		return new File(System.getProperty("java.io.tmpdir"));
+	}
+	
+	public static void main(String[] args) {
+		new DebugCompiler().setVisible(true);
+	}
+
+	public class CompileListener implements java.awt.event.ActionListener {
+
+		public void actionPerformed(java.awt.event.ActionEvent e) {
+		    new CompilationThread(className.getText(), code.getText()).start();
+		}
+
+	}
+	
+	public class CompilationThread extends Thread {
+	    
+        private String name;
+        private String code;
+        
+        public CompilationThread(String name, String code) {
+            this.name = name;
+            this.code = code;
+        }
+
+        public void run() {
+            File file = new File(tempDir, name  + ".mo");
+            Level lv = (Level) level.getSelectedItem();
+            OutputHandler out = new OutputHandler(outText, lv);
+            outText.setText("");
+            try {
+                PrintStream fs = new PrintStream(file);
+                fs.println(code);
+                fs.close();
+                
+                mc.setLogger(out);
+                ModelicaCompiler.TargetObject targ = (ModelicaCompiler.TargetObject) target.getSelectedItem();
+                mc.compileModel(new String[] { file.getAbsolutePath() }, name, targ, null, null);
+            } catch (Exception ex) {
+                out.writeException(ex);
+                return;
+            } finally {
+                try {
+                    if (deleteAll)
+                        for (File f : tempDir.listFiles())
+                            f.delete();
+                    else
+                        file.delete();
+                } catch (Exception ex) {}
+            }
+            out.info("*** Compilation sucessful. ***");
+        }
+        
+    }
+
+    public class OutputHandler extends ModelicaLogger {
+        
+        private javax.swing.JTextArea target;
+
+        public OutputHandler(javax.swing.JTextArea target, Level level) {
+            super(level);
+            this.target = target;
+        }
+
+        public void reset() {
+            target.setText("");
+        }
+
+        protected void writeException(Exception ex) {
+            if (ex instanceof CompilerException) {
+                do_write(ex.toString());
+            } else {
+                ByteArrayOutputStream buf = new ByteArrayOutputStream(512);
+                ex.printStackTrace(new PrintStream(buf));
+                do_write(buf.toString());
+            }
+        }
+
+        @Override
+        public void close() {
+        }
+
+        @Override
+        protected void write(Level level, Level alreadySentLevel, LoggingUnit unit) {
+            do_write(unit.print(level));
+        }
+
+        protected void do_write(String message) {
+            target.append(message + "\n");
+        }
+
+    }
+
+}
+
+}

@@ -1,0 +1,303 @@
+/*
+    Copyright (C) 2016 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect FlatStatements {
+
+    public static boolean FStatement.flattenFStatementList(Flattener f, List<FStatement> sl) {
+        return FStatement.flattenFStatementList(f, sl, new List<FStatement>());
+    }
+
+    public static boolean FStatement.flattenFStatementList(Flattener f, List<FStatement> fromList, List<FStatement> toList) {
+        boolean hasBroken = false;
+        boolean res = false;
+        List<FStatement> prevList = null;
+        for (FStatement stmt : fromList) {
+            if (hasBroken) {
+                prevList = toList;
+                toList = new List<FStatement>();
+            }
+            res = (hasBroken = stmt.flatten(f, toList)) || res;
+            if (prevList != null) {
+                prevList.add(FStatement.breakBlock(toList, new FAccessExp(stmt.breakCondName())));
+                toList = prevList;
+                prevList = null;
+            }
+        }
+        return res;
+    }
+
+    public static FIfStmt FStatement.breakBlock(List<FStatement> stmts, FExp breakCond) {
+        List<FIfWhenClause> clauses = new List<FIfWhenClause>();
+        clauses.add(new FIfClause(breakCond.fullCopy(), stmts));
+        return new FIfStmt(clauses, new List<FStatement>());
+    }
+
+    syn boolean ASTNode.containsBreakStmt() {
+        for (ASTNode n : this)
+            if (n.containsBreakStmt())
+                return true;
+        return false;
+    }
+    eq FForStmt.containsBreakStmt() {
+        return false;
+    }
+    eq FWhileStmt.containsBreakStmt() {
+        return false;
+    }
+    eq FBreakStmt.containsBreakStmt() {
+        return true;
+    }
+
+    public abstract boolean FStatement.flatten(Flattener f, List<FStatement> sl);
+
+    public boolean FAssignStmt.flatten(Flattener f, List<FStatement> sl) {
+        addForIndexRangeAsserts(f, sl);
+        if (scalarizedAsFFunctionCallStmt()) {
+            List<FFunctionCallLeft> lefts = new List<FFunctionCallLeft>();
+            lefts.add(new FFunctionCallLeft(new Opt<FExp>(getLeft().flatten(f))));
+            sl.add(new FFunctionCallStmt(lefts, (FAbstractFunctionCall) getRight().flatten(f)));
+        } else {
+            sl.add(new FAssignStmt((FAssignableExp)getLeft().flatten(f), getRight().flatten(f)));
+        }
+        return false;
+    }
+
+    syn boolean FAssignStmt.scalarizedAsFFunctionCallStmt() =
+            getRight().isNonVectorizedFunctionCall() && getLeft().type().isComposite() && 
+            inFunction() && !getLeft().isSlice();
+    syn boolean InstAssignable.scalarizedAsFFunctionCallStmt() = 
+            getBindingFExp().isNonVectorizedFunctionCall() && type().isComposite();
+    
+    syn boolean FExp.isNonVectorizedFunctionCall()          = false;
+    eq InstFunctionCall.isNonVectorizedFunctionCall()       = true;
+    eq InstVectorFunctionCall.isNonVectorizedFunctionCall() = false;
+    eq FFunctionCall.isNonVectorizedFunctionCall()          = true;
+    eq FVectorFunctionCall.isNonVectorizedFunctionCall()    = false;
+
+    public boolean FInitArrayStmt.flatten(Flattener f, List<FStatement> sl){
+        throw new UnsupportedOperationException();
+    }
+
+    public boolean FFunctionCallStmt.flatten(Flattener f, List<FStatement> sl) {
+        addForIndexRangeAsserts(f, sl);
+        List<FFunctionCallLeft> l = new List<FFunctionCallLeft>();
+        for (FFunctionCallLeft a : getLefts())
+            l.add(a.flatten(f));
+        sl.add(new FFunctionCallStmt(l, (FAbstractFunctionCall) getCall().flatten(f)));
+        return false;
+    }
+
+    public boolean FWhenStmt.flatten(Flattener f, List<FStatement> sl) {
+        boolean res = false;
+        boolean hasBroken = false;
+        List cl = new List();
+        for (FIfWhenClause c : getFIfWhenClauses()) {
+            hasBroken = c.flatten(f, cl) || hasBroken;
+        }
+        sl.add(new FWhenStmt(cl));
+        return hasBroken;
+    }
+
+    public boolean FIfStmt.flatten(Flattener f, List<FStatement> sl) {
+        for (FIfWhenClause c : getFIfWhenClauses()) {
+            c.getTest().addForIndexRangeAsserts(f, sl);
+        }
+        boolean res = false;
+        boolean hasBroken = false;
+        List cl = new List();
+        boolean first = true;
+        for (FIfWhenClause c : getFIfWhenClauses()) {
+            if (c.getTest().variability().indexParameterOrLess()) {
+                try {
+                    CValue val = c.getTest().ceval();
+                    if (val.hasBooleanValue()) { 
+                        if (!val.booleanValue()) {
+                            continue;
+                        } else if (first) {
+                            return FStatement.flattenFStatementList(f, c.getFStatements(), sl) || hasBroken;
+                        } else {
+                            List l = new List();
+                            hasBroken = FStatement.flattenFStatementList(f, c.getFStatements(), l) || hasBroken;
+                            sl.add(new FIfStmt(cl, l));
+                            return hasBroken;
+                        }
+                    }
+                } catch (ConstantEvaluationException e) {}
+            }
+            first = false;
+            hasBroken = c.flatten(f, cl) || hasBroken;
+        }
+        if (first) {
+            return FStatement.flattenFStatementList(f, getElseStmts(), sl) || hasBroken;
+        }
+        List l = new List();
+        hasBroken = FStatement.flattenFStatementList(f, getElseStmts(), l) || hasBroken;
+        sl.add(new FIfStmt(cl, l));
+        return hasBroken;
+    }
+
+    public boolean FIfWhenClause.flatten(Flattener f, List cl) {
+        List l = new List();
+        FExp t = getTest().flatten(f);
+        boolean res = FStatement.flattenFStatementList(f, getFStatements(), l);
+        cl.add(flattenFIfWhenClause(t, l));
+        return res;
+    }
+
+    protected abstract FIfWhenClause FIfWhenClause.flattenFIfWhenClause(FExp t, List l);
+
+    protected FIfWhenClause FIfClause.flattenFIfWhenClause(FExp t, List l) {
+        return new FIfClause(t, l);
+    }
+
+    protected FIfWhenClause FWhenClause.flattenFIfWhenClause(FExp t, List l) {
+        return new FWhenClause(t, l);
+    }
+
+    public boolean FForStmt.flatten(Flattener f, List<FStatement> sl) {
+        sl.add((FForStmt)(this.fullCopy()));
+        return false;
+    }
+
+    public boolean FWhileStmt.flatten(Flattener f, List<FStatement> sl) {
+        getTest().addForIndexRangeAsserts(f, sl);
+        List l = new List();
+        boolean res = FStatement.flattenFStatementList(f, getWhileStmts(), l);
+        sl.add(new FWhileStmt(getTest().flatten(f), l));
+        return res;
+    }
+
+    public boolean InstForStmt.flatten(Flattener f, List<FStatement> sl) {
+        if (inFunction()) {
+            getInstForIndexList().addForIndexRangeAsserts(f, sl);
+            List fsl = new List();
+            FStatement.flattenFStatementList(f, getForStmts(), fsl);
+            int i = getNumInstForIndex() - 1;
+            FForStmt res = new FForStmt(getInstForIndex(i).flatten(f), fsl);
+            for (i--; i >= 0; i--) {
+                fsl = new List().add(res);
+                res = new FForStmt(getInstForIndex(i).flatten(f), fsl);
+            }
+            sl.add(res);
+        } else {
+            ArrayList<CommonForIndex> forIndices = new ArrayList<CommonForIndex>();
+            for (InstForIndex ifi : getInstForIndexs()) {
+                forIndices.add(ifi);
+            }
+            Indices ind = Indices.create(forIndices);
+            if (!ind.size().isZero()) {
+                FVariable tempVar = null;
+                boolean hasBreak = getForStmts().containsBreakStmt();
+                if (hasBreak) {
+                    tempVar = new FBooleanVariable(VisibilityType.TEMPORARY, Variability.DISCRETE, new FAccessString(myTempVarName()));
+                    f.addFVariable(tempVar);
+                    sl.add(new FAssignStmt(tempVar.createAccessExp(), new FBooleanLitExpTrue()));
+                }
+                
+                List<FStatement> inner = sl;
+                for (Index i : ind) {
+                    if (hasBreak) {
+                        inner = new List<FStatement>();
+                    }
+                    ind.translate(i).setValues(forIndices);
+                    getForStmts().flushAllRecursive();
+                    FStatement.flattenFStatementList(f, getForStmts(), inner);
+                    if (hasBreak) {
+                        sl.add(FStatement.breakBlock(inner, tempVar.createAccessExp()));
+                    }
+                }
+                for (InstForIndex ifi : getInstForIndexs()) {
+                    ifi.clearEvaluationValue();
+                }
+            }
+        }
+        return false;
+    }
+
+    private static final String InstClassDecl.TEMP_VAR_PREFIX = "temp_";
+    private int InstClassDecl.incr = 0;
+
+    syn String InstClassDecl.nextTempVarName() = TEMP_VAR_PREFIX + ++incr;
+
+    inh lazy String InstForStmt.myTempVarName();
+    eq Root.getChild().myTempVarName() = null;
+    eq InstClassDecl.getChild().myTempVarName() {
+        String sqn = "";
+        while (componentExists(sqn = nextTempVarName())) {}
+        return sqn;
+    }
+
+    inh String FStatement.breakCondName();
+    eq InstForStmt.getChild().breakCondName() = myTempVarName();
+    eq Root.getChild().breakCondName() = null;
+
+    public boolean InstClassDecl.componentExists(String name) {
+        for (InstComponentDecl decl : allInstComponentDecls()) {
+            if (decl.name().equals(name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean FBreakStmt.flatten(Flattener f, List<FStatement> sl){
+        if (!inFunction() && enclosingLoop() instanceof InstForStmt) {
+            sl.add(new FAssignStmt(new FAccessExp(new FAccessString(breakCondName())), new FBooleanLitExpFalse()));
+            return true;
+        }
+        sl.add(new FBreakStmt());
+        return false;
+    }
+
+    public boolean FReturnStmt.flatten(Flattener f, List<FStatement> sl) {
+        sl.add(new FReturnStmt());
+        return false;
+    }
+
+    public void ASTNode.addForIndexRangeAsserts(Flattener f, List<FStatement> l) {
+        for (ASTNode n : this) {
+            n.addForIndexRangeAsserts(f, l);
+        }
+    }
+
+    private final static String InstForIndexNoExp.SIZE_CONSISTENCE_ASSERT_MSG = 
+            "For index with implicit iteration range used for inconsistent sizes, %s used for different sizes in %s and %s";
+
+    public void InstForIndexNoExp.addForIndexRangeAsserts(Flattener f, List<FStatement> l) {
+        FExpSubscript cmpUse = null;
+        Size cmpSize = null;
+        // Find first known size, or if all are unknown, the first one
+        for (FExpSubscript use : mySubscriptUses()) {
+            Size size = use.mySize();
+            if (cmpUse == null || (cmpSize.isUnknown() && !size.isUnknown())) {
+                cmpUse = use;
+                cmpSize = size;
+            }
+        }
+        for (FExpSubscript use : mySubscriptUses()) {
+            Size size = use.mySize();
+            if (use != cmpUse && size.isUnknown()) {
+                FExp test = getFExp().dynamicFExp(new FEqExp(size.createFExp(0), cmpSize.createFExp(0))).flatten(f);
+                String msg = String.format(SIZE_CONSISTENCE_ASSERT_MSG, 
+                        use, use.myInstAccess(), cmpUse.myInstAccess());
+                FAssert as = new FAssert(test, new FStringLitExp(msg), new Opt());
+                l.add(new FFunctionCallStmt(new List<FFunctionCallLeft>(), as));
+            }
+        }
+    }
+
+}
+

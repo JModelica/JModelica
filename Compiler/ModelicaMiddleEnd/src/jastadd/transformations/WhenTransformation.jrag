@@ -1,0 +1,174 @@
+/*
+    Copyright (C) 2013-2018 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect WhenClauses{
+    
+    public class FClass {
+        /**
+         * Transforms when clauses to if clauses.
+         */
+        public class convertWhenToIf extends Transformation {
+            public void perform() {
+                Collection<FAbstractEquation> newEqns = new ArrayList<FAbstractEquation>();
+                for (FAbstractEquation eqn : getFAbstractEquations()) {
+                    newEqns.add(eqn.convertWhenEqnToIfEqn(newEqns, FClass.this));
+                }
+                setFAbstractEquationList(new List<FAbstractEquation>(newEqns));
+                flushAllRecursive();
+            }
+        }
+    }
+    
+    protected FAbstractEquation FAbstractEquation.convertWhenEqnToIfEqn(Collection<FAbstractEquation> outerNewList, FClass fclass) {
+        return this;
+    }
+    
+    @Override
+    protected FIfWhenElseEquation FIfWhenElseEquation.convertWhenEqnToIfEqn(Collection<FAbstractEquation> outerNewList, FClass fclass) {
+        Collection<FAbstractEquation> newSubList = new ArrayList<FAbstractEquation>();
+        for (FAbstractEquation eqn : getFAbstractEquations()) {
+            newSubList.add(eqn.convertWhenEqnToIfEqn(outerNewList, fclass));
+        }
+        setFAbstractEquationList(new List<FAbstractEquation>(newSubList));
+        return this;
+    }
+
+    @Override
+    protected FIfWhenElseEquation FIfWhenEquation.convertWhenEqnToIfEqn(Collection<FAbstractEquation> outerNewList, FClass fclass) {
+        // Only applies to FIfWhenEquations
+        FIfWhenElseEquation res = super.convertWhenEqnToIfEqn(outerNewList, fclass);
+        if (hasElse()) {
+            setElse(getElse().convertWhenEqnToIfEqn(outerNewList, fclass));
+        }
+        return res;
+    }
+
+    @Override
+    protected FIfWhenElseEquation FWhenEquation.convertWhenEqnToIfEqn(Collection<FAbstractEquation> outerNewList, FClass fclass) {
+        FIfEquation e = new FIfEquation();
+        e.setTest(getTest().transformGuard(outerNewList, null, fclass));
+        if (hasElse()) {
+            e.setElse(getElse().convertWhenEqnToIfEqn(outerNewList, fclass));
+        } else {
+            ArrayList<FAbstractEquation> l = new ArrayList<FAbstractEquation>();
+            for (FVariable fv : referencedFVariablesInLHS()) {
+                l.add(new FEquation(fv.createAccessExp(), fv.createFPreExp()));
+            }
+            e.setElse(new FElseEquation(getType(), new List<FAbstractEquation>(l)));
+        }
+        e.setType(getType());
+        e.setFAbstractEquationList(getFAbstractEquations());
+        e.setWhen();
+        return e;
+    }
+
+    @Override
+    protected FAbstractEquation FAlgorithm.convertWhenEqnToIfEqn(Collection<FAbstractEquation> outerEqnList, FClass fclass) {
+        Collection<FStatement> newStmts = new ArrayList<FStatement>();
+        for (FStatement stmt : getFStatements()) {
+            newStmts.add(stmt.convertWhenStmtToIfStmt(outerEqnList, newStmts, fclass));
+        }
+        setFStatementList(new List<FStatement>(newStmts));
+        return this;
+    }
+    
+    protected FStatement FStatement.convertWhenStmtToIfStmt(Collection<FAbstractEquation> outerEqnList, Collection<FStatement> newStmts, FClass fclass) {
+        return this;
+    }
+
+    @Override
+    protected FStatement FWhenStmt.convertWhenStmtToIfStmt(Collection<FAbstractEquation> outerEqnList, Collection<FStatement> newStmts, FClass fclass) {
+        ArrayList<FIfWhenClause> clauses = new ArrayList<FIfWhenClause>();
+        
+        for (FIfWhenClause clause : getFIfWhenClauses()) {  
+            FIfClause c = new FIfClause();
+            c.setTest(clause.getTest().transformGuard(outerEqnList, newStmts, fclass));
+            c.setFStatementList(clause.getFStatements().fullCopy());
+            clauses.add(c);
+        }
+        
+        FIfStmt e = new FIfStmt();
+        e.setWhen();
+        myFEquation().setWhen();
+        e.setFIfWhenClauseList(new List<FIfWhenClause>(clauses));
+        
+        return e;
+    }
+
+    /**
+     * Should this guard expression be extracted into a temp variable?
+     */
+    syn boolean FExp.shouldExtractGuard() = true;
+    eq FInitialExp.shouldExtractGuard() = false;
+    eq CommonAccessExp.shouldExtractGuard() = false;
+    eq FPreExp.shouldExtractGuard() = true;
+    eq FDerExp.shouldExtractGuard() = true;
+    eq FDummyDerExp.shouldExtractGuard() = true;
+    
+    /**
+     * Flag for whether or not this if clause/expression 
+     * originates from a when clause.
+     */
+    private boolean FAbstractEquation.isWhen = false;
+    private boolean FStatement.isWhen        = false;
+    private boolean FIfExp.isWhen            = false;
+    
+    syn boolean FAbstractEquation.isWhen() = isWhen;
+    eq FWhenEquation.isWhen()              = true;
+    syn boolean FStatement.isWhen()        = isWhen;
+    eq FWhenStmt.isWhen()                  = true;
+    syn boolean FIfExp.isWhen()            = isWhen;
+    public void FAbstractEquation.setWhen() { isWhen = true; }
+    public void FStatement.setWhen()        { isWhen = true; }
+    public void FIfExp.setWhen()            { isWhen = true; }
+    
+    /**
+     * Converts this guard expression from a when clause to a guard expression
+     * to be used in an if clause.
+     */
+    public FExp FExp.transformGuard(Collection<FAbstractEquation> outerEqnList, Collection<FStatement> stmtList, FClass fclass) {
+        Iterator<FExp> it = guards().iterator();
+        FExp res = it.next().asGuard(outerEqnList, stmtList, fclass);
+        while (it.hasNext())
+            res = new FOrExp(res,it.next().asGuard(outerEqnList, stmtList, fclass));
+        return res;
+    }
+    public FExp FExp.asGuard(Collection<FAbstractEquation> outerEqnList, Collection<FStatement> stmtList, FClass fclass) {
+        // We need to extract to temporary equation
+        if (stmtList == null || !dependsOn(myFAlgorithm().referencedFVariablesInLHS())) {
+            outerEqnList.add(new FEquation(tempUseExp(), fullCopy()));
+        } else {
+            stmtList.add(new FAssignStmt(tempUseExp(), fullCopy()));
+        }
+        
+        fclass.addFVariable(type().createFVariable(VisibilityType.PUBLIC,
+                new FAccessFull(tempVarName()), variability().combine(Variability.DISCRETE)));
+        return new FAndExp(tempUseExp(), new FNotExp(tempPreExp()));
+    }
+    
+    @Override
+    public FExp FInitialExp.asGuard(Collection<FAbstractEquation> outerEqnList, Collection<FStatement> stmtList, FClass fclass) {
+        return fullCopy();
+    }
+    
+    @Override
+    public FExp FAccessExp.asGuard(Collection<FAbstractEquation> outerEqnList, Collection<FStatement> stmtList, FClass fclass) {
+        if (shouldExtractGuard())
+            return super.asGuard(outerEqnList, stmtList, fclass);
+        else
+            return new FAndExp(fullCopy(), new FNotExp(new FPreExp(getFAccess().fullCopy())));
+    }
+}

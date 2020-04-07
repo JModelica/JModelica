@@ -1,0 +1,145 @@
+/*
+Copyright (C) 2009-2017 Modelon AB
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, version 3 of the License.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect CCodeGenBlocksResidual {
+
+    /*
+     * Hook for printing residual
+     */
+    
+    public class CodePrinter {
+        public abstract void printResidual(FType type, CodeStream str, String indent,
+                ASTNode left, ASTNode right, int index);
+    }
+
+    public class CPrettyPrinter {
+        @Override
+        public void printResidual(FType type, CodeStream str, String indent,
+                ASTNode left, ASTNode right, int index) {
+            type.printResidual(ExecStep, str, indent, left, right, index);
+        }
+    }
+
+    public void FType.printResidual(CodePrinter.ExecuteCodePrinter p, CodeStream str, String indent,
+            ASTNode left, ASTNode right, int index) {
+        str.print(indent, "(*", p.residual(), ")[", index, "] = ");
+        p.print(right, str, "");
+        str.print(" - (");
+        p.print(left, str, "");
+        str.print(");\n");
+    }
+
+    /**
+     * Generate residual code for equations
+     * 
+     * @param enumerator Enumerates residuals
+     * @param visited    Keeps track of visited equations
+     * @param forIndices Indices of equations that should get a residual
+     */
+    public void FAbstractEquation.genResidual_C(CodePrinter p, CodeStream str, String indent, Enumerator enumerator, Set<FAbstractEquation> visited, Set<Integer> forIndices) {}
+
+    @Override
+    public void FEquation.genResidual_C(CodePrinter p, CodeStream str, String indent, Enumerator enumerator, Set<FAbstractEquation> visited, Set<Integer> forIndices) {
+        boolean firstVisit = visited == null || visited.add(this);
+        p.printPreSteps(this, str, indent);
+        p.printResidual(type(), str, indent, getLeft(), getRight(), enumerator.next());
+        p.printPostSteps(this, str, indent);
+    }
+
+    @Override
+    public void FFunctionCallEquation.genResidual_C(CodePrinter p, CodeStream str, String indent, Enumerator enumerator, Set<FAbstractEquation> visited, Set<Integer> forIndices) {
+        boolean firstVisit = visited == null || visited.add(this);
+        if (!getCall().isIgnored()) {
+            if (firstVisit) {
+                p.printPreSteps(this, str, indent);
+            }
+            Enumerator indexCounter = new Enumerator();
+            for (FFunctionCallLeft l : getLefts())
+                p.printWriteBackResidual(str, indent, l, enumerator, forIndices, indexCounter);
+        }
+    }
+
+    @Override
+    public void FIfWhenElseEquation.genResidual_C(CodePrinter p, CodeStream str, String indent, Enumerator enumerator, Set<FAbstractEquation> visited, Set<Integer> forIndices) {
+        genIfStart_C(p, str, indent);
+        Iterator<Integer> fiIt = forIndices.iterator();
+        int i = 0;
+        int n = fiIt.hasNext() ? fiIt.next() : -1;
+        for (FAbstractEquation equation : getFAbstractEquations()) {
+            Set<Integer> fis = new HashSet<Integer>();
+            while (n >= i && n < i + equation.numScalarEquations()) {
+                fis.add(n - i);
+                n = fiIt.hasNext() ? fiIt.next() : -1;
+            }
+            if (forIndices.size() == 0 || fis.size() > 0) {
+                equation.genResidual_C(p, str, p.indent(indent), enumerator, visited, fis);
+            }
+            i += equation.numScalarEquations();
+        }
+    }
+
+    @Override
+    public void FIfWhenEquation.genResidual_C(CodePrinter p, CodeStream str, String indent, Enumerator enumerator, Set<FAbstractEquation> visited, Set<Integer> forIndices) {
+        Enumerator enumCopy = enumerator.copy();
+        super.genResidual_C(p, str, indent, enumerator, visited, forIndices);
+        if (hasElse())
+            getElse().genResidual_C(p, str, indent, enumCopy, visited, forIndices);
+        genIfEnd_C(p, str, indent);
+    }
+
+    @Override
+    public void FAlgorithm.genResidual_C(CodePrinter p, CodeStream str, String indent, Enumerator enumerator, Set<FAbstractEquation> visited, Set<Integer> forIndices) {
+        if (visited == null || visited.add(this)) {
+            p.printPreSteps(this, str, indent);
+            prettyPrintNoSideEffect_C(p, str, indent, null);
+            p.printPostSteps(this, str, indent);
+        }
+        Enumerator indexCounter = new Enumerator();
+        for (FAccessExp use : uniqueFAccessExpsInLHS()) {
+            p.printWriteBackResidual(str, indent, use.myFV(), this, enumerator, forIndices, indexCounter);
+        }
+    }
+
+    /**
+     * Helper for genBlock_C and genResidual_C
+     * Prints the algorithm, statements which restore LHS variables,
+     * and statements which put the new values in temporaries.
+     */
+    public void FAlgorithm.prettyPrintNoSideEffect_C(CodePrinter p, CodeStream str, String indent, Collection<FVariable> forVariables) {
+        Collection<FAccessExp> lhs = uniqueFAccessExpsInLHS();
+        for (FAccessExp use : lhs) {
+            if (forVariables == null || !forVariables.contains(use.myFV()) || !use.myFV().isReal()) {
+                p.printTempInputAssigns(str, indent, this, use.myFV());
+            }
+        }
+        p.print(this, str, indent);
+        for (FAccessExp use : lhs) {
+            if (forVariables == null || !forVariables.contains(use.myFV()) || !use.myFV().isReal()) {
+                p.printTempSwap(use.myFV(), this, str, indent);
+            }
+        }
+    }
+
+    public abstract void CodePrinter.printTempSwap(FAbstractVariable v, TempScope ts, CodeStream str, String indent);
+    @Override
+    public void CPrettyPrinter.printTempSwap(FAbstractVariable v, TempScope ts, CodeStream str, String indent)  {
+        v.genTempSwap(ExecStep, ts, str, indent);
+    }
+
+    public void FAbstractVariable.genTempSwap(CodePrinter.ExecuteCodePrinter p, TempScope ts, CodeStream str, String indent)  {
+        str.print(indent, "JMI_SWAP(", type().macroType(), ", ", p.name(this), ", ", p.tempName(this, ts), ")\n");
+    }
+    
+}

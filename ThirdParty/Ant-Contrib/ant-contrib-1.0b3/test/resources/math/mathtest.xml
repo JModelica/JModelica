@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+
+<project name="mathtest" basedir="." default="test1">
+   <description>
+     test build file for the Math task
+   </description>
+   
+   <taskdef resource="net/sf/antcontrib/antcontrib.properties">
+      <classpath location="${antcontrib.jar}"/>
+   </taskdef>         
+
+   <target name="test1">
+        <var name="op1" value="12"/>
+        <var name="op2" value="6"/>
+        <var name="op" value="+"/>
+        
+        <!-- demo plus -->
+        <math result="result" operand1="${op1}" 
+        operation="${op}" operand2="${op2}" datatype="int"/>
+        <echo>${op1} ${op} ${op2} = ${result}</echo>
+    </target>            
+</project>

@@ -1,0 +1,200 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+abstract InstNode : BaseNode ::= /InstComponentDecl*/ 
+                                 /InstClassDecl*/ 
+                                 /InstExtends*/ 
+                                 /InstImport*/ 
+                                 /RedeclaredInstClassDecl:InstClassDecl*/
+                                 /FAbstractEquation*/ 
+                                 /ElementInstModification:InstModification*/
+                                 /AnnotationExp:FExp*/;
+
+DynamicOpt : Opt;
+
+abstract InstBaseNode : InstNode;
+
+abstract InstRoot : InstBaseNode;
+InstProgramRoot : InstRoot ::= <Program:Program>
+                               /UnknownInstClassDecl/
+                               /UnknownInstComponentDecl/
+                               /InstAnonymousClass:InstClassDecl*/ 
+                               /InstPredefinedType:InstClassDecl*/ 
+                               /InstBuiltInType:InstClassDecl*/   
+                               /InstBuiltInFunction:InstClassDecl*/
+                               /InstLibClassDecl:InstClassDecl*/
+                               [Dummy:InstNode]                // Dummy node to prevent InstNode from being classified as root
+                               [Dummy2:InstGeneratedInner]     // Dummy node to prevent InstGeneratedInner from being classified as root
+                               [Dummy3:InstConstraining];      // Dummy node to prevent InstConstraining from being classified as root
+
+abstract InstClassDecl: InstBaseNode ::= <SrcClassDecl:SrcClassDecl> /[ClassAnnotation:InstClassModification]/ /FunctionType:FType/;
+abstract InstBaseClassDecl : InstClassDecl ::= [InstConstrainingClass] InstRestriction;
+InstLibNode              : InstClassDecl ::= /ActualInstClass:InstClassDecl/;
+InstFullClassDecl        : InstBaseClassDecl ::= [InstExternal];
+InstExtendClassDecl      : InstFullClassDecl;
+abstract InstAbstractShortClassDecl : InstBaseClassDecl;
+InstSimpleShortClassDecl : InstAbstractShortClassDecl ::= /Target:InstAccess/;
+InstShortClassDecl       : InstAbstractShortClassDecl ::= [FArraySubscripts];
+InstPrimitiveClassDecl   : InstFullClassDecl;
+InstEnumClassDecl        : InstPrimitiveClassDecl;
+InstBuiltInClassDecl     : InstClassDecl;
+UnknownInstClassDecl     : InstFullClassDecl;
+BadInstClassDecl         : InstClassDecl;
+
+InstReplacingFullClassDecl        : InstFullClassDecl  ::= 
+                                     <OriginalClassDecl:SrcClassDecl> 
+                                     /OriginalInstClass:InstClassDecl/ 
+                                     <InstClassRedeclare:InstRedeclareClassNode>;
+InstReplacingShortClassDecl       : InstShortClassDecl ::= 
+                                     <OriginalClassDecl:SrcClassDecl> 
+                                     /OriginalInstClass:InstClassDecl/ 
+                                     <InstClassRedeclare:InstRedeclareClassNode>;
+InstReplacingSimpleShortClassDecl : InstSimpleShortClassDecl ::=
+                                     <OriginalClassDecl:SrcClassDecl> 
+                                     /OriginalInstClass:InstClassDecl/ 
+                                     <InstClassRedeclare:InstRedeclareClassNode>;
+InstReplacingPrimitiveClassDecl : InstReplacingFullClassDecl;
+
+abstract InstRestriction : BaseNode;
+InstModel               : InstRestriction;
+InstBlock               : InstRestriction;
+InstMClass              : InstRestriction;
+InstConnector           : InstRestriction;
+InstExpandableConnector : InstConnector;
+InstMType               : InstRestriction;
+InstMPackage            : InstRestriction;
+InstFunction            : InstRestriction;
+InstMRecord             : InstRestriction;
+InstOperator            : InstRestriction;
+InstOperatorFunction    : InstFunction;
+InstOperatorRecord      : InstMRecord;
+
+InstExternal     : BaseNode ::= <SrcExternalClause:SrcExternalClause> [FExternalLanguage] [InstExternalCall];
+InstExternalCall : BaseNode ::= [ReturnVar:InstAccess] <Name> Arg:FExp*;
+
+abstract InstImport : BaseNode ::= PackageName:InstAccess <SrcImportClause:SrcImportClause>;
+InstImportQualified   : InstImport;
+InstImportUnqualified : InstImport;
+InstImportRename      : InstImport;
+
+abstract InstConstraining : BaseNode         ::=  ClassName:InstAccess [InstClassModification] /InstNode:InstBaseNode/;
+InstConstrainingClass     : InstConstraining ::= <SrcBaseClassDecl:SrcBaseClassDecl> <InstRedeclare:InstRedeclareClassNode>;
+InstConstrainingComponent : InstConstraining ::= <SrcComponentDecl:SrcComponentDecl> <InstRedeclare:InstComponentRedeclare>;
+
+// The class to expand may differ from the declared class of the component due to 
+// redeclaration of classes.
+abstract InstComponentDecl : InstBaseNode ::= <Name:String>
+                                              ClassName:InstAccess 
+                                              [LocalFArraySubscripts:FArraySubscripts] 
+                                              <SrcComponentDecl:SrcComponentDecl> 
+                                              [InstModification] 
+                                              [InstConstrainingComponent] 
+                                              /FArraySubscripts/ 
+                                              [ConditionalAttribute:FExp]
+                                              /[Annotation:InstClassModification]/
+                                              /[ClassAnnotation:InstClassModification]/;
+InstComposite                 : InstComponentDecl;
+abstract InstAssignable       : InstComponentDecl;
+InstPrimitive                 : InstAssignable;
+InstEnum                      : InstPrimitive;
+InstRecord                    : InstAssignable;
+InstBuiltIn                   : InstPrimitive;
+InstEnumLiteral               : InstBuiltIn;
+InstExternalObject            : InstAssignable ::= /DestructorCall:FFunctionCallStmt/;
+InstPartialFunction           : InstAssignable;
+UnknownInstComponentDecl      : InstComponentDecl;
+InstArrayComponentDecl        : InstComponentDecl ::= <Index:int>;
+InstExpandableConnectorDecl   : InstComposite;
+InstArrayExpandableConnector  : InstArrayComponentDecl;
+
+InstReplacingComposite   : InstComposite ::= <OriginalDecl:SrcComponentDecl> 
+                                             /OriginalInstComponent:InstComponentDecl/ 
+                                             <InstComponentRedeclare:InstComponentRedeclare>;
+InstReplacingRecord      : InstRecord    ::= <OriginalDecl:SrcComponentDecl>
+                                             /OriginalInstComponent:InstComponentDecl/ 
+                                             <InstComponentRedeclare:InstComponentRedeclare>;
+InstReplacingPrimitive   : InstPrimitive ::= <OriginalDecl:SrcComponentDecl>
+                                             /OriginalInstComponent:InstComponentDecl/ 
+                                             <InstComponentRedeclare:InstComponentRedeclare>;
+InstReplacingExpandableConnectorDecl : InstReplacingComposite;
+
+InstCreateComponentDecl : InstComponentDecl ::= <LookupNode:InstLookupRedirectNode>;
+InstCreateForIndexPrimitive : InstPrimitive ::= <LookupNode:InstLookupRedirectNode>;
+InstCreateReplacingComponentDecl : InstCreateComponentDecl ::= <OriginalDecl:SrcComponentDecl> 
+                                                               <InstComponentRedeclare:InstComponentRedeclare> 
+                                                               <InstConstrainingRedeclare:InstComponentRedeclare>;
+
+InstGeneratedInner : BaseNode ::= InstComponentDecl 
+                                  <CopiedOuter:InstComponentDecl> 
+                                  <MatchingNonInner:InstComponentDecl>;
+
+InstExtends : InstNode ::=  ClassName:InstAccess <SrcExtendsClause:SrcExtendsClause>
+                            /[ClassAnnotation:InstClassModification]/
+                            /[ClassAnnotationExtends:InstClassModification]/;
+InstNormalExtends : InstExtends ::= [InstClassModification];
+InstExtendsShortClass : InstNormalExtends ::= <LookupNode:InstNode>;
+InstInlineExtends     : InstNormalExtends;
+InstReplacingExtendsShortClass : InstExtends ::= <InstExtendsShortClass:InstExtendsShortClass>;
+
+// Accesses in the instance tree
+abstract InstAccess : CommonAccess;
+abstract InstNamedAccess : InstAccess ::= <ID>;
+InstDot : InstAccess ::= InstAccess*;
+
+InstClassAccess           : InstNamedAccess;
+abstract InstScalarAccess : InstNamedAccess ::= /ExpandedSubscripts:FArraySubscripts/;
+InstParseAccess           : InstScalarAccess;
+InstAmbiguousAccess       : InstScalarAccess;
+InstComponentAccess       : InstScalarAccess;
+abstract InstArrayAccess  : InstNamedAccess ::= FArraySubscripts;
+InstParseArrayAccess      : InstArrayAccess;
+InstAmbiguousArrayAccess  : InstArrayAccess;
+InstComponentArrayAccess  : InstArrayAccess;
+InstGlobalAccess          : InstAccess ::= InstAccess;
+
+abstract InstForIndex : CommonForIndex ::= InstPrimitive:InstForIndexPrimitive;
+InstForIndexWithExp : InstForIndex ::= FExp;
+InstForIndexNoExp   : InstForIndex ::= /[FExp]/;
+
+InstForIndexPrimitive : InstPrimitive;
+
+InstForClauseE : FAbstractEquation ::= InstForIndex* FAbstractEquation*;
+InstForStmt    : FStatement        ::= InstForIndex* ForStmt:FStatement*;
+
+// An expression array subscript that defers name lookup to another subscript
+FDeferExpSubscript : FExpSubscript ::= <Defer:FExpSubscript>;
+FDeferExp : FExp ::= <FExp:FExp>;
+
+InstAccessExp : CommonAccessExp ::= InstAccess;
+
+// These nodes are used to create instance copies of modification trees intended for
+// error checking.
+abstract InstModification : BaseNode ::= <SrcModification:SrcModificationOrRedeclareElement>;
+InstCompleteModification : InstModification ::= InstClassModification [InstValueModification];
+InstValueModification    : InstModification ::= /FExp/
+                                                /InstArrayModification*/;
+InstClassModification    : InstModification ::= InstArgument*;
+//Virtual modification for member of record type modification.
+//Virtual modification for cell of array constant value modification.
+InstArrayModification : InstValueModification ::= <Cell:FExp>;
+
+abstract InstArgument            : InstModification      ::= <Each:boolean> <Final:boolean>;
+abstract InstNamedModification   : InstArgument          ::= Name:InstAccess;
+abstract InstElementModification : InstNamedModification ::= [InstModification] /[Annotation:InstClassModification]/;
+abstract InstElementRedeclare    : InstNamedModification;
+InstComponentModification : InstElementModification; 
+InstClassRedeclare        : InstElementRedeclare ::= /InstClassDecl/;
+InstComponentRedeclare    : InstElementRedeclare ::= /InstComponentDecl/;

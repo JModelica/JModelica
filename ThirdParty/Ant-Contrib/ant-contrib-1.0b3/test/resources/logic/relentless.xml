@@ -1,0 +1,55 @@
+<project name="relentless unit tests" default="invalid">
+  <target name="invalid">
+    <fail>Don't call this file directly.</fail>
+  </target>
+
+  <target name="setup">
+    <taskdef resource="net/sf/antcontrib/antcontrib.properties">
+      <classpath location="${antcontrib.jar}"/>
+    </taskdef>
+  </target>
+
+  <target name="teardown">
+    <delete dir="relentless"/>
+  </target>
+
+  <target name="echo">
+    <echo>Called with param: ${param}</echo>
+  </target>
+  
+  <target name="failTask" depends="setup" description="2 tasks should fail" >
+    <relentless>
+        <antcall target="echo" >
+            <param name="param" value="1" />
+        </antcall>
+        <fail message="This task has failed." />
+        <antcall target="echo" >
+            <param name="param" value="3" />
+        </antcall>
+        <fail message="This task has failed as well." />
+    </relentless>
+  </target>
+
+  <target name="simpleTasks" depends="setup">
+    <relentless>
+        <antcall target="echo" >
+            <param name="param" value="1" />
+        </antcall>
+        <antcall target="echo" >
+            <param name="param" value="2" />
+        </antcall>
+        <antcall target="echo" >
+            <param name="param" value="3" />
+        </antcall>
+        <antcall target="echo" >
+            <param name="param" value="4" />
+        </antcall>
+    </relentless>
+  </target>
+  
+  <target name="noTasks" depends="setup">
+    <relentless>
+    </relentless>
+  </target>
+
+</project>

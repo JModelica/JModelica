@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- edited with XMLSpy v2009 (http://www.altova.com) by Magnus Gäfvert (Modelon AB) -->
+<!--
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License version 3 as published
+    by the Free Software Foundation, or optionally, under the terms of the
+    Common Public License version 1.0 as published by IBM.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License, or the Common Public License, for more details.
+
+    You should have received copies of the GNU General Public License
+    and the Common Public License along with this program.  If not,
+    see <http://www.gnu.org/licenses/> or
+    <http://www.ibm.com/developerworks/library/os-cpl.html/> respectively.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified" attributeFormDefault="unqualified">
+	<xs:element name="OptionRegistry">
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element name="ModelicaLibrary" minOccurs="0">
+					<xs:complexType>
+						<xs:attribute name="name" type="xs:string" use="required"/>
+						<xs:attribute name="version" type="xs:normalizedString" use="required"/>
+						<xs:attribute name="path" type="xs:normalizedString" use="required"/>
+					</xs:complexType>
+				</xs:element>
+				<xs:element name="Options">
+					<xs:complexType>
+						<xs:sequence minOccurs="0" maxOccurs="unbounded">
+							<xs:element name="Option" type="OptionType"/>
+						</xs:sequence>
+					</xs:complexType>
+				</xs:element>
+			</xs:sequence>
+		</xs:complexType>
+	</xs:element>
+	<xs:complexType name="OptionType">
+		<xs:sequence>
+			<xs:choice>
+				<xs:element name="BooleanAttributes">
+					<xs:complexType>
+						<xs:sequence>
+							<xs:element name="Description" type="xs:string" minOccurs="0"/>
+						</xs:sequence>
+						<xs:attribute name="key" type="xs:normalizedString" use="required"/>
+						<xs:attribute name="value" type="xs:boolean" use="required"/>
+					</xs:complexType>
+				</xs:element>
+				<xs:element name="IntegerAttributes">
+					<xs:complexType>
+						<xs:sequence>
+							<xs:element name="Description" type="xs:string" minOccurs="0"/>
+						</xs:sequence>
+						<xs:attribute name="key" type="xs:normalizedString" use="required"/>
+						<xs:attribute name="value" type="xs:integer" use="required"/>
+					</xs:complexType>
+				</xs:element>
+				<xs:element name="RealAttributes">
+					<xs:complexType>
+						<xs:sequence>
+							<xs:element name="Description" type="xs:string" minOccurs="0"/>
+						</xs:sequence>
+						<xs:attribute name="key" type="xs:normalizedString" use="required"/>
+						<xs:attribute name="value" type="xs:double" use="required"/>
+					</xs:complexType>
+				</xs:element>
+				<xs:element name="StringAttributes">
+					<xs:complexType>
+						<xs:sequence>
+							<xs:element name="Description" type="xs:string" minOccurs="0"/>
+						</xs:sequence>
+						<xs:attribute name="key" type="xs:normalizedString" use="required"/>
+						<xs:attribute name="value" type="xs:string" use="required"/>
+					</xs:complexType>
+				</xs:element>
+			</xs:choice>
+		</xs:sequence>
+		<xs:attribute name="type" use="required">
+			<xs:simpleType>
+				<xs:restriction base="xs:token">
+					<xs:enumeration value="integer"/>
+					<xs:enumeration value="string"/>
+					<xs:enumeration value="real"/>
+					<xs:enumeration value="boolean"/>
+				</xs:restriction>
+			</xs:simpleType>
+		</xs:attribute>
+	</xs:complexType>
+</xs:schema>

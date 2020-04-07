@@ -1,0 +1,102 @@
+/*
+    Copyright (C) 2015 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+aspect LocalIteration{
+    public abstract class AttributeContributer {
+        public static class LocalIterationContributer extends AttributeContributer {
+            
+            public LocalIterationContributer() {
+                super("LocalIterationContributer");
+            }
+            
+            @Override
+            protected void contribute(SrcAbstractEquation src, FAbstractEquation dest) {
+                AnnotationNode localIterationNode = src.annotation().vendorNode().forPath("LocalIteration");
+                if (!localIterationNode.exists())
+                    return;
+                AnnotationNode destNode = dest.annotation().vendorNode().createForPath("LocalIteration");
+                
+                AnnotationNode enabledAnnotation = localIterationNode.forPath("enabled");
+                SrcExp enabledExp = enabledAnnotation.exp();
+                if (enabledExp != null) {
+                    destNode.forPath("enabled").setValue(enabledExp.instantiate());
+                    destNode.forPath("enabled").setEach(enabledAnnotation.isEach());
+                }
+            }
+
+            @Override
+            protected void contribute(Flattener f, InstAssignable src, FVariable dest) {}
+
+            @Override
+            protected void contribute(Flattener f, InstBaseClassDecl src, FFunctionDecl dest) {}
+
+            @Override
+            protected void contribute(Flattener f, InstNode src, FClass dest) {}
+
+            @Override
+            protected boolean containsActiveAttributes(FAbstractEquation equation) {
+                return equation.hasLocalIteration();
+            }
+
+            @Override
+            protected boolean containsActiveAttributes(FVariable variable) {
+                return false;
+            }
+
+            @Override
+            protected boolean containsActiveAttributes(FFunctionDecl function) {
+                return false;
+            }
+
+            @Override
+            protected boolean containsActiveAttributes(FClass fClass) {
+                return false;
+            }
+        }
+    }
+    
+    private static AttributeContributer ASTNode.LOCAL_ITERATION_CONTRIBUTER =
+            addAttributeContributer(new AttributeContributer.LocalIterationContributer());
+    
+    syn boolean FAbstractEquation.canUseLocalIteration() {
+        String option = myOptions().getStringOption("local_iteration_in_tearing");
+        if (option == OptionRegistry.LocalIteration.OFF)
+            return false;
+        else if (option == OptionRegistry.LocalIteration.ANNOTATION)
+            return hasLocalIteration();
+        else
+            return true;
+    }
+    
+    protected void FAbstractEquation.typeCheckLocalIteration(ErrorCheckType checkType) {
+        AnnotationNode node = annotation().vendorNode().forPath("LocalIteration");
+        if (!node.exists())
+            return;
+        AnnotationNode enabledNode = node.forPath("enabled");
+        if (enabledNode.exists()) {
+            FExp enabledExp = enabledNode.fExp();
+            typeCheckEnabled(checkType, enabledExp, type(), enabledNode.isEach());
+        }
+    }
+    
+    syn boolean FAbstractEquation.hasLocalIteration() {
+        AnnotationNode node = annotation().vendorNode().forPath("LocalIteration");
+        if (!node.exists())
+            return false;
+        AnnotationNode enabledNode = node.forPath("enabled");
+        return !enabledNode.exists() || enabledNode.bool();
+    }
+    
+}

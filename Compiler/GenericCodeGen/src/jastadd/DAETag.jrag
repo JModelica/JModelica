@@ -1,0 +1,121 @@
+import java.util.ArrayList;
+
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+/** \file DAETag.java
+ *  DAETag class.
+ */
+
+
+/**
+ * A tag class intended for use as base class for tags using the DAE
+ * interface.
+ *
+ */
+public abstract class DAETag extends AbstractTag {
+	/**
+	 * FClass object.
+	 */
+	protected FClass fclass;
+    
+    private String[] options;
+    private boolean optionsChecked;
+    private boolean active;
+	
+	/**
+	 * Default constructor.
+	 * 
+	 * @param name Tag name.
+	 * @param myGenerator The tag's generator.
+	 * @param fclass An FClass object used as a basis in the code generation.
+	 */
+	public DAETag(String name, AbstractGenerator myGenerator, FClass fclass) {
+		super(name, myGenerator);
+		this.fclass = fclass;
+        options = new String[0];
+        optionsChecked = false;
+	}
+    
+    /**
+     * Set list of options that must be true for tag to be active.
+     * 
+     * If an option is prefixed with '!', then it must be false instead.
+     */
+    protected void setOptions(String... opts) {
+        options = opts;
+    }
+	
+	/**
+	 * Add options to list of options that must be true for tag to be active.
+     * 
+     * If an option is prefixed with '!', then it must be false instead.
+	 */
+	protected void addOptions(String... opts) {
+	    if (options.length == 0) {
+	        options = opts;
+	    } else {
+	        String[] old = options;
+	        options = new String[old.length + opts.length];
+            System.arraycopy(old, 0, options, 0, old.length);
+            System.arraycopy(opts, 0, options, old.length, opts.length);
+	    }
+	}
+    
+    /**
+     * Check if this tag should be generated.
+     */
+    public boolean isActive() {
+        if (!optionsChecked) 
+            active = checkOptions();
+        return active;
+    }
+    
+    /**
+     * Check if all options needed are active.
+     */
+    private boolean checkOptions() {
+        optionsChecked = true;
+        for (String opt : options) {
+            boolean flip = false;
+            if (opt.charAt(0) == '!') {
+                flip = true;
+                opt = opt.substring(1);
+            }
+            if (fclass.myOptions().getBooleanOption(opt) == flip)
+                return false;
+        }
+        return true;
+    }
+	
+	/**
+	 * Get the FClass object.
+	 * @return The FClass object.
+	 */
+	public FClass getFClass() {
+		return fclass;
+	}
+	
+	/**
+	 * Instantiates all inner classes, of this tag, that inherits AbstractTag and adds them to the tag map.
+	 */
+	protected void instantiateTags(Map<String,AbstractTag> map) {
+		instantiateTags(getClass(), map, this, myGenerator, fclass);
+	}
+
+}
+

@@ -1,0 +1,527 @@
+FMIL: module = FMILIB, log level = 4: XML specifies FMI standard version 1.0
+FMIL: module = FMILIB, log level = 4: Loading 'win32' binary with 'standard32' platform types
+FMIL: module = FMICAPI, log level = 5: Calling fmiFreeModelInstance
+FMIL: module = FMILIB, log level = 5: Releasing FMU CAPI interface
+FMIL: module = FMICAPI, log level = 5: Successfully unloaded FMU binary
+FMIL: module = FMILIB, log level = 5: Releasing allocated library resources
+FMIL: module = JMPRT, log level = 5: Removing c:\users\emil\appdata\local\temp\JModelica.org\jm_tmpkfhopx
+FMIL: module = FMICAPI, log level = 5: Calling fmiInitialize
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK] <EquationSolve>Model equations evaluation invoked at <value name="t">       0.0000000000000000E+000</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]   <BlockEventIterations>Starting block (local) event iteration at <value name="t">       0.0000000000000000E+000</value> in <value name="block">0</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]     <vector name="ivs">       1.0000000000000000E+000,       -4.5000000000000000E+000</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]     <vector name="switches"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]     <vector name="booleans"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]     <BlockIteration>Local iteration <value name="iter">1</value> at <value name="t">       0.0000000000000000E+000</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]       <ScalingUpdated><value name="block">0</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <vector name="scaling">       8.5500001274049282E+001,        4.0500000841915607E+001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]       </ScalingUpdated>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]       <NewtonSolve>Newton solver invoked for <value name="block">0</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <vector name="variables">"x_2", "x_1"</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <vector name="max">       4.0000000000000000E+000,        6.0000000000000000E+000</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <vector name="min">      -4.0000000000000000E+000,       -6.0000000000000000E+000</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <vector name="nominal">       1.0000000000000000E+000,        1.0000000000000000E+000</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <vector name="initial_guess">       1.0000000000000000E+000,       -4.5000000670552254E+000</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINSolInit</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"scsteptol =       1e-008  fnormtol =       1e-008"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINSolInit</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"scaled f norm (for stopping) =         1.02"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINSolInit</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"nni =    0   nfe =      1   fnorm =          1.024659938369944"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="iteration_index">0</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="ivs">       1.0000000000000000E+000,       -4.5000000670552254E+000</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="scaled_residual_norm">       1.0246599383699440E+000</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="residuals">      -1.0204678359523154E+000,       -9.2592575766613172E-002</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <StepDirection><vector name="unbounded_step">       1.5294642910749864E+001,        2.9821429185552395E+000</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <LimitationBounds><vector name="max">"x_2", "x_1"</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]             <vector name="min"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           </LimitationBounds>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="bounded_step">       1.5294642910749864E+001,        2.9821429185552395E+000</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </StepDirection>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"min_lam = 6.6667e-009   f1norm = 5.2496e-001   pnorm = 3.0565e+000"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLinesearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"fnorm = 9.42609680e-001   f1norm = 4.44256504e-001   alpha_cond = 5.24943401e-001  lam = 1.00000000e+000"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"no. of lambda adjustments = 0"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINStop</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"scaled f norm (for stopping) =         0.93"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINSol</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"nni =    1   nfe =      2   fnorm =         0.9426096795790906"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="iteration_index">1</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="ivs">       3.9999999999999982E+000,       -3.9150613530315264E+000</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="scaled_residual_norm">       9.4260967957909059E-001</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="residuals">      -9.2957096776604775E-001,        1.5623963620889977E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <StepDirection><vector name="unbounded_step">       1.0626401265673675E+001,        3.0645008629983659E+000</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <LimitationBounds><vector name="max">"x_2", "x_1"</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]             <vector name="min"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           </LimitationBounds>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <ActiveBounds><vector name="max">"x_2"</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]             <vector name="min"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           </ActiveBounds>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="bounded_step">       1.7763568394002501E-015,        3.0645008629983659E+000</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </StepDirection>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"min_lam = 1.6039e-008   f1norm = 4.4426e-001   pnorm = 3.0645e+000"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLinesearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"fnorm = 4.49482672e-001   f1norm = 1.01017336e-001   alpha_cond = 4.44167653e-001  lam = 1.00000000e+000"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"no. of lambda adjustments = 0"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINStop</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"scaled f norm (for stopping) =          0.4"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINSol</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"nni =    2   nfe =      3   fnorm =          0.449482671790833"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="iteration_index">2</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="ivs">       4.0000000000000000E+000,       -8.5056049003316136E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="scaled_residual_norm">       4.4948267179083295E-001</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="residuals">      -4.0033985423958318E-001,       -2.0435917730225603E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <StepDirection><vector name="unbounded_step">       8.3092127422138375E+000,        9.2687539805838903E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <LimitationBounds><vector name="max">"x_2", "x_1"</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]             <vector name="min"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           </LimitationBounds>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <ActiveBounds><vector name="max"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]             <vector name="min"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           </ActiveBounds>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="bounded_step">       0.0000000000000000E+000,        9.2687539805838903E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </StepDirection>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"min_lam = 1.9966e-008   f1norm = 1.0102e-001   pnorm = 9.2688e-001"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLinesearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"fnorm = 3.60157999e-001   f1norm = 6.48568922e-002   alpha_cond = 1.00997133e-001  lam = 1.00000000e+000"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"no. of lambda adjustments = 0"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINStop</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"scaled f norm (for stopping) =        0.284"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINSol</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"nni =    3   nfe =      4   fnorm =         0.3601579992930621"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="iteration_index">3</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="ivs">       4.0000000000000000E+000,        7.6314908025227446E-002</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="scaled_residual_norm">       3.6015799929306208E-001</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="residuals">      -2.8354005290866230E-001,       -2.2207841599609424E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <StepDirection><vector name="unbounded_step">       6.9477396281084758E+000,        5.4458924361671968E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <LimitationBounds><vector name="max">"x_2"</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]             <vector name="min"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           </LimitationBounds>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <ActiveBounds><vector name="max"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]             <vector name="min"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           </ActiveBounds>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="bounded_step">       0.0000000000000000E+000,        5.4458924361671968E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </StepDirection>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"min_lam = 1.9764e-008   f1norm = 6.4857e-002   pnorm = 5.4459e-001"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLinesearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"fnorm = 3.09106754e-001   f1norm = 4.77734926e-002   alpha_cond = 6.48439208e-002  lam = 1.00000000e+000"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"no. of lambda adjustments = 0"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINStop</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"scaled f norm (for stopping) =        0.224"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINSol</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"nni =    4   nfe =      5   fnorm =         0.3091067538450276"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="iteration_index">4</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="ivs">       4.0000000000000000E+000,        6.2090415164194701E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="scaled_residual_norm">       3.0910675384502762E-001</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="residuals">      -2.2428631770005747E-001,       -2.1270315692335029E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <StepDirection><vector name="unbounded_step">       6.0047036977979982E+000,        3.7721437123740725E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <LimitationBounds><vector name="max">"x_2"</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]             <vector name="min"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           </LimitationBounds>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <ActiveBounds><vector name="max"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]             <vector name="min"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           </ActiveBounds>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="bounded_step">       0.0000000000000000E+000,        3.7721437123740725E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </StepDirection>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"min_lam = 4.2970e-008   f1norm = 4.7773e-002   pnorm = 3.7721e-001"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLinesearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"fnorm = 2.72287305e-001   f1norm = 3.70701883e-002   alpha_cond = 4.77639379e-002  lam = 1.00000000e+000"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"no. of lambda adjustments = 0"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINStop</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"scaled f norm (for stopping) =        0.198"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINSol</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"nni =    5   nfe =      6   fnorm =         0.2722873052867342"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="iteration_index">5</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="ivs">       4.0000000000000000E+000,        9.9811852287935410E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="scaled_residual_norm">       2.7228730528673417E-001</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="residuals">      -1.8731058617869481E-001,       -1.9762368513339926E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <StepDirection><vector name="unbounded_step">       5.2894094173523509E+000,        2.8611771169561168E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <LimitationBounds><vector name="max">"x_2"</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]             <vector name="min"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           </LimitationBounds>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <ActiveBounds><vector name="max"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]             <vector name="min"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           </ActiveBounds>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="bounded_step">       0.0000000000000000E+000,        2.8611771169561168E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </StepDirection>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"min_lam = 6.9836e-008   f1norm = 3.7070e-002   pnorm = 2.8612e-001"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLinesearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"fnorm = 2.42938852e-001   f1norm = 2.95096428e-002   alpha_cond = 3.70627743e-002  lam = 1.00000000e+000"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"no. of lambda adjustments = 0"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINStop</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"scaled f norm (for stopping) =        0.181"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINSol</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"nni =    6   nfe =      7   fnorm =         0.2429388515224233"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="iteration_index">6</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="ivs">       4.0000000000000000E+000,        1.2842362345749656E+000</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="scaled_residual_norm">       2.4293885152242331E-001</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="residuals">      -1.6148421233575189E-001,       -1.8149968249376042E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <StepDirection><vector name="unbounded_step">       4.7129662867573607E+000,        2.3057725194373205E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <LimitationBounds><vector name="max">"x_2"</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]             <vector name="min"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           </LimitationBounds>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <ActiveBounds><vector name="max"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]             <vector name="min"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           </ActiveBounds>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="bounded_step">       0.0000000000000000E+000,        2.3057725194373205E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </StepDirection>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"min_lam = 9.9066e-008   f1norm = 2.9510e-002   pnorm = 2.3058e-001"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLinesearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"fnorm = 2.18159981e-001   f1norm = 2.37968886e-002   alpha_cond = 2.95037409e-002  lam = 1.00000000e+000"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"no. of lambda adjustments = 0"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINStop</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"scaled f norm (for stopping) =        0.166"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINSol</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"nni =    7   nfe =      8   fnorm =         0.2181599806651364"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="iteration_index">7</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="ivs">       4.0000000000000000E+000,        1.5148134865186975E+000</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="scaled_residual_norm">       2.1815998066513637E-001</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="residuals">      -1.4206461816087290E-001,       -1.6556394967086902E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <StepDirection><vector name="unbounded_step">       4.2271462039205252E+000,        1.9432803294267925E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <LimitationBounds><vector name="max">"x_2"</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]             <vector name="min"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           </LimitationBounds>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <ActiveBounds><vector name="max"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]             <vector name="min"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           </ActiveBounds>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="bounded_step">       0.0000000000000000E+000,        1.9432803294267925E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </StepDirection>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"min_lam = 1.2941e-007   f1norm = 2.3797e-002   pnorm = 1.9433e-001"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLinesearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"fnorm = 1.96397860e-001   f1norm = 1.92860596e-002   alpha_cond = 2.37921292e-002  lam = 1.00000000e+000"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"no. of lambda adjustments = 0"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINStop</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"scaled f norm (for stopping) =         0.15"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINSol</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"nni =    8   nfe =      9   fnorm =         0.1963978596630118"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="iteration_index">8</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="ivs">       4.0000000000000000E+000,        1.7091415194613768E+000</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="scaled_residual_norm">       1.9639785966301179E-001</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="residuals">      -1.2666373541002499E-001,       -1.5009469481694299E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <StepDirection><vector name="unbounded_step">       3.8029574300680995E+000,        1.6967550941035670E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <LimitationBounds><vector name="max">"x_2"</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]             <vector name="min"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           </LimitationBounds>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <ActiveBounds><vector name="max"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]             <vector name="min"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           </ActiveBounds>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="bounded_step">       0.0000000000000000E+000,        1.6967550941035670E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </StepDirection>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"min_lam = 1.5967e-007   f1norm = 1.9286e-002   pnorm = 1.6968e-001"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLinesearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"fnorm = 1.76703345e-001   f1norm = 1.56120360e-002   alpha_cond = 1.92822024e-002  lam = 1.00000000e+000"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"no. of lambda adjustments = 0"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINStop</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"scaled f norm (for stopping) =        0.135"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINSol</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"nni =    9   nfe =     10   fnorm =         0.1767033447602851"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="iteration_index">9</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="ivs">       4.0000000000000000E+000,        1.8788170288717334E+000</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="scaled_residual_norm">       1.7670334476028507E-001</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="residuals">      -1.1393898238710172E-001,       -1.3506287551382834E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <UBoundExceeded><value name="message">"Out of bounds for variable x_2"</value></UBoundExceeded>
+FMIL: module = Model, log level = 3: [WARNING][FMU status:Warning]         <Warning><value name="errorCode">1</value> returned from <value name="block">0</value></Warning>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <StepDirection><vector name="unbounded_step">      -3.7864298747111287E-002,        1.5363287061193682E+000</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <LimitationBounds><vector name="max">"x_1"</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]             <vector name="min"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           </LimitationBounds>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="bounded_step">      -3.7864298747111287E-002,        1.5363287061193682E+000</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </StepDirection>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"min_lam = 1.8738e-008   f1norm = 1.5612e-002   pnorm = 1.5368e+000"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLinesearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"fnorm = 6.45259679e-002   f1norm = 2.08180027e-003   alpha_cond = 1.56089136e-002  lam = 1.00000000e+000"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"no. of lambda adjustments = 0"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINStop</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"scaled f norm (for stopping) =       0.0583"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINSol</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"nni =   10   nfe =     11   fnorm =        0.06452596792027704"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="iteration_index">10</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="ivs">       3.9621357012528886E+000,        3.4151457349911016E+000</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="scaled_residual_norm">       6.4525967920277039E-002</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="residuals">      -2.7622684400647947E-002,        5.8314559438881322E-002</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <StepDirection><vector name="unbounded_step">      -4.5486694435901942E-001,        1.8194676051316269E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="bounded_step">      -4.5486694435901942E-001,        1.8194676051316269E-001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </StepDirection>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"min_lam = 1.0909e-007   f1norm = 2.0818e-003   pnorm = 4.8991e-001"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLinesearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"fnorm = 6.55736304e-003   f1norm = 2.14995050e-005   alpha_cond = 2.08138391e-003  lam = 1.00000000e+000"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"no. of lambda adjustments = 0"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINStop</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"scaled f norm (for stopping) =      0.00593"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINSol</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"nni =   11   nfe =     12   fnorm =       0.006557363042629544"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="iteration_index">11</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="ivs">       3.5072687568938692E+000,        3.5970924955042642E+000</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="scaled_residual_norm">       6.5573630426295441E-003</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="residuals">      -2.8071177555840485E-003,        5.9261370199421284E-003</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <StepDirection><vector name="unbounded_step">      -5.8017037339258497E-002,        2.3206816561634671E-002</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="bounded_step">      -5.8017037339258497E-002,        2.3206816561634671E-002</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </StepDirection>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"min_lam = 7.7689e-007   f1norm = 2.1500e-005   pnorm = 6.2486e-002"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLinesearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"fnorm = 1.06677225e-004   f1norm = 5.69001520e-009   alpha_cond = 2.14952051e-005  lam = 1.00000000e+000"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"no. of lambda adjustments = 0"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINStop</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"scaled f norm (for stopping) =    9.64e-005"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINSol</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"nni =   12   nfe =     13   fnorm =      0.0001066772252843621"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="iteration_index">12</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="ivs">       3.4492517195546109E+000,        3.6202993120658991E+000</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="scaled_residual_norm">       1.0667722528436207E-004</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="residuals">      -4.5667074381820054E-005,        9.6408239854152777E-005</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <StepDirection><vector name="unbounded_step">      -9.7558146788482788E-004,        3.9023270084866032E-004</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="bounded_step">      -9.7558146788482788E-004,        3.9023270084866032E-004</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </StepDirection>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"min_lam = 4.5606e-005   f1norm = 5.6900e-009   pnorm = 1.0507e-003"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLinesearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"fnorm = 3.01649504e-008   f1norm = 4.54962117e-016   alpha_cond = 5.68887719e-009  lam = 1.00000000e+000"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"no. of lambda adjustments = 0"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINStop</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"scaled f norm (for stopping) =    2.73e-008"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINSol</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"nni =   13   nfe =     14   fnorm =     3.016495040620687e-008"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="iteration_index">13</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="ivs">       3.4482761380867260E+000,        3.6206895447667478E+000</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="scaled_residual_norm">       3.0164950406206869E-008</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="residuals">      -1.2913066041813206E-008,        2.7261272134819580E-008</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <StepDirection><vector name="unbounded_step">      -2.7601773612645577E-007,        1.1040565653537215E-007</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="bounded_step">      -2.7601773612645577E-007,        1.1040565653537215E-007</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </StepDirection>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"min_lam = 1.6116e-001   f1norm = 4.5496e-016   pnorm = 2.9728e-007"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLinesearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"fnorm = 2.70029352e-015   f1norm = 3.64579254e-030   alpha_cond = 4.54871124e-016  lam = 1.00000000e+000"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINLineSearch</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"no. of lambda adjustments = 0"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINStop</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"scaled f norm (for stopping) =    2.46e-015"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINSol</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"nni =   14   nfe =     15   fnorm =     2.700293516083764e-015"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="iteration_index">14</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="ivs">       3.4482758620689897E+000,        3.6206896551724044E+000</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="scaled_residual_norm">       2.7002935160837644E-015</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <vector name="residuals">      -1.1219095660613504E-015,        2.4561970602099602E-015</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINSol</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"Return value: 0 (KIN_SUCCESS)"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         Newton solver finished with <value name="kinsol_exit_flag">KIN_SUCCESS</value>
+FMIL: module = Model, log level = 4: [WARNING][FMU status:OK]       </NewtonSolve>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]       <Rescaling>Attempting rescaling in <value name="block">0</value></Rescaling>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]       <ScalingUpdated><value name="block">0</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <vector name="scaling">       9.9881114713322443E+000,        2.6218786562276083E+001</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]       </ScalingUpdated>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]       <NewtonSolve>Newton solver invoked for <value name="block">0</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <vector name="variables">"x_2", "x_1"</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <vector name="max">       4.0000000000000000E+000,        6.0000000000000000E+000</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <vector name="min">      -4.0000000000000000E+000,       -6.0000000000000000E+000</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <vector name="nominal">       1.0000000000000000E+000,        1.0000000000000000E+000</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <vector name="initial_guess">       3.4482758620689897E+000,        3.6206896551724044E+000</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINSolInit</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"scsteptol =       1e-008  fnormtol =       1e-008"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         <KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="calling_function">KINSolInit</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]           <value name="message">"scaled f norm (for stopping) =     9.6e-015"</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         </KinsolInfo>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]         Newton solver finished with <value name="kinsol_exit_flag">KIN_INITIAL_GUESS_OK</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]       </NewtonSolve>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]       <vector name="ivs">       3.4482758620689897E+000,        3.6206896551724044E+000</vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]       <vector name="switches"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]       <vector name="booleans"></vector>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]       Found consistent solution using fixed point iteration at <value name="t">       0.0000000000000000E+000</value>
+FMIL: module = Model, log level = 4: [WARNING][FMU status:OK]     </BlockIteration>
+FMIL: module = Model, log level = 4: [WARNING][FMU status:OK]   </BlockEventIterations>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]   Model equations evaluation finished
+FMIL: module = Model, log level = 4: [WARNING][FMU status:OK] </EquationSolve>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK] <EquationSolve>Model equations evaluation invoked at <value name="t">       0.0000000000000000E+000</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]   Model equations evaluation finished
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK] </EquationSolve>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK] <GlobalEventIterations>Starting global event iteration at <value name="t">       0.0000000000000000E+000</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]   <GlobalIteration>Global iteration <value name="iter">1</value>, at <value name="t">       0.0000000000000000E+000</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]     <EquationSolve>Model equations evaluation invoked at <value name="t">       0.0000000000000000E+000</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]       Model equations evaluation finished
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]     </EquationSolve>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]   </GlobalIteration>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]   <final_step>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]   </final_step>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK] </GlobalEventIterations>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK] <EquationSolve>Model equations evaluation invoked at <value name="t">       0.0000000000000000E+000</value>
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK]   Model equations evaluation finished
+FMIL: module = Model, log level = 4: [INFO][FMU status:OK] </EquationSolve>
+FMIL: module = FMICAPI, log level = 5: Calling fmiFreeModelInstance
+FMIL: module = FMILIB, log level = 5: Releasing FMU CAPI interface
+FMIL: module = FMICAPI, log level = 5: Successfully unloaded FMU binary
+FMIL: module = FMILIB, log level = 5: Releasing allocated library resources
+FMIL: module = JMPRT, log level = 5: Removing c:\users\emil\appdata\local\temp\JModelica.org\jm_tmpbub8zz

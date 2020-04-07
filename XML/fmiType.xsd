@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- edited with XMLSpy v2008 rel. 2 sp2 (http://www.altova.com) by Prof. Martin Otter (Deutsches Zentrum für Luft- und Raumfahrt e. V.) -->
+<!--
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License version 3 as published
+    by the Free Software Foundation, or optionally, under the terms of the
+    Common Public License version 1.0 as published by IBM.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License, or the Common Public License, for more details.
+
+    You should have received copies of the GNU General Public License
+    and the Common Public License along with this program.  If not,
+    see <http://www.gnu.org/licenses/> or
+    <http://www.ibm.com/developerworks/library/os-cpl.html/> respectively.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified" attributeFormDefault="unqualified">
+  <xs:complexType name="fmiType">
+    <xs:annotation>
+      <xs:documentation>Type attributes of a scalar variable</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:choice>
+        <xs:element name="RealType">
+          <xs:complexType>
+            <xs:attribute name="quantity" type="xs:normalizedString"/>
+            <xs:attribute name="unit" type="xs:normalizedString"/>
+            <xs:attribute name="displayUnit" type="xs:normalizedString">
+              <xs:annotation>
+                <xs:documentation>Default display unit, provided the conversion of displayUnit to unit is defined in UnitDefinitions (fmiBaseUnit).</xs:documentation>
+              </xs:annotation>
+            </xs:attribute>
+            <xs:attribute name="relativeQuantity" type="xs:boolean" default="false">
+              <xs:annotation>
+                <xs:documentation>If relativeQuantity=true, offset for displayUnit must be ignored.</xs:documentation>
+              </xs:annotation>
+            </xs:attribute>
+            <xs:attribute name="min" type="xs:double"/>
+            <xs:attribute name="max" type="xs:double"/>
+            <xs:attribute name="nominal" type="xs:double"/>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="IntegerType">
+          <xs:complexType>
+            <xs:attribute name="quantity" type="xs:normalizedString"/>
+            <xs:attribute name="min" type="xs:int"/>
+            <xs:attribute name="max" type="xs:int"/>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="BooleanType"/>
+        <xs:element name="StringType"/>
+        <xs:element name="EnumerationType">
+          <xs:complexType>
+            <xs:sequence minOccurs="0" maxOccurs="unbounded">
+              <xs:element name="Item">
+                <xs:annotation>
+                  <xs:documentation>First Item has value=1, Second Item has value = 2, etc.</xs:documentation>
+                </xs:annotation>
+                <xs:complexType>
+                  <xs:attribute name="name" type="xs:string" use="required"/>
+                  <xs:attribute name="description" type="xs:string"/>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+            <xs:attribute name="quantity" type="xs:normalizedString"/>
+            <xs:attribute name="min" type="xs:int"/>
+            <xs:attribute name="max" type="xs:int"/>
+          </xs:complexType>
+        </xs:element>
+      </xs:choice>
+    </xs:sequence>
+    <xs:attribute name="name" type="xs:string" use="required"/>
+    <xs:attribute name="description" type="xs:string"/>
+  </xs:complexType>
+</xs:schema>

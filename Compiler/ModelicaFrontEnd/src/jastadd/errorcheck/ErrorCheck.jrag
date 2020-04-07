@@ -1,0 +1,1798 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedList;
+import java.util.ArrayList;
+import java.util.Map;
+
+import org.jmodelica.util.collections.ListMap;
+import org.jmodelica.util.collections.LinkedHashListMap;
+import org.jmodelica.api.problemHandling.Problem;
+import org.jmodelica.api.problemHandling.ProblemSeverity;
+import org.jmodelica.api.problemHandling.ProblemKind;
+import org.jmodelica.util.problemHandling.ReporterNode;
+import org.jmodelica.util.problemHandling.ProblemOptionsProvider;
+import org.jmodelica.util.ErrorCheckType;
+
+
+
+/**
+ * Interface for handling semantic errors.
+ * $see Root#setErrorHandler(IErrorHandler)
+ */
+public interface IErrorHandler {
+    /**
+     * Called when a semantic error is found. 
+     * 
+     * @param s	error message.
+     * @param n	the node the error originated from.
+     * @see ASTNode#error(String)
+     */
+    public void error(String s, ASTNode n);
+    
+    /**
+     * Called when a compiler compliance error is found.
+     * 
+     * These errors are generated when compiling code that is legal Modelica, 
+     * but uses features that aren't implemented. Compliance errors are ignored 
+     * by test cases (except ComplianceErrorTestCase).
+     *  
+     * @param s	error message.
+     * @param n	the node the error originated from.
+     * @see ASTNode#compliance(String)
+     */
+    public void compliance(String s, ASTNode n);
+    
+    /**
+     * Called when a warning is issued during semantic error checking.
+     * 
+     * @param s	warning message.
+     * @param n	the node the warning originated from.
+     * @see ASTNode#warning(String)
+     */
+    public void warning(String s, ASTNode n);
+    
+    /**
+     * Called when a problem is generated though other means than the other methods in this interface, 
+     * typically during parsing of library files.
+     * 
+     * @param p   the problem
+     * @see ASTNode#problem(Problem)
+     */
+    public void problem(Problem p);
+}
+
+/**
+ * Default implementation of {@link IErrorHandler}.
+ *  
+ * Collects a list of {@link Problem} for all found errors.
+ */
+public class DefaultErrorHandler implements IErrorHandler {
+    protected boolean haltOnWarning;
+    
+    public DefaultErrorHandler() {
+        this(false);
+    }
+
+    public DefaultErrorHandler(boolean haltOnWarning) {
+        this.haltOnWarning = haltOnWarning;
+    }
+
+    /**
+     * Creates a new {@link Problem} and adds it to root.errors, ignoring duplicates.
+     * 
+     * @param s	error message.
+     * @param n	the node the error originated from.
+     */
+    public void error(String s, ASTNode n) {
+        problem(s, n, ProblemSeverity.ERROR, ProblemKind.SEMANTIC);
+    }
+
+    /**
+     * Creates a new {@link Problem} with kind COMPLIANCE 
+     *        and adds it to root.errors, ignoring duplicates.
+     * 
+     * @param s	error message.
+     * @param n	the node the error originated from.
+     */
+    public void compliance(String s, ASTNode n) {
+        problem(s, n, ProblemSeverity.ERROR, ProblemKind.COMPLIANCE);
+    }
+
+    /**
+     * Creates a new {@link Problem} and adds it to root.warnings, ignoring duplicates.
+     * 
+     * @param s	warning message.
+     * @param n	the node the warning originated from.
+     */
+    public void warning(String s, ASTNode n) {
+        problem(s, n, ProblemSeverity.WARNING, ProblemKind.OTHER);
+    }
+
+    /**
+     * Called when a problem is generated though other means than the other methods in this class, 
+     * typically during parsing of library files.
+     * 
+     * @param p   the problem
+     * @see ASTNode#problem(Problem)
+     */
+    public void problem(Problem p) {
+        ArrayList<Problem> list = (p.severity() == ProblemSeverity.WARNING) ? warnings : errors;
+        int pos = list.indexOf(p);
+        if (pos == -1)
+            list.add(p);
+        else
+            list.get(pos).merge(p);
+    }
+
+    protected void problem(String message, ASTNode node, ProblemSeverity severity, ProblemKind kind) {
+        problem(Problem.createProblem(null, node, severity, kind, message));
+    }
+}
+
+/**
+ * Error handler that generates warnings for compliance errors, 
+ *        delegating to another error handler.
+ */
+public class ComplianceWarnErrorHandler implements IErrorHandler {
+
+    private IErrorHandler delegate;
+
+    public ComplianceWarnErrorHandler(IErrorHandler delegate) {
+        if (delegate instanceof ComplianceWarnErrorHandler)
+            delegate = ((ComplianceWarnErrorHandler) delegate).delegate;
+        this.delegate = delegate;
+    }
+
+    /**
+     * Delegates to wrapped error handler.
+     * 
+     * @param s	error message.
+     * @param n	the node the error originated from.
+     */
+    public void error(String s, ASTNode n) {
+        delegate.error(s, n);
+    }
+
+    /**
+     * Delegates to warning() in wrapped error handler.
+     * 
+     * @param s	error message.
+     * @param n	the node the error originated from.
+     */
+    public void compliance(String s, ASTNode n) {
+        delegate.warning(s, n);
+    }
+
+    /**
+     * Delegates to wrapped error handler.
+     * 
+     * @param s	warning message.
+     * @param n	the node the warning originated from.
+     */
+    public void warning(String s, ASTNode n) {
+        delegate.warning(s, n);
+    }
+
+    /**
+     * Called when a problem is generated though other means than the other methods in this class, 
+     * typically during parsing of library files.
+     * 
+     * @param p   the problem
+     * @see ASTNode#problem(Problem)
+     */
+    public void problem(Problem p) {
+        delegate.problem(p);
+    }
+}
+
+aspect ErrorCheck {
+    
+    syn ProblemOptionsProvider ASTNode.myProblemOptionsProvider() = root().getUtilInterface();
+    
+    public class UtilInterface implements ProblemOptionsProvider {
+        private Set<String> warningsFilterCache = null;
+        public boolean filterThisWarning(String identifier) {
+            if (warningsFilterCache == null) {
+                warningsFilterCache = new HashSet<String>();
+                for (String s : getOptionRegistry().getStringOption("filter_warnings").split(",")) {
+                    warningsFilterCache.add(s);
+                }
+            }
+            return warningsFilterCache.contains(identifier);
+        }
+    }
+	
+	public void ASTNode.breakOnErrors() throws CompilerException {
+		root().getErrorHandler().breakOnErrors();
+	}
+	
+	public void IErrorHandler.breakOnErrors() throws CompilerException;
+	
+	public void ComplianceWarnErrorHandler.breakOnErrors() throws CompilerException {
+	    delegate.breakOnErrors();
+	}
+	
+	public void DefaultErrorHandler.breakOnErrors() throws CompilerException {
+		if (!errors.isEmpty() || (haltOnWarning && !warnings.isEmpty())) {
+		    java.util.Collections.sort(errors);
+		    java.util.Collections.sort(warnings);
+		    
+		    ArrayList<Problem> problems = new ArrayList<Problem>();
+		    problems.addAll(warnings);
+		    problems.addAll(errors);
+		    
+		    errors.clear();
+		    warnings.clear();
+		    
+		    throw new CompilerException(problems);
+		}
+	}
+	
+    public ArrayList<Problem> ASTNode.collectWarnings() {
+        return root().getErrorHandler().collectWarnings();
+    }
+    
+    public ArrayList<Problem> IErrorHandler.collectWarnings();
+    
+    public ArrayList<Problem> ComplianceWarnErrorHandler.collectWarnings() {
+        return delegate.collectWarnings();
+    }
+    
+    public ArrayList<Problem> DefaultErrorHandler.collectWarnings() {
+		breakOnErrors();
+	    java.util.Collections.sort(warnings);
+	    ArrayList<Problem> problems = new ArrayList<Problem>(warnings);
+	    warnings.clear();
+	    return problems;
+	}
+
+    public ArrayList<Problem> DefaultErrorHandler.errors = new ArrayList<Problem>();
+    public ArrayList<Problem> DefaultErrorHandler.warnings = new ArrayList<Problem>();
+
+  private IErrorHandler Root.errorHandler = null;
+  
+  /**
+   * Get the handler for semantic errors.
+   * @see IErrorHandler 
+   */
+  public IErrorHandler Root.getErrorHandler() {
+	  return getUtilInterface().getErrorHandler();
+  }
+
+  ASTNode implements ReporterNode;
+  
+  public void ASTNode.reportProblem(Problem problem) {
+      root().getErrorHandler().problem(problem);
+  }
+
+  
+  
+  /**
+   * Register an error. Delegates to an {@link IErrorHandler}.
+   * @param s	the error message.
+   */
+  @Deprecated
+  public void ASTNode.error(String s) {
+	  root().getErrorHandler().error(s, this);
+  }
+  
+  /**
+   * Register an error. Delegates to an {@link IErrorHandler}.
+   * 
+   * Builds error message using <code>format</code> as format string.
+   */
+  @Deprecated
+  public void ASTNode.error(String format, Object... args) {
+	  error(String.format(format, args));
+  }
+
+  /**
+   * Register a compliance error. Delegates to an {@link IErrorHandler}.
+   * @param s	the error message.
+   */
+  @Deprecated
+  public void ASTNode.compliance(String s) {
+	  root().getErrorHandler().compliance(s, this);
+  }
+  
+  /**
+   * Register a compliance error. Delegates to an {@link IErrorHandler}.
+   * 
+   * Builds error message using <code>format</code> as format string.
+   */
+  @Deprecated
+  public void ASTNode.compliance(String format, Object... args) {
+	  compliance(String.format(format, args));
+  }
+
+  /**
+   * Register a warning. Delegates to an {@link IErrorHandler}.
+   * @param s	the warning message.
+   */
+  @Deprecated
+  public void ASTNode.warning(String s) {
+	  root().getErrorHandler().warning(s, this);
+  }
+  
+  /**
+   * Register a warning. Delegates to an {@link IErrorHandler}.
+   * 
+   * Builds warning message using <code>format</code> as format string.
+   */
+  @Deprecated
+  public void ASTNode.warning(String format, Object... args) {
+	  warning(String.format(format, args));
+  }
+
+  /**
+   * Register a problem. Delegates to an {@link IErrorHandler}.
+   * @param p   the problem.
+   */
+  @Deprecated
+  public void ASTNode.problem(Problem p) {
+      root().getErrorHandler().problem(p);
+  }
+
+    /**
+     * If this node is in a disabled conditional component, generate a warning, otherwise generate an error.
+     */
+    @Deprecated
+    public void ASTNode.errorUnlessDisabled(String s) {
+        if (inDisabledComponent()) {
+            warning("Found error in disabled conditional:\n  " + s);
+        } else {
+            error(s);
+        }
+    }
+
+    /**
+     * If this node is in a disabled conditional component, generate a warning, otherwise generate an error.
+     */
+    @Deprecated
+    public void ASTNode.errorUnlessDisabled(String format, Object... args) {
+        if (inDisabledComponent()) {
+            warning("Found error in disabled conditional:\n  " + format, args);
+        } else {
+            error(format, args);
+        }
+    }
+
+    /**
+     * If this node is in a disabled conditional component and <code>condition</code> is <code>true</code>, 
+     * generate a warning, otherwise generate an error.
+     */
+    @Deprecated
+    public void ASTNode.errorUnlessDisabledAnd(boolean condition, String s) {
+        if (condition) {
+            errorUnlessDisabled(s);
+        } else {
+            error(s);
+        }
+    }
+
+    /**
+     * If this node is in a disabled conditional component and <code>condition</code> is <code>true</code>, 
+     * generate a warning, otherwise generate an error.
+     */
+    @Deprecated
+    public void ASTNode.errorUnlessDisabledAnd(boolean condition, String format, Object... args) {
+        if (condition) {
+            errorUnlessDisabled(format, args);
+        } else {
+            error(format, args);
+        }
+    }
+
+    public interface LockBranch {
+        /**
+         * Lock the closest surrounding if-equation or if-expression that have only 
+         * parameter-expression tests and evaluates to another branch. Returns true 
+         * if any such if exists. 
+         * 
+         * Any parameters used in the test will be marked as structural.
+         * 
+         * NB: This has side-effects, despite being an inherited attribute.
+         * 
+         * @param checkType  the type of error checks to use when marking structural parameters
+         */
+        public boolean lockBranch(ErrorCheckType checkType);
+    }
+    FExp implements LockBranch;
+    FExpSubscript implements LockBranch;
+    FAbstractEquation implements LockBranch;
+    FStatement implements LockBranch;
+    FIfWhenClause implements LockBranch;
+    InstComponentDecl implements LockBranch;
+    InstFunctionArgument implements LockBranch;
+    FFunctionCallLeft implements LockBranch;
+    InstValueModification implements LockBranch;
+
+    // TODO: find way to move side-effects out from inh attr
+    inh boolean FExp.lockBranch(ErrorCheckType checkType);
+    inh boolean FExpSubscript.lockBranch(ErrorCheckType checkType);
+    inh boolean FIntegerSubscript.lockBranch(ErrorCheckType checkType);
+    inh boolean FAbstractEquation.lockBranch(ErrorCheckType checkType);
+    inh boolean FStatement.lockBranch(ErrorCheckType checkType);
+    inh boolean FIfWhenClause.lockBranch(ErrorCheckType checkType);
+    inh boolean InstComponentDecl.lockBranch(ErrorCheckType checkType);
+    inh boolean InstFunctionArgument.lockBranch(ErrorCheckType checkType); 
+    inh boolean FFunctionCallLeft.lockBranch(ErrorCheckType checkType);
+    inh boolean InstValueModification.lockBranch(ErrorCheckType checkType);
+    eq FIfExp.getThenExp().lockBranch(ErrorCheckType checkType)                = lockMyBranch(this, checkType, getIfExp(), true);
+    eq FIfExp.getElseExp().lockBranch(ErrorCheckType checkType)                = lockMyBranch(this, checkType, getIfExp(), false);
+    eq FIfEquation.getFAbstractEquation().lockBranch(ErrorCheckType checkType) = lockMyBranch(this, checkType, getTest(), true);
+    eq FIfEquation.getElse().lockBranch(ErrorCheckType checkType)              = lockMyBranch(this, checkType, getTest(), false);
+    eq FIfClause.getFStatement().lockBranch(ErrorCheckType checkType)          = lockMyBranch(this, checkType, getTest(), true);
+    eq FIfStmt.getFIfWhenClause(int i).lockBranch(ErrorCheckType checkType)    = lockMyBranch(checkType, i);
+    eq FIfStmt.getElseStmt().lockBranch(ErrorCheckType checkType)              = lockMyBranch(checkType, getNumFIfWhenClause());
+    eq FConnectClause.getConnector1().lockBranch(ErrorCheckType checkType)     = getConnector2().isDisabled() || lockBranch(checkType);
+    eq FConnectClause.getConnector2().lockBranch(ErrorCheckType checkType)     = getConnector1().isDisabled() || lockBranch(checkType);
+    eq InstComponentDecl.getChild().lockBranch(ErrorCheckType checkType)       = isDisabled() || lockBranch(checkType);
+    eq InstValueModification.getFExp().lockBranch(ErrorCheckType checkType)    = isSuperseded() || lockBranch(checkType);
+    eq InstClassDecl.getChild().lockBranch(ErrorCheckType checkType)           = false;
+    eq InstRoot.getChild().lockBranch(ErrorCheckType checkType)                = false;
+    eq FClass.getChild().lockBranch(ErrorCheckType checkType)                  = false;
+
+    /**
+     * Lock branch on src and return true if it only has parameter-expression 
+     * tests that evaluates to use the branch not indicated by <code>then</code>. 
+     * Otherwise delegates to {@link LockBranch#lockBranch(ErrorCheckType)}.
+     * 
+     * Any parameters used in the test will be marked as structural.
+     * 
+     * @param checkType  the type of error checks to use when marking structural parameters
+     * @param then       if true, we are trying to remove the then-branch, otherwise the else-branch
+     */
+    public static boolean ASTNode.lockMyBranch(LockBranch src, ErrorCheckType checkType, FExp exp, boolean then) {
+        if (exp.lockable(then)) {
+            exp.markAsStructuralParameter(checkType);
+            return true;
+        } else {
+            return src.lockBranch(checkType);
+        }
+    }
+
+    syn boolean FExp.lockable(boolean then) {
+        if (variability().fixedParameterOrLess()) {
+            try {
+                CValue val = ceval();
+                return val.hasBooleanValue() && val.booleanValue() != then;
+            } catch (ConstantEvaluationException e) {}
+        }
+        return false;
+    }
+
+    public boolean FIfStmt.lockMyBranch(ErrorCheckType checkType, int i) {
+        if (i == 0) {
+            return lockBranch(checkType);
+        } else {
+            FIfWhenClause next = getFIfWhenClause(i - 1);
+            return lockMyBranch(next, checkType, next.getTest(), false);
+        }
+    }
+
+    syn boolean InstValueModification.isSuperseded() {
+        InstComponentDecl cmp = myTargetComponent();
+        InstModification mod = cmp.isAttribute() ? 
+                parentTargetComponent().totalMergedEnvironment().find(cmp.name()) : 
+                cmp.myInstValueMod();
+        return mod != null && mod != this;
+    }
+
+    inh InstComponentDecl InstModification.myTargetComponent();
+    eq InstComponentModification.getChild().myTargetComponent() = getName().myInstComponentDecl();
+    eq InstComponentDecl.getChild().myTargetComponent()         = this;
+    eq InstNode.getChild().myTargetComponent()                  = unknownInstComponentDecl();
+    eq InstRecordConstructor.getChild().myTargetComponent()     = unknownInstComponentDecl();
+
+    inh InstComponentDecl InstModification.parentTargetComponent();
+    eq InstComponentModification.getChild().parentTargetComponent() = myTargetComponent();
+    eq InstNode.getChild().parentTargetComponent()                  = unknownInstComponentDecl();
+    eq InstRecordConstructor.getChild().parentTargetComponent()     = unknownInstComponentDecl();
+
+    syn boolean InstComponentDecl.isAttribute() = false;
+    eq InstBuiltIn.isAttribute()                = true;
+
+
+    /**
+     * Class used by the error check to delegate to different error checks.
+     * This class is subtyped for each error check with different
+     * implementations of check() that delegate to corresponding check.
+     */
+    public abstract class ErrorChecker {
+        private final String name;
+
+        public ErrorChecker(String name) {
+            this.name = name;
+        }
+
+        /**
+         * Do check on ASTNode node with the ErrorCheckType check type.
+         */
+        public abstract void check(ASTNode node, ErrorCheckType checkType);
+
+        @Override
+        public String toString() {
+            return name;
+        }
+    }
+
+    /**
+     * A list that contains all error checkers. New error checkers are added
+     * dynamically during static evaluation by calling addErrorChecker().
+     * 
+     * @see ASTNode.addErrorChecker(ErrorChecker)
+     */
+    private static Collection<ErrorChecker> ASTNode.ERROR_CHECKERS;
+
+    /**
+     * Add ErrorChecker checker to the list of error checkers. This method
+     * should only be called from ASTnode in order to ensure that the checker
+     * is added corretly during static evaluation, hence the private
+     * visibility.
+     */
+    private static ErrorChecker ASTNode.addErrorChecker(ErrorChecker checker) {
+        if (ERROR_CHECKERS == null)
+            ERROR_CHECKERS = new ArrayList<ErrorChecker>();
+        ERROR_CHECKERS.add(checker);
+        return checker;
+    }
+
+    /**
+     * A helper method that calls all registered error checkers.
+     * 
+     * @see ASTNode#addErrorChecker(ErrorChecker)
+     */
+    protected void ASTNode.allChecks(ErrorCheckType checkType) {
+        for (ErrorChecker checker : ERROR_CHECKERS)
+            checker.check(this, checkType);
+    }
+
+    public void ASTNode.collectErrors(ErrorCheckType checkType) {
+        for (ASTNode n : this) {
+            n.collectErrors(checkType);
+        }
+        allChecks(checkType);
+    }
+
+
+    public void ASTNode.errorCheck(ErrorCheckType checkType) {
+        collectErrors(checkType);
+        breakOnErrors();
+    }
+
+    inh InstComponentDecl ASTNode.errorEnclosingComponent();
+    eq InstNode.getChild().errorEnclosingComponent() = containingInstComponent();
+    eq InstComponentDecl.getChild().errorEnclosingComponent() {
+        if (isRedeclared() || getSrcComponentDecl().hasRedeclare()) {
+            return errorEnclosingComponent();
+        } else {
+            return containingInstComponent();
+        }
+    }
+    eq InstComponentDecl.getFAbstractEquation().errorEnclosingComponent() = this;
+    
+    eq FlatRoot.getChild().errorEnclosingComponent() = null;
+    eq InstRoot.getChild().errorEnclosingComponent() = null;
+    eq SourceRoot.getChild().errorEnclosingComponent() = null;
+
+    syn String ASTNode.errorComponentName() {
+        InstComponentDecl parent = errorEnclosingComponent();
+        return parent == null ? null : parent.getFAccess().scalarName(false);
+    }
+
+}
+
+aspect InstanceErrorCheck {
+
+ // Error checking in instance tree
+
+    // We don't want to error check an entire model, just the classes
+    //   that are used. 
+    public void InstProgramRoot.checkErrorsInInstClass(String className, ErrorCheckType checkType) throws ModelicaClassNotFoundException {
+        InstClassDecl icd = instantiateModel(className);
+        if (!icd.isUnknown()) {
+            icd.errorCheck(checkType);
+        } else {
+            throw new ModelicaClassNotFoundException(className);
+        }
+    }
+
+    public void InstClassDecl.checkErrorsInModelInstance(String className, ErrorCheckType checkType) throws ModelicaClassNotFoundException {
+        errorCheck(checkType);
+    }
+
+    public void UnknownInstClassDecl.checkErrorsInModelInstance(String className, ErrorCheckType checkType) throws ModelicaClassNotFoundException {
+        throw new ModelicaClassNotFoundException(className);
+    }
+
+	protected boolean BaseNode.errorChecked = false;
+
+	public void ASTNode.resetCollectErrors() {
+		for (ASTNode n : noTransform())
+			n.resetCollectErrors();
+	}
+	
+	public static void ASTNode.resetCollectErrorsOn(ASTNode n) {
+		if (n != null)
+			n.resetCollectErrors();
+	}
+	
+	public void BaseNode.resetCollectErrors() {
+		errorChecked = false;
+		super.resetCollectErrors();
+	}
+	
+	public void InstNode.resetCollectErrors() {
+		super.resetCollectErrors();
+		resetCollectErrorsOn(getInstComponentDeclListNoTransform());
+		resetCollectErrorsOn(getInstClassDeclListNoTransform());
+		resetCollectErrorsOn(getInstExtendsListNoTransform());
+		resetCollectErrorsOn(getInstImportListNoTransform());
+		resetCollectErrorsOn(getRedeclaredInstClassDeclListNoTransform());
+		resetCollectErrorsOn(getFAbstractEquationListNoTransform());
+	}
+
+  public void InstNode.collectErrors(ErrorCheckType checkType) {
+    if (!errorChecked) {
+      errorChecked = true;
+	  allChecks(checkType);
+	  for (InstNode n : getInstComponentDecls()) 
+		  n.collectErrors(checkType);
+	  for (InstNode n : getInstExtendss()) 
+		  n.collectErrors(checkType);
+	  for (FAbstractEquation e : getFAbstractEquations()) 
+		  e.collectErrors(checkType);
+	}
+  }
+    
+    /**
+     * Check if this node is in an InstComponentDecl.
+     */
+    inh boolean InstExtends.inInstComponent();
+    inh boolean InstClassRedeclare.inInstComponent();
+    eq InstComponentDecl.getChild().inInstComponent() = true;
+    eq InstClassDecl.getChild().inInstComponent()     = false;
+    eq InstRoot.getChild().inInstComponent()          = false;
+    eq FlatRoot.getChild().inInstComponent()          = false;
+    eq InstRecordConstructor.getChild().inInstComponent() = false;
+    
+    
+    public void FExp.collectErrors(ErrorCheckType checkType) {
+        if (!errorChecked) {
+            errorChecked = true;
+            super.collectErrors(checkType);
+        }
+    }
+
+    public void InstBaseClassDecl.collectErrors(ErrorCheckType checkType) {
+        if (!errorChecked) {
+            super.collectErrors(checkType);
+            errorChecked = true;
+            for (InstImport ii : getInstImports()) {
+                ii.collectErrors(checkType);
+            }
+            if (hasInstConstrainingClass()) {
+                getInstConstrainingClass().collectErrors(checkType);
+            }
+            getInstRestriction().collectErrors(checkType);
+            getInstGeneratedInners().collectErrors(checkType);
+            if (getSrcBaseClassDecl() instanceof SrcFullClassDecl) {
+                SrcFullClassDecl fcd = (SrcFullClassDecl) getSrcBaseClassDecl();
+                if (!(fcd.getName().getID().equals(fcd.getSrcEndDecl().getEndID()))) {
+                    error("The declaration and end names of a class should be the same");
+                }
+            }
+        }
+    }
+
+    public void InstFullClassDecl.collectErrors(ErrorCheckType checkType) {
+        if (!errorChecked) {
+            super.collectErrors(checkType);
+            errorChecked = true;
+            getInstExternalOpt().collectErrors(checkType);
+            if (isFunction())
+                errorCheckDerivativeAnnotations(checkType);
+        }
+    }
+
+    public void InstGeneratedInner.collectErrors(ErrorCheckType checkType) {
+        if (!checkType.allowBadGeneratedInner()) {
+            boolean error = false;
+            if (getMatchingNonInner() != null) {
+                getCopiedOuter().error("Can not generate missing inner declaration for %s, due to presence of component with same name on top level", name());
+                error = true;
+            } else {
+                ListMap<String, String> map = new LinkedHashListMap<String, String>();
+                for (InstComponentDecl outer : outers) {
+                    if (outer.myInstClass().isPartial()) {
+                        outer.error("Can not generate missing inner declaration for outer component %s of partial type %s", 
+                                outer.name(), outer.myInstClass().qualifiedName());
+                        error = true;
+                    } else {
+                        map.add(outer.myInstClass().actualInstClass().qualifiedName(), outer.qualifiedName());
+                    }
+                }
+                if (map.size() > 1) {
+                    StringBuilder sb = new StringBuilder();
+                    java.util.List<String> classes = new ArrayList<String>(map.keySet());
+                    Collections.sort(classes);
+                    for (String cls : classes) {
+                        java.util.List<String> components = map.get(cls);
+                        Collections.sort(components);
+                        for (String outer : components) {
+                            sb.append("\n    ");
+                            sb.append(cls);
+                            sb.append(" ");
+                            sb.append(outer);
+                        }
+                    }
+                    getCopiedOuter().error("Can't generate missing inner declaration for %s, due to the outer declarations being of different types: %s", name(), sb);
+                    error = true;
+                }
+            }
+            if (!error) {
+                getInstComponentDecl().collectErrors(checkType);
+                // TODO: Use missingInnerMessage annotation
+                getCopiedOuter().warning("Generated missing inner declaration for '%s'", getCopiedOuter());
+            }
+        }
+    }
+
+    public void InstBaseClassDecl.errorCheckDerivativeAnnotations(ErrorCheckType checkType) {
+        errorCheckDerivativeAnnotations(checkType, findDerivativeAnnotationRoot());
+    }
+    
+    private void InstBaseClassDecl.errorCheckDerivativeAnnotations(ErrorCheckType checkType, AnnotationNode src) {
+        for (AnnotationNode derivative : src.allFor("derivative")) {
+            errorCheckDerivativeAnnotation(checkType, derivative);
+        }
+    }
+
+    private void InstBaseClassDecl.errorCheckDerivativeAnnotation(ErrorCheckType checkType, AnnotationNode derivative) {
+        // TODO: Check that inputs/outputs of target function matches this function
+        if (!derivative.isValue()) {
+            derivative.ast().error("Function name is missing in derivative annotation declaration");
+            return;
+        }
+        InstLookupResult<InstClassDecl> lr = derivative.lookupInstClass();
+        if (lr == null) {
+            derivative.ast().error("Invalid derivative function reference");
+            return;
+        }
+        if (lr.isProblem()) {
+            lr.problem(derivative.ast(), "function", derivative.valueToString());
+            if (lr.isError()) {
+                return;
+            }
+        }
+        InstClassDecl icd = lr.target().actualInstClass();
+        if (!icd.isFunction()) {
+            derivative.ast().error("The class " + derivative.valueToString() + " is not a function");
+            return;
+        }
+        icd.collectErrors(checkType);
+        boolean orderFound = false;
+        Set<String> noAndZeroDerivatives = new HashSet<String>();
+        for (AnnotationNode attrNode : derivative) {
+            if ("noDerivative".equals(attrNode.name()) || "zeroDerivative".equals(attrNode.name())) {
+                InstLookupResult<InstComponentDecl> res = attrNode.lookupInstComponent();
+                if (res == null) {
+                    attrNode.ast().error("Expecting variable reference for " + attrNode.name() + " annotation");
+                    continue;
+                }
+                String varName = attrNode.valueToString();
+                if (!noAndZeroDerivatives.add(varName))
+                    attrNode.ast().error("Multiple noDerivative or zeroDerivative declarations for " + varName);
+                if (res.isNotFound())
+                    attrNode.ast().error("Unable to find " + varName);
+                else if (!res.target().isInput())
+                    attrNode.ast().error(attrNode.name() + " annotation may only reference input variables");
+            } else if ("order".equals(attrNode.name())) {
+                if (orderFound)
+                    attrNode.ast().error("Multiple declarations of the order attribute");
+                orderFound = true;
+                if (!attrNode.isIntegerValue())
+                    attrNode.ast().error("Expecting integer typed expression for order attribute");
+                else if (attrNode.integer() < 1)
+                    attrNode.ast().error("Order attribute must be greater or equal to one");
+            }
+        }
+    }
+
+    public void InstSimpleShortClassDecl.collectErrors(ErrorCheckType checkType) {
+        if (!errorChecked) {
+            errorChecked = true;
+            getTarget().collectErrors(checkType);
+            actualInstClass().collectErrors(checkType);
+        }
+    }
+
+    public void InstLibNode.collectErrors(ErrorCheckType checkType) {
+        if (!errorChecked) {
+            errorChecked = true;
+            actualInstClass().collectErrors(checkType);
+        }
+    }
+
+    public void InstImport.collectErrors(ErrorCheckType checkType) {
+        if (!errorChecked) {
+            errorChecked = true;
+            getPackageName().collectErrors(checkType);
+        }
+    }
+
+    public void InstComponentDecl.collectErrors(ErrorCheckType checkType) {
+        if (!errorChecked) {
+            errorChecked = true;
+            if (checkType.checkForRecursiveStructure() && isRecursed()) {
+                error("Recursive class structure");
+            } else if (isOuter()) {
+                myInnerInstComponentDecl().collectErrors(checkType);
+            } else {
+                collectErrorsInClassName(checkType);
+                myInstClass().checkRestriction(checkType);
+                if (hasFArraySubscripts()) {
+                    getFArraySubscripts().collectErrors(checkType);
+                }
+                if (hasConditionalAttribute())  {
+                    getConditionalAttribute().collectErrors(checkType);
+                }
+                if (!isDisabled() && hasInstModification()) {
+                    getInstModification().collectErrors(checkType);
+                }
+                for (InstModification im : getMergedEnvironment()) {
+                    im.checkModificationNames(checkType);
+                }
+                
+                if (shouldCheckInto(checkType)) {
+                    errorChecked = false;
+                    super.collectErrors(checkType);
+                    if (hasInstConstrainingComponent()) {
+                        getInstConstrainingComponent().collectErrors(checkType);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Check that the restriction of this class is fulfilled.
+     */
+    public void InstClassDecl.checkRestriction(ErrorCheckType checkType) {}
+    public void InstBaseClassDecl.checkRestriction(ErrorCheckType checkType) {
+        if (!errorChecked)
+            getInstRestriction().collectErrors(checkType);
+    }
+
+    public void InstModification.checkModificationNames(ErrorCheckType checkType) {}
+    
+    public void InstElementModification.checkModificationNames(ErrorCheckType checkType) {
+        getName().allChecks(checkType);
+    }
+	
+	syn boolean InstComponentDecl.shouldCheckInto(ErrorCheckType checkType) =
+	        !isDisabled() || checkType.checkInactiveComponents() || myOptions().getBooleanOption("check_inactive_contitionals");
+
+	public void InstComponentDecl.collectErrorsInClassName(ErrorCheckType checkType) {
+		getClassName().collectErrors(checkType);
+	}	
+	
+	public void InstArrayComponentDecl.collectErrorsInClassName(ErrorCheckType checkType) {
+		// TODO: use correct class name instead of "ArrayDecl" so that name lookup suceeds instead?
+		//       need that for other things as well, but is there problems with it?
+	}	
+	
+	public void FExp.checkConstantExpression(ErrorCheckType checkType, String varKind, String varName) {
+		boolean failed = false;
+        ConstantEvaluationException eres = null;
+		try {
+			if (isCircular()) {
+			    if (!checkType.allowConstantNoValue())
+    				error("Could not evaluate binding expression for %s '%s' due to circularity: '%s'", 
+    						varKind, varName, prettyPrint(""));
+			} else {
+				CValue val = ceval();
+				if (val.isPartlyUnknown()) {
+					if (val.isUnsupported()) {
+						compliance("Constant evaluation not supported for expression(s) directly or indirectly " + 
+								"used by the binding expression for %s '%s': '%s'", varKind, varName, prettyPrint(""));
+					} else {
+						failed = true;
+					}
+				}
+			}
+		} catch (ConstantEvaluationNotReadyException e) {
+			// Will be evaluatable later, ignore for now
+		} catch (ConstantEvaluationException e) {
+			failed = true;
+			eres = e;
+		}
+		if (failed && !checkType.allowConstantNoValue()) {
+			error("Could not evaluate binding expression for %s '%s': '%s'%s", varKind, varName, prettyPrint(""),
+			        eres == null ? "" : eres.getModelicaStackTrace());
+		}
+	}
+
+    public static final SimpleProblemProducer ASTNode.PARAMETER_MISSING_BINDING_EXPRESSION =
+            new SimpleWarningProducer("PARAMETER_MISSING_BINDING_EXPRESSION", ProblemKind.SEMANTIC, "The parameter %s does not have a binding expression");
+    public static final SimpleProblemProducer ASTNode.CONSTANT_MISSING_BINDING_EXPRESSION =
+            new SimpleWarningProducer("CONSTANT_MISSING_BINDING_EXPRESSION", ProblemKind.SEMANTIC, "The constant %s does not have a binding expression");
+    
+    public void InstAssignable.collectErrors(ErrorCheckType checkType) {
+        //log.debug(toString());
+        if (!errorChecked) {
+            super.collectErrors(checkType);
+            errorChecked = true;
+            
+            // Check modification
+            if (hasInstValueMod()) {
+                myInstValueMod().collectErrors(checkType);
+            }
+            
+            if (hasBindingFExp()) {
+                // Check if the binding expression of constants can be evaluated
+                FExp bexp = getBindingFExp();
+                if (isConstant() && !bexp.type().isUnknown()) {
+                    bexp.checkConstantExpression(checkType, "constant", qualifiedName());
+                } else if (isParameter() && bexp.isCircular()) {
+                    bexp.error("Circularity in binding expression of parameter: %s = %s", qualifiedName(), bexp);
+                }
+            } else {
+                // Warn if constant or parameter does not have a binding expression (start is used)
+                if (variability().fixedParameterOrLess() && !isForIndex() && !isRecord() && 
+                        !hasParentRecordWithBindingExp() && !inFunction()) {
+                    if (isParameter()) {
+                        PARAMETER_MISSING_BINDING_EXPRESSION.invoke(this, qualifiedName());
+                    } else {
+                        CONSTANT_MISSING_BINDING_EXPRESSION.invoke(this, qualifiedName());
+                    }
+                }
+            }
+            
+            TypePrefixVariability v = variability().combine();
+            // Mark parameters with Evaluate=true as structural
+            if (v.parameterVariability() && isEvalAnnotated(true)) {
+                if (v.fixedParameterOrLess()) {
+                    forceVariability(checkType, Variability.STRUCTPARAMETER);
+                } else {
+                    warning("Evaluate annotation is ignored for parameters with fixed=false");
+                }
+            }
+            
+            // Check array indices
+            getClassName().collectErrors(checkType);
+            getLocalFArraySubscriptsOpt().collectErrors(checkType);
+            
+            // Check attributes for primitive variables
+            checkAttributes(checkType);
+        }
+    }
+    
+	public void InstAssignable.checkAttributes(ErrorCheckType checkType) {}
+
+    public static final SimpleProblemProducer ASTNode.START_VALUE_NOT_PARAMETER =
+            new SimpleErrorProducer("START_VALUE_NOT_PARAMETER", ProblemKind.SEMANTIC,
+                    "Variability of binding expression for attribute '%s' is not less"
+                    + " than or equal to parameter variability: %s");
+    public static final SimpleProblemProducer ASTNode.START_VALUE_INITIAL_PARAMETER =
+            new SimpleWarningProducer("START_VALUE_INITIAL_PARAMETER", ProblemKind.COMPLIANCE,
+                    "Variability of binding expression for attribute '%s' is "
+                    + " initial parameter variability: %s");
+
+	public void InstPrimitive.checkAttributes(ErrorCheckType checkType) {
+		// Check if the expressions of the attributes can be evaluated
+		// Note that this check has to be done locally in the
+		// context of an InstAssignable node in order to avoid
+		// evaluation of all value modifications also for non
+		// parameters.
+		for (InstModification im : totalMergedEnvironment()) {
+			// Only check attributes, value modifications are checked above
+			if (im instanceof InstComponentModification) {
+				InstComponentModification icm = (InstComponentModification)im;
+				if (icm.hasInstModification() && icm.getInstModification().hasInstValueMod()) {
+					FExp val_mod = icm.getInstModification().instValueMod();
+                    if (val_mod.variability().lessOrEqual(Variability.CONSTANT)) {
+                        val_mod.checkConstantExpression(checkType, "attribute", icm.getName().name());
+                    } else if (!val_mod.variability().parameterOrLess()) {
+                        ASTNode.START_VALUE_NOT_PARAMETER.invoke(val_mod, icm.getName().name(), val_mod);
+                    }
+				}
+			}
+		}
+	}
+
+	
+    public static final SimpleProblemProducer ASTNode.UNSPECIFIED_ENUM_COMPONENT =
+            new SimpleErrorProducer("UNSPECIFIED_ENUM_COMPONENT", ProblemKind.SEMANTIC,
+                    "Components of unspecified enumerations are not allowed in simulation models:\n %s");
+
+	syn boolean InstNode.isUnspecifiedEnum() = false;
+	eq InstPrimitive.isUnspecifiedEnum() = myInstClass().isUnspecifiedEnum();
+	eq InstClassDecl.isUnspecifiedEnum() = enumLiterals().isEmpty();
+
+	public void InstExtends.collectErrors(ErrorCheckType checkType) {
+	    if (!errorChecked) {
+	    	if (checkType.checkForRecursiveStructure() && isRecursed()) {
+	    		error("Recursive class structure");
+	    		errorChecked = true;
+	    	} else {
+				super.collectErrors(checkType);
+    			errorChecked = true;
+				getClassName().collectErrors(checkType);
+				if (hasInstClassModification() && shouldCheckModification())
+					getInstClassModification().collectErrors(checkType);
+			}
+	    }
+	}
+	
+	// Normally the class modifications in an InstExtendsShortClass
+	// does not need to be checked, since they are checked in InstShortClassDecl.
+	// This is not the case if the short class decl references
+	// an primitive variable, however, and in this case the
+	// class modification needs to be checked for errors.
+	syn boolean InstExtends.shouldCheckModification()           = true;
+	eq InstExtendsShortClass.shouldCheckModification()          = extendsPrimitive();
+	eq InstReplacingExtendsShortClass.shouldCheckModification() = extendsPrimitive();
+
+    public void InstShortClassDecl.collectErrors(ErrorCheckType checkType) {
+        if (!errorChecked) {
+          super.collectErrors(checkType);
+          errorChecked = true;
+          // The localInstModifications should only be checked if
+          // the node is not a InstReplacingShortClassDecl. This
+          // is accomplished by the method collectInstModificationErrors.
+          collectInstModificationErrors(checkType);
+          if (hasInstConstrainingClass()) {
+                getInstConstrainingClass().collectErrors(checkType);
+          }
+        }
+    }
+
+	public void InstShortClassDecl.collectInstModificationErrors(ErrorCheckType checkType) {
+		for (InstModification mod : localInstModifications())
+			mod.collectErrors(checkType);
+    }
+    public void InstReplacingShortClassDecl.collectInstModificationErrors(ErrorCheckType checkType) { }
+
+	public void InstReplacingShortClassDecl.collectErrors(ErrorCheckType checkType) {
+	    if (!errorChecked) {
+		  super.collectErrors(checkType);
+    	  errorChecked = true;
+		  getOriginalInstClass().collectErrors(checkType);
+		}
+		
+	}
+
+	public void InstReplacingFullClassDecl.collectErrors(ErrorCheckType checkType) {
+	    if (!errorChecked) {
+		  super.collectErrors(checkType);
+    	  errorChecked = true;
+		  getOriginalInstClass().collectErrors(checkType);
+		}
+	}
+
+	public void InstBuiltIn.collectErrors(ErrorCheckType checkType) {}
+
+	public void InstComponentRedeclare.collectErrors(ErrorCheckType checkType) {
+		if (!errorChecked) {
+		    super.collectErrors(checkType);
+		    errorChecked = true;
+		}
+	}
+	
+	public void InstNode.checkRedeclares(ErrorCheckType checkType) {
+	    if (!errorChecked) {
+	        for (InstNode n : getInstComponentDecls()) 
+	            n.checkRedeclares(checkType);
+	        for (InstNode n : getInstExtendss()) 
+	            n.checkRedeclares(checkType);
+	      }
+	}
+
+    public void InstReplacingRecord.checkRedeclares(ErrorCheckType checkType) {
+        super.checkRedeclares(checkType);
+        if (shouldCheckInto(checkType))
+            typeCheckReplacingComponent(getOriginalInstComponent(), checkType);
+    }
+
+    public void InstReplacingComposite.checkRedeclares(ErrorCheckType checkType) {
+        super.checkRedeclares(checkType);
+        if (shouldCheckInto(checkType))
+            typeCheckReplacingComponent(getOriginalInstComponent(), checkType);
+    }
+
+    public void InstReplacingPrimitive.checkRedeclares(ErrorCheckType checkType) {
+        super.checkRedeclares(checkType);
+        if (shouldCheckInto(checkType))
+            typeCheckReplacingComponent(getOriginalInstComponent(), checkType);
+    }
+
+    public void InstReplacingExpandableConnectorDecl.checkRedeclares(ErrorCheckType checkType) {
+        super.checkRedeclares(checkType);
+        if (shouldCheckInto(checkType))
+            typeCheckReplacingComponent(getOriginalInstComponent(), checkType);
+    }
+
+    public void InstComponentDecl.checkRedeclares(ErrorCheckType checkType) {
+        if (!isDisabled() && hasInstModification()) {
+            getInstModification().collectErrors(checkType);
+        }
+        if (shouldCheckInto(checkType)) {
+            if (hasInstConstrainingComponent()) {
+                getInstConstrainingComponent().collectErrors(checkType);
+            }
+            super.checkRedeclares(checkType);
+        }
+    }
+
+	public void InstClassRedeclare.collectErrors(ErrorCheckType checkType) {
+		super.collectErrors(checkType);
+//		if (!inInstComponent())
+//			getInstClassDecl().collectErrors(checkType);	
+	}
+
+	public void InstValueModification.collectErrors(ErrorCheckType checkType) {
+		getFExp().collectErrors(checkType);
+	}
+
+    public void InstDot.collectErrors(ErrorCheckType checkType) {
+        for (InstAccess ia : getInstAccesss()) {
+            ia.collectErrors(checkType);
+            if (ia.isUnknown() || !ia.myInstComponentDecl().shouldCheckInto(checkType))
+                break;
+        }
+        allChecks(checkType);
+    }
+
+	public void InstClassAccess.collectErrors(ErrorCheckType checkType) {
+	    nameCheck(checkType);
+	}
+
+	public void InstComponentAccess.collectErrors(ErrorCheckType checkType) {
+	    super.collectErrors(checkType);
+	    if (!myInstComponentDecl().isUnknown() && !isModificationName())
+	    	myInstComponentDecl().collectErrors(checkType);
+	}
+	
+	public void InstComponentArrayAccess.collectErrors(ErrorCheckType checkType) {
+	    super.collectErrors(checkType);
+	    if (!myInstComponentDecl().isUnknown() && !isModificationName())
+	    	myInstComponentDecl().collectErrors(checkType);
+	}
+	
+	inh boolean InstAccess.isModificationName();
+	eq InstNamedModification.getName().isModificationName() = true;
+	eq BaseNode.getChild().isModificationName()             = false;
+
+	inh boolean FArraySubscripts.myAccessExists();
+	eq Root.getChild().myAccessExists()       = false;
+	eq InstAccess.getChild().myAccessExists() = !myInstComponentDecl().isUnknown();
+	
+	public void FArrayExpSubscripts.collectErrors(ErrorCheckType checkType) {
+		// Should this check be in the access instead?
+        int ndims = myDims();
+		if (getNumFSubscript() > ndims && !isInstComponentSize() && myAccessExists()) {
+			// TODO: shouldn't this check for to few as well? (no [] or all dimensions given)
+			error("Too many array subscripts for access: " + getNumFSubscript() + 
+                    " subscripts given, component has " + ndims + " dimensions");
+			allChecks(checkType);
+			for (int i = 0; i < ndims; i++)
+				getFSubscript(i).collectErrors(checkType);
+		} else {
+    		super.collectErrors(checkType);
+		}
+	}
+
+    public void FArrayLitSubscripts.collectErrors(ErrorCheckType checkType) {
+        /*
+         * Does not need implementation since error checking is done in the instance tree,
+         * and there should not be any FArrayLitSubscripts there.
+         * The reason for that is information necessary for error printing (line and column number)
+         * is not saved in FArrayLitSubscripts.
+         */
+        throw new UnsupportedOperationException();
+    }
+
+    public void FBreakStmt.collectErrors(ErrorCheckType checkType) {
+        if (enclosingLoop() == null)
+            error("Break statement must be inside while- or for-statement");
+    }
+
+	/**
+	 * Check if class has exactly one algorithm section or external function declaration.
+	 */
+    public boolean InstClassDecl.isCompleteFunction() {
+        return (numFAlgorithm() == 1);
+    }
+    syn boolean InstPartialFunction.isCompleteFunction() = true;
+    
+	syn boolean InstClassDecl.hasInstExternal() = false;
+	
+	syn int InstClassDecl.numInstExternal() {
+		int n = hasInstExternal() ? 1 : 0;
+		for (InstExtends ie : getInstExtendss())
+			n += ie.myInstClass().numInstExternal();
+		return n;
+	}
+    eq InstSimpleShortClassDecl.numInstExternal() = actualInstClass().numInstExternal();
+    eq InstLibNode.numInstExternal()              = actualInstClass().numInstExternal();
+	
+	syn int InstClassDecl.numFAlgorithm() {
+		int n = 0;
+		for (FAbstractEquation e : getFAbstractEquations())
+			if (e instanceof FAlgorithm)
+				n++;
+		for (InstExtends ie : getInstExtendss())
+			n += ie.myInstClass().numFAlgorithm();
+		return n;
+	}
+    eq InstSimpleShortClassDecl.numFAlgorithm() = actualInstClass().numFAlgorithm();
+    eq InstLibNode.numFAlgorithm()              = actualInstClass().numFAlgorithm();
+	
+	public void InstExternalObject.collectErrors(ErrorCheckType checkType) {
+	    if (!errorChecked) {
+			super.collectErrors(checkType);
+	    	errorChecked = true;
+	    	if (!inFunction()) {
+                if (!hasBindingExp() && !checkType.allowExternalObjectMissingBindingExpression()) {
+                    ASTNode.EXTERNAL_OBJECT_MISSING_BINDING_EXPRESSION.invoke(this, name());
+                }
+	    		getDestructorCall().collectErrors(checkType);
+	    		myInstClass().collectErrors(checkType);
+	    	}
+	    }
+	}
+
+    public static final SimpleProblemProducer ASTNode.EXTERNAL_OBJECT_MISSING_BINDING_EXPRESSION =
+            new SimpleErrorProducer("EXTERNAL_OBJECT_MISSING_BINDING_EXPRESSION", ProblemKind.SEMANTIC,
+                    "The external object '%s' does not have a binding expression");
+
+	public void InstForClauseE.collectErrors(ErrorCheckType checkType) {
+	    collectErrorsInFor(getFAbstractEquationList(), getInstForIndexList(), checkType);
+	}
+	
+	public void InstForStmt.collectErrors(ErrorCheckType checkType) {
+	    collectErrorsInFor(getForStmtList(), getInstForIndexList(), checkType);
+	}
+	
+	public void FIterExp.collectErrors(ErrorCheckType checkType) {
+	    collectErrorsInFor(getFExp(), getForIndexList(), checkType);
+	}
+
+    public void ASTNode.collectErrorsInFor(
+            ASTNode iterChild, List<? extends CommonForIndex> indices, ErrorCheckType checkType) {
+        // Do the checks on the for itself
+        allChecks(checkType);
+        
+        // Check everything except iterChild once
+        for (ASTNode ch : this)
+            if (ch != iterChild)
+                ch.collectErrors(checkType);
+        
+        // Check array bounds in iterChild for each index combination
+        try {
+            indices.getChild(0).collectErrorsForAllIndices(indices, 0, iterChild, checkType);
+        } catch (ConstantEvaluationException e) {
+            // Do "general" check if we are unable to determine the indices.
+            // Will probably give incorrect errors. However this is better than
+            // passing along errors and then crash!
+            iterChild.collectErrors(checkType);
+        }
+    }
+
+    /**
+     * Collect errors in iterated node for all combinations of for indices.
+     * 
+     * @param indices    the list of indices too loop for
+     * @param i          next index to handle
+     * @param child      the iterated node to check
+     * @param checkType  type of check to perform
+     */
+    public void CommonForIndex.collectErrorsForAllIndices(
+            List<? extends CommonForIndex> indices, int i, ASTNode child, ErrorCheckType checkType) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void InstForIndex.collectErrorsForAllIndices(
+        List<? extends CommonForIndex> indices, int i, ASTNode child, ErrorCheckType checkType) {
+        InstComponentDecl var = getInstPrimitive();
+        CValue oldVal = var.evaluationValue;
+        boolean last = i == indices.getNumChild() - 1;
+        CommonForIndex next = last ? null : indices.getChild(i + 1);
+        CValueArray ivals = getFExp().ceval().array();
+
+        if (ivals.hasUnknowns()) {
+            return;
+        }
+
+        for (Index j : ivals.indices()) {
+            var.setLocalCachedEvaluationValue(ivals.getCell(j));
+            if (last) {
+                child.resetCollectErrors();
+                child.collectErrors(checkType);
+                child.flushAllRecursive();
+            } else {
+                next.collectErrorsForAllIndices(indices, i + 1, child, checkType);
+            }
+        }
+        var.setLocalCachedEvaluationValue(oldVal);
+    }
+
+    @Override
+    public void InstForIndexNoExp.collectErrorsForAllIndices(
+            List<? extends CommonForIndex> indices, int i, ASTNode child, ErrorCheckType checkType) {
+        if (hasFExp()) {
+            super.collectErrorsForAllIndices(indices, i, child, checkType);
+        }
+    }
+
+
+    public void InstFunctionCall.collectErrors(ErrorCheckType checkType) {
+        if (!errorChecked) {
+            errorChecked = true;
+            // Check that the function exists
+            InstLookupResult<InstCallable> lp = getName().myInstLookupCallable();
+            InstCallable func = getName().myInstCallable();
+            String name = getName().name();
+            if (lp.isError()) {
+                // Function does not exist or can't be used due to constraining classes, or name refers to component
+                getName().generateClassLookupProblems(lp, this);
+            } else if (!func.isCallable()) {
+                if (func.isExternalObject()) {
+                    // Something is be wrong with constructor
+                    name += ".constructor";
+                    func = func.asInstClassDecl().myConstructor();
+                    if (func.isUnknown()) {
+                        // The constructor does not exist
+                        error("Cannot find function declaration for " + name + "()");
+                    }
+                    // Constructor exists, but is not a function - delegate to default case
+                }
+                if (!func.isUnknown()) {
+                    // Not a function
+                    error("The class " + name + " is not a function");
+                }
+            } else if (!func.isRecord() && !func.isCompleteFunction()) {
+                // TODO: add check if function is partial?
+                if (!checkType.allowIncompleteReplaceableFunc() || !canBeReplacedForMe(func.asInstNode()))
+                    error("Calling function " + getName().name() + 
+                            "(): can only call functions that have one algorithm section or external function specification");
+            } else {
+                // Function exists, check everything
+                errorChecked = false; // super also uses errorChecked
+                super.collectErrors(checkType);
+                
+                // We need to check the function definition as well.
+                func.collectErrors(checkType);
+                
+                // Check if there were any unbindable args
+                boolean pos = true;
+                String desc = functionCallDecription();
+                for (InstFunctionArgument arg : unbindableArgs) 
+                    pos = arg.generateUnbindableError(desc, pos);
+            }
+        }
+    }
+    
+    public static final SimpleProblemProducer ASTNode.NEGATIVE_SIZE_FILL =
+        new SimpleErrorProducer("NEGATIVE_SIZE_FILL", ProblemKind.SEMANTIC, "The dimension arguments of the fill()"
+                + " operator may not be negative");
+    
+    public void FFillExp.collectErrors(ErrorCheckType checkType) {
+        super.collectErrors(checkType);
+        if (!lockBranch(checkType)) {
+            for (FExp exp : getFExps()) {
+                if (exp.variability().knownParameterOrLess()) {
+                    try {
+                        CValue val = exp.ceval();
+                            if (val.hasIntValue()) {
+                            int d = val.intValue();
+                            if (d < 0) {
+                                NEGATIVE_SIZE_FILL.invoke(exp);
+                            }
+                        }
+                    } catch (ConstantEvaluationException e) {}
+                }
+            }
+        }
+    }
+    
+    /**
+     * Can <code>node</code> be replaced as seen from here?
+     */
+    inh boolean ASTNode.canBeReplacedForMe(InstNode node);
+    eq InstNode.getChild().canBeReplacedForMe(InstNode node) = node.canBeReplacedFor(this);
+    eq Root.getChild().canBeReplacedForMe(InstNode node)     = false;
+
+    /**
+     * Is this node or any node before the closest common ancestor with <code>source</code> replaceable?
+     */
+    syn boolean InstNode.canBeReplacedFor(InstNode source)        = canBeReplacedIn(commonAncestor(source));
+    eq InstSimpleShortClassDecl.canBeReplacedFor(InstNode source) = 
+        super.canBeReplacedFor(source) || myTargetInstClassDecl().canBeReplacedFor(source);
+    eq InstShortClassDecl.canBeReplacedFor(InstNode source)       = 
+        super.canBeReplacedFor(source) || myTargetInstClassDecl().canBeReplacedFor(source);
+
+    /**
+     * Is this class or any class before <code>ancestor</code> replaceable?
+     */
+    syn boolean InstNode.canBeReplacedIn(InstNode ancestor) = isReplaceable() || canBeReplacedInHelper(ancestor);
+
+    /**
+     * Helper method for {@link #canBeReplacedIn(InstNode)} - use it instead.
+     */
+    inh boolean InstNode.canBeReplacedInHelper(InstNode ancestor);
+    eq InstNode.getChild().canBeReplacedInHelper(InstNode ancestor) = (ancestor != this) && canBeReplacedIn(ancestor);
+    eq Root.getChild().canBeReplacedInHelper(InstNode ancestor)     = false;
+
+	public void FInfArgsFunctionCall.collectErrors(ErrorCheckType checkType) {
+		super.collectErrors(checkType);
+		if (unbindableArgs != null) {
+		    boolean pos = true;
+		    String desc = functionCallDecription();
+		    for (InstFunctionArgument arg : unbindableArgs) 
+		    	pos = arg.generateUnbindableError(desc, pos);
+		}
+	}
+	
+	syn String FAbstractFunctionCall.functionCallDecription() = "Calling function " + name() + "()";
+	eq FRecordConstructor.functionCallDecription()    = "Record constructor for " + name();
+    eq InstRecordConstructor.functionCallDecription() = "Record constructor for " + name();
+	eq InstFunctionCall.functionCallDecription()      = getName().myInstClassDecl().isRecord() ? 
+			"Record constructor for " + name() : super.functionCallDecription();
+    eq InstPartialFunctionCall.functionCallDecription() = "Creating functional input argument " + name() + "()";
+	  
+	public boolean InstFunctionArgument.generateUnbindableError(String desc, boolean genForPos) {
+		return genForPos;
+	}
+	  
+	public boolean InstPositionalArgument.generateUnbindableError(String desc, boolean genForPos) {
+		if (genForPos)
+			error(desc + ": too many positional arguments");
+		return false;
+	}
+	  
+	public boolean InstNamedArgument.generateUnbindableError(String desc, boolean genForPos) {
+		error(desc + ": no input matching named argument " + getName().name() + " found");
+		return genForPos;
+	}
+	
+	public void FBuiltInFunctionCall.collectErrors(ErrorCheckType checkType) {
+	    if (!errorChecked) {
+	    	super.collectErrors(checkType);
+	    	errorChecked = true;
+	    	getOriginalArgs().collectErrors(checkType);
+	    }
+	}
+	
+	public void FUnsupportedBuiltIn.collectErrors(ErrorCheckType checkType) {
+		// Don't check arguments
+		allChecks(checkType);
+	}
+ 
+	public void InstNamedArgument.collectErrors(ErrorCheckType checkType) {
+		// TODO: This way, the FExp for each argument to a built-in function is checked twice - fix that
+	    if (!errorChecked) {
+			allChecks(checkType);
+			getFExp().collectErrors(checkType);
+	    }
+	}
+
+    /**
+     * Check if this node is in a recursive structure.
+     */
+    syn boolean InstNode       .isRecursed() = false;
+    eq InstComponentDecl       .isRecursed() = !isPrimitive() && isWithin(myInstClass());
+    eq InstExtends             .isRecursed() = isWithin(myInstClass());
+    eq InstSimpleShortClassDecl.isRecursed() = isWithin(actualInstClass());
+    eq InstArrayComponentDecl  .isRecursed() = instComponentDecl().isRecursed();
+
+	// TODO: check if we realy need this in addition to isRecursed()
+	/**
+	 * Check if extends tree is recursive.
+	 */
+	public boolean InstExtends.isRecursive() {
+		if (recursiveCache == RECURSIVE_UNKNOWN)
+			calcIsRecursive(new HashSet<InstNode>());
+		return recursiveCache == RECURSIVE_YES;
+	}
+
+    /**
+     * Check if extends tree is recursive.
+     */
+    public boolean InstSimpleShortClassDecl.isRecursive() {
+        if (recursiveCache == RECURSIVE_UNKNOWN)
+            calcIsRecursive(new HashSet<InstNode>());
+        return recursiveCache == RECURSIVE_YES;
+    }
+
+    /**
+     * Check if extends tree is recursive.
+     */
+    public boolean InstLibNode.isRecursive() {
+        if (recursiveCache == RECURSIVE_UNKNOWN)
+            calcIsRecursive(new HashSet<InstNode>());
+        return recursiveCache == RECURSIVE_YES;
+    }
+
+	/**
+	 * Examine extends tree to find recursive extends nodes.
+	 */
+	public void InstExtends.calcIsRecursive(HashSet<InstNode> visited) {
+		recursiveCache = visited.contains(this) ? RECURSIVE_YES : RECURSIVE_NO;
+		visited.add(this);
+		if (recursiveCache == RECURSIVE_NO) 
+			myInstClass().calcIsRecursive(visited);
+	}
+	
+	/**
+	 * Examine extends tree to find recursive extends nodes.
+	 */
+	public void InstClassDecl.calcIsRecursive(HashSet<InstNode> visited) {
+		for (InstExtends ie : getInstExtendss())
+			ie.calcIsRecursive(visited);
+	}
+
+    public void InstSimpleShortClassDecl.calcIsRecursive(HashSet<InstNode> visited) {
+        recursiveCache = visited.contains(this) ? RECURSIVE_YES : RECURSIVE_NO;
+        visited.add(this);
+        if (recursiveCache == RECURSIVE_NO) 
+            myTargetInstClassDecl().calcIsRecursive(visited);
+        // Can't use actualInstClass() here, since it uses isRecursive()
+    }
+
+    public void InstLibNode.calcIsRecursive(HashSet<InstNode> visited) {
+        recursiveCache = visited.contains(this) ? RECURSIVE_YES : RECURSIVE_NO;
+        visited.add(this);
+        if (recursiveCache == RECURSIVE_NO) 
+            resolveLib().calcIsRecursive(visited);
+        // Can't use actualInstClass() here, since it uses isRecursive()
+    }
+
+    private byte InstExtends.recursiveCache              = RECURSIVE_UNKNOWN;
+    private byte InstSimpleShortClassDecl.recursiveCache = RECURSIVE_UNKNOWN;
+    private byte InstLibNode.recursiveCache              = RECURSIVE_UNKNOWN;
+    protected static final byte InstNode.RECURSIVE_UNKNOWN = 0;
+    protected static final byte InstNode.RECURSIVE_YES     = 1;
+    protected static final byte InstNode.RECURSIVE_NO      = 2;
+
+    /**
+     * Check if <code>icd</code> is an ancestor of this node or any ancestor is an 
+     *        instance of <code>icd</code>.
+     */
+    inh boolean InstComponentDecl.isWithin(InstClassDecl icd);
+    inh boolean InstExtends      .isWithin(InstClassDecl icd);
+    inh boolean InstClassDecl    .isWithin(InstClassDecl icd);
+    eq InstNode         .getChild().isWithin(InstClassDecl icd) = isOfInstClassDecl(icd);
+    eq InstComponentDecl.getChild().isWithin(InstClassDecl icd) = isOfInstClassDecl(icd) || isWithin(icd);
+    eq InstClassDecl    .getChild().isWithin(InstClassDecl icd) = icd == this || (!isFunction() && isWithin(icd));
+    eq InstExtends      .getChild().isWithin(InstClassDecl icd) = isOfInstClassDecl(icd) || isWithin(icd);
+    eq Root             .getChild().isWithin(InstClassDecl icd) = false;
+
+	/**
+	 * Check if this node is equal to or an instance of <code>icd</code>.
+	 */
+	syn boolean InstNode.isOfInstClassDecl(InstClassDecl icd) = false;
+	eq InstClassDecl.isOfInstClassDecl(InstClassDecl icd)     = icd == this;
+	eq InstComponentDecl.isOfInstClassDecl(InstClassDecl icd) = icd == myInstClass() && !icd.isUnknown();
+	eq InstExtends.isOfInstClassDecl(InstClassDecl icd)       = icd == myInstClass() && !icd.isUnknown();
+	
+}
+
+aspect AssertEval {
+
+    public class FClass {
+        /**
+         * Evaluate asserts with constant tests, generate errors for failing ones, 
+         * and eliminate all evaluated assets.
+         */
+        public class evaluateAsserts extends Transformation {
+            public void perform() {
+                List<FAbstractEquation> l = new List<FAbstractEquation>();
+                for (FAbstractEquation eqn : getFAbstractEquations()) {
+                    if (!eqn.evaluateAsserts(true)) {
+                        l.add(eqn);
+                    }
+                }
+                setFAbstractEquationList(l);
+            }
+        }
+    }
+    
+    /**
+     * Try to evaluate asserts with constant tests in this equation.
+     * 
+     * If this equation should be removed, returns true.
+     */
+    public boolean FAbstractEquation.evaluateAsserts(boolean inClause) {
+        return false;
+    }
+    
+    @Override
+    public boolean FFunctionCallEquation.evaluateAsserts(boolean inClause) {
+        return getCall().evaluateAsserts(inClause);
+    }
+    
+    @Override
+    public boolean FIfWhenEquation.evaluateAsserts(boolean inClause) {
+        boolean res = super.evaluateAsserts(inClause);
+        if (hasElse())
+            res = res && getElse().evaluateAsserts(inClause);
+        return res;
+    }
+    
+    @Override
+    public boolean FIfWhenElseEquation.evaluateAsserts(boolean inClause) {
+        boolean res = true;
+        List<FAbstractEquation> l = new List<FAbstractEquation>();
+        for (FAbstractEquation eqn : getFAbstractEquations()) {
+            if (!eqn.evaluateAsserts(false)) {
+                l.add(eqn);
+                res = false;
+            }
+        }
+        setFAbstractEquationList(l);
+        return res;
+    }
+    
+    /**
+     * If this call is an assert with constant test, try to evaluate it.
+     * 
+     * @return  <code>true</code> if this is an assert that should be removed
+     */
+    public boolean FAbstractFunctionCall.evaluateAsserts(boolean error) {
+        return false;
+    }
+    
+    private static final String FAssert.LEVEL_ERROR = "error";
+    
+    public boolean FAssert.evaluateAsserts(boolean error) {
+        boolean remove = false;
+        if (getTest().isConstantExp()) {
+            try {
+                CValue cVal = getTest().ceval();
+                if (cVal.hasBooleanValue()) {
+                    boolean val = cVal.booleanValue();
+                    if (error && !val) {
+                        CValue cMsg = getMsg().ceval();
+                        CValue cLevel = hasLevel() ? getLevel().ceval() : null;
+                        if (cMsg.hasStringValue() && (cLevel == null || cLevel.hasStringValue())) {
+                            String msg = "Assertion failed: " + cMsg.stringValue();
+                            if (cLevel == null || cLevel.stringValue().equals(LEVEL_ERROR)) {
+                                error(msg);
+                            } else {
+                                warning(msg);
+                            }
+                        }
+                    }
+                    remove = val || error;
+                }
+            } catch (ConstantEvaluationException e) {}
+        }
+        return remove;
+    }
+    
+}
+
+aspect ScalarizationErrorCheck {
+    
+    /**
+     * Check errors that can only be detected after scalarization.
+     */
+    public void FClass.scalarizationErrorCheck() {
+        checkMultipleReinit();
+        breakOnErrors();
+    }
+    
+    /**
+     * Check for variables with multiple reinits.
+     */
+    public void FClass.checkMultipleReinit() {
+        Map<FAbstractVariable, Set<FReinit>> reinitMap = collectReinits();
+        for (FAbstractVariable fv : reinitMap.keySet()) {
+            if (!fv.isUnknown()) {
+                Set<FWhenEquation> whens = new HashSet<FWhenEquation>();
+                Set<FReinit> reinits = reinitMap.get(fv);
+                for (FReinit r : reinits) {
+                    FWhenEquation w = r.myWhen();
+                    if (!whens.contains(w))
+                        whens.add(w);
+                }
+                if (whens.size() > 1) {
+                    StringBuilder buf = new StringBuilder();
+                    buf.append("The variable ");
+                    buf.append(fv.name());
+                    buf.append(" is assigned in reinit() clauses in more than one when clause:\n");
+                    for (FReinit r : reinits) {
+                        buf.append("    ");
+                        buf.append(r);
+                        buf.append(";\n");
+                    }
+                    fv.error(buf.toString());
+                }
+            }
+        }
+    }
+    
+    /**
+     * Find all reinits and map them to the assigned variable.
+     */
+    syn boolean FVariable.isReinit() = myFClass().collectReinits().keySet().contains(this);
+    
+    syn lazy Map<FAbstractVariable,Set<FReinit>> FClass.collectReinits() {
+        Map<FAbstractVariable,Set<FReinit>> reinitMap = new HashMap<FAbstractVariable,Set<FReinit>>();
+        for (FAbstractEquation e : getFAbstractEquations())
+            e.collectReinits(reinitMap);
+        return reinitMap;
+    }
+    
+    public void FAbstractEquation.collectReinits(Map<FAbstractVariable,Set<FReinit>> map) {}
+    
+    public void FIfWhenEquation.collectReinits(Map<FAbstractVariable,Set<FReinit>> map) {
+    	if (isWhen()) {
+	        super.collectReinits(map);
+	        if (hasElse())
+	            getElse().collectReinits(map);
+    	}
+    }
+    
+    public void FIfWhenElseEquation.collectReinits(Map<FAbstractVariable,Set<FReinit>> map) {
+        for (FAbstractEquation e : getFAbstractEquations())
+            e.collectReinits(map);
+    }
+    
+    public void FFunctionCallEquation.collectReinits(Map<FAbstractVariable,Set<FReinit>> map) {
+        getCall().collectReinits(map);
+    }
+    
+    public void FExp.collectReinits(Map<FAbstractVariable,Set<FReinit>> map) {}
+    
+    public void FReinit.collectReinits(Map<FAbstractVariable,Set<FReinit>> map) {
+        Set<FReinit> set = map.get(myFV());
+        if (set == null) {
+            set = new LinkedHashSet<FReinit>();
+            map.put(myFV(), set);
+        }
+        set.add(this);
+    }
+    
+    /**
+     * Get the when-equation that this reinit() belongs to.
+     * 
+     * Gets the top when in a when-elsewhen-else.
+     * Not valid after when-equations have been converted to if-equations.
+     */
+    inh FWhenEquation FReinit.myWhen();
+    eq FWhenEquation.getChild().myWhen() = findTopWhen(this);
+    eq FClass.getChild().myWhen()        = null;
+    eq InstNode.getChild().myWhen()      = null;
+    
+    /**
+     * Find the top when-equation in a when-elsewhen-else equation.
+     * 
+     * @param last  will be returned if parent is not a when equation
+     */
+    inh FWhenEquation FWhenEquation.findTopWhen(FWhenEquation last);
+    eq FWhenEquation.getChild().findTopWhen(FWhenEquation last) = findTopWhen(this);
+    eq FClass.getChild().findTopWhen(FWhenEquation last)        = last;
+    eq InstNode.getChild().findTopWhen(FWhenEquation last)      = last;
+    
+}

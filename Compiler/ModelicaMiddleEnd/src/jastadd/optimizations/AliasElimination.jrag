@@ -1,0 +1,1014 @@
+/*
+    Copyright (C) 2009-2018 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect AliasElimination {
+
+    public class FClass {
+        /**
+         * Perform alias elimination if it is activated.
+         */
+        public class aliasEliminationIfSet extends Transformation {
+            public aliasEliminationIfSet() {
+                super("eliminate_alias_variables");
+            }
+            
+            public void perform() {
+                genAlias();
+                propagateDerivativeBindings();
+                sortAliasVariables(false);
+                sortAliasEquations();
+                enableAliasRewrite();
+                change();
+                removeUnusedTemporaries();
+                mergeEquivalentRecords();
+                insertTempsInLHS();
+                remoteRedundantInitialEquations();
+                change();
+            }
+            
+            public void propagateDerivativeBindings() {
+                // Collect derivative binding equations, however only if we are going
+                // to perform index reduction!
+                if (myOptions().getBooleanOption("propagate_derivatives")) {
+                    for (FAbstractEquation equation : getFAbstractEquations()) {
+                        if (!equation.isAliasEquation()) {
+                            equation.propagateDerivativeBindings();
+                        }
+                    }
+                }
+            }
+        }
+        
+        public aliasEliminationIfSet aliasElimination = new aliasEliminationIfSet();
+    }
+	
+	ArrayList<String> FClass.aliasErrors = new ArrayList<String>();
+	
+	
+	/**
+	 * A helper class containing information about an alias pair.
+	 */
+	public class AliasPair {
+		public FVariable fv1;
+		public FVariable fv2;
+		public boolean negated;
+		public AliasPair(FVariable fv1, FVariable fv2, boolean negated) {
+			this.fv1 = fv1;
+			this.fv2 = fv2;
+			this.negated = negated;
+		}
+	}
+	
+	public AliasPair FAbstractEquation.aliasVariables() {
+		return null;
+	}
+	
+	public boolean FAbstractEquation.aliasClassified = false;
+	public boolean FAbstractEquation.classifiedAsAlias = false;
+	
+    /**
+     * Detection of alias variables in equations
+     * 
+     * Equations of the type 'x=y', 'x=-y', '-x=y' and '-x=-y' are detected
+     * as alias equations and an AliasPair object is returned.
+     */
+    public AliasPair FEquation.aliasVariables() {
+        AliasPair res = null;
+        if (!containsActiveAnnotations()) // This equation should not be alias-removed if it is marked as residual!
+            res = aliasVariables(true);
+        aliasClassified = true;
+        classifiedAsAlias = res != null;
+        return res;
+    }
+
+    public AliasPair FEquation.aliasVariables(boolean checkVariables) {
+        return aliasVariables(getLeft(), getRight(), 1, checkVariables);
+    }
+
+    syn boolean FAbstractEquation.potentialAliasEquation() = false;
+    eq FEquation.potentialAliasEquation() = aliasVariables(false) != null;
+    
+    /**
+     * Determine if two expressions would form an alias pair if on the left and right sides of 
+     * an equation.
+     * 
+     * @param e1    an expression that would form one side of the equation
+     * @param e2    an expression that would form the other side of the equation
+     * @param sign  alias sign is multiplied with this - useful for e.g. 0 = x + y
+     */
+    public static AliasPair ASTNode.aliasVariables(FExp e1, FExp e2, int sign, boolean checkVariables) {
+        FVariable fv1 = e1.variableThatCanBeAlias();
+        FVariable fv2 = e2.variableThatCanBeAlias();
+        if (fv1 != null && fv2 != null) {  // x = y, etc.
+            if (!checkVariables || e1.canBeAlias() && e2.canBeAlias() 
+                    && e1.type().typeAliasCompatible(e2.type()) 
+                    && e1.variability().aliasCompatible(e2.variability())) {
+                boolean negated = e1.aliasSign() * e2.aliasSign() * sign < 0;
+                return new AliasPair(fv1, fv2, negated);
+            } else {
+                return null;
+            }
+        } else {                          // 0 = x + y, etc
+            FExp eqZero = null;
+            if (e1.isLiteralZero()) {
+                eqZero = e2;
+            } else if (e2.isLiteralZero()) {
+                eqZero = e1;
+            } if (eqZero != null) {
+                return eqZero.aliasVariables(checkVariables);
+            } else {
+                return null;
+            }
+        }
+    }
+
+    public boolean TypePrefixVariability.aliasCompatible(TypePrefixVariability that) {
+        return this.equals(that);
+    }
+	
+    /**
+     * Detection of alias variables in expressions
+     * 
+     * Only valid when in an equation that gives that the value of this expression is always 0.
+     */
+    public AliasPair FExp.aliasVariables(boolean checkVariables) {
+        return null;
+    }
+
+    public AliasPair FDotAddExp.aliasVariables(boolean checkVariables) {
+        return aliasVariables(getLeft(), getRight(), -1, checkVariables);
+    }
+
+    public AliasPair FDotSubExp.aliasVariables(boolean checkVariables) {
+        return aliasVariables(getLeft(), getRight(), 1, checkVariables);
+    }
+
+    syn boolean FExp.canBeAlias() = false;
+    eq FAccessExp.canBeAlias()     = myFV().canBeAlias();
+    eq FDerExp.canBeAlias()       = false;
+    eq FNegExp.canBeAlias()       = getFExp().canBeAlias();
+
+    syn boolean FAbstractVariable.canBeAlias() = false;
+    eq FVariable.canBeAlias() = !getFAccess().myDerFV(order() + 1).isDummyDerivativeVariable() 
+            && !isPreVariable() && !isNonDummyDerivativeVariable()
+            && !isInput() && !isOutput() && !isIndependentParameter()
+            && !isInterface();
+
+    syn int FExp.aliasSign() = 1;
+    eq FNegExp.aliasSign()   = -getFExp().aliasSign();
+
+    syn FVariable FExp.variableThatCanBeAlias() = null;
+    eq FNegExp.variableThatCanBeAlias()         = getFExp().variableThatCanBeAlias();
+    eq FAccessExp.variableThatCanBeAlias() {
+        FAbstractVariable fav = myFV();
+        if (fav.isFVariable()) {
+            return fav.asFVariable();
+        } else {
+            return null;
+        }
+    }
+
+	syn boolean FExp.isLiteralExp() = false;
+	eq FLitExp.isLiteralExp()       = true;
+	
+	
+	syn lazy boolean FAbstractEquation.isAliasEquation() = false;
+	// If an equation has been classified, the result needs to be cached 
+	// in order to avoid reclassification after alias rewrites.
+	eq FEquation.isAliasEquation() = aliasClassified? classifiedAsAlias: aliasVariables()!=null;
+	
+	/**
+	 * Generate alias information and remove alias equations.
+	 */
+	public void FClass.genAlias() {
+		if (aliasManager == null) {
+			aliasManager = new AliasManager();
+		}
+		for (FAbstractEquation equation : getFAbstractEquations()) {
+			// Iterate over all equations
+			// If the equation is an alias equation, then register
+			// the alias variables in the alias manager.
+			// Check all alias equations, also those that that have been
+			// checked before.
+			equation.aliasClassified = false; 
+			if (equation.isAliasEquation()) 
+				aliasManager.addAliasVariables(equation.aliasVariables());
+		}
+        if (myOptions().getBooleanOption("eliminate_alias_parameters")) {
+            for (FAbstractEquation equation : getParameterEquations()) {
+                equation.aliasClassified = false; 
+                if (equation.isAliasEquation()) 
+                    aliasManager.addAliasVariables(equation.aliasVariables());
+            }
+        }
+        if (myOptions().getBooleanOption("eliminate_alias_constants")) {
+            Map<String, FVariable> firstOccurencesReal = new HashMap<String, FVariable>();
+            Map<String, FVariable> firstOccurencesNonReal = new HashMap<String, FVariable>();
+            for (FVariable fv : getFVariables()) {
+                fv.classifyAliasConstant(aliasManager, firstOccurencesReal, firstOccurencesNonReal);
+            }
+        }
+        aliasManager.reportAliasErrors(this);
+	}
+	
+    public void FVariable.classifyAliasConstant(AliasManager aliasManager, 
+            Map<String, FVariable> firstOccurencesReal, 
+            Map<String, FVariable> firstOccurencesNonReal) {
+        if (variability().knownParameterOrLess() && hasBindingExp()) {
+            Map<String, FVariable> firstOccurences = isReal() ? firstOccurencesReal : firstOccurencesNonReal;
+            String s = getBindingExp().toString();
+            FVariable first = firstOccurences.get(s);
+            if (first != null) {
+                aliasManager.addAliasVariables(new AliasPair(first, this, false));
+            } else {
+                firstOccurences.put(s, this);
+            }
+        }
+    }
+
+    /**
+     * Eliminate alias variables from the flat model.
+     * 
+     * The non-alias variables are kept in the list FClass.FVariableList but the
+     * alias variables are moved to FClass.AliasVariablesList.
+     */
+    public void FClass.sortAliasVariables(boolean recompute) {
+        ArrayList<FVariable> nonAliasVars = new ArrayList<FVariable>();
+        ArrayList<FVariable> aliasVars    = new ArrayList<FVariable>();
+        if (recompute) {
+            for (FVariable fv : getAliasVariables()) {
+                fv.aliasSort(nonAliasVars, aliasVars);
+            }
+        } else {
+            for (FVariable fv : getAliasVariables()) {
+                aliasVars.add(fv);
+            }
+        }
+        for (FVariable fv : getFVariables()) {
+             fv.aliasSort(nonAliasVars, aliasVars);
+        }
+        setFVariableList(new List(nonAliasVars));
+        setAliasVariableList(new List(aliasVars));
+    }
+
+    /**
+     * Eliminate alias equation from the flat model.
+     */
+    public void FClass.sortAliasEquations() {
+        ArrayList<FAbstractEquation> eqns = new ArrayList<FAbstractEquation>();
+        ArrayList<FAbstractEquation> pEqns = new ArrayList<FAbstractEquation>();
+        for (FAbstractEquation equation : getFAbstractEquations()) {
+            if (!equation.isAliasEquation()) {
+                eqns.add(equation);
+            }
+        }
+        if (myOptions().getBooleanOption("eliminate_alias_parameters")) {
+            for (FAbstractEquation equation : getParameterEquations()) { 
+                if (!equation.isAliasEquation()) {
+                    pEqns.add(equation);
+                }
+            }
+            setParameterEquationList(new List(pEqns));
+        }
+        setFAbstractEquationList(new List(eqns));
+    }
+
+    /**
+     * Adds this variable to <code>aliasVars</code>, if it is an alias, or 
+     * <code>nonAliasVars</code>, if it is not.
+     */
+    public void FVariable.aliasSort(ArrayList<FVariable> nonAliasVars, ArrayList<FVariable> aliasVars) {
+        if (isAlias()) {
+            aliasVars.add(this);
+        } else if (aliasSortKeep()) { 
+            nonAliasVars.add(this);
+            this.propagateAttributesFromAlias();
+        }
+    }
+    
+    /**
+     * A derivative variable of an alias is removed, if there is no suitable 
+     * alias derivative variable one is created. 
+     */
+    public void FDerivativeVariable.aliasSort(ArrayList<FVariable> nonAliasVars, ArrayList<FVariable> aliasVars) {
+        FVariable itg = getMeIntegrated();
+        if (itg.isAlias()) {
+            FVariable alias = itg.alias();
+            if (alias.getMeDifferentiated() == null) {
+                FVariable fdv = alias.createFDerivativeVariable();
+                alias.setMeDifferentiated(fdv);
+                fdv.setMeIntegrated(alias);
+                nonAliasVars.add(fdv);
+            }
+        } else {
+            super.aliasSort(nonAliasVars, aliasVars);
+        }
+    }
+    
+    /**
+     * If this is a pre variable of an alias it should be left out/removed.
+     */
+    syn boolean FVariable.aliasSortKeep() = !isPreVariable() || !myNonPreVariable().isAlias();
+    
+	
+	public void ASTNode.enableAliasRewrite() {
+		for (ASTNode n : this)
+			n.enableAliasRewrite();
+	}
+
+    public void FAccessExp.enableAliasRewrite() {
+        super.enableAliasRewrite();
+        rewriteAlias = !isLHSAssignStmt();
+        is$Final = false;
+    }
+
+    inh boolean FAccessExp.isLHSAssignStmt();
+    eq BaseNode.getChild().isLHSAssignStmt() = false;
+    eq FAssignStmt.getLeft().isLHSAssignStmt() = true;
+
+	public void FAssignStmt.enableAliasRewrite() {
+		super.enableAliasRewrite();
+		rewriteAlias = true;
+		is$Final = false;
+	}
+	
+    public void FInternalAttribute.enableAliasRewrite() {
+        // We do not want to rewrite attributes that are of reference type
+        if (!getType().name().equals("*"))
+            super.enableAliasRewrite();
+    }
+	
+	public void FFunctionDecl.enableAliasRewrite() {
+	}
+	
+	boolean FAccessExp.rewriteAlias = false;
+	boolean FAssignStmt.rewriteAlias = false;
+
+    /**
+     * CommonAccesss referring to alias variables need to be changed to 
+     * CommonAccesss referring to their alias targets. 
+     * 
+     * This is done by rewrites which are activated once FAccessExp.rewriteAlias
+     * is true. Notice that in order for the rewrite to be enable, the is$final
+     * field of FAccessExp needs to be set to false: this is done by the recursive
+     * method ASTNode.flushAllRecursiveClearFinal. 
+     */
+    rewrite FAccessExp {
+        when (rewriteAlias) to FExp {
+            if (myFV().isFVariable() && myFV().isAlias()) {
+                FVariable fv = (FVariable) myFV();
+                FAccessExp newExp = fv.alias().createAccessExp();
+                newExp.setLocationNoTree(this);
+                newExp.addLocation(fv);
+                newExp.setOriginalVariable(this, fv);
+                newExp.rewriteAlias = true;
+                return fv.aliasNegatedWrap(this, newExp);
+            }
+            FAbstractEquation eqn = myFEquation();
+            if (eqn != null && !eqn.potentialAliasEquation()
+                    && myFV().derivativeEquivalent() != null
+                    && order() == 0 && inEquationSection()
+                    && !inWhen() && !inFunctionCallLeft()) {
+                FVariable var = myFV().derivativeEquivalent();
+                FAccessExp exp = var.getMeDifferentiated().createAccessExp();
+                exp.setOriginalVariable(this, var);
+                if (var.isAlias())
+                    exp.rewriteAlias = true;
+                return exp;
+            } else {
+                rewriteAlias = false;
+                return this;
+            }
+        }
+    }
+
+    rewrite FPreExp {
+        when (rewriteAlias) to FExp {
+            if (myNonPreFV().isFVariable() && myNonPreFV().isAlias()) {
+                FVariable fv = (FVariable) myNonPreFV();
+                FPreExp newExp = fv.alias().createFPreExp();
+                newExp.setOriginalVariable(this, fv);
+                return fv.aliasNegatedWrap(this, newExp);
+            } else {
+                rewriteAlias = false;
+                return this;
+            }
+        }
+    }
+
+    rewrite FAssignStmt {
+        when (rewriteAlias && getLeft() instanceof FAccessExp) to FAssignStmt {
+            FAccessExp left = getLeft().asFAccessExp();
+            if (left.myFV().isFVariable() && left.myFV().isAlias()) {
+                FVariable fv = (FVariable) left.myFV();
+                FAccessExp exp = fv.alias().createAccessExp();
+                setLeft(exp);
+                exp.setOriginalVariable(left, fv);
+                setRight(fv.aliasNegatedWrap(getRight(), getRight()));
+                return this;
+            } else {
+                rewriteAlias = false;
+                return this;
+            }
+        }
+    }
+
+    /**
+     * FDerExps referring to alias variables need to be changed to 
+     * FDerExps referring to their alias targets. 
+     * 
+     * This is done by rewrites which are activated once FAccessExp.rewriteAlias
+     * is true. Notice that in order for the rewrite to be enable, the is$final
+     * field of FAccessExp needs to be set to false: this is done by the recursive
+     * method ASTNode.flushAllRecursiveClearFinal. 
+     */
+    rewrite FAbstractDerExp {
+        when (rewriteAlias && getFAccess().myFV().isFVariable() && (myFV().isAlias() || getFAccess().myFV().isAlias())) to FExp {
+            if (myFV().isAlias()) {
+                FVariable fv = (FVariable) myFV();
+                FAccessExp newExp = fv.alias().createAccessExp();
+                newExp.setOriginalVariable(this, fv);
+                return myFV().aliasNegatedWrap(this, newExp);
+            } else {
+                FAccess newName = ((FVariable)getFAccess().myFV()).alias().getFAccess().treeCopy();
+                FAbstractDerExp newExp = createEmptyNode();
+                newExp.setFAccess(newName);
+                newExp.setOrder(order());
+                newExp.setOriginalVariable(this, getFAccess().myFV());
+                return getFAccess().myFV().aliasNegatedWrap(this, newExp);
+            }
+        }
+    }
+
+    public FExp FAbstractVariable.aliasNegatedWrap(FExp oldExp, FExp newExp) {
+        if (isAliasNegated(oldExp)) {
+            return new FNegExp(newExp);
+        } else {
+            return newExp;
+        }
+    }
+    
+    public boolean FAbstractVariable.isAliasNegated(FExp oldExp) {
+        // Hook to facilitate extensions
+        return isNegated();
+    }
+
+    public void FAccessExp.setOriginalVariable(FAccessExp oldExp, FAbstractVariable var) {
+        setOriginalVariable(computeOriginalVariable(oldExp, var));
+    }
+    private static String FAccessExp.computeOriginalVariable(FAccessExp oldExp, FAbstractVariable var) {
+        if (!oldExp.getOriginalVariable().isEmpty()) {
+            return oldExp.getOriginalVariable();
+        }
+        while (var.isTemporary()) {
+            AliasManager.AliasVariable av = var.asFVariable().myFClass().getAliasManager().getAliasVariable(var.asFVariable());
+            if (av.getTempAssignRight() != null) {
+                var = av.getTempAssignRight();
+            } else {
+                return null;
+            }
+            
+        }
+        return var.name();
+    }
+    
+    syn FAbstractVariable FAccessExp.myOriginalFV() = myFClass().lookupFV(getOriginalVariable());
+    
+    /*
+     * Rewrite derivatives of parameters to zeros.
+     */
+    rewrite FAbstractDerExp {
+        when (getFAccess().myFV().isFVariable() && getFAccess().myFV().variability().parameterOrLess()) to FExp {
+            return new FRealLitExp(0.0);
+        }
+    }
+
+    /**
+     * Remove all unused temporary variables, and inline temporaries only used once.
+     */
+    public void FClass.removeUnusedTemporaries() {
+        ArrayList<FVariable> temps = tempVariables();
+        Collection<FVariable> tempsToRemove = new ArrayList<FVariable>();
+        int oldSize = Integer.MAX_VALUE;
+        while (temps.size() < oldSize) {
+            ArrayList<FVariable> temps2 = new ArrayList<FVariable>(temps.size());
+            for (FVariable fv : temps) {
+                if (!fv.inlineUses()) {
+                    temps2.add(fv);
+                } else {
+                    tempsToRemove.add(fv);
+                }
+            }
+            oldSize = temps.size();
+            temps = temps2;
+        }
+        
+        ArrayList<FVariable> vars = new ArrayList<FVariable>();
+        for (FVariable fv : getFVariables())
+            if (!fv.isTemporary())
+                vars.add(fv);
+        for (FVariable fv : temps)
+            vars.add(fv);
+        
+        removeMarkedEqns();
+        setFVariableList(new List(vars));
+        
+        Set<FVariable> aliasVarsToRemove = new HashSet<FVariable>();
+        
+        for (FVariable fv : tempsToRemove) {
+            aliasVarsToRemove.addAll(getAliasManager().removeTemporaryVariableSet(fv));
+        }
+        
+        ArrayList<FVariable> newAliasVars = new ArrayList<FVariable>();
+        for (FVariable fv : getAliasVariables()) {
+            if (!aliasVarsToRemove.contains(fv)) {
+                newAliasVars.add(fv);
+            }
+        }
+        setAliasVariableList(new List(newAliasVars));
+    }
+
+    /**
+     * Check if this is a temporary variable that should be eliminated.
+     */
+    syn boolean FVariable.shouldEliminateTemporary() = 
+        isTemporary() && 
+        definingUses().size() <= 1 && 
+        (nonDefiningUses().size() <= 1 || (definingUses().size() == 1 && definingUses().iterator().next().myFEquation().isOkInlineTemporaries())) && 
+        !isPreVariable() && myPreVariable().isUnknown() && 
+        (definingUses().isEmpty() || !definingUses().iterator().next().myFEquation().generatesEvents()) && 
+        !isDifferentiatedVariable() && !isDerivativeVariable();
+
+    syn boolean FAbstractEquation.isOkInlineTemporaries() = false;
+    eq FEquation.isOkInlineTemporaries() = getRight().isOkInlineTemporaries();
+    
+    syn boolean FExp.isOkInlineTemporaries() = false;
+    eq FAccessExp.isOkInlineTemporaries() = true;
+    /* This rule is needed to sort out dynamic state selection in equations inlined from resolve 
+       function in Modelica.Mechanics.MultiBody.Examples.Constraints.RevoluteConstraint */
+    eq FDotMulExp.isOkInlineTemporaries() = getLeft().isTempAccess() && getRight().isTempAccess();
+    
+    syn boolean FExp.isTempAccess() = false;
+    eq FAccessExp.isTempAccess() = myFV().isTemporary();
+
+	/**
+	 * Inline all non-defining uses of variable, and remove equation defining it.
+	 * 
+	 * NB: This assumes that the variable and any equations marked for removal will be removed.
+	 */
+    public boolean FVariable.inlineUses() {
+        if (!shouldEliminateTemporary()) {
+            return false;
+        }
+		FExp value;
+		if (hasBindingExp()) {
+			value = getBindingExp();
+		} else {
+			if (definingUses().isEmpty())
+                return nonDefiningUses().isEmpty();
+			FAbstractEquation eqn = definingUses().iterator().next().myFEquation();
+            if (eqn instanceof FEquation) {
+                value = ((FEquation) eqn).getRight();
+                eqn.markForRemoval();
+            } else if (eqn instanceof FFunctionCallEquation) {
+                return inlineUsesFunctionCallLeft();
+            } else {
+                return false;
+            }
+        }
+        
+        value.updateUses(FAccessExp.USES_REMOVER);
+        for (FAccessExp use : nonDefiningUses()) {
+            FExp copy = value.treeCopy();
+            use.replaceMe(copy);
+            copy.updateUses(FAccessExp.USES_ADDER);
+        }
+        
+        return true;
+    }
+    
+    public boolean FVariable.inlineUsesFunctionCallLeft() {
+        FAccessExp defineUse = definingUses().iterator().next();
+        FExp value;
+        if (nonDefiningUses().size() > 0) {
+            List<FAbstractEquation> defineEqnList = defineUse.myFEquation().myFAbstractEquationList();
+            FAccessExp nonDefineUse = nonDefiningUses().iterator().next();
+            value = nonDefineUse.inlineUsesFunctionCallLeft();
+            if (value == null || defineEqnList == null || defineEqnList != value.myFEquation().myFAbstractEquationList()) {
+                return false;
+            }
+            value.myFEquation().markForRemoval();
+        } else {
+            value = new FNoExp();
+        }
+        
+        definingUses().remove(defineUse);
+        defineUse.replaceMe(value);
+        return true;
+    }
+    
+    inh FAccessExp FAccessExp.inlineUsesFunctionCallLeft();
+    eq BaseNode.getChild().inlineUsesFunctionCallLeft()  = null;
+    eq FEquation.getRight().inlineUsesFunctionCallLeft() = getLeft().getEquationLeftInlineUse();
+    
+    syn FAccessExp FExp.getEquationLeftInlineUse() = null;
+    eq FAccessExp.getEquationLeftInlineUse()       = this;
+    eq FAbstractDerExp.getEquationLeftInlineUse() = null;
+    eq FPreExp.getEquationLeftInlineUse()         = null;
+    
+	/**
+	 * Flag for removing equation.
+	 */
+	public boolean FAbstractEquation.markedForRemoval = false;
+	
+    public void FAbstractEquation.markForRemoval() {
+        markedForRemoval = true;
+    }
+
+
+    public interface UsesUpdater {
+        public void update(FAbstractVariable var, FAccessExp use);
+    }
+
+    public static final UsesUpdater FAccessExp.USES_REMOVER = new UsesUpdater() {
+        @Override
+        public void update(FAbstractVariable var, FAccessExp use) {
+            var.uses().remove(use);
+            var.definingUses().remove(use);
+            var.nonDefiningUses().remove(use);
+        }
+    };
+    
+    public static final UsesUpdater FAccessExp.USES_ADDER = new UsesUpdater() {
+        @Override
+        public void update(FAbstractVariable var, FAccessExp use) {
+            var.uses().add(use);
+            var.nonDefiningUses().add(use);
+        }
+    };
+
+    /**
+     * Update uses sets of variables referenced in expressions.
+     * 
+     * Should only be used to allow iterative algorithms to use updated 
+     * uses lists while removing expressions. Only valid in flat tree.
+     */
+    public void FExp.updateUses(UsesUpdater uu) {
+        for (FExp e : childFExps()) {
+            e.updateUses(uu);
+        }
+    }
+
+    public void FAccessExp.updateUses(UsesUpdater uu) {
+        uu.update(myFV(), this);
+        getFAccess().updateUses(uu);
+    }
+
+    /**
+     * Update uses sets of variables referenced in expressions in array subscripts.
+     * 
+     * Should only be used to allow iterative algorithms to use updated 
+     * uses lists while removing expressions. Only valid in flat tree.
+     */
+    public abstract void FAccess.updateUses(UsesUpdater uu);
+
+    public void FAccessFull.updateUses(UsesUpdater uu) {
+        for (FAccessPart p : getFAccessParts()) {
+            if (p.hasFArraySubscripts()) {
+                p.getFArraySubscripts().updateUses(uu);
+            }
+        }
+    }
+
+    public void FAccessEmpty.updateUses(UsesUpdater uu) {
+        
+    }
+
+    public void FAccessString.updateUses(UsesUpdater uu) {
+        
+    }
+
+    public void FArraySubscripts.updateUses(UsesUpdater uu) {}
+    public void FArrayExpSubscripts.updateUses(UsesUpdater uu) {
+        for (FSubscript s : getFSubscripts()) {
+            s.updateUses(uu);
+        }
+    }
+
+	/**
+	 * Remove all uses in an expression from the uses lists of their respective variables.
+	 * 
+	 * Should only be used to allow iterative algorithms to use updated uses lists while 
+	 * removing expressions. Only valid in flat tree.
+	 */
+    public void FSubscript.updateUses(UsesUpdater uu) {}
+
+    public void FExpSubscript.updateUses(UsesUpdater uu) {
+        getFExp().updateUses(uu);
+    }
+
+	/**
+	 * Remove all equations with <code>markedForRemoval == true</code>. 
+	 */
+	public void FClass.removeMarkedEqns() {
+		setFInitialEquationList(removeMarkedEqns(getFInitialEquations()));
+		setParameterEquationList(removeMarkedEqns(getParameterEquations()));
+		setFAbstractEquationList(removeMarkedEqns(getFAbstractEquations()));
+	}
+	
+	/**
+	 * Create a copy of the list with all equations with <code>markedForRemoval == true</code> removed. 
+	 */
+	protected static List<FAbstractEquation> ASTNode.removeMarkedEqns(List<FAbstractEquation> list) {
+		List<FAbstractEquation> res = new List<FAbstractEquation>();
+		for (FAbstractEquation eqn : list) {
+			if (!eqn.markedForRemoval) {
+				eqn.removeMarkedEqns();
+				res.add(eqn);
+			}
+		}
+		return res;
+	}
+	
+	/**
+	 * Remove all contained equations with <code>markedForRemoval == true</code>. 
+	 */
+	public void FAbstractEquation.removeMarkedEqns() {}
+	
+	public void FForClauseE.removeMarkedEqns() {
+		setFAbstractEquationList(removeMarkedEqns(getFAbstractEquations()));
+	}
+	
+	public void FIfWhenElseEquation.removeMarkedEqns() {
+		setFAbstractEquationList(removeMarkedEqns(getFAbstractEquations()));
+	}
+	
+	public void FIfWhenEquation.removeMarkedEqns() {
+		super.removeMarkedEqns();
+		if (hasElse())
+			getElse().removeMarkedEqns();
+	}
+	
+	/**
+	 * Remove records that are equivalent, and update uses. 
+	 */
+	public void FClass.mergeEquivalentRecords() {
+		computeEquivalentRecords();
+		activateEquivalentRecordUseRewrite();
+		List<FRecordDecl> list = new List<FRecordDecl>();
+		for (FRecordDecl rec : getFRecordDecls())
+			if (rec.equivalentRecordToKeep)
+				list.add(rec);
+		setFRecordDeclList(list);
+	}
+
+    public void FClass.computeEquivalentRecords() {
+        ArrayList<FRecordType> distinctTypes = new ArrayList<>();
+        ArrayList<FRecordDecl> keptDecl = new ArrayList<>();
+        equivalentRecordComponentOrderMap = new HashMap<>();
+        for (FRecordDecl rec : getFRecordDecls()) {
+            boolean found = false;
+            FRecordType type = rec.type();
+            for (int i = 0; !found && i < distinctTypes.size(); i++) {
+                FRecordType other = distinctTypes.get(i);
+                /* TODO: Also check that this type is not used in any external functions.
+                 *       If it is, do not remove it (if the one chosen to be kept isn't used 
+                 *       in an external, keep this one instead). */
+                if (type.typeCompatible(other)) {
+                    found = true;
+                    rec.equivalentRecordGroup = i;
+                    type.addComponentReorderFrom(other, equivalentRecordComponentOrderMap);
+                }
+            }
+            if (!found) {
+                rec.equivalentRecordToKeep = true;
+                rec.equivalentRecordGroup = distinctTypes.size();
+                distinctTypes.add(type);
+                keptDecl.add(rec);
+            }
+        }
+        equivalentRecordMap = new HashMap<>();
+        for (FRecordDecl rec : getFRecordDecls())
+            equivalentRecordMap.put(rec.name(), keptDecl.get(rec.equivalentRecordGroup));
+    }
+
+    public void FRecordType.addComponentReorderFrom(FRecordType other, Map<String, int[]> map) {
+        Map<String,Integer> myOrder = new HashMap<>();
+        for (int i = 0, n = getNumComponent(); i < n; i++) {
+            myOrder.put(getComponent(i).getName(), i);
+        }
+        
+        int[] order = new int[getNumComponent()];
+        boolean different = false;
+        for (int i = 0, n = other.getNumComponent(); i < n; i++) {
+            int j = myOrder.get(other.getComponent(i).getName());
+            order[i] = j;
+            if (i != j) {
+                different = true;
+            }
+        }
+        
+        if (different) {
+            map.put(name(), order);
+        }
+    }
+
+    protected Map<String,FRecordDecl> FClass.equivalentRecordMap;
+    protected Map<String,int[]> FClass.equivalentRecordComponentOrderMap;
+
+	public boolean FRecordDecl.equivalentRecordToKeep = false;
+	public int FRecordDecl.equivalentRecordGroup = -1;
+	
+	public void ASTNode.activateEquivalentRecordUseRewrite() {
+		for (ASTNode n : this)
+			n.activateEquivalentRecordUseRewrite();
+	}
+    
+    public void FRecordType.activateEquivalentRecordUseRewrite() {
+        super.activateEquivalentRecordUseRewrite();
+        rewriteEquivalentRecord = true;
+        is$Final = false;
+    }
+    
+	public void FRecordVariable.activateEquivalentRecordUseRewrite() {
+		super.activateEquivalentRecordUseRewrite();
+		rewriteEquivalentRecord = true;
+		is$Final = false;
+	}
+	
+	public void FRecordConstructor.activateEquivalentRecordUseRewrite() {
+		super.activateEquivalentRecordUseRewrite();
+		rewriteEquivalentRecord = true;
+		is$Final = false;
+	}
+	
+    private boolean FRecordType.rewriteEquivalentRecord        = false;
+	private boolean FRecordVariable.rewriteEquivalentRecord    = false;
+	private boolean FRecordConstructor.rewriteEquivalentRecord = false;
+	
+    rewrite FRecordType {
+        when (rewriteEquivalentRecord) to FType {
+            return myFClass().createEquivalentRecordType(this);
+		}
+	}
+	
+	rewrite FRecordVariable {
+		when (rewriteEquivalentRecord)
+		to FRecordVariable {
+			rewriteEquivalentRecord = false;
+			setRecord(myFClass().createEquivalentRecordAccess(getRecord()));
+			flushAll();
+			return this;
+		}
+	}
+
+    rewrite FRecordConstructor {
+        when (rewriteEquivalentRecord)
+        to FRecordConstructor {
+            rewriteEquivalentRecord = false;
+            FRecordAccess old = getRecord();
+            setRecord(myFClass().createEquivalentRecordAccess(getRecord()));
+            int[] order = myFClass().getEquivalentRecordComponentOrder(old);
+            if (order != null) {
+                List<FExp> args = new List<>();
+                for (int i : order) {
+                    args.add(getArg(i));
+                }
+                setArgList(args);
+            }
+            flushAll();
+            return this;
+        }
+    }
+
+    public FRecordAccess FClass.createEquivalentRecordAccess(FRecordAccess old) {
+		FRecordDecl rec = equivalentRecordMap.get(old.name());
+		return (rec != null) ? rec.getFAccess().createFRecordAccess() : old;
+	}
+
+    public int[] FClass.getEquivalentRecordComponentOrder(FAccess old) {
+        return equivalentRecordComponentOrderMap.get(old.name());
+    }
+
+	public FType FClass.createEquivalentRecordType(FType old) {
+        FRecordDecl rec = equivalentRecordMap.get(old.name());
+        if (rec == null) {
+            return old;
+        }
+        FType t = rec.type().fullCopy();
+        t.transferSizes(old);
+        return t;
+    }
+    
+    public void FType.transferSizes(FType t) {
+        if (!t.isUnknown()) {
+            setSize(t.getSize());
+        }
+    }
+    
+    public void FRecordType.transferSizes(FType t) {
+        super.transferSizes(t);
+        if (!t.isUnknown() && !t.isNoType()) {
+            FRecordType rt = (FRecordType) t;
+            for (int i = 0; i < getNumComponent(); i++) {
+                getComponent(i).getFType().transferSizes(rt.getComponent(i).getFType());
+            }
+        }
+    }
+    
+    public void FClass.insertTempsInLHS() {
+        for (FAbstractEquation equation : getParameterEquations()) {
+            equation.insertTempsInLHS(this, true);
+        }
+        for (FAbstractEquation equation : getFAbstractEquations()) {
+            equation.insertTempsInLHS(this, false);
+        }
+    }
+    
+    public void FAbstractEquation.insertTempsInLHS(FClass fClass, boolean param) {}
+    
+    @Override
+    public void FFunctionCallEquation.insertTempsInLHS(FClass fClass, boolean param) {
+        for (FFunctionCallLeft left : getLefts()) {
+            left.insertTempsInLHS(fClass, param);
+        }
+    }
+    
+    public void FFunctionCallLeft.insertTempsInLHS(FClass fClass, boolean param) {
+        if (hasFExp()) {
+            getFExp().insertTempsInLHS(fClass, param);
+        }
+    }
+    
+    public void FExp.insertTempsInLHS(FClass fClass, boolean param) {
+        String tempName = calcTempVarName();
+        TypePrefixVariability v;
+        if (param) {
+            v = Variability.FIXEDPARAMETER;
+        } else {
+            v = type().funcOutputVariability();
+        }
+        fClass.addFVariable(type().createTempFVariable(new FAccessString(tempName), v));
+        replaceMe(new FAccessExp(tempName));
+        FEquation e = new FEquation(this, new FAccessExp(tempName));
+        if (param) {
+            fClass.addParameterEquation(e);
+        } else {
+            fClass.addFEquation(e);
+        }
+    }
+    
+    @Override
+    public void FNoExp.insertTempsInLHS(FClass fClass, boolean param) {
+        
+    }
+    
+    @Override
+    public void FAccessExp.insertTempsInLHS(FClass fClass, boolean param) {
+        
+    }
+    
+    @Override
+    public void FArray.insertTempsInLHS(FClass fClass, boolean param) {
+        for (FExp fExp : getFExps()) {
+            fExp.insertTempsInLHS(fClass, param);
+        }
+    }
+    
+    @Override
+    public void FRecordConstructor.insertTempsInLHS(FClass fClass, boolean param) {
+        for (FExp fExp : getArgs()) {
+            fExp.insertTempsInLHS(fClass, param);
+        }
+    }
+    
+    public void FClass.remoteRedundantInitialEquations() {
+        ArrayList<FAbstractEquation> eqns = new ArrayList<FAbstractEquation>();
+        // Remove alias equations.
+        for (FAbstractEquation equation : getFInitialEquations()) {
+            if (!equation.isSameVariableEquality()) {
+                eqns.add(equation);
+            }
+        }
+        setFInitialEquationList(new List(eqns));
+    }
+    
+    syn boolean FAbstractEquation.isSameVariableEquality() = false;
+    eq FEquation.isSameVariableEquality() = getLeft().isAccess() && getRight().isAccess()
+            && getLeft().asFAccessExp().myFV() == getRight().asFAccessExp().myFV()
+            && !getLeft().asFAccessExp().myFV().isUnknown();
+
+}

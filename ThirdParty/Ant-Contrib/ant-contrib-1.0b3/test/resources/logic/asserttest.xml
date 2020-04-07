@@ -1,0 +1,74 @@
+<?xml version="1.0"?>
+
+<project name="asserttest" basedir="." default="test1">
+   <description>
+     test build file for the Assert task
+   </description>
+   
+   <taskdef resource="net/sf/antcontrib/antcontrib.properties">
+      <classpath location="${antcontrib.jar}"/>
+   </taskdef>         
+   <property name="ant.enable.asserts" value="true"/>         
+         
+   <target name="test1">
+      <property name="testprop" value="true"/>
+      <assert>
+      	<isset property="testprop"/>
+      </assert>
+      <assert>
+   	    <istrue value="${testprop}" />
+      </assert>
+   </target>
+   
+   <target name="test2">
+      <assert name="testprop"/>
+   </target>
+   
+   <target name="test3">
+      <property name="testprop" value="true"/>
+      <assert name="testprop" value="12"/>
+   </target>
+   
+   <!-- test boolean conditions -->
+   <target name="test4">
+      <assert>
+            <isgreaterthan arg1="6.02" arg2="4"/>
+      </assert>
+      <assert>
+            <isgreaterthan arg1="Many" arg2="Less"/>
+      </assert>
+   </target>
+   <target name="test5">
+      <assert>
+            <islessthan arg1="6.02" arg2="23.456"/>
+      </assert>
+      <assert>
+            <islessthan arg1="least" arg2="most"/>
+      </assert>
+   </target>
+   <target name="test6">
+      <property name="testprop" value="false"/>
+      <assert>
+            <ispropertyfalse property="testprop"/>
+      </assert>
+   </target>
+   <target name="test7">
+      <property name="testprop" value="no"/>
+      <assert>
+            <ispropertytrue property="testprop"/>
+      </assert>
+   </target>
+   <target name="test8">
+      <property name="testprop" value="yes"/>
+      <assert>
+            <ispropertytrue property="testprop"/>
+      </assert>
+   </target>
+   <target name="test9">
+      <property name="testprop" value="on"/>
+      <assert>
+            <ispropertyfalse property="testprop"/>
+      </assert>
+   </target>
+  
+</project>

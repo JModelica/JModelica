@@ -1,0 +1,273 @@
+/*
+    Copyright (C) 2009-2018 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect ParameterSorting {
+
+	/**
+	 * Index of equation during equation sorting.
+	 */
+	public int FAbstractEquation.sortingIndex = -1;
+	
+	public class FAbstractEquation {
+		public static class SortingIndexComparator implements Comparator<FAbstractEquation> {
+			public int compare(FAbstractEquation o1, FAbstractEquation o2) {
+				return o1.sortingIndex - o2.sortingIndex;
+			}
+		}
+	}
+	
+	public class FVariable {
+		public static class SortingIndexComparator implements Comparator<FVariable> {
+			public int compare(FVariable o1, FVariable o2) {
+				return o1.parameterEquation().sortingIndex - o2.parameterEquation().sortingIndex;
+			}
+		}
+	}
+	
+	/**
+	 * Creates a TreeSet that can hold FAbstractEquations, sorted by their sortingIndex.
+	 */
+	public static TreeSet<FAbstractEquation> FAbstractEquation.sortingSet() {
+		return new TreeSet<FAbstractEquation>(new SortingIndexComparator());
+	}
+	
+	/** 
+	 * Sorts a list of FVariables according to the sortingIndex of their equation.
+	 */
+	public static void FVariable.sortParameters(java.util.List<FVariable> vars) {
+		Collections.sort(vars, new SortingIndexComparator());
+	}
+
+    public class FClass {
+        /**
+         * Sort dependent parameter equations.
+         * 
+         * This is a simple implementation of Kahn's topological sorting algorithm.
+         * This implementation will most likely be replaced by other graph 
+         * algorithms later on.
+         */
+        public class sortDependentParameters extends Transformation {
+            public void perform() {
+                sortDependentParameters();
+            }
+        }
+    }
+
+    /**
+     * Sort dependent parameter equations.
+     * 
+     * This is a simple implementation of Kahn's topological sorting algorithm.
+     * This implementation will most likely be replaced by other graph 
+     * algorithms later on.
+     */
+    public void FClass.sortDependentParameters() {
+        // Check that all independent parameters can be evaluated.
+        for (FVariable var : getFVariables()) {
+            TypePrefixVariability variability = var.variability();
+            if (variability.parameterVariability() && var.hasBindingExp()) {
+                FExp bExp = var.getBindingExp();
+                if (!bExp.isLiteralExp() && !var.isExternalObject()) {
+                    FExp literal = null;
+                    try {
+                        CValue cval = bExp.ceval();
+                        if (cval.hasBuildLiteral()) {
+                            literal = cval.buildLiteral();
+                        }
+                    } catch (ConstantEvaluationException e) {}
+                    if (literal != null) {
+                        var.setBindingExp(literal);
+                    } else {
+                        FAbstractEquation fae = new FEquation(var.createAccessExp(), bExp);
+                        addParameterEquationNoTransform(fae);
+                        var.removeBindingExp();
+                        parameterEquationsMap().put(var, fae);
+                    }
+                }
+            }
+        }
+		// Get the list of parameter equations and set up preliminary data.
+		ArrayList<FAbstractEquation> eqns = getParameterEquations().toArrayList();
+		
+		// Check if there is any dependent parameters that can be made independent.
+		Iterator<FAbstractEquation> it = eqns.iterator();
+		while (it.hasNext()) {
+			FAbstractEquation eqn = it.next();
+			if (eqn != null && eqn.isIndependentParameterEquation()) {
+				try {
+					eqn.revertToBindingExp();
+					it.remove();
+				} catch (ConstantEvaluationException e) {
+					// Doh, we were unable to evaluate the expression
+				}
+			}
+		}
+		int n_eqns = eqns.size();
+		List<FVariable> vars = getFVariables();
+		int n_vars = getNumFVariable();
+		for (int i = 0; i < n_eqns; i++)
+			eqns.get(i).sortingIndex = i;
+		for (FVariable fv : vars)
+			fv.parameterEquation();  // Calculate these before changing anything
+		
+		
+		// Set up data structures for the adjacency graph.
+		ArrayList<HashSet<FAbstractEquation>> toNodes = new ArrayList<HashSet<FAbstractEquation>>(n_eqns);
+		ArrayList<HashSet<FAbstractEquation>> fromNodes = new ArrayList<HashSet<FAbstractEquation>>(n_eqns);
+		for (int i = 0; i < n_eqns; i++) {
+			toNodes.add(new HashSet<FAbstractEquation>());
+			fromNodes.add(new HashSet<FAbstractEquation>());
+		}
+		
+		// For each equation
+		for (FAbstractEquation eqn : eqns) {
+			// Retrieve all variables referenced in right hand side
+            Set<FVariable> deps = eqn.variableDependenciesRHS();
+			// Build the actual adjacency graph.
+			for (FVariable fv : deps) {
+				FAbstractEquation depEqn = fv.parameterEquation();
+				if (depEqn != null && depEqn.sortingIndex >= 0) {
+					toNodes.get(depEqn.sortingIndex).add(eqn);		
+					fromNodes.get(eqn.sortingIndex).add(depEqn);
+				}
+			}
+		}	
+				
+		// Sort using algorithm described at
+		// http://en.wikipedia.org/wiki/Topological_sorting
+		List<FAbstractEquation> L = new List<FAbstractEquation>();
+		Queue<FAbstractEquation> S = new ArrayDeque<FAbstractEquation>();
+		
+		// Add all nodes without incoming edges to S
+		for (int i = 0; i < n_eqns; i++) 
+			if (fromNodes.get(i).isEmpty()) 
+				S.add(eqns.get(i));
+		
+		// Repeat while S is not empty
+		int si = 0;
+		int n_indep = 0;
+		while (S.size() > 0) {
+			// Remove a node n from S
+			FAbstractEquation n = S.remove();
+			L.add(n);
+			// For each node m with an edge e from n to m (in original order)
+			Set<FAbstractEquation> nodes = FAbstractEquation.sortingSet();
+			nodes.addAll(toNodes.get(n.sortingIndex));
+			for (FAbstractEquation m : nodes) {
+				// Remove edge e from fromNodes
+				fromNodes.get(m.sortingIndex).remove(n);
+				// If m has no incoming edges add m to S
+				if (fromNodes.get(m.sortingIndex).isEmpty()) 
+					S.add(m);
+			}
+			// Remove e from toNodes
+			toNodes.get(n.sortingIndex).clear();
+			// Done with n - update sortingIndex
+			n.sortingIndex = si++;
+		}
+		
+		// Not possible to find an ordering without cycles?
+		if (L.getNumChild() != eqns.size() - n_indep) {
+			error("The model "+ name() +" contains cyclic parameter dependencies.");
+		} else {
+			// Replace old parameter equation list
+			setParameterEquationList(L);
+			
+			// Rearrange parameters in same order as parameter equations
+			ArrayList<FVariable> depParams = new ArrayList<FVariable>(n_eqns);
+            for (FAbstractEquation fae : L) {
+                depParams.addAll(fae.referencedFVariablesInLHS());
+            }
+			ArrayList<Integer> depParamIndices = new ArrayList<Integer>(n_eqns);
+			for (int i = 0; i < n_vars; i++) {
+				FVariable fv = vars.getChild(i);
+				if (fv.hasParameterEquation()) {
+                    depParamIndices.add(Integer.valueOf(i));
+                }
+            }
+            
+			for (int i = 0; i < depParams.size(); i++)
+				vars.setChild(depParams.get(i), depParamIndices.get(i).intValue());
+	
+			// Flush AST since the structure has changed.
+				root().flushAllRecursive();
+			
+			// Remove any binding expressions of variables with parameter equations
+			for (FAbstractEquation eqn : L)
+				eqn.removeBindingExpOfAssignedVars();
+		}
+	}
+	
+	/**
+	 * Remove binding expression of variables assigned in this equation.
+	 */
+	public void FAbstractEquation.removeBindingExpOfAssignedVars() {}
+
+	public void FEquation.removeBindingExpOfAssignedVars() {
+		getLeft().removeBindingExpOfReferencedVars();
+	}
+	
+	public void FFunctionCallEquation.removeBindingExpOfAssignedVars() {
+		for (FFunctionCallLeft left : getLefts())
+			if (left.hasFExp())
+				left.getFExp().removeBindingExpOfReferencedVars();
+	}
+	
+	/**
+	 * Remove binding expression of variables referenced in this expression.
+	 */
+	public void FExp.removeBindingExpOfReferencedVars() {
+		for (FExp e : childFExps())
+			e.removeBindingExpOfReferencedVars();
+	}
+	
+	public void FAccessExp.removeBindingExpOfReferencedVars() {
+		getFAccess().myFV().removeBindingExp();
+	}
+	
+	/**
+	 * Remove binding expression of this variable.
+	 */
+	public void FAbstractVariable.removeBindingExp() {}
+	
+	public void FVariable.removeBindingExp() {
+		if (hasBindingExp())
+			setBindingExpOpt(new Opt());
+	}
+	
+	/**
+	 * Test if this should be the binding expression of an independent parameter instead.
+	 */
+	syn boolean FAbstractEquation.isIndependentParameterEquation() = false;
+	eq FEquation.isIndependentParameterEquation() = 
+		getLeft().isFlatParameterUse() && getRight().isIndependentParameterExp();
+	
+	/**
+	 * Test if this is a use of a parameter (in the flat tree).
+	 */
+	syn boolean FExp.isFlatParameterUse()   = false;
+	eq FAccessExp.isFlatParameterUse()       = getFAccess().isFlatParameterUse();
+	syn boolean FAccess.isFlatParameterUse() = myFV().isParameter();
+	
+	/**
+	 * Convert this parameter equation to a binding expression.
+	 */
+	public void FAbstractEquation.revertToBindingExp() {}
+	public void FEquation.revertToBindingExp() throws ConstantEvaluationException {
+		FVariable fv = (FVariable) getLeft().asFAccessExp().getFAccess().myFV();
+		fv.setBindingExp(getRight().ceval().buildLiteral());
+	}
+
+}

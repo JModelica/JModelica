@@ -1,0 +1,104 @@
+/*
+Copyright (C) 2009-2017 Modelon AB
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, version 3 of the License.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect CCodeGenNames {
+    interface Named_C {
+        public String name_C();
+        public String tempName_C();
+        public String nextTempName_C();
+    }
+
+    FExp              implements Named_C;
+    FFunctionCallLeft implements Named_C;
+    FAbstractVariable implements Named_C;
+
+    syn String FExp             .name_C() = tempName_C();
+    eq FSubscriptedExp          .name_C() = getFExp().name_C();
+    eq CommonAccessExp          .name_C() = getAccess().name_C();
+    syn String FFunctionCallLeft.name_C() = getFExp().name_C();
+
+    syn String FFunctionCallLeft.tempName_C() = getFExp().tempName_C();
+    syn String FAbstractVariable.tempName_C() { throw new UnsupportedOperationException(); }
+
+    public interface TempScope {
+        public String tempName_C();
+        public String tempName_C(FAbstractVariable v);
+    }
+
+    FAlgorithm implements TempScope;
+    syn lazy String FAlgorithm.tempName_C(FAbstractVariable v) = nextTempName_C();
+
+    syn lazy String FExp.tempName_C()       = nextTempName_C();
+    syn lazy String FAlgorithm.tempName_C() = nextTempName_C();
+
+    syn String ASTNode.nextTempName_C() = myCodeGenContext().nextTempName_C();
+
+    inh CodeGenContext ASTNode.myCodeGenContext();
+    eq Root.getChild().myCodeGenContext() = null;
+    eq FClass.getChild().myCodeGenContext() = codeGenContext;
+    eq FFunctionDecl.getChild().myCodeGenContext() = codeGenContext;
+    eq FExternalStmt.getChild().myCodeGenContext() = getCodeGenContext();
+
+    private CodeGenContext FClass.codeGenContext = new CodeGenContext();
+    private CodeGenContext FFunctionDecl.codeGenContext = new CodeGenContext();
+    private CodeGenContext FExternalStmt.codeGenContext = null;
+    public void FExternalStmt.setCodeGenContext(CodeGenContext cgc) { codeGenContext = cgc; }
+    public CodeGenContext FExternalStmt.getCodeGenContext() { return codeGenContext == null ? myCodeGenContext() : codeGenContext; }
+
+    public class CodeGenContext {
+        private int nextTempNbr_C = 1;
+        private Map<String,String> recordChildTempNames = new HashMap<>();
+        
+        public String nextTempName_C() {
+            return "tmp_" + nextTempNbr_C++;
+        }
+        public void setAlias(ExternalArgument arg, String val) {
+            throw new UnsupportedOperationException();
+        }
+        public String alias(ExternalArgument arg) {
+            return null;
+        }
+        public CodeGenContext createProxy() {
+            return new CodeGenContextProxy(this);
+        }
+        public Map<String,String> recordChildTempNames() {
+            return recordChildTempNames;
+        }
+        private class CodeGenContextProxy extends CodeGenContext {
+            private CodeGenContext redirect;
+            private Map<ExternalArgument,String> aliases = new HashMap<>();
+            public CodeGenContextProxy(CodeGenContext redirect) {
+                this.redirect = redirect;
+            }
+            public String nextTempName_C() {
+                return redirect.nextTempName_C();
+            }
+            public void setAlias(ExternalArgument arg, String val) {
+                aliases.put(arg,val);
+            }
+            public String alias(ExternalArgument arg) {
+                String res = aliases.get(arg);
+                if (res == null) {
+                    res = redirect.alias(arg);
+                }
+                return res;
+            }
+            public Map<String,String> recordChildTempNames() {
+                return redirect.recordChildTempNames();
+            }
+        }
+    }
+
+}

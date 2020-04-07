@@ -1,0 +1,107 @@
+package Crystallizer
+  model Crystallizer
+    parameter Real Vs = 300 "Volume of the solvent";
+    parameter Real W = 2025 "The total mass in the crystallizer";
+    parameter Real Ls0 = 5e-4 "Initial crystal size";
+    parameter Real L0 = 5e-5 "Nucleate crystal size";
+    parameter Real Ws0 = 2 "Weigt of seed crystals";
+    parameter Real rho = 1.58 "Specific gravity of the crystals";
+    parameter Real alpha = 0.2 "Shape factor of the area of the crystals";
+    parameter Real beta = 1.2 "Shape factor of the volume of the crystals";
+    parameter Real Kg = 0.00418;
+    parameter Real Bn = 385;
+    parameter Real Cp = 0.4;
+    parameter Real Kc = 35;
+    parameter Real Ke = 377;
+    parameter Real n1 = 1.1;
+    parameter Real n2 = 5.72;
+    parameter Real a[4] = {-66.4309, 2.804, -0.022579, 6.7117*1e-5};
+    parameter Real b[4] = {16.08852, -2.708263, 0.0670694, -3.5685*1e-4}; 	 
+
+    parameter Real ep = 1e-2;
+
+    // Start values
+    parameter Real Ls_0 = 0.0005;
+    parameter Real Nc_0 = 0;
+    parameter Real L_0 = 0;
+    parameter Real Ac_0 = 0;
+    parameter Real Vc_0 = 0;
+    parameter Real Mc_0 = 2;
+    parameter Real Cc_0 = 5.4;
+    parameter Real Tc_0 = 75;
+
+    // States
+    
+    Real Ls(min=0,start=Ls_0,fixed=true,nominal=0.001) "Mean crystal size";
+    Real Nc(start=Nc_0,fixed=true,nominal=1e4) "Number of nuclei per liter"; 
+    Real L(start=L_0,fixed=true,nominal=10) "Length of the crystals per liter";
+    Real Ac(start=Ac_0,fixed=true,nominal=10) "Total surface area of the crystals per liter";
+    Real Vc(start=Vc_0,fixed=true,nominal=5e-2) "Total volume of the crystals per liter";
+    Real Mc(start=Mc_0,fixed=true,nominal=500)"Total mass of the crystals";
+    Real Cc(start=Cc_0,fixed=true) "";
+    Real Tc(start=Tc_0,fixed=true) "Crystallizer temperature";
+
+    //Algebraics
+    parameter Real Cbar_0 = 100*Cc_0/(1.35+Cc_0);
+    parameter Real Teq_0 = sum(a[i]*Cbar_0^(i-1) for i in 1:4);
+    parameter Real deltaT_0 = sqrt((Teq_0-Tc_0)^2 + ep^2)/2 + (Teq_0-Tc_0)/2;
+    Real Cbar(min=0,max=100,start=Cbar_0);
+    Real deltaT(min=0,max=3,start=Tc_0);
+    Real Teq(start=Teq_0);
+
+    // Input
+    input Real Tj(start=40);
+    
+  equation
+    der(Ls) = Kg*Ls^0.5*deltaT^n1;
+    der(Nc) = Bn*deltaT^n2;
+
+    der(L) = Nc*der(Ls) + L0*der(Nc);
+    der(Ac) = 2*alpha*Nc*der(Ls) + L0^2*der(Nc);
+    der(Vc) = 3*beta*Ac*der(Ls) + L0^3*der(Nc);
+    der(Mc) = 3*(Ws0/Ls0^3)*Ls^2*der(Ls) + rho*Vs*der(Vc);
+    der(Cc) = -1/Vs*der(Mc);
+    der(Tc) = (Kc*der(Mc)-Ke*(Tc-Tj))/(W*Cp);
+ 
+    Cbar = 100*Cc/(1.35+Cc);
+    Teq = sum(a[i]*Cbar^(i-1) for i in 1:4);
+    deltaT = sqrt((Teq-Tc)^2 + ep^2)/2 + (Teq-Tc)/2; // Max function approximation
+
+ end Crystallizer;
+
+ model SimulateCrystallizer
+    Crystallizer c;
+    Real Tj(start=40) = c.Tj;
+    Real Ta(min=0,start=Ta_0);
+    parameter Real Ta_0 = sum(c.b[i]*c.Cbar_0^(i-1) for i in 1:4);
+    equation
+    c.Tj = 40;
+    Ta = sum(c.b[i]*c.Cbar^(i-1) for i in 1:4);
+ end SimulateCrystallizer;
+
+ optimization OptCrystallizer0(objectiveIntegrand = (40-Tj)^2, startTime=0, finalTime=25)
+    Crystallizer c;
+    Real Ta(start=Ta_0);
+      input Real Tj(start=40/*, min=0, max=100*/);
+    parameter Real Ta_0 = sum(c.b[i]*c.Cbar_0^(i-1) for i in 1:4);
+ equation
+    Tj = c.Tj;
+    //Tj=40;
+    Ta = sum(c.b[i]*c.Cbar^(i-1) for i in 1:4);
+ constraint
+//    Ta <= c.Tj;
+ end OptCrystallizer0;
+
+ optimization OptCrystallizer(objective = -c.Ls(finalTime)/0.001, objectiveIntegrand = 1e-5*(30-Tj)^2, startTime=0, finalTime=25)
+    Crystallizer c;
+//    Real Ta(min=0,start=Ta_0);
+    input Real Tj(start=40, min=10, max=100);
+//    parameter Real Ta_0 = sum(c.b[i]*c.Cbar_0^(i-1) for i in 1:4);
+ equation
+    Tj = c.Tj;
+//    Ta = sum(c.b[i]*c.Cbar^(i-1) for i in 1:4);
+ constraint
+//    Tj >= sum(c.b[i]*c.Cbar^(i-1) for i in 1:4);
+ end OptCrystallizer;
+
+end Crystallizer;

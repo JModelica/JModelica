@@ -1,0 +1,42 @@
+<?xml version="1.0"?>
+<project default="everything" name="Antclipse test xml file" basedir=".">
+    <taskdef resource="net/sf/antcontrib/antcontrib.properties">
+        <classpath location="${antcontrib.jar}"/>
+    </taskdef>
+
+<target name="make.fs.output">
+	<!-- creates a fileset including all the files from the output directory, called ecl1-bin if your binary directory is bin/ -->
+	<antclipse produce="fileset" idcontainer="ecl1" includeoutput="true" includesource="false"
+	includelibs="false" verbose="true"/>
+</target>
+
+<target name="make.fs.sources">
+	<!-- creates a fileset for each source directory, called ecl2-*source-dir-name*/ -->
+	<antclipse produce="fileset" idcontainer="ecl2" includeoutput="false" includesource="true"
+	includelibs="false" verbose="true"/>
+</target>
+
+<target name="make.fs.libs">
+	<!-- creates a fileset sontaining all your project libs called ecl3/ -->
+	<antclipse produce="fileset" idcontainer="ecl3" verbose="true"/>
+</target>
+
+<target name="make.cp">
+	<!-- creates a fileset sontaining all your project libs called ecl3/ -->
+	<antclipse produce="classpath" idcontainer="eclp" verbose="true" includeoutput="true"/>
+</target>
+
+<target name="everything" depends="make.fs.libs, make.fs.output, make.fs.sources, make.cp">
+    <echo message="The output path is ${ecl1outpath}"/>
+    <echo message="The source path is ${ecl2srcpath}"/>
+    <!-- makes a jar file with the content of the output directory -->
+	<zip destfile="out.jar"><fileset refid="ecl1-${ecl1outpath}"/></zip>
+	<!-- makes a zip file with all your sources (supposing you have only source directory) -->
+	 <zip destfile="src.zip"><fileset refid="ecl2-${ecl2srcpath}"/></zip>
+	<!-- makes a big zip file with all your project libraries -->
+	 <zip destfile="libs.zip"><fileset refid="ecl3"/></zip>
+	 <!-- imports the classpath into a property then echoes the property -->
+	 <property name="cpcontent" refid="eclp"/>
+	<echo>The newly created classpath is ${cpcontent}</echo>
+</target>
+</project>

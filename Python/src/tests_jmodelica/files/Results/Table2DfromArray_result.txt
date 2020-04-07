@@ -1,0 +1,1788 @@
+#1
+char Aclass(3,11)
+Atrajectory
+1.1
+
+char name(557,28)
+time
+src1.pi
+table1[1,1]
+table1[1,2]
+table1[1,3]
+table1[1,4]
+table1[1,5]
+table1[1,6]
+table1[1,7]
+table1[1,8]
+table1[1,9]
+table1[1,10]
+table1[1,11]
+table1[1,12]
+table1[2,1]
+table1[2,2]
+table1[2,3]
+table1[2,4]
+table1[2,5]
+table1[2,6]
+table1[2,7]
+table1[2,8]
+table1[2,9]
+table1[2,10]
+table1[2,11]
+table1[2,12]
+table1[3,1]
+table1[3,2]
+table1[3,3]
+table1[3,4]
+table1[3,5]
+table1[3,6]
+table1[3,7]
+table1[3,8]
+table1[3,9]
+table1[3,10]
+table1[3,11]
+table1[3,12]
+table1[4,1]
+table1[4,2]
+table1[4,3]
+table1[4,4]
+table1[4,5]
+table1[4,6]
+table1[4,7]
+table1[4,8]
+table1[4,9]
+table1[4,10]
+table1[4,11]
+table1[4,12]
+table1[5,1]
+table1[5,2]
+table1[5,3]
+table1[5,4]
+table1[5,5]
+table1[5,6]
+table1[5,7]
+table1[5,8]
+table1[5,9]
+table1[5,10]
+table1[5,11]
+table1[5,12]
+table1[6,1]
+table1[6,2]
+table1[6,3]
+table1[6,4]
+table1[6,5]
+table1[6,6]
+table1[6,7]
+table1[6,8]
+table1[6,9]
+table1[6,10]
+table1[6,11]
+table1[6,12]
+table1[7,1]
+table1[7,2]
+table1[7,3]
+table1[7,4]
+table1[7,5]
+table1[7,6]
+table1[7,7]
+table1[7,8]
+table1[7,9]
+table1[7,10]
+table1[7,11]
+table1[7,12]
+table1[8,1]
+table1[8,2]
+table1[8,3]
+table1[8,4]
+table1[8,5]
+table1[8,6]
+table1[8,7]
+table1[8,8]
+table1[8,9]
+table1[8,10]
+table1[8,11]
+table1[8,12]
+table1[9,1]
+table1[9,2]
+table1[9,3]
+table1[9,4]
+table1[9,5]
+table1[9,6]
+table1[9,7]
+table1[9,8]
+table1[9,9]
+table1[9,10]
+table1[9,11]
+table1[9,12]
+table1[10,1]
+table1[10,2]
+table1[10,3]
+table1[10,4]
+table1[10,5]
+table1[10,6]
+table1[10,7]
+table1[10,8]
+table1[10,9]
+table1[10,10]
+table1[10,11]
+table1[10,12]
+table1[11,1]
+table1[11,2]
+table1[11,3]
+table1[11,4]
+table1[11,5]
+table1[11,6]
+table1[11,7]
+table1[11,8]
+table1[11,9]
+table1[11,10]
+table1[11,11]
+table1[11,12]
+table1[12,1]
+table1[12,2]
+table1[12,3]
+table1[12,4]
+table1[12,5]
+table1[12,6]
+table1[12,7]
+table1[12,8]
+table1[12,9]
+table1[12,10]
+table1[12,11]
+table1[12,12]
+table1[13,1]
+table1[13,2]
+table1[13,3]
+table1[13,4]
+table1[13,5]
+table1[13,6]
+table1[13,7]
+table1[13,8]
+table1[13,9]
+table1[13,10]
+table1[13,11]
+table1[13,12]
+table1[14,1]
+table1[14,2]
+table1[14,3]
+table1[14,4]
+table1[14,5]
+table1[14,6]
+table1[14,7]
+table1[14,8]
+table1[14,9]
+table1[14,10]
+table1[14,11]
+table1[14,12]
+table1[15,1]
+table1[15,2]
+table1[15,3]
+table1[15,4]
+table1[15,5]
+table1[15,6]
+table1[15,7]
+table1[15,8]
+table1[15,9]
+table1[15,10]
+table1[15,11]
+table1[15,12]
+table1[16,1]
+table1[16,2]
+table1[16,3]
+table1[16,4]
+table1[16,5]
+table1[16,6]
+table1[16,7]
+table1[16,8]
+table1[16,9]
+table1[16,10]
+table1[16,11]
+table1[16,12]
+table1[17,1]
+table1[17,2]
+table1[17,3]
+table1[17,4]
+table1[17,5]
+table1[17,6]
+table1[17,7]
+table1[17,8]
+table1[17,9]
+table1[17,10]
+table1[17,11]
+table1[17,12]
+table1[18,1]
+table1[18,2]
+table1[18,3]
+table1[18,4]
+table1[18,5]
+table1[18,6]
+table1[18,7]
+table1[18,8]
+table1[18,9]
+table1[18,10]
+table1[18,11]
+table1[18,12]
+table1[19,1]
+table1[19,2]
+table1[19,3]
+table1[19,4]
+table1[19,5]
+table1[19,6]
+table1[19,7]
+table1[19,8]
+table1[19,9]
+table1[19,10]
+table1[19,11]
+table1[19,12]
+table1[20,1]
+table1[20,2]
+table1[20,3]
+table1[20,4]
+table1[20,5]
+table1[20,6]
+table1[20,7]
+table1[20,8]
+table1[20,9]
+table1[20,10]
+table1[20,11]
+table1[20,12]
+table1[21,1]
+table1[21,2]
+table1[21,3]
+table1[21,4]
+table1[21,5]
+table1[21,6]
+table1[21,7]
+table1[21,8]
+table1[21,9]
+table1[21,10]
+table1[21,11]
+table1[21,12]
+table1[22,1]
+table1[22,2]
+table1[22,3]
+table1[22,4]
+table1[22,5]
+table1[22,6]
+table1[22,7]
+table1[22,8]
+table1[22,9]
+table1[22,10]
+table1[22,11]
+table1[22,12]
+src1.amplitude
+src1.freqHz
+src1.phase
+src1.offset
+src1.startTime
+src2.k
+src2.y
+modelicaTable2D.u2
+_events_default_tol
+_events_tol_factor
+_nle_solver_default_tol
+_nle_solver_min_tol
+_nle_solver_tol_factor
+modelicaTable2D.table[1,1]
+modelicaTable2D.table[1,2]
+modelicaTable2D.table[1,3]
+modelicaTable2D.table[1,4]
+modelicaTable2D.table[1,5]
+modelicaTable2D.table[1,6]
+modelicaTable2D.table[1,7]
+modelicaTable2D.table[1,8]
+modelicaTable2D.table[1,9]
+modelicaTable2D.table[1,10]
+modelicaTable2D.table[1,11]
+modelicaTable2D.table[1,12]
+modelicaTable2D.table[2,1]
+modelicaTable2D.table[2,2]
+modelicaTable2D.table[2,3]
+modelicaTable2D.table[2,4]
+modelicaTable2D.table[2,5]
+modelicaTable2D.table[2,6]
+modelicaTable2D.table[2,7]
+modelicaTable2D.table[2,8]
+modelicaTable2D.table[2,9]
+modelicaTable2D.table[2,10]
+modelicaTable2D.table[2,11]
+modelicaTable2D.table[2,12]
+modelicaTable2D.table[3,1]
+modelicaTable2D.table[3,2]
+modelicaTable2D.table[3,3]
+modelicaTable2D.table[3,4]
+modelicaTable2D.table[3,5]
+modelicaTable2D.table[3,6]
+modelicaTable2D.table[3,7]
+modelicaTable2D.table[3,8]
+modelicaTable2D.table[3,9]
+modelicaTable2D.table[3,10]
+modelicaTable2D.table[3,11]
+modelicaTable2D.table[3,12]
+modelicaTable2D.table[4,1]
+modelicaTable2D.table[4,2]
+modelicaTable2D.table[4,3]
+modelicaTable2D.table[4,4]
+modelicaTable2D.table[4,5]
+modelicaTable2D.table[4,6]
+modelicaTable2D.table[4,7]
+modelicaTable2D.table[4,8]
+modelicaTable2D.table[4,9]
+modelicaTable2D.table[4,10]
+modelicaTable2D.table[4,11]
+modelicaTable2D.table[4,12]
+modelicaTable2D.table[5,1]
+modelicaTable2D.table[5,2]
+modelicaTable2D.table[5,3]
+modelicaTable2D.table[5,4]
+modelicaTable2D.table[5,5]
+modelicaTable2D.table[5,6]
+modelicaTable2D.table[5,7]
+modelicaTable2D.table[5,8]
+modelicaTable2D.table[5,9]
+modelicaTable2D.table[5,10]
+modelicaTable2D.table[5,11]
+modelicaTable2D.table[5,12]
+modelicaTable2D.table[6,1]
+modelicaTable2D.table[6,2]
+modelicaTable2D.table[6,3]
+modelicaTable2D.table[6,4]
+modelicaTable2D.table[6,5]
+modelicaTable2D.table[6,6]
+modelicaTable2D.table[6,7]
+modelicaTable2D.table[6,8]
+modelicaTable2D.table[6,9]
+modelicaTable2D.table[6,10]
+modelicaTable2D.table[6,11]
+modelicaTable2D.table[6,12]
+modelicaTable2D.table[7,1]
+modelicaTable2D.table[7,2]
+modelicaTable2D.table[7,3]
+modelicaTable2D.table[7,4]
+modelicaTable2D.table[7,5]
+modelicaTable2D.table[7,6]
+modelicaTable2D.table[7,7]
+modelicaTable2D.table[7,8]
+modelicaTable2D.table[7,9]
+modelicaTable2D.table[7,10]
+modelicaTable2D.table[7,11]
+modelicaTable2D.table[7,12]
+modelicaTable2D.table[8,1]
+modelicaTable2D.table[8,2]
+modelicaTable2D.table[8,3]
+modelicaTable2D.table[8,4]
+modelicaTable2D.table[8,5]
+modelicaTable2D.table[8,6]
+modelicaTable2D.table[8,7]
+modelicaTable2D.table[8,8]
+modelicaTable2D.table[8,9]
+modelicaTable2D.table[8,10]
+modelicaTable2D.table[8,11]
+modelicaTable2D.table[8,12]
+modelicaTable2D.table[9,1]
+modelicaTable2D.table[9,2]
+modelicaTable2D.table[9,3]
+modelicaTable2D.table[9,4]
+modelicaTable2D.table[9,5]
+modelicaTable2D.table[9,6]
+modelicaTable2D.table[9,7]
+modelicaTable2D.table[9,8]
+modelicaTable2D.table[9,9]
+modelicaTable2D.table[9,10]
+modelicaTable2D.table[9,11]
+modelicaTable2D.table[9,12]
+modelicaTable2D.table[10,1]
+modelicaTable2D.table[10,2]
+modelicaTable2D.table[10,3]
+modelicaTable2D.table[10,4]
+modelicaTable2D.table[10,5]
+modelicaTable2D.table[10,6]
+modelicaTable2D.table[10,7]
+modelicaTable2D.table[10,8]
+modelicaTable2D.table[10,9]
+modelicaTable2D.table[10,10]
+modelicaTable2D.table[10,11]
+modelicaTable2D.table[10,12]
+modelicaTable2D.table[11,1]
+modelicaTable2D.table[11,2]
+modelicaTable2D.table[11,3]
+modelicaTable2D.table[11,4]
+modelicaTable2D.table[11,5]
+modelicaTable2D.table[11,6]
+modelicaTable2D.table[11,7]
+modelicaTable2D.table[11,8]
+modelicaTable2D.table[11,9]
+modelicaTable2D.table[11,10]
+modelicaTable2D.table[11,11]
+modelicaTable2D.table[11,12]
+modelicaTable2D.table[12,1]
+modelicaTable2D.table[12,2]
+modelicaTable2D.table[12,3]
+modelicaTable2D.table[12,4]
+modelicaTable2D.table[12,5]
+modelicaTable2D.table[12,6]
+modelicaTable2D.table[12,7]
+modelicaTable2D.table[12,8]
+modelicaTable2D.table[12,9]
+modelicaTable2D.table[12,10]
+modelicaTable2D.table[12,11]
+modelicaTable2D.table[12,12]
+modelicaTable2D.table[13,1]
+modelicaTable2D.table[13,2]
+modelicaTable2D.table[13,3]
+modelicaTable2D.table[13,4]
+modelicaTable2D.table[13,5]
+modelicaTable2D.table[13,6]
+modelicaTable2D.table[13,7]
+modelicaTable2D.table[13,8]
+modelicaTable2D.table[13,9]
+modelicaTable2D.table[13,10]
+modelicaTable2D.table[13,11]
+modelicaTable2D.table[13,12]
+modelicaTable2D.table[14,1]
+modelicaTable2D.table[14,2]
+modelicaTable2D.table[14,3]
+modelicaTable2D.table[14,4]
+modelicaTable2D.table[14,5]
+modelicaTable2D.table[14,6]
+modelicaTable2D.table[14,7]
+modelicaTable2D.table[14,8]
+modelicaTable2D.table[14,9]
+modelicaTable2D.table[14,10]
+modelicaTable2D.table[14,11]
+modelicaTable2D.table[14,12]
+modelicaTable2D.table[15,1]
+modelicaTable2D.table[15,2]
+modelicaTable2D.table[15,3]
+modelicaTable2D.table[15,4]
+modelicaTable2D.table[15,5]
+modelicaTable2D.table[15,6]
+modelicaTable2D.table[15,7]
+modelicaTable2D.table[15,8]
+modelicaTable2D.table[15,9]
+modelicaTable2D.table[15,10]
+modelicaTable2D.table[15,11]
+modelicaTable2D.table[15,12]
+modelicaTable2D.table[16,1]
+modelicaTable2D.table[16,2]
+modelicaTable2D.table[16,3]
+modelicaTable2D.table[16,4]
+modelicaTable2D.table[16,5]
+modelicaTable2D.table[16,6]
+modelicaTable2D.table[16,7]
+modelicaTable2D.table[16,8]
+modelicaTable2D.table[16,9]
+modelicaTable2D.table[16,10]
+modelicaTable2D.table[16,11]
+modelicaTable2D.table[16,12]
+modelicaTable2D.table[17,1]
+modelicaTable2D.table[17,2]
+modelicaTable2D.table[17,3]
+modelicaTable2D.table[17,4]
+modelicaTable2D.table[17,5]
+modelicaTable2D.table[17,6]
+modelicaTable2D.table[17,7]
+modelicaTable2D.table[17,8]
+modelicaTable2D.table[17,9]
+modelicaTable2D.table[17,10]
+modelicaTable2D.table[17,11]
+modelicaTable2D.table[17,12]
+modelicaTable2D.table[18,1]
+modelicaTable2D.table[18,2]
+modelicaTable2D.table[18,3]
+modelicaTable2D.table[18,4]
+modelicaTable2D.table[18,5]
+modelicaTable2D.table[18,6]
+modelicaTable2D.table[18,7]
+modelicaTable2D.table[18,8]
+modelicaTable2D.table[18,9]
+modelicaTable2D.table[18,10]
+modelicaTable2D.table[18,11]
+modelicaTable2D.table[18,12]
+modelicaTable2D.table[19,1]
+modelicaTable2D.table[19,2]
+modelicaTable2D.table[19,3]
+modelicaTable2D.table[19,4]
+modelicaTable2D.table[19,5]
+modelicaTable2D.table[19,6]
+modelicaTable2D.table[19,7]
+modelicaTable2D.table[19,8]
+modelicaTable2D.table[19,9]
+modelicaTable2D.table[19,10]
+modelicaTable2D.table[19,11]
+modelicaTable2D.table[19,12]
+modelicaTable2D.table[20,1]
+modelicaTable2D.table[20,2]
+modelicaTable2D.table[20,3]
+modelicaTable2D.table[20,4]
+modelicaTable2D.table[20,5]
+modelicaTable2D.table[20,6]
+modelicaTable2D.table[20,7]
+modelicaTable2D.table[20,8]
+modelicaTable2D.table[20,9]
+modelicaTable2D.table[20,10]
+modelicaTable2D.table[20,11]
+modelicaTable2D.table[20,12]
+modelicaTable2D.table[21,1]
+modelicaTable2D.table[21,2]
+modelicaTable2D.table[21,3]
+modelicaTable2D.table[21,4]
+modelicaTable2D.table[21,5]
+modelicaTable2D.table[21,6]
+modelicaTable2D.table[21,7]
+modelicaTable2D.table[21,8]
+modelicaTable2D.table[21,9]
+modelicaTable2D.table[21,10]
+modelicaTable2D.table[21,11]
+modelicaTable2D.table[21,12]
+modelicaTable2D.table[22,1]
+modelicaTable2D.table[22,2]
+modelicaTable2D.table[22,3]
+modelicaTable2D.table[22,4]
+modelicaTable2D.table[22,5]
+modelicaTable2D.table[22,6]
+modelicaTable2D.table[22,7]
+modelicaTable2D.table[22,8]
+modelicaTable2D.table[22,9]
+modelicaTable2D.table[22,10]
+modelicaTable2D.table[22,11]
+modelicaTable2D.table[22,12]
+modelicaTable2D.u1
+src1.y
+modelicaTable2D.y
+_log_level
+_nle_solver_log_level
+modelicaTable2D.tableID
+modelicaTable2D.tableOnFile
+_enforce_bounds
+_nle_solver_check_jac_cond
+_rescale_after_singular_jac
+_rescale_each_step
+_use_Brent_in_1d
+_use_automatic_scaling
+_use_jacobian_scaling
+
+char description(557,80)
+Time in [s]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Amplitude of sine wave
+Frequency of sine wave
+Phase of sine wave
+Offset of output signal
+Output = offset for time < startTime
+Constant output value
+Connector of Real output signal
+Connector of Real input signal 2
+
+
+
+
+
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+table matrix (grid u1 = first column, grid u2 = first row; e.g. table=[0,0;0,1])
+Connector of Real input signal 1
+Connector of Real output signal
+Connector of Real output signal
+
+
+
+true, if table is defined on file or in function usertab
+
+
+
+
+
+
+
+
+int dataInfo(557,4)
+0 1 0 -1 # time
+1 2 0 -1 # src1.pi
+1 3 0 -1 # table1[1,1]
+1 4 0 -1 # table1[1,2]
+1 5 0 -1 # table1[1,3]
+1 6 0 -1 # table1[1,4]
+1 7 0 -1 # table1[1,5]
+1 8 0 -1 # table1[1,6]
+1 9 0 -1 # table1[1,7]
+1 10 0 -1 # table1[1,8]
+1 11 0 -1 # table1[1,9]
+1 12 0 -1 # table1[1,10]
+1 13 0 -1 # table1[1,11]
+1 14 0 -1 # table1[1,12]
+1 15 0 -1 # table1[2,1]
+1 16 0 -1 # table1[2,2]
+1 17 0 -1 # table1[2,3]
+1 18 0 -1 # table1[2,4]
+1 19 0 -1 # table1[2,5]
+1 20 0 -1 # table1[2,6]
+1 21 0 -1 # table1[2,7]
+1 22 0 -1 # table1[2,8]
+1 23 0 -1 # table1[2,9]
+1 24 0 -1 # table1[2,10]
+1 25 0 -1 # table1[2,11]
+1 26 0 -1 # table1[2,12]
+1 27 0 -1 # table1[3,1]
+1 28 0 -1 # table1[3,2]
+1 29 0 -1 # table1[3,3]
+1 30 0 -1 # table1[3,4]
+1 31 0 -1 # table1[3,5]
+1 32 0 -1 # table1[3,6]
+1 33 0 -1 # table1[3,7]
+1 34 0 -1 # table1[3,8]
+1 35 0 -1 # table1[3,9]
+1 36 0 -1 # table1[3,10]
+1 37 0 -1 # table1[3,11]
+1 38 0 -1 # table1[3,12]
+1 39 0 -1 # table1[4,1]
+1 40 0 -1 # table1[4,2]
+1 41 0 -1 # table1[4,3]
+1 42 0 -1 # table1[4,4]
+1 43 0 -1 # table1[4,5]
+1 44 0 -1 # table1[4,6]
+1 45 0 -1 # table1[4,7]
+1 46 0 -1 # table1[4,8]
+1 47 0 -1 # table1[4,9]
+1 48 0 -1 # table1[4,10]
+1 49 0 -1 # table1[4,11]
+1 50 0 -1 # table1[4,12]
+1 51 0 -1 # table1[5,1]
+1 52 0 -1 # table1[5,2]
+1 53 0 -1 # table1[5,3]
+1 54 0 -1 # table1[5,4]
+1 55 0 -1 # table1[5,5]
+1 56 0 -1 # table1[5,6]
+1 57 0 -1 # table1[5,7]
+1 58 0 -1 # table1[5,8]
+1 59 0 -1 # table1[5,9]
+1 60 0 -1 # table1[5,10]
+1 61 0 -1 # table1[5,11]
+1 62 0 -1 # table1[5,12]
+1 63 0 -1 # table1[6,1]
+1 64 0 -1 # table1[6,2]
+1 65 0 -1 # table1[6,3]
+1 66 0 -1 # table1[6,4]
+1 67 0 -1 # table1[6,5]
+1 68 0 -1 # table1[6,6]
+1 69 0 -1 # table1[6,7]
+1 70 0 -1 # table1[6,8]
+1 71 0 -1 # table1[6,9]
+1 72 0 -1 # table1[6,10]
+1 73 0 -1 # table1[6,11]
+1 74 0 -1 # table1[6,12]
+1 75 0 -1 # table1[7,1]
+1 76 0 -1 # table1[7,2]
+1 77 0 -1 # table1[7,3]
+1 78 0 -1 # table1[7,4]
+1 79 0 -1 # table1[7,5]
+1 80 0 -1 # table1[7,6]
+1 81 0 -1 # table1[7,7]
+1 82 0 -1 # table1[7,8]
+1 83 0 -1 # table1[7,9]
+1 84 0 -1 # table1[7,10]
+1 85 0 -1 # table1[7,11]
+1 86 0 -1 # table1[7,12]
+1 87 0 -1 # table1[8,1]
+1 88 0 -1 # table1[8,2]
+1 89 0 -1 # table1[8,3]
+1 90 0 -1 # table1[8,4]
+1 91 0 -1 # table1[8,5]
+1 92 0 -1 # table1[8,6]
+1 93 0 -1 # table1[8,7]
+1 94 0 -1 # table1[8,8]
+1 95 0 -1 # table1[8,9]
+1 96 0 -1 # table1[8,10]
+1 97 0 -1 # table1[8,11]
+1 98 0 -1 # table1[8,12]
+1 99 0 -1 # table1[9,1]
+1 100 0 -1 # table1[9,2]
+1 101 0 -1 # table1[9,3]
+1 102 0 -1 # table1[9,4]
+1 103 0 -1 # table1[9,5]
+1 104 0 -1 # table1[9,6]
+1 105 0 -1 # table1[9,7]
+1 106 0 -1 # table1[9,8]
+1 107 0 -1 # table1[9,9]
+1 108 0 -1 # table1[9,10]
+1 109 0 -1 # table1[9,11]
+1 110 0 -1 # table1[9,12]
+1 111 0 -1 # table1[10,1]
+1 112 0 -1 # table1[10,2]
+1 113 0 -1 # table1[10,3]
+1 114 0 -1 # table1[10,4]
+1 115 0 -1 # table1[10,5]
+1 116 0 -1 # table1[10,6]
+1 117 0 -1 # table1[10,7]
+1 118 0 -1 # table1[10,8]
+1 119 0 -1 # table1[10,9]
+1 120 0 -1 # table1[10,10]
+1 121 0 -1 # table1[10,11]
+1 122 0 -1 # table1[10,12]
+1 123 0 -1 # table1[11,1]
+1 124 0 -1 # table1[11,2]
+1 125 0 -1 # table1[11,3]
+1 126 0 -1 # table1[11,4]
+1 127 0 -1 # table1[11,5]
+1 128 0 -1 # table1[11,6]
+1 129 0 -1 # table1[11,7]
+1 130 0 -1 # table1[11,8]
+1 131 0 -1 # table1[11,9]
+1 132 0 -1 # table1[11,10]
+1 133 0 -1 # table1[11,11]
+1 134 0 -1 # table1[11,12]
+1 135 0 -1 # table1[12,1]
+1 136 0 -1 # table1[12,2]
+1 137 0 -1 # table1[12,3]
+1 138 0 -1 # table1[12,4]
+1 139 0 -1 # table1[12,5]
+1 140 0 -1 # table1[12,6]
+1 141 0 -1 # table1[12,7]
+1 142 0 -1 # table1[12,8]
+1 143 0 -1 # table1[12,9]
+1 144 0 -1 # table1[12,10]
+1 145 0 -1 # table1[12,11]
+1 146 0 -1 # table1[12,12]
+1 147 0 -1 # table1[13,1]
+1 148 0 -1 # table1[13,2]
+1 149 0 -1 # table1[13,3]
+1 150 0 -1 # table1[13,4]
+1 151 0 -1 # table1[13,5]
+1 152 0 -1 # table1[13,6]
+1 153 0 -1 # table1[13,7]
+1 154 0 -1 # table1[13,8]
+1 155 0 -1 # table1[13,9]
+1 156 0 -1 # table1[13,10]
+1 157 0 -1 # table1[13,11]
+1 158 0 -1 # table1[13,12]
+1 159 0 -1 # table1[14,1]
+1 160 0 -1 # table1[14,2]
+1 161 0 -1 # table1[14,3]
+1 162 0 -1 # table1[14,4]
+1 163 0 -1 # table1[14,5]
+1 164 0 -1 # table1[14,6]
+1 165 0 -1 # table1[14,7]
+1 166 0 -1 # table1[14,8]
+1 167 0 -1 # table1[14,9]
+1 168 0 -1 # table1[14,10]
+1 169 0 -1 # table1[14,11]
+1 170 0 -1 # table1[14,12]
+1 171 0 -1 # table1[15,1]
+1 172 0 -1 # table1[15,2]
+1 173 0 -1 # table1[15,3]
+1 174 0 -1 # table1[15,4]
+1 175 0 -1 # table1[15,5]
+1 176 0 -1 # table1[15,6]
+1 177 0 -1 # table1[15,7]
+1 178 0 -1 # table1[15,8]
+1 179 0 -1 # table1[15,9]
+1 180 0 -1 # table1[15,10]
+1 181 0 -1 # table1[15,11]
+1 182 0 -1 # table1[15,12]
+1 183 0 -1 # table1[16,1]
+1 184 0 -1 # table1[16,2]
+1 185 0 -1 # table1[16,3]
+1 186 0 -1 # table1[16,4]
+1 187 0 -1 # table1[16,5]
+1 188 0 -1 # table1[16,6]
+1 189 0 -1 # table1[16,7]
+1 190 0 -1 # table1[16,8]
+1 191 0 -1 # table1[16,9]
+1 192 0 -1 # table1[16,10]
+1 193 0 -1 # table1[16,11]
+1 194 0 -1 # table1[16,12]
+1 195 0 -1 # table1[17,1]
+1 196 0 -1 # table1[17,2]
+1 197 0 -1 # table1[17,3]
+1 198 0 -1 # table1[17,4]
+1 199 0 -1 # table1[17,5]
+1 200 0 -1 # table1[17,6]
+1 201 0 -1 # table1[17,7]
+1 202 0 -1 # table1[17,8]
+1 203 0 -1 # table1[17,9]
+1 204 0 -1 # table1[17,10]
+1 205 0 -1 # table1[17,11]
+1 206 0 -1 # table1[17,12]
+1 207 0 -1 # table1[18,1]
+1 208 0 -1 # table1[18,2]
+1 209 0 -1 # table1[18,3]
+1 210 0 -1 # table1[18,4]
+1 211 0 -1 # table1[18,5]
+1 212 0 -1 # table1[18,6]
+1 213 0 -1 # table1[18,7]
+1 214 0 -1 # table1[18,8]
+1 215 0 -1 # table1[18,9]
+1 216 0 -1 # table1[18,10]
+1 217 0 -1 # table1[18,11]
+1 218 0 -1 # table1[18,12]
+1 219 0 -1 # table1[19,1]
+1 220 0 -1 # table1[19,2]
+1 221 0 -1 # table1[19,3]
+1 222 0 -1 # table1[19,4]
+1 223 0 -1 # table1[19,5]
+1 224 0 -1 # table1[19,6]
+1 225 0 -1 # table1[19,7]
+1 226 0 -1 # table1[19,8]
+1 227 0 -1 # table1[19,9]
+1 228 0 -1 # table1[19,10]
+1 229 0 -1 # table1[19,11]
+1 230 0 -1 # table1[19,12]
+1 231 0 -1 # table1[20,1]
+1 232 0 -1 # table1[20,2]
+1 233 0 -1 # table1[20,3]
+1 234 0 -1 # table1[20,4]
+1 235 0 -1 # table1[20,5]
+1 236 0 -1 # table1[20,6]
+1 237 0 -1 # table1[20,7]
+1 238 0 -1 # table1[20,8]
+1 239 0 -1 # table1[20,9]
+1 240 0 -1 # table1[20,10]
+1 241 0 -1 # table1[20,11]
+1 242 0 -1 # table1[20,12]
+1 243 0 -1 # table1[21,1]
+1 244 0 -1 # table1[21,2]
+1 245 0 -1 # table1[21,3]
+1 246 0 -1 # table1[21,4]
+1 247 0 -1 # table1[21,5]
+1 248 0 -1 # table1[21,6]
+1 249 0 -1 # table1[21,7]
+1 250 0 -1 # table1[21,8]
+1 251 0 -1 # table1[21,9]
+1 252 0 -1 # table1[21,10]
+1 253 0 -1 # table1[21,11]
+1 254 0 -1 # table1[21,12]
+1 255 0 -1 # table1[22,1]
+1 256 0 -1 # table1[22,2]
+1 257 0 -1 # table1[22,3]
+1 258 0 -1 # table1[22,4]
+1 259 0 -1 # table1[22,5]
+1 260 0 -1 # table1[22,6]
+1 261 0 -1 # table1[22,7]
+1 262 0 -1 # table1[22,8]
+1 263 0 -1 # table1[22,9]
+1 264 0 -1 # table1[22,10]
+1 265 0 -1 # table1[22,11]
+1 266 0 -1 # table1[22,12]
+1 267 0 -1 # src1.amplitude
+1 268 0 -1 # src1.freqHz
+1 269 0 -1 # src1.phase
+1 270 0 -1 # src1.offset
+1 271 0 -1 # src1.startTime
+1 272 0 -1 # src2.k
+1 272 0 -1 # src2.y
+1 272 0 -1 # modelicaTable2D.u2
+1 273 0 -1 # _events_default_tol
+1 274 0 -1 # _events_tol_factor
+1 275 0 -1 # _nle_solver_default_tol
+1 276 0 -1 # _nle_solver_min_tol
+1 277 0 -1 # _nle_solver_tol_factor
+1 278 0 -1 # modelicaTable2D.table[1,1]
+1 279 0 -1 # modelicaTable2D.table[1,2]
+1 280 0 -1 # modelicaTable2D.table[1,3]
+1 281 0 -1 # modelicaTable2D.table[1,4]
+1 282 0 -1 # modelicaTable2D.table[1,5]
+1 283 0 -1 # modelicaTable2D.table[1,6]
+1 284 0 -1 # modelicaTable2D.table[1,7]
+1 285 0 -1 # modelicaTable2D.table[1,8]
+1 286 0 -1 # modelicaTable2D.table[1,9]
+1 287 0 -1 # modelicaTable2D.table[1,10]
+1 288 0 -1 # modelicaTable2D.table[1,11]
+1 289 0 -1 # modelicaTable2D.table[1,12]
+1 290 0 -1 # modelicaTable2D.table[2,1]
+1 291 0 -1 # modelicaTable2D.table[2,2]
+1 292 0 -1 # modelicaTable2D.table[2,3]
+1 293 0 -1 # modelicaTable2D.table[2,4]
+1 294 0 -1 # modelicaTable2D.table[2,5]
+1 295 0 -1 # modelicaTable2D.table[2,6]
+1 296 0 -1 # modelicaTable2D.table[2,7]
+1 297 0 -1 # modelicaTable2D.table[2,8]
+1 298 0 -1 # modelicaTable2D.table[2,9]
+1 299 0 -1 # modelicaTable2D.table[2,10]
+1 300 0 -1 # modelicaTable2D.table[2,11]
+1 301 0 -1 # modelicaTable2D.table[2,12]
+1 302 0 -1 # modelicaTable2D.table[3,1]
+1 303 0 -1 # modelicaTable2D.table[3,2]
+1 304 0 -1 # modelicaTable2D.table[3,3]
+1 305 0 -1 # modelicaTable2D.table[3,4]
+1 306 0 -1 # modelicaTable2D.table[3,5]
+1 307 0 -1 # modelicaTable2D.table[3,6]
+1 308 0 -1 # modelicaTable2D.table[3,7]
+1 309 0 -1 # modelicaTable2D.table[3,8]
+1 310 0 -1 # modelicaTable2D.table[3,9]
+1 311 0 -1 # modelicaTable2D.table[3,10]
+1 312 0 -1 # modelicaTable2D.table[3,11]
+1 313 0 -1 # modelicaTable2D.table[3,12]
+1 314 0 -1 # modelicaTable2D.table[4,1]
+1 315 0 -1 # modelicaTable2D.table[4,2]
+1 316 0 -1 # modelicaTable2D.table[4,3]
+1 317 0 -1 # modelicaTable2D.table[4,4]
+1 318 0 -1 # modelicaTable2D.table[4,5]
+1 319 0 -1 # modelicaTable2D.table[4,6]
+1 320 0 -1 # modelicaTable2D.table[4,7]
+1 321 0 -1 # modelicaTable2D.table[4,8]
+1 322 0 -1 # modelicaTable2D.table[4,9]
+1 323 0 -1 # modelicaTable2D.table[4,10]
+1 324 0 -1 # modelicaTable2D.table[4,11]
+1 325 0 -1 # modelicaTable2D.table[4,12]
+1 326 0 -1 # modelicaTable2D.table[5,1]
+1 327 0 -1 # modelicaTable2D.table[5,2]
+1 328 0 -1 # modelicaTable2D.table[5,3]
+1 329 0 -1 # modelicaTable2D.table[5,4]
+1 330 0 -1 # modelicaTable2D.table[5,5]
+1 331 0 -1 # modelicaTable2D.table[5,6]
+1 332 0 -1 # modelicaTable2D.table[5,7]
+1 333 0 -1 # modelicaTable2D.table[5,8]
+1 334 0 -1 # modelicaTable2D.table[5,9]
+1 335 0 -1 # modelicaTable2D.table[5,10]
+1 336 0 -1 # modelicaTable2D.table[5,11]
+1 337 0 -1 # modelicaTable2D.table[5,12]
+1 338 0 -1 # modelicaTable2D.table[6,1]
+1 339 0 -1 # modelicaTable2D.table[6,2]
+1 340 0 -1 # modelicaTable2D.table[6,3]
+1 341 0 -1 # modelicaTable2D.table[6,4]
+1 342 0 -1 # modelicaTable2D.table[6,5]
+1 343 0 -1 # modelicaTable2D.table[6,6]
+1 344 0 -1 # modelicaTable2D.table[6,7]
+1 345 0 -1 # modelicaTable2D.table[6,8]
+1 346 0 -1 # modelicaTable2D.table[6,9]
+1 347 0 -1 # modelicaTable2D.table[6,10]
+1 348 0 -1 # modelicaTable2D.table[6,11]
+1 349 0 -1 # modelicaTable2D.table[6,12]
+1 350 0 -1 # modelicaTable2D.table[7,1]
+1 351 0 -1 # modelicaTable2D.table[7,2]
+1 352 0 -1 # modelicaTable2D.table[7,3]
+1 353 0 -1 # modelicaTable2D.table[7,4]
+1 354 0 -1 # modelicaTable2D.table[7,5]
+1 355 0 -1 # modelicaTable2D.table[7,6]
+1 356 0 -1 # modelicaTable2D.table[7,7]
+1 357 0 -1 # modelicaTable2D.table[7,8]
+1 358 0 -1 # modelicaTable2D.table[7,9]
+1 359 0 -1 # modelicaTable2D.table[7,10]
+1 360 0 -1 # modelicaTable2D.table[7,11]
+1 361 0 -1 # modelicaTable2D.table[7,12]
+1 362 0 -1 # modelicaTable2D.table[8,1]
+1 363 0 -1 # modelicaTable2D.table[8,2]
+1 364 0 -1 # modelicaTable2D.table[8,3]
+1 365 0 -1 # modelicaTable2D.table[8,4]
+1 366 0 -1 # modelicaTable2D.table[8,5]
+1 367 0 -1 # modelicaTable2D.table[8,6]
+1 368 0 -1 # modelicaTable2D.table[8,7]
+1 369 0 -1 # modelicaTable2D.table[8,8]
+1 370 0 -1 # modelicaTable2D.table[8,9]
+1 371 0 -1 # modelicaTable2D.table[8,10]
+1 372 0 -1 # modelicaTable2D.table[8,11]
+1 373 0 -1 # modelicaTable2D.table[8,12]
+1 374 0 -1 # modelicaTable2D.table[9,1]
+1 375 0 -1 # modelicaTable2D.table[9,2]
+1 376 0 -1 # modelicaTable2D.table[9,3]
+1 377 0 -1 # modelicaTable2D.table[9,4]
+1 378 0 -1 # modelicaTable2D.table[9,5]
+1 379 0 -1 # modelicaTable2D.table[9,6]
+1 380 0 -1 # modelicaTable2D.table[9,7]
+1 381 0 -1 # modelicaTable2D.table[9,8]
+1 382 0 -1 # modelicaTable2D.table[9,9]
+1 383 0 -1 # modelicaTable2D.table[9,10]
+1 384 0 -1 # modelicaTable2D.table[9,11]
+1 385 0 -1 # modelicaTable2D.table[9,12]
+1 386 0 -1 # modelicaTable2D.table[10,1]
+1 387 0 -1 # modelicaTable2D.table[10,2]
+1 388 0 -1 # modelicaTable2D.table[10,3]
+1 389 0 -1 # modelicaTable2D.table[10,4]
+1 390 0 -1 # modelicaTable2D.table[10,5]
+1 391 0 -1 # modelicaTable2D.table[10,6]
+1 392 0 -1 # modelicaTable2D.table[10,7]
+1 393 0 -1 # modelicaTable2D.table[10,8]
+1 394 0 -1 # modelicaTable2D.table[10,9]
+1 395 0 -1 # modelicaTable2D.table[10,10]
+1 396 0 -1 # modelicaTable2D.table[10,11]
+1 397 0 -1 # modelicaTable2D.table[10,12]
+1 398 0 -1 # modelicaTable2D.table[11,1]
+1 399 0 -1 # modelicaTable2D.table[11,2]
+1 400 0 -1 # modelicaTable2D.table[11,3]
+1 401 0 -1 # modelicaTable2D.table[11,4]
+1 402 0 -1 # modelicaTable2D.table[11,5]
+1 403 0 -1 # modelicaTable2D.table[11,6]
+1 404 0 -1 # modelicaTable2D.table[11,7]
+1 405 0 -1 # modelicaTable2D.table[11,8]
+1 406 0 -1 # modelicaTable2D.table[11,9]
+1 407 0 -1 # modelicaTable2D.table[11,10]
+1 408 0 -1 # modelicaTable2D.table[11,11]
+1 409 0 -1 # modelicaTable2D.table[11,12]
+1 410 0 -1 # modelicaTable2D.table[12,1]
+1 411 0 -1 # modelicaTable2D.table[12,2]
+1 412 0 -1 # modelicaTable2D.table[12,3]
+1 413 0 -1 # modelicaTable2D.table[12,4]
+1 414 0 -1 # modelicaTable2D.table[12,5]
+1 415 0 -1 # modelicaTable2D.table[12,6]
+1 416 0 -1 # modelicaTable2D.table[12,7]
+1 417 0 -1 # modelicaTable2D.table[12,8]
+1 418 0 -1 # modelicaTable2D.table[12,9]
+1 419 0 -1 # modelicaTable2D.table[12,10]
+1 420 0 -1 # modelicaTable2D.table[12,11]
+1 421 0 -1 # modelicaTable2D.table[12,12]
+1 422 0 -1 # modelicaTable2D.table[13,1]
+1 423 0 -1 # modelicaTable2D.table[13,2]
+1 424 0 -1 # modelicaTable2D.table[13,3]
+1 425 0 -1 # modelicaTable2D.table[13,4]
+1 426 0 -1 # modelicaTable2D.table[13,5]
+1 427 0 -1 # modelicaTable2D.table[13,6]
+1 428 0 -1 # modelicaTable2D.table[13,7]
+1 429 0 -1 # modelicaTable2D.table[13,8]
+1 430 0 -1 # modelicaTable2D.table[13,9]
+1 431 0 -1 # modelicaTable2D.table[13,10]
+1 432 0 -1 # modelicaTable2D.table[13,11]
+1 433 0 -1 # modelicaTable2D.table[13,12]
+1 434 0 -1 # modelicaTable2D.table[14,1]
+1 435 0 -1 # modelicaTable2D.table[14,2]
+1 436 0 -1 # modelicaTable2D.table[14,3]
+1 437 0 -1 # modelicaTable2D.table[14,4]
+1 438 0 -1 # modelicaTable2D.table[14,5]
+1 439 0 -1 # modelicaTable2D.table[14,6]
+1 440 0 -1 # modelicaTable2D.table[14,7]
+1 441 0 -1 # modelicaTable2D.table[14,8]
+1 442 0 -1 # modelicaTable2D.table[14,9]
+1 443 0 -1 # modelicaTable2D.table[14,10]
+1 444 0 -1 # modelicaTable2D.table[14,11]
+1 445 0 -1 # modelicaTable2D.table[14,12]
+1 446 0 -1 # modelicaTable2D.table[15,1]
+1 447 0 -1 # modelicaTable2D.table[15,2]
+1 448 0 -1 # modelicaTable2D.table[15,3]
+1 449 0 -1 # modelicaTable2D.table[15,4]
+1 450 0 -1 # modelicaTable2D.table[15,5]
+1 451 0 -1 # modelicaTable2D.table[15,6]
+1 452 0 -1 # modelicaTable2D.table[15,7]
+1 453 0 -1 # modelicaTable2D.table[15,8]
+1 454 0 -1 # modelicaTable2D.table[15,9]
+1 455 0 -1 # modelicaTable2D.table[15,10]
+1 456 0 -1 # modelicaTable2D.table[15,11]
+1 457 0 -1 # modelicaTable2D.table[15,12]
+1 458 0 -1 # modelicaTable2D.table[16,1]
+1 459 0 -1 # modelicaTable2D.table[16,2]
+1 460 0 -1 # modelicaTable2D.table[16,3]
+1 461 0 -1 # modelicaTable2D.table[16,4]
+1 462 0 -1 # modelicaTable2D.table[16,5]
+1 463 0 -1 # modelicaTable2D.table[16,6]
+1 464 0 -1 # modelicaTable2D.table[16,7]
+1 465 0 -1 # modelicaTable2D.table[16,8]
+1 466 0 -1 # modelicaTable2D.table[16,9]
+1 467 0 -1 # modelicaTable2D.table[16,10]
+1 468 0 -1 # modelicaTable2D.table[16,11]
+1 469 0 -1 # modelicaTable2D.table[16,12]
+1 470 0 -1 # modelicaTable2D.table[17,1]
+1 471 0 -1 # modelicaTable2D.table[17,2]
+1 472 0 -1 # modelicaTable2D.table[17,3]
+1 473 0 -1 # modelicaTable2D.table[17,4]
+1 474 0 -1 # modelicaTable2D.table[17,5]
+1 475 0 -1 # modelicaTable2D.table[17,6]
+1 476 0 -1 # modelicaTable2D.table[17,7]
+1 477 0 -1 # modelicaTable2D.table[17,8]
+1 478 0 -1 # modelicaTable2D.table[17,9]
+1 479 0 -1 # modelicaTable2D.table[17,10]
+1 480 0 -1 # modelicaTable2D.table[17,11]
+1 481 0 -1 # modelicaTable2D.table[17,12]
+1 482 0 -1 # modelicaTable2D.table[18,1]
+1 483 0 -1 # modelicaTable2D.table[18,2]
+1 484 0 -1 # modelicaTable2D.table[18,3]
+1 485 0 -1 # modelicaTable2D.table[18,4]
+1 486 0 -1 # modelicaTable2D.table[18,5]
+1 487 0 -1 # modelicaTable2D.table[18,6]
+1 488 0 -1 # modelicaTable2D.table[18,7]
+1 489 0 -1 # modelicaTable2D.table[18,8]
+1 490 0 -1 # modelicaTable2D.table[18,9]
+1 491 0 -1 # modelicaTable2D.table[18,10]
+1 492 0 -1 # modelicaTable2D.table[18,11]
+1 493 0 -1 # modelicaTable2D.table[18,12]
+1 494 0 -1 # modelicaTable2D.table[19,1]
+1 495 0 -1 # modelicaTable2D.table[19,2]
+1 496 0 -1 # modelicaTable2D.table[19,3]
+1 497 0 -1 # modelicaTable2D.table[19,4]
+1 498 0 -1 # modelicaTable2D.table[19,5]
+1 499 0 -1 # modelicaTable2D.table[19,6]
+1 500 0 -1 # modelicaTable2D.table[19,7]
+1 501 0 -1 # modelicaTable2D.table[19,8]
+1 502 0 -1 # modelicaTable2D.table[19,9]
+1 503 0 -1 # modelicaTable2D.table[19,10]
+1 504 0 -1 # modelicaTable2D.table[19,11]
+1 505 0 -1 # modelicaTable2D.table[19,12]
+1 506 0 -1 # modelicaTable2D.table[20,1]
+1 507 0 -1 # modelicaTable2D.table[20,2]
+1 508 0 -1 # modelicaTable2D.table[20,3]
+1 509 0 -1 # modelicaTable2D.table[20,4]
+1 510 0 -1 # modelicaTable2D.table[20,5]
+1 511 0 -1 # modelicaTable2D.table[20,6]
+1 512 0 -1 # modelicaTable2D.table[20,7]
+1 513 0 -1 # modelicaTable2D.table[20,8]
+1 514 0 -1 # modelicaTable2D.table[20,9]
+1 515 0 -1 # modelicaTable2D.table[20,10]
+1 516 0 -1 # modelicaTable2D.table[20,11]
+1 517 0 -1 # modelicaTable2D.table[20,12]
+1 518 0 -1 # modelicaTable2D.table[21,1]
+1 519 0 -1 # modelicaTable2D.table[21,2]
+1 520 0 -1 # modelicaTable2D.table[21,3]
+1 521 0 -1 # modelicaTable2D.table[21,4]
+1 522 0 -1 # modelicaTable2D.table[21,5]
+1 523 0 -1 # modelicaTable2D.table[21,6]
+1 524 0 -1 # modelicaTable2D.table[21,7]
+1 525 0 -1 # modelicaTable2D.table[21,8]
+1 526 0 -1 # modelicaTable2D.table[21,9]
+1 527 0 -1 # modelicaTable2D.table[21,10]
+1 528 0 -1 # modelicaTable2D.table[21,11]
+1 529 0 -1 # modelicaTable2D.table[21,12]
+1 530 0 -1 # modelicaTable2D.table[22,1]
+1 531 0 -1 # modelicaTable2D.table[22,2]
+1 532 0 -1 # modelicaTable2D.table[22,3]
+1 533 0 -1 # modelicaTable2D.table[22,4]
+1 534 0 -1 # modelicaTable2D.table[22,5]
+1 535 0 -1 # modelicaTable2D.table[22,6]
+1 536 0 -1 # modelicaTable2D.table[22,7]
+1 537 0 -1 # modelicaTable2D.table[22,8]
+1 538 0 -1 # modelicaTable2D.table[22,9]
+1 539 0 -1 # modelicaTable2D.table[22,10]
+1 540 0 -1 # modelicaTable2D.table[22,11]
+1 541 0 -1 # modelicaTable2D.table[22,12]
+2 2 0 -1 # modelicaTable2D.u1
+2 2 0 -1 # src1.y
+2 3 0 -1 # modelicaTable2D.y
+1 542 0 -1 # _log_level
+1 543 0 -1 # _nle_solver_log_level
+2 4 0 -1 # modelicaTable2D.tableID
+1 544 0 -1 # modelicaTable2D.tableOnFile
+1 545 0 -1 # _enforce_bounds
+1 546 0 -1 # _nle_solver_check_jac_cond
+1 547 0 -1 # _rescale_after_singular_jac
+1 548 0 -1 # _rescale_each_step
+1 549 0 -1 # _use_Brent_in_1d
+1 550 0 -1 # _use_automatic_scaling
+1 551 0 -1 # _use_jacobian_scaling
+
+float data_1(2,551)
+0.00000000000000E+00 3.14159265358979E+00 0.00000000000000E+00 0.00000000000000E+00 1.00000000000000E+01 2.00000000000000E+01 3.00000000000000E+01 4.00000000000000E+01 5.00000000000000E+01 6.00000000000000E+01 7.00000000000000E+01 8.00000000000000E+01 9.00000000000000E+01 1.00000000000000E+02 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 1.00000000000000E-01 2.00000000000000E-01 2.00000000000000E+00 4.00000000000000E+00 6.00000000000000E+00 8.00000000000000E+00 1.00000000000000E+01 1.20000000000000E+01 1.40000000000000E+01 1.60000000000000E+01 1.80000000000000E+01 2.00000000000000E+01 2.00000000000000E-01 4.00000000000000E-01 4.00000000000000E+00 8.00000000000000E+00 1.20000000000000E+01 1.60000000000000E+01 2.00000000000000E+01 2.40000000000000E+01 2.80000000000000E+01 3.20000000000000E+01 3.60000000000000E+01 4.00000000000000E+01 3.00000000000000E-01 6.00000000000000E-01 6.00000000000000E+00 1.20000000000000E+01 1.80000000000000E+01 2.40000000000000E+01 3.00000000000000E+01 3.60000000000000E+01 4.20000000000000E+01 4.80000000000000E+01 5.40000000000000E+01 6.00000000000000E+01 4.00000000000000E-01 8.00000000000000E-01 8.00000000000000E+00 1.60000000000000E+01 2.40000000000000E+01 3.20000000000000E+01 4.00000000000000E+01 4.80000000000000E+01 5.60000000000000E+01 6.40000000000000E+01 7.20000000000000E+01 8.00000000000000E+01 5.00000000000000E-01 1.00000000000000E+00 1.00000000000000E+01 2.00000000000000E+01 3.00000000000000E+01 4.00000000000000E+01 5.00000000000000E+01 6.00000000000000E+01 7.00000000000000E+01 8.00000000000000E+01 9.00000000000000E+01 1.00000000000000E+02 6.00000000000000E-01 1.20000000000000E+00 1.20000000000000E+01 2.40000000000000E+01 3.60000000000000E+01 4.80000000000000E+01 6.00000000000000E+01 7.20000000000000E+01 8.40000000000000E+01 9.60000000000000E+01 1.08000000000000E+02 1.20000000000000E+02 7.00000000000000E-01 1.40000000000000E+00 1.40000000000000E+01 2.80000000000000E+01 4.20000000000000E+01 5.60000000000000E+01 7.00000000000000E+01 8.40000000000000E+01 9.80000000000000E+01 1.12000000000000E+02 1.26000000000000E+02 1.40000000000000E+02 8.00000000000000E-01 1.60000000000000E+00 1.60000000000000E+01 3.20000000000000E+01 4.80000000000000E+01 6.40000000000000E+01 8.00000000000000E+01 9.60000000000000E+01 1.12000000000000E+02 1.28000000000000E+02 1.44000000000000E+02 1.60000000000000E+02 9.00000000000000E-01 1.80000000000000E+00 1.80000000000000E+01 3.60000000000000E+01 5.40000000000000E+01 7.20000000000000E+01 9.00000000000000E+01 1.08000000000000E+02 1.26000000000000E+02 1.44000000000000E+02 1.62000000000000E+02 1.80000000000000E+02 1.00000000000000E+00 2.00000000000000E+00 2.00000000000000E+01 4.00000000000000E+01 6.00000000000000E+01 8.00000000000000E+01 1.00000000000000E+02 1.20000000000000E+02 1.40000000000000E+02 1.60000000000000E+02 1.80000000000000E+02 2.00000000000000E+02 1.10000000000000E+00 2.20000000000000E+00 2.20000000000000E+01 4.40000000000000E+01 6.60000000000000E+01 8.80000000000000E+01 1.10000000000000E+02 1.32000000000000E+02 1.54000000000000E+02 1.76000000000000E+02 1.98000000000000E+02 2.20000000000000E+02 1.20000000000000E+00 2.40000000000000E+00 2.40000000000000E+01 4.80000000000000E+01 7.20000000000000E+01 9.60000000000000E+01 1.20000000000000E+02 1.44000000000000E+02 1.68000000000000E+02 1.92000000000000E+02 2.16000000000000E+02 2.40000000000000E+02 1.30000000000000E+00 2.60000000000000E+00 2.60000000000000E+01 5.20000000000000E+01 7.80000000000000E+01 1.04000000000000E+02 1.30000000000000E+02 1.56000000000000E+02 1.82000000000000E+02 2.08000000000000E+02 2.34000000000000E+02 2.60000000000000E+02 1.40000000000000E+00 2.80000000000000E+00 2.80000000000000E+01 5.60000000000000E+01 8.40000000000000E+01 1.12000000000000E+02 1.40000000000000E+02 1.68000000000000E+02 1.96000000000000E+02 2.24000000000000E+02 2.52000000000000E+02 2.80000000000000E+02 1.50000000000000E+00 3.00000000000000E+00 3.00000000000000E+01 6.00000000000000E+01 9.00000000000000E+01 1.20000000000000E+02 1.50000000000000E+02 1.80000000000000E+02 2.10000000000000E+02 2.40000000000000E+02 2.70000000000000E+02 3.00000000000000E+02 1.60000000000000E+00 3.20000000000000E+00 3.20000000000000E+01 6.40000000000000E+01 9.60000000000000E+01 1.28000000000000E+02 1.60000000000000E+02 1.92000000000000E+02 2.24000000000000E+02 2.56000000000000E+02 2.88000000000000E+02 3.20000000000000E+02 1.70000000000000E+00 3.40000000000000E+00 3.40000000000000E+01 6.80000000000000E+01 1.02000000000000E+02 1.36000000000000E+02 1.70000000000000E+02 2.04000000000000E+02 2.38000000000000E+02 2.72000000000000E+02 3.06000000000000E+02 3.40000000000000E+02 1.80000000000000E+00 3.60000000000000E+00 3.60000000000000E+01 7.20000000000000E+01 1.08000000000000E+02 1.44000000000000E+02 1.80000000000000E+02 2.16000000000000E+02 2.52000000000000E+02 2.88000000000000E+02 3.24000000000000E+02 3.60000000000000E+02 1.90000000000000E+00 3.80000000000000E+00 3.80000000000000E+01 7.60000000000000E+01 1.14000000000000E+02 1.52000000000000E+02 1.90000000000000E+02 2.28000000000000E+02 2.66000000000000E+02 3.04000000000000E+02 3.42000000000000E+02 3.80000000000000E+02 2.00000000000000E+00 4.00000000000000E+00 4.00000000000000E+01 8.00000000000000E+01 1.20000000000000E+02 1.60000000000000E+02 2.00000000000000E+02 2.40000000000000E+02 2.80000000000000E+02 3.20000000000000E+02 3.60000000000000E+02 4.00000000000000E+02 2.00000000000000E+00 1.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 1.00000000000000E-10 1.00000000000000E-04 1.00000000000000E-10 1.00000000000000E-12 1.00000000000000E-04 0.00000000000000E+00 0.00000000000000E+00 1.00000000000000E+01 2.00000000000000E+01 3.00000000000000E+01 4.00000000000000E+01 5.00000000000000E+01 6.00000000000000E+01 7.00000000000000E+01 8.00000000000000E+01 9.00000000000000E+01 1.00000000000000E+02 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 1.00000000000000E-01 2.00000000000000E-01 2.00000000000000E+00 4.00000000000000E+00 6.00000000000000E+00 8.00000000000000E+00 1.00000000000000E+01 1.20000000000000E+01 1.40000000000000E+01 1.60000000000000E+01 1.80000000000000E+01 2.00000000000000E+01 2.00000000000000E-01 4.00000000000000E-01 4.00000000000000E+00 8.00000000000000E+00 1.20000000000000E+01 1.60000000000000E+01 2.00000000000000E+01 2.40000000000000E+01 2.80000000000000E+01 3.20000000000000E+01 3.60000000000000E+01 4.00000000000000E+01 3.00000000000000E-01 6.00000000000000E-01 6.00000000000000E+00 1.20000000000000E+01 1.80000000000000E+01 2.40000000000000E+01 3.00000000000000E+01 3.60000000000000E+01 4.20000000000000E+01 4.80000000000000E+01 5.40000000000000E+01 6.00000000000000E+01 4.00000000000000E-01 8.00000000000000E-01 8.00000000000000E+00 1.60000000000000E+01 2.40000000000000E+01 3.20000000000000E+01 4.00000000000000E+01 4.80000000000000E+01 5.60000000000000E+01 6.40000000000000E+01 7.20000000000000E+01 8.00000000000000E+01 5.00000000000000E-01 1.00000000000000E+00 1.00000000000000E+01 2.00000000000000E+01 3.00000000000000E+01 4.00000000000000E+01 5.00000000000000E+01 6.00000000000000E+01 7.00000000000000E+01 8.00000000000000E+01 9.00000000000000E+01 1.00000000000000E+02 6.00000000000000E-01 1.20000000000000E+00 1.20000000000000E+01 2.40000000000000E+01 3.60000000000000E+01 4.80000000000000E+01 6.00000000000000E+01 7.20000000000000E+01 8.40000000000000E+01 9.60000000000000E+01 1.08000000000000E+02 1.20000000000000E+02 7.00000000000000E-01 1.40000000000000E+00 1.40000000000000E+01 2.80000000000000E+01 4.20000000000000E+01 5.60000000000000E+01 7.00000000000000E+01 8.40000000000000E+01 9.80000000000000E+01 1.12000000000000E+02 1.26000000000000E+02 1.40000000000000E+02 8.00000000000000E-01 1.60000000000000E+00 1.60000000000000E+01 3.20000000000000E+01 4.80000000000000E+01 6.40000000000000E+01 8.00000000000000E+01 9.60000000000000E+01 1.12000000000000E+02 1.28000000000000E+02 1.44000000000000E+02 1.60000000000000E+02 9.00000000000000E-01 1.80000000000000E+00 1.80000000000000E+01 3.60000000000000E+01 5.40000000000000E+01 7.20000000000000E+01 9.00000000000000E+01 1.08000000000000E+02 1.26000000000000E+02 1.44000000000000E+02 1.62000000000000E+02 1.80000000000000E+02 1.00000000000000E+00 2.00000000000000E+00 2.00000000000000E+01 4.00000000000000E+01 6.00000000000000E+01 8.00000000000000E+01 1.00000000000000E+02 1.20000000000000E+02 1.40000000000000E+02 1.60000000000000E+02 1.80000000000000E+02 2.00000000000000E+02 1.10000000000000E+00 2.20000000000000E+00 2.20000000000000E+01 4.40000000000000E+01 6.60000000000000E+01 8.80000000000000E+01 1.10000000000000E+02 1.32000000000000E+02 1.54000000000000E+02 1.76000000000000E+02 1.98000000000000E+02 2.20000000000000E+02 1.20000000000000E+00 2.40000000000000E+00 2.40000000000000E+01 4.80000000000000E+01 7.20000000000000E+01 9.60000000000000E+01 1.20000000000000E+02 1.44000000000000E+02 1.68000000000000E+02 1.92000000000000E+02 2.16000000000000E+02 2.40000000000000E+02 1.30000000000000E+00 2.60000000000000E+00 2.60000000000000E+01 5.20000000000000E+01 7.80000000000000E+01 1.04000000000000E+02 1.30000000000000E+02 1.56000000000000E+02 1.82000000000000E+02 2.08000000000000E+02 2.34000000000000E+02 2.60000000000000E+02 1.40000000000000E+00 2.80000000000000E+00 2.80000000000000E+01 5.60000000000000E+01 8.40000000000000E+01 1.12000000000000E+02 1.40000000000000E+02 1.68000000000000E+02 1.96000000000000E+02 2.24000000000000E+02 2.52000000000000E+02 2.80000000000000E+02 1.50000000000000E+00 3.00000000000000E+00 3.00000000000000E+01 6.00000000000000E+01 9.00000000000000E+01 1.20000000000000E+02 1.50000000000000E+02 1.80000000000000E+02 2.10000000000000E+02 2.40000000000000E+02 2.70000000000000E+02 3.00000000000000E+02 1.60000000000000E+00 3.20000000000000E+00 3.20000000000000E+01 6.40000000000000E+01 9.60000000000000E+01 1.28000000000000E+02 1.60000000000000E+02 1.92000000000000E+02 2.24000000000000E+02 2.56000000000000E+02 2.88000000000000E+02 3.20000000000000E+02 1.70000000000000E+00 3.40000000000000E+00 3.40000000000000E+01 6.80000000000000E+01 1.02000000000000E+02 1.36000000000000E+02 1.70000000000000E+02 2.04000000000000E+02 2.38000000000000E+02 2.72000000000000E+02 3.06000000000000E+02 3.40000000000000E+02 1.80000000000000E+00 3.60000000000000E+00 3.60000000000000E+01 7.20000000000000E+01 1.08000000000000E+02 1.44000000000000E+02 1.80000000000000E+02 2.16000000000000E+02 2.52000000000000E+02 2.88000000000000E+02 3.24000000000000E+02 3.60000000000000E+02 1.90000000000000E+00 3.80000000000000E+00 3.80000000000000E+01 7.60000000000000E+01 1.14000000000000E+02 1.52000000000000E+02 1.90000000000000E+02 2.28000000000000E+02 2.66000000000000E+02 3.04000000000000E+02 3.42000000000000E+02 3.80000000000000E+02 2.00000000000000E+00 4.00000000000000E+00 4.00000000000000E+01 8.00000000000000E+01 1.20000000000000E+02 1.60000000000000E+02 2.00000000000000E+02 2.40000000000000E+02 2.80000000000000E+02 3.20000000000000E+02 3.60000000000000E+02 4.00000000000000E+02 3.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 1.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 1.00000000000000E+00 0.00000000000000E+00
+1.00000000000000E+00         3.14159265358979E+00 0.00000000000000E+00 0.00000000000000E+00 1.00000000000000E+01 2.00000000000000E+01 3.00000000000000E+01 4.00000000000000E+01 5.00000000000000E+01 6.00000000000000E+01 7.00000000000000E+01 8.00000000000000E+01 9.00000000000000E+01 1.00000000000000E+02 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 1.00000000000000E-01 2.00000000000000E-01 2.00000000000000E+00 4.00000000000000E+00 6.00000000000000E+00 8.00000000000000E+00 1.00000000000000E+01 1.20000000000000E+01 1.40000000000000E+01 1.60000000000000E+01 1.80000000000000E+01 2.00000000000000E+01 2.00000000000000E-01 4.00000000000000E-01 4.00000000000000E+00 8.00000000000000E+00 1.20000000000000E+01 1.60000000000000E+01 2.00000000000000E+01 2.40000000000000E+01 2.80000000000000E+01 3.20000000000000E+01 3.60000000000000E+01 4.00000000000000E+01 3.00000000000000E-01 6.00000000000000E-01 6.00000000000000E+00 1.20000000000000E+01 1.80000000000000E+01 2.40000000000000E+01 3.00000000000000E+01 3.60000000000000E+01 4.20000000000000E+01 4.80000000000000E+01 5.40000000000000E+01 6.00000000000000E+01 4.00000000000000E-01 8.00000000000000E-01 8.00000000000000E+00 1.60000000000000E+01 2.40000000000000E+01 3.20000000000000E+01 4.00000000000000E+01 4.80000000000000E+01 5.60000000000000E+01 6.40000000000000E+01 7.20000000000000E+01 8.00000000000000E+01 5.00000000000000E-01 1.00000000000000E+00 1.00000000000000E+01 2.00000000000000E+01 3.00000000000000E+01 4.00000000000000E+01 5.00000000000000E+01 6.00000000000000E+01 7.00000000000000E+01 8.00000000000000E+01 9.00000000000000E+01 1.00000000000000E+02 6.00000000000000E-01 1.20000000000000E+00 1.20000000000000E+01 2.40000000000000E+01 3.60000000000000E+01 4.80000000000000E+01 6.00000000000000E+01 7.20000000000000E+01 8.40000000000000E+01 9.60000000000000E+01 1.08000000000000E+02 1.20000000000000E+02 7.00000000000000E-01 1.40000000000000E+00 1.40000000000000E+01 2.80000000000000E+01 4.20000000000000E+01 5.60000000000000E+01 7.00000000000000E+01 8.40000000000000E+01 9.80000000000000E+01 1.12000000000000E+02 1.26000000000000E+02 1.40000000000000E+02 8.00000000000000E-01 1.60000000000000E+00 1.60000000000000E+01 3.20000000000000E+01 4.80000000000000E+01 6.40000000000000E+01 8.00000000000000E+01 9.60000000000000E+01 1.12000000000000E+02 1.28000000000000E+02 1.44000000000000E+02 1.60000000000000E+02 9.00000000000000E-01 1.80000000000000E+00 1.80000000000000E+01 3.60000000000000E+01 5.40000000000000E+01 7.20000000000000E+01 9.00000000000000E+01 1.08000000000000E+02 1.26000000000000E+02 1.44000000000000E+02 1.62000000000000E+02 1.80000000000000E+02 1.00000000000000E+00 2.00000000000000E+00 2.00000000000000E+01 4.00000000000000E+01 6.00000000000000E+01 8.00000000000000E+01 1.00000000000000E+02 1.20000000000000E+02 1.40000000000000E+02 1.60000000000000E+02 1.80000000000000E+02 2.00000000000000E+02 1.10000000000000E+00 2.20000000000000E+00 2.20000000000000E+01 4.40000000000000E+01 6.60000000000000E+01 8.80000000000000E+01 1.10000000000000E+02 1.32000000000000E+02 1.54000000000000E+02 1.76000000000000E+02 1.98000000000000E+02 2.20000000000000E+02 1.20000000000000E+00 2.40000000000000E+00 2.40000000000000E+01 4.80000000000000E+01 7.20000000000000E+01 9.60000000000000E+01 1.20000000000000E+02 1.44000000000000E+02 1.68000000000000E+02 1.92000000000000E+02 2.16000000000000E+02 2.40000000000000E+02 1.30000000000000E+00 2.60000000000000E+00 2.60000000000000E+01 5.20000000000000E+01 7.80000000000000E+01 1.04000000000000E+02 1.30000000000000E+02 1.56000000000000E+02 1.82000000000000E+02 2.08000000000000E+02 2.34000000000000E+02 2.60000000000000E+02 1.40000000000000E+00 2.80000000000000E+00 2.80000000000000E+01 5.60000000000000E+01 8.40000000000000E+01 1.12000000000000E+02 1.40000000000000E+02 1.68000000000000E+02 1.96000000000000E+02 2.24000000000000E+02 2.52000000000000E+02 2.80000000000000E+02 1.50000000000000E+00 3.00000000000000E+00 3.00000000000000E+01 6.00000000000000E+01 9.00000000000000E+01 1.20000000000000E+02 1.50000000000000E+02 1.80000000000000E+02 2.10000000000000E+02 2.40000000000000E+02 2.70000000000000E+02 3.00000000000000E+02 1.60000000000000E+00 3.20000000000000E+00 3.20000000000000E+01 6.40000000000000E+01 9.60000000000000E+01 1.28000000000000E+02 1.60000000000000E+02 1.92000000000000E+02 2.24000000000000E+02 2.56000000000000E+02 2.88000000000000E+02 3.20000000000000E+02 1.70000000000000E+00 3.40000000000000E+00 3.40000000000000E+01 6.80000000000000E+01 1.02000000000000E+02 1.36000000000000E+02 1.70000000000000E+02 2.04000000000000E+02 2.38000000000000E+02 2.72000000000000E+02 3.06000000000000E+02 3.40000000000000E+02 1.80000000000000E+00 3.60000000000000E+00 3.60000000000000E+01 7.20000000000000E+01 1.08000000000000E+02 1.44000000000000E+02 1.80000000000000E+02 2.16000000000000E+02 2.52000000000000E+02 2.88000000000000E+02 3.24000000000000E+02 3.60000000000000E+02 1.90000000000000E+00 3.80000000000000E+00 3.80000000000000E+01 7.60000000000000E+01 1.14000000000000E+02 1.52000000000000E+02 1.90000000000000E+02 2.28000000000000E+02 2.66000000000000E+02 3.04000000000000E+02 3.42000000000000E+02 3.80000000000000E+02 2.00000000000000E+00 4.00000000000000E+00 4.00000000000000E+01 8.00000000000000E+01 1.20000000000000E+02 1.60000000000000E+02 2.00000000000000E+02 2.40000000000000E+02 2.80000000000000E+02 3.20000000000000E+02 3.60000000000000E+02 4.00000000000000E+02 2.00000000000000E+00 1.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 1.00000000000000E-10 1.00000000000000E-04 1.00000000000000E-10 1.00000000000000E-12 1.00000000000000E-04 0.00000000000000E+00 0.00000000000000E+00 1.00000000000000E+01 2.00000000000000E+01 3.00000000000000E+01 4.00000000000000E+01 5.00000000000000E+01 6.00000000000000E+01 7.00000000000000E+01 8.00000000000000E+01 9.00000000000000E+01 1.00000000000000E+02 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 1.00000000000000E-01 2.00000000000000E-01 2.00000000000000E+00 4.00000000000000E+00 6.00000000000000E+00 8.00000000000000E+00 1.00000000000000E+01 1.20000000000000E+01 1.40000000000000E+01 1.60000000000000E+01 1.80000000000000E+01 2.00000000000000E+01 2.00000000000000E-01 4.00000000000000E-01 4.00000000000000E+00 8.00000000000000E+00 1.20000000000000E+01 1.60000000000000E+01 2.00000000000000E+01 2.40000000000000E+01 2.80000000000000E+01 3.20000000000000E+01 3.60000000000000E+01 4.00000000000000E+01 3.00000000000000E-01 6.00000000000000E-01 6.00000000000000E+00 1.20000000000000E+01 1.80000000000000E+01 2.40000000000000E+01 3.00000000000000E+01 3.60000000000000E+01 4.20000000000000E+01 4.80000000000000E+01 5.40000000000000E+01 6.00000000000000E+01 4.00000000000000E-01 8.00000000000000E-01 8.00000000000000E+00 1.60000000000000E+01 2.40000000000000E+01 3.20000000000000E+01 4.00000000000000E+01 4.80000000000000E+01 5.60000000000000E+01 6.40000000000000E+01 7.20000000000000E+01 8.00000000000000E+01 5.00000000000000E-01 1.00000000000000E+00 1.00000000000000E+01 2.00000000000000E+01 3.00000000000000E+01 4.00000000000000E+01 5.00000000000000E+01 6.00000000000000E+01 7.00000000000000E+01 8.00000000000000E+01 9.00000000000000E+01 1.00000000000000E+02 6.00000000000000E-01 1.20000000000000E+00 1.20000000000000E+01 2.40000000000000E+01 3.60000000000000E+01 4.80000000000000E+01 6.00000000000000E+01 7.20000000000000E+01 8.40000000000000E+01 9.60000000000000E+01 1.08000000000000E+02 1.20000000000000E+02 7.00000000000000E-01 1.40000000000000E+00 1.40000000000000E+01 2.80000000000000E+01 4.20000000000000E+01 5.60000000000000E+01 7.00000000000000E+01 8.40000000000000E+01 9.80000000000000E+01 1.12000000000000E+02 1.26000000000000E+02 1.40000000000000E+02 8.00000000000000E-01 1.60000000000000E+00 1.60000000000000E+01 3.20000000000000E+01 4.80000000000000E+01 6.40000000000000E+01 8.00000000000000E+01 9.60000000000000E+01 1.12000000000000E+02 1.28000000000000E+02 1.44000000000000E+02 1.60000000000000E+02 9.00000000000000E-01 1.80000000000000E+00 1.80000000000000E+01 3.60000000000000E+01 5.40000000000000E+01 7.20000000000000E+01 9.00000000000000E+01 1.08000000000000E+02 1.26000000000000E+02 1.44000000000000E+02 1.62000000000000E+02 1.80000000000000E+02 1.00000000000000E+00 2.00000000000000E+00 2.00000000000000E+01 4.00000000000000E+01 6.00000000000000E+01 8.00000000000000E+01 1.00000000000000E+02 1.20000000000000E+02 1.40000000000000E+02 1.60000000000000E+02 1.80000000000000E+02 2.00000000000000E+02 1.10000000000000E+00 2.20000000000000E+00 2.20000000000000E+01 4.40000000000000E+01 6.60000000000000E+01 8.80000000000000E+01 1.10000000000000E+02 1.32000000000000E+02 1.54000000000000E+02 1.76000000000000E+02 1.98000000000000E+02 2.20000000000000E+02 1.20000000000000E+00 2.40000000000000E+00 2.40000000000000E+01 4.80000000000000E+01 7.20000000000000E+01 9.60000000000000E+01 1.20000000000000E+02 1.44000000000000E+02 1.68000000000000E+02 1.92000000000000E+02 2.16000000000000E+02 2.40000000000000E+02 1.30000000000000E+00 2.60000000000000E+00 2.60000000000000E+01 5.20000000000000E+01 7.80000000000000E+01 1.04000000000000E+02 1.30000000000000E+02 1.56000000000000E+02 1.82000000000000E+02 2.08000000000000E+02 2.34000000000000E+02 2.60000000000000E+02 1.40000000000000E+00 2.80000000000000E+00 2.80000000000000E+01 5.60000000000000E+01 8.40000000000000E+01 1.12000000000000E+02 1.40000000000000E+02 1.68000000000000E+02 1.96000000000000E+02 2.24000000000000E+02 2.52000000000000E+02 2.80000000000000E+02 1.50000000000000E+00 3.00000000000000E+00 3.00000000000000E+01 6.00000000000000E+01 9.00000000000000E+01 1.20000000000000E+02 1.50000000000000E+02 1.80000000000000E+02 2.10000000000000E+02 2.40000000000000E+02 2.70000000000000E+02 3.00000000000000E+02 1.60000000000000E+00 3.20000000000000E+00 3.20000000000000E+01 6.40000000000000E+01 9.60000000000000E+01 1.28000000000000E+02 1.60000000000000E+02 1.92000000000000E+02 2.24000000000000E+02 2.56000000000000E+02 2.88000000000000E+02 3.20000000000000E+02 1.70000000000000E+00 3.40000000000000E+00 3.40000000000000E+01 6.80000000000000E+01 1.02000000000000E+02 1.36000000000000E+02 1.70000000000000E+02 2.04000000000000E+02 2.38000000000000E+02 2.72000000000000E+02 3.06000000000000E+02 3.40000000000000E+02 1.80000000000000E+00 3.60000000000000E+00 3.60000000000000E+01 7.20000000000000E+01 1.08000000000000E+02 1.44000000000000E+02 1.80000000000000E+02 2.16000000000000E+02 2.52000000000000E+02 2.88000000000000E+02 3.24000000000000E+02 3.60000000000000E+02 1.90000000000000E+00 3.80000000000000E+00 3.80000000000000E+01 7.60000000000000E+01 1.14000000000000E+02 1.52000000000000E+02 1.90000000000000E+02 2.28000000000000E+02 2.66000000000000E+02 3.04000000000000E+02 3.42000000000000E+02 3.80000000000000E+02 2.00000000000000E+00 4.00000000000000E+00 4.00000000000000E+01 8.00000000000000E+01 1.20000000000000E+02 1.60000000000000E+02 2.00000000000000E+02 2.40000000000000E+02 2.80000000000000E+02 3.20000000000000E+02 3.60000000000000E+02 4.00000000000000E+02 3.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 1.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 1.00000000000000E+00 0.00000000000000E+00
+
+float data_2(101,4)                          
+ 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 2.00000000000000E+00
+ 1.00000000000000E-02 1.25581039058627E-01 2.51162078117253E-01 2.00000000000000E+00
+ 2.00000000000000E-02 2.50666467128609E-01 5.01332934257217E-01 2.00000000000000E+00
+ 3.00000000000000E-02 3.74762629171449E-01 7.49525258342898E-01 2.00000000000000E+00
+ 4.00000000000000E-02 4.97379774329710E-01 9.94759548659419E-01 2.00000000000000E+00
+ 5.00000000000000E-02 6.18033988749895E-01 1.23606797749979E+00 2.00000000000000E+00
+ 6.00000000000000E-02 7.36249105369356E-01 1.47249821073871E+00 2.00000000000000E+00
+ 7.00000000000000E-02 8.51558583130145E-01 1.70311716626029E+00 2.00000000000000E+00
+ 8.00000000000000E-02 9.63507348203431E-01 1.92701469640686E+00 2.00000000000000E+00
+ 9.00000000000000E-02 1.07165358995799E+00 2.14330717991599E+00 2.00000000000000E+00
+ 1.00000000000000E-01 1.17557050458495E+00 2.35114100916989E+00 2.00000000000000E+00
+ 1.10000000000000E-01 1.27484797949738E+00 2.54969595899476E+00 2.00000000000000E+00
+ 1.20000000000000E-01 1.36909421185738E+00 2.73818842371475E+00 2.00000000000000E+00
+ 1.30000000000000E-01 1.45793725484282E+00 2.91587450968565E+00 2.00000000000000E+00
+ 1.40000000000000E-01 1.54102648555158E+00 3.08205297110316E+00 2.00000000000000E+00
+ 1.50000000000000E-01 1.61803398874989E+00 3.23606797749979E+00 2.00000000000000E+00
+ 1.60000000000000E-01 1.68865585100403E+00 3.37731170200806E+00 2.00000000000000E+00
+ 1.70000000000000E-01 1.75261336008773E+00 3.50522672017545E+00 2.00000000000000E+00
+ 1.80000000000000E-01 1.80965410493204E+00 3.61930820986408E+00 2.00000000000000E+00
+ 1.90000000000000E-01 1.85955297177650E+00 3.71910594355301E+00 2.00000000000000E+00
+ 2.00000000000000E-01 1.90211303259031E+00 3.80422606518061E+00 2.00000000000000E+00
+ 2.10000000000000E-01 1.93716632225726E+00 3.87433264451452E+00 2.00000000000000E+00
+ 2.20000000000000E-01 1.96457450145738E+00 3.92914900291475E+00 2.00000000000000E+00
+ 2.30000000000000E-01 1.98422940262896E+00 3.96845880525791E+00 2.00000000000000E+00
+ 2.40000000000000E-01 1.99605345685654E+00 3.99210691371309E+00 2.00000000000000E+00
+ 2.50000000000000E-01 2.00000000000000E+00 4.00000000000000E+00 2.00000000000000E+00
+ 2.60000000000000E-01 1.99605345685654E+00 3.99210691371309E+00 2.00000000000000E+00
+ 2.70000000000000E-01 1.98422940262896E+00 3.96845880525791E+00 2.00000000000000E+00
+ 2.80000000000000E-01 1.96457450145738E+00 3.92914900291475E+00 2.00000000000000E+00
+ 2.90000000000000E-01 1.93716632225726E+00 3.87433264451452E+00 2.00000000000000E+00
+ 3.00000000000000E-01 1.90211303259031E+00 3.80422606518061E+00 2.00000000000000E+00
+ 3.10000000000000E-01 1.85955297177650E+00 3.71910594355301E+00 2.00000000000000E+00
+ 3.20000000000000E-01 1.80965410493204E+00 3.61930820986408E+00 2.00000000000000E+00
+ 3.30000000000000E-01 1.75261336008773E+00 3.50522672017545E+00 2.00000000000000E+00
+ 3.40000000000000E-01 1.68865585100403E+00 3.37731170200806E+00 2.00000000000000E+00
+ 3.50000000000000E-01 1.61803398874989E+00 3.23606797749979E+00 2.00000000000000E+00
+ 3.60000000000000E-01 1.54102648555158E+00 3.08205297110316E+00 2.00000000000000E+00
+ 3.70000000000000E-01 1.45793725484282E+00 2.91587450968565E+00 2.00000000000000E+00
+ 3.80000000000000E-01 1.36909421185738E+00 2.73818842371476E+00 2.00000000000000E+00
+ 3.90000000000000E-01 1.27484797949738E+00 2.54969595899476E+00 2.00000000000000E+00
+ 4.00000000000000E-01 1.17557050458495E+00 2.35114100916989E+00 2.00000000000000E+00
+ 4.10000000000000E-01 1.07165358995799E+00 2.14330717991599E+00 2.00000000000000E+00
+ 4.20000000000000E-01 9.63507348203431E-01 1.92701469640686E+00 2.00000000000000E+00
+ 4.30000000000000E-01 8.51558583130146E-01 1.70311716626029E+00 2.00000000000000E+00
+ 4.40000000000000E-01 7.36249105369356E-01 1.47249821073871E+00 2.00000000000000E+00
+ 4.50000000000000E-01 6.18033988749895E-01 1.23606797749979E+00 2.00000000000000E+00
+ 4.60000000000000E-01 4.97379774329710E-01 9.94759548659419E-01 2.00000000000000E+00
+ 4.70000000000000E-01 3.74762629171449E-01 7.49525258342898E-01 2.00000000000000E+00
+ 4.80000000000000E-01 2.50666467128609E-01 5.01332934257218E-01 2.00000000000000E+00
+ 4.90000000000000E-01 1.25581039058627E-01 2.51162078117254E-01 2.00000000000000E+00
+ 5.00000000000000E-01 2.44921270764475E-16 4.89842541528951E-16 2.00000000000000E+00
+ 5.10000000000000E-01 -1.25581039058627E-01 -2.51162078117253E-01 2.00000000000000E+00
+ 5.20000000000000E-01 -2.50666467128609E-01 -5.01332934257217E-01 2.00000000000000E+00
+ 5.30000000000000E-01 -3.74762629171450E-01 -7.49525258342899E-01 2.00000000000000E+00
+ 5.40000000000000E-01 -4.97379774329710E-01 -9.94759548659420E-01 2.00000000000000E+00
+ 5.50000000000000E-01 -6.18033988749895E-01 -1.23606797749979E+00 2.00000000000000E+00
+ 5.60000000000000E-01 -7.36249105369357E-01 -1.47249821073871E+00 2.00000000000000E+00
+ 5.70000000000000E-01 -8.51558583130145E-01 -1.70311716626029E+00 2.00000000000000E+00
+ 5.80000000000000E-01 -9.63507348203430E-01 -1.92701469640686E+00 2.00000000000000E+00
+ 5.90000000000000E-01 -1.07165358995799E+00 -2.14330717991599E+00 2.00000000000000E+00
+ 6.00000000000000E-01 -1.17557050458495E+00 -2.35114100916989E+00 2.00000000000000E+00
+ 6.10000000000000E-01 -1.27484797949738E+00 -2.54969595899476E+00 2.00000000000000E+00
+ 6.20000000000000E-01 -1.36909421185738E+00 -2.73818842371475E+00 2.00000000000000E+00
+ 6.30000000000000E-01 -1.45793725484282E+00 -2.91587450968565E+00 2.00000000000000E+00
+ 6.40000000000000E-01 -1.54102648555158E+00 -3.08205297110316E+00 2.00000000000000E+00
+ 6.50000000000000E-01 -1.61803398874989E+00 -3.23606797749979E+00 2.00000000000000E+00
+ 6.60000000000000E-01 -1.68865585100403E+00 -3.37731170200806E+00 2.00000000000000E+00
+ 6.70000000000000E-01 -1.75261336008773E+00 -3.50522672017545E+00 2.00000000000000E+00
+ 6.80000000000000E-01 -1.80965410493204E+00 -3.61930820986408E+00 2.00000000000000E+00
+ 6.90000000000000E-01 -1.85955297177650E+00 -3.71910594355301E+00 2.00000000000000E+00
+ 7.00000000000000E-01 -1.90211303259031E+00 -3.80422606518061E+00 2.00000000000000E+00
+ 7.10000000000000E-01 -1.93716632225726E+00 -3.87433264451452E+00 2.00000000000000E+00
+ 7.20000000000000E-01 -1.96457450145738E+00 -3.92914900291475E+00 2.00000000000000E+00
+ 7.30000000000000E-01 -1.98422940262896E+00 -3.96845880525791E+00 2.00000000000000E+00
+ 7.40000000000000E-01 -1.99605345685654E+00 -3.99210691371309E+00 2.00000000000000E+00
+ 7.50000000000000E-01 -2.00000000000000E+00 -4.00000000000000E+00 2.00000000000000E+00
+ 7.60000000000000E-01 -1.99605345685654E+00 -3.99210691371309E+00 2.00000000000000E+00
+ 7.70000000000000E-01 -1.98422940262896E+00 -3.96845880525791E+00 2.00000000000000E+00
+ 7.80000000000000E-01 -1.96457450145738E+00 -3.92914900291475E+00 2.00000000000000E+00
+ 7.90000000000000E-01 -1.93716632225726E+00 -3.87433264451452E+00 2.00000000000000E+00
+ 8.00000000000000E-01 -1.90211303259031E+00 -3.80422606518061E+00 2.00000000000000E+00
+ 8.10000000000000E-01 -1.85955297177650E+00 -3.71910594355300E+00 2.00000000000000E+00
+ 8.20000000000000E-01 -1.80965410493204E+00 -3.61930820986408E+00 2.00000000000000E+00
+ 8.30000000000000E-01 -1.75261336008773E+00 -3.50522672017545E+00 2.00000000000000E+00
+ 8.40000000000000E-01 -1.68865585100403E+00 -3.37731170200806E+00 2.00000000000000E+00
+ 8.50000000000000E-01 -1.61803398874990E+00 -3.23606797749979E+00 2.00000000000000E+00
+ 8.60000000000000E-01 -1.54102648555158E+00 -3.08205297110316E+00 2.00000000000000E+00
+ 8.70000000000000E-01 -1.45793725484282E+00 -2.91587450968565E+00 2.00000000000000E+00
+ 8.80000000000000E-01 -1.36909421185738E+00 -2.73818842371476E+00 2.00000000000000E+00
+ 8.90000000000000E-01 -1.27484797949738E+00 -2.54969595899476E+00 2.00000000000000E+00
+ 9.00000000000000E-01 -1.17557050458495E+00 -2.35114100916989E+00 2.00000000000000E+00
+ 9.10000000000000E-01 -1.07165358995799E+00 -2.14330717991599E+00 2.00000000000000E+00
+ 9.20000000000000E-01 -9.63507348203431E-01 -1.92701469640686E+00 2.00000000000000E+00
+ 9.30000000000000E-01 -8.51558583130144E-01 -1.70311716626029E+00 2.00000000000000E+00
+ 9.40000000000000E-01 -7.36249105369356E-01 -1.47249821073871E+00 2.00000000000000E+00
+ 9.50000000000000E-01 -6.18033988749895E-01 -1.23606797749979E+00 2.00000000000000E+00
+ 9.60000000000000E-01 -4.97379774329711E-01 -9.94759548659421E-01 2.00000000000000E+00
+ 9.70000000000000E-01 -3.74762629171449E-01 -7.49525258342899E-01 2.00000000000000E+00
+ 9.80000000000000E-01 -2.50666467128609E-01 -5.01332934257219E-01 2.00000000000000E+00
+ 9.90000000000000E-01 -1.25581039058627E-01 -2.51162078117253E-01 2.00000000000000E+00
+ 1.00000000000000E+00 -4.89842541528951E-16 -9.79685083057902E-16 2.00000000000000E+00

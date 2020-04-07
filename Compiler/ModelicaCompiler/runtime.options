@@ -1,0 +1,260 @@
+
+
+********************************************************************************
+*** Runtime options
+********************************************************************************
+*** Note: Two JUnit tests are affected by changes to runtime options:
+*** ModelicaCompiler : TransformCanonicalTests.mo : TestRuntimeOptions1
+*** ModelicaCBackEnd : CCodeGenTests.mo : TestRuntimeOptions1
+***
+********************************************************************************
+INTEGER log_level runtime user 3 0 8
+
+"Log level for the runtime: 
+0 - none, 
+1 - fatal error, 
+2 - error, 
+3 - warning, 
+4 - info, 
+5 - verbose, 
+6 - debug."
+
+********************************************************************************
+BOOLEAN enforce_bounds runtime user true
+
+"If enabled, min / max bounds on variables are enforced in the equation blocks."
+
+********************************************************************************
+BOOLEAN use_jacobian_equilibration runtime uncommon false
+
+"If enabled, jacobian equilibration will be utilized in the equation block 
+solvers to improve linear solver accuracy."
+
+********************************************************************************
+BOOLEAN use_newton_for_brent runtime uncommon true
+
+"If enabled, a few Newton steps are computed to get a better initial guess for 
+Brent."
+
+********************************************************************************
+INTEGER iteration_variable_scaling runtime user 1 0 2
+
+"Scaling mode for the iteration variables in the equation block solvers: 
+0 - no scaling, 
+1 - scaling based on nominals, 
+2 - utilize heuristic to guess nominal based on min, max, start, etc."
+
+********************************************************************************
+INTEGER residual_equation_scaling runtime user 1 0 5
+
+"Equations scaling mode in equation block solvers: 
+0 - no scaling, 
+1 - automatic scaling, 
+2 - manual scaling, 
+3 - hybrid, 
+4 - aggressive automatic scaling, 
+5 - automatic rescaling at full Jacobian update"
+
+********************************************************************************
+INTEGER nle_solver_exit_criterion runtime user 3 0 3
+
+"Exit criterion mode: 
+0 - step length and residual based, 
+1 - only step length based, 
+2 - only residual based, 
+3 - hybrid."
+
+********************************************************************************
+INTEGER nle_jacobian_update_mode runtime user 2 0 2
+
+"Mode for how to update the Jacobian: 
+0 - full Jacobian, 
+1 - Broyden update, 
+2 - Reuse Jacobian."
+
+********************************************************************************
+INTEGER nle_jacobian_calculation_mode runtime user 0 0 9
+
+"Mode for how to calculate the Jacobian: 
+0 - onesided differences, 
+1 - central differences, 
+2 - central differences at bound, 
+3 - central differences at bound and 0, 
+4 - central differences in second Newton solve, 
+5 - central differences at bound in second Newton solve, 
+6 - central differences at bound and 0 in second Newton solve, 
+7 - central differences at small residual, 
+8 - calculate Jacobian externally, 
+9 - Jacobian compresssion."
+
+********************************************************************************
+REAL nle_jacobian_finite_difference_delta runtime user 1.490116119384766E-8 2.220446049250313e-16 1e-1
+
+"Delta to use when calculating finite difference Jacobians."
+
+********************************************************************************
+INTEGER nle_active_bounds_mode runtime user 0 0 1
+
+"Mode for how to handle active bounds: 
+0 - project Newton step at active bounds, 
+1 - use projected steepest descent direction."
+
+********************************************************************************
+REAL nle_solver_min_residual_scaling_factor runtime user 1.0E-10 1e-32 1
+
+"Minimal scaling factor used by automatic and hybrid residual scaling algorithm."
+
+********************************************************************************
+REAL nle_solver_max_residual_scaling_factor runtime user 1.0E10 1 1e32
+
+"Maximal scaling factor used by automatic and hybrid residual scaling algorithm."
+
+********************************************************************************
+BOOLEAN rescale_each_step runtime user false
+
+"If enabled, scaling will be updated at every step (only active if automatic 
+scaling is used)."
+
+********************************************************************************
+BOOLEAN rescale_after_singular_jac runtime user true
+
+"If enabled, scaling will be updated after a singular jacobian was detected 
+(only active if automatic scaling is used)."
+
+********************************************************************************
+BOOLEAN use_Brent_in_1d runtime user true
+
+"If enabled, Brent search will be used to improve accuracy in solution of 1D 
+non-linear equations."
+
+********************************************************************************
+BOOLEAN block_solver_profiling runtime uncommon false
+
+"If enabled, methods involved in solving an equation block will be timed."
+
+********************************************************************************
+INTEGER block_solver_experimental_mode runtime experimental 0 0 Integer.MAX_VALUE
+
+"Activates experimental features of equation block solvers"
+
+********************************************************************************
+REAL nle_solver_default_tol runtime user 1.0E-10 1e-14 1e-2
+
+"Default tolerance for the equation block solver."
+
+********************************************************************************
+BOOLEAN nle_solver_check_jac_cond runtime uncommon false
+
+"If enabled, the equation block solver computes and log the jacobian condition 
+number."
+
+********************************************************************************
+BOOLEAN nle_brent_ignore_error runtime uncommon false
+
+"If enabled, the Brent solver will ignore convergence failures."
+
+********************************************************************************
+REAL nle_solver_min_tol runtime uncommon 1.0E-12 1e-14 1e-6
+
+"Minimum tolerance for the equation block solver. Note that, e.g. default 
+Kinsol tolerance is machine precision pwr 1/3, i.e. 1e-6."
+
+********************************************************************************
+REAL nle_solver_tol_factor runtime uncommon 1.0E-4 1e-6 1.0
+
+"Tolerance safety factor for the equation block solver. Used when external 
+solver specifies relative tolerance."
+
+********************************************************************************
+INTEGER nle_solver_max_iter runtime uncommon 100 2 500
+
+"Maximum number of iterations for the equation block solver."
+
+********************************************************************************
+INTEGER nle_solver_max_iter_no_jacobian runtime uncommon 10 1 500
+
+"Maximum number of iterations without jacobian update. Value 1 means an update 
+in every iteration."
+
+********************************************************************************
+REAL nle_solver_step_limit_factor runtime uncommon 10.0 0 1e10
+
+"Factor limiting the step-size taken by the nonlinear block solver."
+
+********************************************************************************
+REAL nle_solver_regularization_tolerance runtime uncommon -1.0 -1 1e20
+
+"Tolerance for deciding when regularization should be activated (i.e. when 
+condition number > reg tol)."
+
+********************************************************************************
+BOOLEAN nle_solver_use_nominals_as_fallback runtime uncommon true
+
+"If enabled, the nominal values will be used as initial guess to the solver if 
+initialization failed."
+
+********************************************************************************
+BOOLEAN nle_solver_use_last_integrator_step runtime uncommon true
+
+"If enabled, the initial guess for the iteration variables will be set to the 
+iteration variables from the last integrator step."
+
+********************************************************************************
+REAL events_default_tol runtime uncommon 1.0E-10 1e-14 1e-2
+
+"Default tolerance for the event iterations."
+
+********************************************************************************
+REAL time_events_default_tol runtime uncommon 2.220446049250313E-14 0 1.0
+
+"Default tolerance for the time event iterations."
+
+********************************************************************************
+REAL events_tol_factor runtime uncommon 1.0E-4 1e-6 1.0
+
+"Tolerance safety factor for the event indicators. Used when external solver 
+specifies relative tolerance."
+
+********************************************************************************
+BOOLEAN block_jacobian_check runtime debug false
+
+"Compares the analytic block jacobians with the finite difference block 
+jacobians during block evaluation. An error is given if the relative error is 
+to big."
+
+********************************************************************************
+REAL block_jacobian_check_tol runtime debug 1.0E-6 1e-12 1.0
+
+"Specifies the relative tolerance for block jacobian check."
+
+********************************************************************************
+INTEGER cs_solver runtime user 0 0 1
+
+"Specifies the internal solver used in Co-Simulation. 
+0 - CVode, 
+1 - Euler."
+
+********************************************************************************
+REAL cs_rel_tol runtime user 1.0E-6 1e-14 1.0
+
+"Tolerance for the adaptive solvers in the Co-Simulation case."
+
+********************************************************************************
+REAL cs_step_size runtime user 0.001
+
+"Step-size for the fixed-step solvers in the Co-Simulation case."
+
+********************************************************************************
+INTEGER cs_experimental_mode runtime experimental 0 0 Integer.MAX_VALUE
+
+"Activates experimental features of CS ode solvers"
+
+********************************************************************************
+BOOLEAN runtime_log_to_file runtime user false
+
+"If enabled, log messages from the runtime are written directly to a file, 
+besides passing it through the FMU interface. The log file name is generated 
+based on the FMU name."
+
+********************************************************************************
+

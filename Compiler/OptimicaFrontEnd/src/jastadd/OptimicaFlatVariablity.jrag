@@ -1,0 +1,90 @@
+/*
+    Copyright (C) 2015 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+/**
+ * This aspect introduces a new type of variability: timed. An expression has 
+ * timed variability if it is composed of parameters, literals and timed
+ * variables but no continuous or discrete variables.
+ */
+aspect OptimicaVariability {
+
+    class Variability {
+        public static final Timed TIMED = new Timed();
+        public static final OptParameter OPTPARAMETER = new OptParameter();
+    }
+
+    public class Timed extends TypePrefixVariability {}
+    public class OptParameter extends Parameter {}
+
+	public boolean TypePrefixVariability.timedVariability() { return false; }
+	public boolean Timed.timedVariability() { return true; }
+	
+	syn boolean FExp.isTimedExp() = variability().timedVariability();
+	
+    eq FTimedVariable.variability()    = Variability.TIMED;
+    eq InstTimedVariable.variability() = Variability.TIMED;
+	eq FStartTimeExp.variability()     = Variability.FIXEDPARAMETER;
+	eq FFinalTimeExp.variability()     = Variability.FIXEDPARAMETER;
+	
+	public boolean TypePrefixVariability.optParameterVariability() { return false; }
+	public boolean OptParameter.optParameterVariability() { return true; }	
+	syn boolean FExp.isOptParameterExp() = variability().optParameterVariability();
+	
+	protected int Timed.variabilityLevel()        { return VARIABILITY_LEVEL; }
+	protected int OptParameter.variabilityLevel() { return VARIABILITY_LEVEL; }
+	protected static final int Timed.VARIABILITY_LEVEL        = Variability.DISCRETE.variabilityLevel() - 5;
+	protected static final int OptParameter.VARIABILITY_LEVEL = Variability.FIXEDPARAMETER.variabilityLevel();
+	
+	public int OptParameter.combineLevel() { return variabilityLevel() * 10 + 5; }
+	
+	// Notice that the attribute FVariable.isParameter is not redefined in order
+	// not to render a lot of attributes in FlatAPI to be redefined as a
+	// consequence.
+    public boolean FVariable.isOptParameter() { return variability().optParameterVariability(); }
+	
+	// TODO: Change to be more in line with Variability and more extensible
+    refine InstVariability eq InstAssignable.calcVariability() {
+        TypePrefixVariability v = refined();
+        if (v.parameterVariability() && freeAttribute()) {
+            v = Variability.OPTPARAMETER;
+        }
+        return v;
+    }
+    
+    public String Timed.toString()        { return "timed "; }
+    public String OptParameter.toString() { return "free parameter "; }
+    
+    public String Timed.toStringLiteral()        { return "timed"; }
+    public String OptParameter.toStringLiteral() { return "free parameter"; }
+    
+    syn boolean FConstraint.isTimed()     = variability().lessOrEqual(Variability.TIMED);
+    syn boolean FConstraint.isParameter() = variability().parameterOrLess();
+    
+    syn TypePrefixVariability FConstraint.variability();
+    eq FRelationConstraint.variability() = getLeft().variability().combine(getRight().variability());
+    eq InstForClauseC.variability() = combineFConstraintsListVariability(getFConstraints());
+    
+    syn TypePrefixVariability FConstraint.combineFConstraintsListVariability(List<FConstraint> l) {
+        TypePrefixVariability res = Variability.CONSTANT;
+        for (FConstraint c : l) {
+            res = res.combine(c.variability());
+        }
+        return res;
+    }
+    
+    public String Timed.genJMIVariabilityConstant_C()        { return null; }
+    public String OptParameter.genJMIVariabilityConstant_C() { return null; }
+}

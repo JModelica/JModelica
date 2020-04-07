@@ -1,0 +1,82 @@
+<?xml version="1.0"?>
+
+<project name="variabletest" basedir="." default="test1">
+   <description>
+      test build file for the Variable task
+   </description>
+   
+   <taskdef resource="net/sf/antcontrib/antcontrib.properties">
+      <classpath location="${antcontrib.jar}"/>
+   </taskdef>         
+   
+   <!-- use like a standard property -->
+   <target name="test1">
+      <var name="x" value="6" />
+   </target>
+   
+   <!-- use like a standard property -->
+   <target name="test2">
+      <var name="x" value="12" />
+   </target>
+   
+   <!-- can append to itself -->
+   <target name="test3">
+      <var name="x" value="12" />
+      <var name="x" value="6 + ${x}" /> <!-- 6 + 12 -->
+   </target>
+   
+   <!-- property can't override -->
+   <target name="test4">
+      <var name="x" value="6" />
+      <property name="x" value="12" />
+   </target>
+   
+   <!-- can append multiple times -->
+   <target name="test5">
+      <var name="str" value="I" />
+      <var name="str" value="${str} am" />
+      <var name="str" value="${str} a" />
+      <var name="str" value="${str} string." />
+      <!-- I am a string. -->
+   </target>
+   
+   <!-- property can't override -->
+   <target name="test6">   
+      <var name="x" value="blue" />
+      <tstamp>
+         <format property="x" pattern="EEEE" />
+      </tstamp>
+      <var name="x" value="Today is ${x}."/>
+      <!-- Today is blue. -->
+   </target>
+   
+   <!-- can override property -->
+   <target name="test7">
+      <property name="x" value="12" />
+      <var name="x" value="6" />
+   </target>
+   
+   <!-- TODO: uses the Antelope <if>, need to adjust to use ant-contrib <if>
+   <target name="test8">
+      <var name="x" value="6"/>
+      <if name="x" value="6">
+          <var name="x" value="12"/>
+          <else>
+             <var name="x" value="13"/>
+          </else>
+      </if>
+      <echo>${x}</echo>   
+   </target>
+   -->
+   
+   <target name="test9">
+      <property name="i" value="2"/>
+      <var name="i" unset="true"/>
+   </target>
+   
+   <target name="test10">
+      <var name="x" value="test"/>
+      <var name="x" unset="true"/>
+      <property name="x" value="xxx"/>
+   </target>
+</project>

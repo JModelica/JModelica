@@ -1,0 +1,120 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.Collection;
+
+/**
+ * 
+ * Main compiler class which bundles the tasks needed to compile an Optimica
+ * model. This class is an extension of ModelicaCompiler.
+ * <p>
+ * There are two usages with this class:
+ * 	-# Compile in one step either from the command line or by calling the static 
+ * method <compileModel> in your own class.
+ *	-# Split compilation into several steps by calling the static methods in your
+ *  own class.
+ *  <p>
+ * Use (1) for a simple and compact way of compiling an Optimica model. As a
+ * minimum, provide the modelfile name and class name as command line arguments.
+ * Optional arguments are XML templates and c template files which are needed
+ * for code generation. If any of these are ommitted no code generation will be
+ * performed.
+ * <p>
+ * Example without code generation: <br>
+ * <code>org.jmodelica.applications.OptimicaCompiler myModels/models.mo models.model1</code>
+ * <p>
+ * Example with code generation: <br> 
+ * <code>org.jmodelica.applications.OptimicaCompiler myModels/models.mo 
+ * models.model1 XMLtemplate1.xml XMLtemplate2.xml XMLtemplate3.xml cppTemplate.cpp</code>
+ * <p>
+ * Logging can be set with the optional argument -log=i, w or e where:
+ *	- -i : log info, warning and error messages 
+ *	- -w : log warning and error messages
+ *	- -e : log error messages only (default if the log option is not used)
+ * <p>
+ * Example with log level set to INFO: <br>
+ * <code>org.jmodelica.applications.OptimicaCompiler -i myModels/models.mo
+ * models.model1</code> <br>
+ * The logs will be printed to standard out.
+ * <p>
+ * 
+ * For method (2), the compilation steps are divided into 4 tasks which can be
+ * used via the methods:
+ *	-# parseModel (source code -> attributed source representation) - ModelicaCompiler
+ *	-# instantiateModel (source representation -> instance model) - ModelicaCompiler
+ *	-# flattenModel (instance model -> flattened model)
+ *	-# generateCode (flattened model -> c code and XML code)
+ * 
+ * <p>
+ * They must be called in this order. Use provided methods in ModelicaCompiler
+ * to get/set logging level.
+ * 
+ */
+public class OptimicaCompiler extends ModelicaCompiler {
+	
+	public OptimicaCompiler(OptionRegistry options) {
+		super(options);
+	}
+	
+	protected OptimicaCompiler() {
+		super();
+	}
+	
+	public boolean hasModelicaFileExt(String file) {
+		return super.hasModelicaFileExt(file) || file.endsWith(".mop");
+	}
+
+	public static void main(String ... args) {
+		// create an empty compiler
+		OptimicaCompiler oc = new OptimicaCompiler();
+		try {
+            // set arguments
+            Arguments arguments = new Arguments("OptimicaCompiler", args);
+            oc.setArguments(arguments);
+            // Compile model
+            oc.compileModelFromCommandLine(args, arguments);
+		} catch(Throwable t) {
+			log.error(t);
+			log.close();
+			System.exit(1);
+		}
+	}	
+}
+
+aspect OptimicaCompilationHelpers {
+
+    //Overshadowing the use of templates in case of optimization.
+    refine CompilationHelpers private String Templates.getCTemplateName(FClass fc) {
+        if (fc != null && fc instanceof FOptClass)
+            return null;
+        else
+            return template(C);
+    }
+
+    //Overshadowing the use of XMLgenerator in case of optimization.
+    refine CompilationHelpers public GenericXMLGenerator XMLGeneratorHolder.getXMLGenerator(FClass fc) {
+        if (fc instanceof FOptClass && (this == FMIX))
+            return new OptimicaXMLGenerator(ASTNode.prettyPrinter, '$', (FOptClass) fc);
+        else
+            return refined(fc);
+    }
+
+}

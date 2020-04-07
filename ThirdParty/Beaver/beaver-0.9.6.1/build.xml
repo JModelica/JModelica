@@ -1,0 +1,73 @@
+<project name="Beaver" default="help">
+
+	<property file="build.properties"/>
+	<available file="bin" type="dir" property="bin.available"/>
+	<available file="lib" type="dir" property="lib.available"/>
+	<available file="lib/beaver.jar" type="file" property="beaver.jar.available"/>
+	<available file="${jflex_jar}" type="file" property="jflex.jar.available"/>
+	<uptodate property="scanner.src.uptodate" srcfile="etc/GrammarScanner.flex" targetfile="src/beaver/spec/parser/GrammarScanner.java"/>
+	<uptodate property="parser.src.uptodate" srcfile="etc/beaver.grammar" targetfile="src/beaver/spec/parser/GrammarParser.java"/>
+
+	<target name="jflextask" unless="jflex.available" if="jflex.jar.available" description="creates JFlex Ant task">
+		<taskdef name="jflex" classname="JFlex.anttask.JFlexTask" classpath="${jflex_jar}"/>
+		<property name="jflex.available" value="yes"/>
+	</target>
+
+	<target name="beavertask" unless="beaver.available" if="beaver.jar.available" description="creates Beaver Ant task">
+		<taskdef name="beaver" classname="beaver.comp.run.AntTask" classpath="lib/beaver.jar"/>
+		<property name="beaver.available" value="yes"/>
+	</target>
+
+	<target name="help" description="show help message">
+		<echo message="Ant build file for Beaver. Useful targets:"/>
+		<echo message=""/>
+		<echo message="clean: remove compiled files"/>
+		<echo message="make:  make beaver.jar and beaver-rt.jar"/>
+	</target>
+
+	<target name="makebin" unless="bin.available" description="creates output directory for classes">
+		<mkdir dir="bin"/>
+	</target>
+
+	<target name="makelib" unless="lib.available" description="creates output directory for jars">
+		<mkdir dir="lib"/>
+	</target>
+
+	<target name="scanner" unless="scanner.src.uptodate" depends="jflextask" description="generate scanner">
+		<jflex file="etc/GrammarScanner.flex" nobak="yes" destdir="src"/>
+	</target>
+
+	<target name="parser" unless="parser.src.uptodate" depends="beavertask" description="generate parser">
+		<beaver file="etc/beaver.grammar" terminalNames="yes" compress="no" useSwitch="yes" destdir="src"/>
+	</target>
+
+	<target name="compile" depends="makebin" description="compile everything">
+		<javac srcdir="src" destdir="bin" includes="**/*.java" source="1.3" classpath="${ant_jar}" debug="${debug.info}"/>
+	</target>
+
+	<target name="make" depends="parser,scanner,compile,makelib" description="make beaver.jar and beaver-rt.jar">
+		<jar destfile="lib/beaver.jar" basedir="bin" includes="beaver/**">
+			<manifest>
+				<attribute name="Main-Class" value="beaver.comp.run.Make"/>
+			</manifest>
+			<zipfileset file="LICENSE" prefix="META-INF"/>
+		</jar>
+		<jar destfile="lib/beaver-rt.jar" basedir="bin" includes="beaver/*.class">
+			<zipfileset file="LICENSE" prefix="META-INF"/>
+		</jar>
+		<jar destfile="lib/beaver-rt-src.jar" basedir="src" includes="beaver/*.java">
+			<zipfileset file="LICENSE" prefix="META-INF"/>
+		</jar>
+	</target>
+	
+	<target name="dist" depends="make" description="prepare beaver-N.M.X.Y.zip">
+		<zip destfile="../beaver-${version}.zip">
+			<zipfileset dir="." excludes="**/CVS/* **/bin/** **/.* .*/**" prefix="beaver-${version}"/>
+		</zip>
+	</target>
+
+	<target name="clean" description="remove compiled classes">
+		<delete dir="bin/beaver" quiet="yes"/>
+	</target>
+
+</project>

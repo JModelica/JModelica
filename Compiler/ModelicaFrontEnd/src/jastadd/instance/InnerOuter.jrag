@@ -1,0 +1,152 @@
+/*
+    Copyright (C) 2015 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import java.util.Set;
+
+aspect InnerOuterComponents {
+
+    inh boolean InstNode.inOuter();
+    eq InstRoot.getChild().inOuter()          = false;
+    eq Root.getChild().inOuter()              = false;
+    eq InstClassDecl.getChild().inOuter()     = false;
+    eq InstComponentDecl.getChild().inOuter() = inOrIsOuter();
+    
+    inh boolean InstNode.inInner();
+    eq InstRoot.getChild().inInner()          = false;
+    eq Root.getChild().inInner()              = false;
+    eq InstClassDecl.getChild().inInner()     = false;
+    eq InstComponentDecl.getChild().inInner() = inOrIsInner();
+
+    inh InstComponentDecl InstComponentDecl.surroundingOuterComponentDecl();
+    eq InstRoot.getChild().surroundingOuterComponentDecl()          = null;
+    eq Root.getChild().surroundingOuterComponentDecl()              = null;
+    eq InstComponentDecl.getChild().surroundingOuterComponentDecl() = isOuter() ? this : surroundingOuterComponentDecl();
+
+    syn boolean InstComponentDecl.inOrIsOuter() = isOuter() || inOuter();
+    syn boolean InstComponentDecl.inOrIsInner() = isInner() || inInner();
+    
+    syn lazy InstComponentDecl InstComponentDecl.myInnerInstComponentDecl() {
+        InstComponentDecl res = null;
+        if (isOuter()) {
+            res = lookupInnerInstComponent(this, true);
+        }
+        return (res == null) ? unknownInstComponentDecl() : res;
+    }
+
+    inh InstComponentDecl InstNode.lookupInnerInstComponent(InstComponentDecl outer, boolean firstScope);
+
+    eq InstRoot.getChild().lookupInnerInstComponent(InstComponentDecl outer, boolean firstScope)    = null;
+    eq Root.getChild().lookupInnerInstComponent(InstComponentDecl outer, boolean firstScope)        = null;
+    eq InstExtends.getChild().lookupInnerInstComponent(InstComponentDecl outer, boolean firstScope) = 
+        lookupInnerInstComponent(outer, firstScope);
+
+    eq InstNode.getChild().lookupInnerInstComponent(InstComponentDecl outer, boolean firstScope) {
+        InstComponentDecl res = genericLookupInstComponent(outer.name()).unresolved().targetOrNull();
+        if (!firstScope && res != null && res.isInner()) {
+            return res;
+        } else if (res != null && res.isOuter() && !res.isInner()) {
+            res = null;
+        }
+        return lookupInnerInstComponentNoLocal(outer, res);
+    }
+
+    /**
+     * Lookup upwards in tree for matching inner declaration.
+     * 
+     * @param outer  outer declaration we are searching for 
+     */
+    syn InstComponentDecl InstNode.lookupInnerInstComponentNoLocal(InstComponentDecl outer, InstComponentDecl nonInner) = 
+        lookupInnerInstComponent(outer, false);
+    eq InstClassDecl.lookupInnerInstComponentNoLocal(InstComponentDecl outer, InstComponentDecl nonInner) {
+        String name = outer.name();
+        InstGeneratedInner res = null;
+        List<InstGeneratedInner> inners = getInstGeneratedInners();
+        for (InstGeneratedInner node : inners) {
+            if (node.matches(name)) {
+                res = node;
+            }
+        }
+        
+        if (res != null) {
+            res.addOuter(outer);
+        } else {
+            res = new InstGeneratedInner(this, outer, nonInner);
+            inners.add(res);
+            inners.getChild(inners.getNumChild() - 1);  // Make sure res is final
+        }
+        return res.getInstComponentDecl();
+    }
+
+    syn nta List<InstGeneratedInner> InstClassDecl.getInstGeneratedInners() = new List<InstGeneratedInner>();
+
+    eq InstGeneratedInner.getChild().myEnvironment() = new Environment();
+    eq InstGeneratedInner.getChild().myEnvironment(String name) = new Environment();
+
+    public InstGeneratedInner.InstGeneratedInner(InstClassDecl parent, InstComponentDecl outer, InstComponentDecl nonInner) {
+        this(parent.createInstComponentDecl(outer.getSrcComponentDecl()), outer, nonInner);
+        addOuter(outer);
+    }
+
+    eq InstGeneratedInner.matches(String str) = getCopiedOuter().matches(str);
+
+    private Set<InstComponentDecl> InstGeneratedInner.outers = new HashSet<InstComponentDecl>();
+
+    public void InstGeneratedInner.addOuter(InstComponentDecl outer) {
+        outers.add(outer);
+    }
+
+    inh boolean InstComponentDecl.isGeneratedInner();
+    eq InstGeneratedInner.getInstComponentDecl().isGeneratedInner() = true;
+    eq BaseNode.getChild().isGeneratedInner()                       = false;
+
+}
+
+aspect InnerOuterClasses {
+
+    syn boolean InstClassDecl.inOrIsOuter() = isOuter() || inOuter();
+    syn boolean InstClassDecl.inOrIsInner() = isInner() || inInner();
+
+    syn InstClassDecl InstClassDecl.myInnerInstClassDecl() {
+        InstClassDecl res = null;
+        if (isOuter()) 
+            res = lookupInnerInstClass(name(), true);
+        else if (inOuter())
+            res = lookupInInnerInstClass(name());
+        return res;
+    }
+
+    inh InstClassDecl InstNode.lookupInnerInstClass(String name, boolean firstScope);
+
+    eq InstRoot.getChild().lookupInnerInstClass(String name, boolean firstScope)    = null;
+    eq Root.getChild().lookupInnerInstClass(String name, boolean firstScope)        = null;
+    eq InstExtends.getChild().lookupInnerInstClass(String name, boolean firstScope) = lookupInnerInstClass(name, firstScope);
+
+    eq InstNode.getChild().lookupInnerInstClass(String name, boolean firstScope) {
+        if (!firstScope) {
+            InstClassDecl icd = genericLookupInstClass(name).target();
+            if (icd != null && icd.isInner())
+                return icd;
+        }
+        return lookupInnerInstClass(name, false);
+    }
+
+    inh InstClassDecl InstNode.lookupInInnerInstClass(String name);
+    eq InstRoot.getChild().lookupInInnerInstClass(String name)          = null;
+    eq Root.getChild().lookupInInnerInstClass(String name)              = null;
+    eq InstComponentDecl.getChild().lookupInInnerInstClass(String name) = myInnerInstComponentDecl().memberInstClass(name).targetOrNull();
+    eq InstClassDecl.getChild().lookupInInnerInstClass(String name)     = myInnerInstClassDecl().memberInstClass(name).targetOrNull();
+
+}

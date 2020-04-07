@@ -1,0 +1,330 @@
+import java.io.File;
+
+import beaver.Symbol;
+
+
+aspect HtmlSourcePrettyPrint {
+
+    /**
+     * Static printer instance.
+     */
+    public static HtmlSourcePrettyPrinter ASTNode.printer_htmlSource = new HtmlSourcePrettyPrinter();
+
+	public class HtmlSourcePrettyPrinter extends PrettyPrinter {
+		
+			private int htmlLineDepth;
+			
+			private int htmlContainedLDepth;
+			
+		
+			public HtmlSourcePrettyPrinter() {
+				super();
+				htmlLineDepth = 0;
+			}
+			
+	 		public void print(ASTNode node, CodeStream str, String indent) { 
+	 			node.htmlSourcePrettyPrint(this, str, indent); 
+	 		
+	 		}
+	 		
+	 		public int incLineDepth(){ return htmlLineDepth++; }
+	 		public int incContainedLDepth(){ return htmlContainedLDepth++; }
+	 		
+	 		public int decLineDepth(){ return htmlLineDepth--; }
+	 		public int decContainedLDepth(){ return htmlContainedLDepth--; }
+	 		
+	 		public int getLineDepth(){ return htmlLineDepth; }
+	 		public int getContainedLDepth(){ return htmlContainedLDepth; }
+	}
+	
+	public void ASTNode.htmlSourcePrettyPrint(Printer p, CodeStream str, String indent) {
+		prettyPrint(p, str, indent);
+	}
+	
+	/*public int ASTNode.printfname(){
+		int n = 0;
+		if(this instanceof BaseNode){
+			if(((BaseNode)this).fName != null){
+				n = 1;
+			}
+		}
+		for(int i = 0; i < getNumChild(); i++ ){
+			n += getChild(i).printfname();
+		}
+		return n;
+	}
+	
+	public int ASTNode.printbasenodes(){
+		int n = 0;
+		if(this instanceof BaseNode){
+			n = 1;
+		}
+		for(int i = 0; i < getNumChild(); i++ ){
+			n += getChild(i).printbasenodes();
+		}
+		return n;
+	}
+	
+	public int ASTNode.printmult(){
+		int n = 0;
+		if(this instanceof BaseNode){
+			if(((BaseNode)this).fName != null && !(((BaseNode)this).fName instanceof String)){
+				n = 1;
+			}
+		}
+		for(int i = 0; i < getNumChild(); i++ ){
+			n += getChild(i).printmult();
+		}
+		return n;
+	}*/
+
+    public void ASTNode.htmlSourcePrettyPrint(CodeStream str, String indent) {
+        //System.out.println("fname: " + printfname());
+        //System.out.println("multnodes: " + printmult());
+        //System.out.println("Total basenodes: " + printbasenodes() + "\n");
+        HtmlSourcePrettyPrinter p = printer_htmlSource;
+        str.println("<html>\n<head>\n");
+        str.println(p.htmlStyle());
+        str.println(p.htmlScriptHeader());
+        str.println("</head>\n<body>\n");
+        str.println("<div class=\"font\">\n");
+        str.println("<button class=\"button\" type=\"button\" onclick=\"classIdSwitch()\">Debug</button><br>\n");
+
+        htmlSourcePrettyPrint(p, str, indent);
+        str.println("</div>\n</body>\n</html>");
+    }
+
+	public static String HtmlSourcePrettyPrinter.htmlStyle(){
+		StringBuilder sb = new StringBuilder();
+		sb.append("<style>\n");
+		sb.append("span {\n");
+		sb.append("\tdisplay:inline-block\n}\n");
+		sb.append("span.newLevel,\n");
+		sb.append("span.forceLevel {\n");
+		sb.append("\tborder-bottom:1px solid blue;\n");
+		sb.append("\tmargin-bottom:2px;\n}\n");
+		sb.append(".constantUse{\n");
+		sb.append("color:#999900;\n}\n");
+		sb.append(".parameterUse{\n");
+		sb.append("color:#990099;\n}\n");
+		sb.append(".discreteUse{\n");
+		sb.append("color:#009999;\n}\n");
+		sb.append(".continuousUse{\n");
+		sb.append("color:#009900;\n}\n");
+		
+		sb.append(".button{\n");
+		sb.append("position: fixed;\n");
+		sb.append("right: 10px;\n}\n");
+		sb.append("div.font{\n");
+		sb.append("font-family:\"Courier New\";\n}\n");
+		sb.append("</style>\n");
+		sb.append("\n");
+		return sb.toString();
+		
+	}
+	
+	public static String HtmlSourcePrettyPrinter.htmlScriptHeader(){
+		StringBuilder sb = new StringBuilder();
+		sb.append("<script>\n");
+		sb.append("var forceLevel = false;\n");
+		sb.append("function classIdSwitch(){\n");
+		sb.append("forceLevel = !forceLevel;\n");
+		sb.append("var allSpans = document.getElementsByTagName(\"span\");\n");
+		sb.append("for(i = 1; i < allSpans.length; i++){\n");
+		sb.append("\tvar clazz = allSpans[i].className;\n");
+		sb.append("\tif (clazz.match(/(^|\\s)newLevel($|\\s)/)) {\n");
+		sb.append("\t\tcontinue;\n}\n");
+		sb.append("\tif (forceLevel) {\n");
+		sb.append("\t\tclazz += \" forceLevel\";\n");
+		sb.append("\t} else {\n");
+		sb.append("\t\tclazz = clazz.replace(/(^|\\s)forceLevel($|\\s)/, '$2');\n}\n");
+		sb.append("allSpans[i].className = clazz;\n}\n}\n");
+		sb.append("</script>");
+		
+		return sb.toString();
+	}
+	
+	/**
+	 * Copied from FClass.prettyPrint and modified
+	 */
+	public void FClass.htmlSourcePrettyPrint(Printer p, CodeStream str, String indent) {
+        String nextInd = p.indent(indent);
+        str.print(indent + "<b>fclass " + name() + "</b><br>\n");
+        ArrayList<FVariable> protectedVars = new ArrayList<FVariable>();
+        for (FVariable fv : getFVariables()) {
+            if (!fv.isDerivativeVariable() && !fv.isPreVariable() &&
+                    !fv.getVisibilityType().isRuntimeOptionVisibility()) {
+                if (fv.isProtected()) {
+                  protectedVars.add(fv);
+                } else {
+                    p.print(fv, str, nextInd);
+                    str.print(";<br>\n");
+                }
+            }
+        }
+        if (!protectedVars.isEmpty()) {
+            str.print(indent + "<b>protected</b><br>\n");
+            for (FVariable fv : protectedVars) {
+                p.print(fv, str, nextInd);
+                str.print(";<br>\n");
+            }
+        }
+
+        if (getNumFInitialEquation() > 0) {
+            str.print(indent + "<b>initial equation</b><br>\n");
+        }
+        getFInitialEquations().prettyPrintWithFix(p, str, nextInd, "", "");
+
+        if (getNumParameterEquation() > 0) {
+            str.print(indent + "<b>parameter equation</b><br>\n");
+        }
+        getParameterEquations().prettyPrintWithFix(p, str, nextInd, "", "");
+    
+        boolean wroteEquation = false;
+        for (FAbstractEquation e : getFAbstractEquations()) {
+            if (e instanceof FAlgorithm) {
+                p.print(e, str, indent);
+                str.print("<br>");
+                wroteEquation = false;
+            } else {
+                if (!e.isIgnored()) {
+                    if (!wroteEquation) {
+                        str.print(indent);
+                        str.print("<b>equation</b><br>\n");
+                        wroteEquation = true;
+                    }
+                    p.print(e, str, nextInd);
+                }
+            }
+        }
+        
+        if (getNumFFunctionDecl() > 0 || getNumFRecordDecl() > 0 || 
+                getNumFEnumDecl() > 0 || getNumFDerivedType() > 0) {
+            str.print("\n" + indent + "<b>public</b><br>\n");
+            p.print(getFFunctionDecls(), str, nextInd);
+            p.print(getFRecordDecls(), str, nextInd);
+            p.print(getFEnumDecls(), str, nextInd);
+            p.print(getFDerivedTypes(), str, nextInd);
+        }
+        
+        getFAttributeList().prettyPrintFAnnotationAttributeList(str, p, indent, ";\n");
+
+        str.print(indent);
+        str.print("<br><b>end ");
+        str.print(name());
+        str.print(";</b>\n");
+    }
+	
+	syn String BaseNode.htmlSourceNodeClass() = null;
+	eq TypePrefixVariability.htmlSourceNodeClass() = "variabilityPrefix";
+	eq CommonAccessExp.htmlSourceNodeClass() = variability().htmlSourceVarUseClass();
+	
+	public String TypePrefixVariability.htmlSourceVarUseClass() { 
+	    return null;
+	}
+	public String Constant.htmlSourceVarUseClass() { return "constantUse"; }
+	public String Parameter.htmlSourceVarUseClass() { return "parameterUse"; }
+	public String Continuous.htmlSourceVarUseClass() { return "continuousUse"; }
+	public String Discrete.htmlSourceVarUseClass() { return "discreteUse"; }
+	
+	public void BaseNode.htmlSourcePrettyPrint(Printer p, CodeStream str, String indent) {
+		SourceLocation[] file = null;
+		if (fName instanceof String) {
+			file = new SourceLocation[1];
+			file[0] = new SourceLocation((String)fName, start, end);
+		} else if(fName != null) {
+			file = (SourceLocation[])fName;			
+		}
+		String nodeClass = htmlSourceNodeClass();
+
+		if ((file != null || htmlSourceNodeClass() != null) && p instanceof HtmlSourcePrettyPrinter) {// && !locationContainedBy()){
+			String dir = System.getProperty("user.dir");
+			Boolean containedByParent = locationContainedBy();
+			HtmlSourcePrettyPrinter hp = (HtmlSourcePrettyPrinter)p;
+
+			str.print("<span ");
+			str.print("class=\"");
+			if (htmlSourceNodeClass() != null) {
+				str.print(htmlSourceNodeClass());
+			}
+
+			if (file != null) {
+				if (!containedByParent) {
+					if (htmlSourceNodeClass() != null) {
+						str.print(" ");
+					}
+					str.print("newLevel");
+				}
+				str.print("\" title=\"");
+				for (int i = 0; i < file.length; i++) {
+					String fileName = cropAbsolutePath(file[i].getFile());
+					if (i > 0) {
+						str.print("&#10;");                                   // makes linebreaks to show multiple sources
+				    }
+
+					str.format("%s %d:%d %d:%d", fileName, file[i].getStartLine(), file[i].getStartColumn(),  file[i].getEndLine(), file[i].getEndColumn());
+				}
+			}
+
+			str.print("\">");
+			prettyPrint(p, str, indent);
+
+			str.print("</span>");
+		} else {
+			prettyPrint(p, str, indent);
+		}
+	}
+	
+	private static String BaseNode.cropAbsolutePath(String path){
+		String p = path;
+		String dir = System.getProperty("user.dir");
+		try {
+			if (p.substring(0, dir.lastIndexOf("\\")).equals(dir.substring(0, dir.lastIndexOf("\\")))) {
+			   	p = p.substring(dir.lastIndexOf("\\") + 1);
+			}
+		} catch (IndexOutOfBoundsException e) {}
+		return p;
+	}
+	
+	public void FAbstractEquation.htmlSourcePrettyPrint(Printer p, CodeStream str, String indent) {
+		super.htmlSourcePrettyPrint(p, str, indent);
+		str.print(";<br>\n");
+	}
+	
+	public void FFunctionDecl.htmlSourcePrettyPrint(Printer p, CodeStream str, String indent) {
+    	str.print(indent + "function " + name() + "<br>\n");
+    	getFFunctionVariables().prettyPrintWithIndent(p, str, p.indent(indent), ";<br>");
+    	p.print(getFAlgorithm(), str, indent);
+        getFAttributeList().prettyPrintFAnnotationAttributeList(str, p, indent, ";<br>\n");
+    	str.print(indent + "end " + name() + ";<br><br>\n\n");
+    }
+	
+    public void FAlgorithm.htmlSourcePrettyPrint(Printer p, CodeStream str, String indent) {
+		str.print(indent);
+		str.print("algorithm<br>\n");
+		getFStatements().prettyPrintWithIndent(p, str, p.indent(indent), ";<br>");
+	}
+    
+    public void FDerivedType.htmlSourcePrettyPrint(Printer p, CodeStream str, String indent) {
+    	if (!getBaseType().isEnum()) {
+	    	str.print(indent + "<b>type</b><i> " + getName() + "</i> = ");
+	    	str.print(getBaseType());
+	    	getFAttributeList().prettyPrintFAttributeList(str, p);
+	    	str.print(";<br>\n");
+    	}
+    }
+    
+    public void FRecordDecl.htmlSourcePrettyPrint(Printer p, CodeStream str, String indent) {
+    	str.print(indent + "<b>record</b> " + name() + "<br>\n");
+    	getFVariables().prettyPrintWithFix(p, str, p.indent(indent), "", ";<br>\n");
+    	str.print(indent + "<b>end</b> " + name() + ";<br><br>\n\n");
+    }
+	
+	
+	public String ASTNode.htmlSourcePrettyPrint(String indent) {
+		ByteArrayOutputStream os = new ByteArrayOutputStream();
+		CodeStream str = new NotNullCodeStream(os);
+		htmlSourcePrettyPrint(str, indent);
+		return os.toString();
+	}
+}

@@ -1,0 +1,6 @@
+BUILD_DIR=${SDK_HOME}/build
+JM_HOME=${SDK_HOME}/src
+LAPACK_BUILD_DIR=${BUILD_DIR}/build_lapack
+FORTRAN_FLAGS="-fPIC -O3 -ffloat-store"
+LAPACK_INSTALL_DIR=${BUILD_DIR}/lapack_install
+LAPACK_SRC_DIR=${JM_HOME}/ThirdParty/Lapack

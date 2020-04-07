@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<chapter version="5.0" xml:id="ch_intro" xmlns="http://docbook.org/ns/docbook"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns:xs="http://www.w3.org/2001/XMLSchema"
+         xmlns:xlink="http://www.w3.org/1999/xlink"
+         xmlns:xi="http://www.w3.org/2001/XInclude"
+         xmlns:svg="http://www.w3.org/2000/svg"
+         xmlns:m="http://www.w3.org/1998/Math/MathML"
+         xmlns:html="http://www.w3.org/1999/xhtml"
+         xmlns:db="http://docbook.org/ns/docbook">
+  <title>Introduction</title>
+
+  <section>
+    <title>About JModelica.org</title>
+
+    <para>JModelica.org is an extensible Modelica and FMI-based open source
+    platform for optimization, simulation and analysis of complex dynamic
+    systems. The main objective of the project is to create a viable open
+    source platform for simulation and optimization of Modelica models, while
+    offering a flexible platform serving as a virtual lab for algorithm
+    development and research. JModelica.org is intended to provide a platform
+    for technology transfer where industrially relevant problems can inspire
+    new research and where state of the art algorithms can be propagated from
+    academia into industrial use. JModelica.org is a result of research at the
+    Department of Automatic Control, Lund University,
+    <citation>Jak2007</citation> and is now maintained and developed by
+    Modelon AB in collaboration with academia.</para>
+
+    <para>JModelica.org offers the following key features:</para>
+
+    <itemizedlist>
+      <listitem>
+        <para>A Modelica compiler compliant with the Modelica language
+        specification 3.2.2 and supporting the full Modelica Standard Library
+        version 3.2.2 build 3. The compiler generates Functional Mock-up Units
+        (FMUs), including Model Exchange and Co-simulation as well as version
+        1.0 and 2.0 of the FMI standard.</para>
+      </listitem>
+
+      <listitem>
+        <para>Dynamic simulation algorithms for integration of large-scale and
+        stiff systems. Algorithms include CVode and Radau.</para>
+      </listitem>
+
+      <listitem>
+        <para>Dynamic optimization algorithms based on collocation for solving
+        optimal control and estimation problems. Dynamic optimization problems
+        are encoded in Optimica, an extension to Modelica.</para>
+      </listitem>
+
+      <listitem>
+        <para>A derivative-free model calibration algorithm to estimate model
+        parameters based on measurement data.</para>
+      </listitem>
+
+      <listitem>
+        <para>Scripting APIs in Python are available to script automation of
+        compilation, simulation and optimization of Modelica and FMI
+        models.</para>
+      </listitem>
+    </itemizedlist>
+  </section>
+
+  <section>
+    <title>Mission Statement</title>
+
+    <para>To offer a community-based, free, open source, accessible, user and
+    application-oriented Modelica environment for optimization and simulation
+    of complex dynamic systems, built on well-recognized technology and
+    supporting major platforms.</para>
+  </section>
+
+  <section xml:id="intr_sec_tech">
+    <title>Technology</title>
+
+    <para>JModelica.org relies on the modeling language <link
+    xlink:href="http://www.modelica.org">Modelica</link>. Modelica targets
+    modeling of complex heterogeneous physical systems, and is becoming a de
+    facto standard for dynamic model development and exchange. There are
+    numerous model libraries for Modelica, both free and commercial, including
+    the freely available Modelica Standard Library (MSL).</para>
+
+    <para>A unique feature of JModelica.org is the support for the language extension
+    Optimica. Optimica enables users to conveniently formulate optimization
+    problems based on Modelica models using simple but powerful constructs for
+    encoding of optimization interval, cost function and constraints.</para>
+
+    <para>The JModelica.org compilers are developed in the compiler
+    construction framework <link
+    xlink:href="http://jastadd.org">JastAdd</link>. JastAdd is based on a
+    number of different concepts, including object-orientation,
+    aspect-orientation and reference attributed grammars. Compilers developed
+    in JastAdd are specified in terms of declarative attributes and equations
+    which together forms an executable specification of the language
+    semantics. In addition, JastAdd targets extensible compiler development
+    which makes it easy to experiment with language extensions.</para>
+
+    <para>For user interaction JModelica.org relies on the <link
+    xlink:href="http://www.python.org/">Python</link> language. Python offers
+    an interactive environment suitable for scripting, development of custom
+    applications and prototype algorithm integration. The Python packages
+    Numpy and Scipy provide support for numerical computation, including
+    matrix and vector operations, basic linear algebra and plotting. The
+    JModelica.org compilers as well as the model executables and numerical
+    algorithms integrate seamlessly with Python and Numpy.</para>
+
+    <para>JModelica.org offers support for the <link
+    xlink:href="https://www.fmi-standard.org/">Functional Mock-up
+    Interface</link> (FMI) standard. FMI specifies a format for exchange of
+    compiled dynamic models and it is supported by a large number of modeling
+    and simulation tools, including established Modelica tools such as Dymola,
+    OpenModelica, and SimulationX. FMI defines a model execution interface
+    consisting of a set of C-function signatures for handling the
+    communication between the model and a simulation environment. Models are
+    presented as ODEs with time, state and step events. FMI also specifies
+    that all information related to a model, except the equations, should be
+    stored in an XML formated text-file. The format is specified in the
+    standard and specifically contains information about the variables, names,
+    identifiers, types and start attributes. A model is distributed in a
+    zip-file with the extension '.fmu', these zip-files containing the models
+    are called FMUs (Functional Mock-up Units). FMI version 1.0 and 2.0
+    specifies two types of FMUs, either Model Exchange or Co-Simulation. The
+    difference between them is that in a Co-Simulation FMU, the integrator for
+    solving the system is contained in the model while in an Model Exchange
+    FMU, an external integrator is needed to solve the system. The
+    JModelica.org compiler supports export of FMUs. FMUs can be imported
+    into Python using the Python packages included in the platform.</para>
+  </section>
+</chapter>

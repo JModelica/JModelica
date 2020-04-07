@@ -1,0 +1,50 @@
+package CatalyticCracking
+
+	model CatalyticCracking
+ 
+	 //parameter
+	  parameter Real y1_0=1;
+	  parameter Real y2_0=0;
+	  parameter Real theta1 (start=1);
+	  parameter Real theta2 (start=1);
+	  parameter Real theta3 (start=1);
+
+	  //states
+	  Real y1(start=y1_0);
+	  Real y2(start=y2_0);
+	equation
+	  der(y1) = -(theta1+theta3)*y1^2;
+	  der(y2) = theta1*y1^2-theta2*y2;
+
+	end CatalyticCracking;
+
+	optimization CatalyticCracking_opt (objective = sum(((sys.y1(t[i]) - y1m[i])^2 + (sys.y2(t[i]) - y2m[i])^2) 
+					   for i in 1:21),
+                       startTime = 0,
+                       finalTime = 1)
+
+	  // Create second order system instance
+	  // Set parameters w and z free and give initial guesses
+	  CatalyticCracking sys(theta1(free=true,initialGuess=1),
+							  theta2(free=true,initialGuess=1),
+							  theta3(free=true,initialGuess=1),
+							  y1(fixed=true),
+							  y2(fixed=true));
+	  
+	  
+	  // Measurement data time points and output values
+	  parameter Real y1m[21] = {1, 0.8105, 0.6208, 0.5258, 0.4345, 0.3903,
+					0.3342, 0.3034, 0.2735, 0.2405, 0.2283, 0.2071, 0.1669,
+					0.1530, 0.1339, 0.1265, 0.1200, 0.0990, 0.0870, 0.077, 0.069};
+	  parameter Real y2m[21] = {0, 0.2, 0.2886, 0.301, 0.3215, 0.3123, 0.2716,
+					0.2551, 0.2258, 0.1959, 0.1789, 0.1457, 0.1198, 0.0909,
+					0.0719, 0.0561, 0.0460, 0.0280, 0.0190, 0.0140, 0.01};
+	  parameter Real t[21] = {0, 0.025, 0.05, 0.075, 0.1, 0.125, 
+					0.15, 0.175, 0.2, 0.225, 0.25, 0.3, 0.35, 0.4,
+					0.45, 0.5, 0.55, 0.65, 0.75, 0.85, 0.95};
+		
+	equation
+
+	end CatalyticCracking_opt;
+	
+end CatalyticCracking;

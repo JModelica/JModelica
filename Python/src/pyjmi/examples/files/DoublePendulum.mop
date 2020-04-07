@@ -1,0 +1,48 @@
+within DoublePendulum;
+
+optimization Opt(finalTime=3.0, objectiveIntegrand=
+    (pendulum.revolute1.phi-pi/2)^2 + 5*pendulum.revolute2.phi^2 +
+     0.1*pendulum.revolute1.w^2 + 0.1*pendulum.revolute2.w^2 + (u/500)^2)
+    DoublePendulum.DoublePendulum pendulum(revolute1.phi(start=phi1_start), revolute1.w(start=w1_start),
+                                           revolute2.phi(start=phi2_start), revolute2.w(start=w2_start));
+    constant Real pi = Modelica.Constants.pi;
+    parameter Real phi1_start = -pi/4;
+    parameter Real w1_start = -pi/4;
+    parameter Real phi2_start = -pi/4;
+    parameter Real w2_start = -pi/4;
+	input Real u(min=-500, max=500);
+equation
+    pendulum.u = u;
+end Opt;
+
+model OptModel
+    DoublePendulum.DoublePendulum pendulum(revolute1.phi(start=phi1_start), revolute1.w(start=w1_start),
+                                           revolute2.phi(start=phi2_start), revolute2.w(start=w2_start));
+    constant Real pi = Modelica.Constants.pi;
+    parameter Real phi1_start = -pi/4;
+    parameter Real w1_start = -pi/4;
+    parameter Real phi2_start = -pi/4;
+    parameter Real w2_start = -pi/4;
+	input Real u(min=-500, max=500);
+equation
+    pendulum.u = u;
+end OptModel;
+
+optimization OptMinTime(finalTime(free=true, min=0.1), objective=finalTime)
+    DoublePendulum.DoublePendulum pendulum(revolute1.phi(start=phi1_start), revolute1.w(start=w1_start),
+                                           revolute2.phi(start=phi2_start), revolute2.w(start=w2_start));
+    constant Real pi = Modelica.Constants.pi;
+    parameter Real phi1_start = -pi/4;
+    parameter Real w1_start = -pi/4;
+    parameter Real phi2_start = -pi/4;
+    parameter Real w2_start = -pi/4;
+	input Real u(min=-500, max=500);
+equation
+    pendulum.u = u;
+constraint
+    pendulum.revolute1.phi(finalTime) = pi/2;
+    pendulum.revolute1.w(finalTime) = 0;
+    pendulum.revolute2.phi(finalTime) = 0;
+    pendulum.revolute2.w(finalTime) = 0;
+end OptMinTime;
+

@@ -1,0 +1,949 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+
+import org.jmodelica.util.Criteria;
+import org.jmodelica.util.collections.FilteredIterator;
+
+
+aspect InstFunctionBinding {
+
+	/**
+	 * Return an InstMultipleBoundArgument containing both <code>this</code> and <code>arg</code>.
+	 * 
+	 * If <code>this</code> is an InstMultipleBoundArgument, <code>arg</code> is simply added to it.
+	 */
+	protected InstMultipleBoundArgument InstFunctionArgument.addMultipleBoundArgument(InstFunctionArgument arg) {
+		return new InstMultipleBoundArgument(new List().add(this).add(arg));
+	}
+	
+	protected InstMultipleBoundArgument InstMultipleBoundArgument.addMultipleBoundArgument(InstFunctionArgument arg) {
+		addArg(arg);
+		return this;
+	}
+	
+	/**
+	 * Return the position of the input the argument corresponds to.
+	 */
+    syn int InstFunctionArgument.findArgumentPosition(ArrayList<InstComponentDecl> inputs) = -1;
+    eq InstPositionalArgument.findArgumentPosition(ArrayList<InstComponentDecl> inputs)    = getPos();
+    eq InstNamedArgument.findArgumentPosition(ArrayList<InstComponentDecl> inputs) {
+		int i = 0;
+		for (InstComponentDecl in : inputs) {
+			if (getName().name().equals(in.name()))
+				return i;
+			i++;
+		}
+		return -1;
+	}
+
+    /**
+     * Check if the argument was explicitly given in the call.
+     */
+    syn boolean InstFunctionArgument.isGiven() = false;
+    eq InstGivenArgument.isGiven()      = true;
+
+	/**
+	 * The input component this argument is bound to.
+	 */
+	protected InstComponentDecl InstFunctionArgument.boundInput = null;
+	
+	/**
+	 * Set the input component this argument is bound to.
+	 */
+	public void InstFunctionArgument.setBoundInput(InstComponentDecl input) {
+		boundInput = input;
+	}
+	
+	public void InstMultipleBoundArgument.setBoundInput(InstComponentDecl input) {
+		boundInput = input;
+		for (InstFunctionArgument arg : getArgs())
+			arg.setBoundInput(input);
+	}
+
+    /**
+     * Get the input component this argument is bound to.
+     */
+    syn InstComponentDecl InstFunctionArgument.getBoundInput() = 
+        isInstRecordConstructorArg() ? myRecordConstructorVirtualInstComponentDecl() : 
+            boundInput == null ? unknownInstComponentDecl() : boundInput;
+
+    /**
+     * Is this an argument to a record constructor in the instance tree?
+     */
+    inh boolean InstFunctionArgument.isInstRecordConstructorArg();
+    eq InstRecordConstructor.getArg().isInstRecordConstructorArg()     = true;
+    eq InstMultipleBoundArgument.getArg().isInstRecordConstructorArg() = isInstRecordConstructorArg();
+    eq BaseNode.getChild().isInstRecordConstructorArg()                = false;
+
+    /**
+     * Get the virtual component instance that is connected to this argument.
+     * 
+     * Only valid for arguments to record constructors in the instance tree.
+     */
+    syn InstComponentDecl InstFunctionArgument.myRecordConstructorVirtualInstComponentDecl() = 
+        lookupRecordConstructorVirtualInstComponentDecl(boundInput.name());
+
+    /**
+     * Lookup the virtual component instance that should be connected to an argument of a given name.
+     * 
+     * Only valid for arguments to record constructors in the instance tree.
+     */
+    inh InstComponentDecl InstFunctionArgument.lookupRecordConstructorVirtualInstComponentDecl(String name);
+    eq BaseNode.getChild().lookupRecordConstructorVirtualInstComponentDecl(String name) = null;
+    eq InstRecordConstructor.getArg(int i).lookupRecordConstructorVirtualInstComponentDecl(String name) {
+        return localLookupInstComponent(name).targetOrNull();
+    }
+
+    /**
+     * Get the expression to use for this argument.
+     */
+    syn lazy FExp InstDefaultArgument.getFExp() {
+        FExp exp = getOriginalFExp();
+        FAbstractFunctionCall call = myCall();
+        FExp.FunctionContextReplacer crp = new FExp.FunctionContextReplacer(call.inputArgMap());
+        return exp.copyReplaceAccess(crp);
+    }
+
+    inh FAbstractFunctionCall InstFunctionArgument.myCall();
+    eq FAbstractFunctionCall.getChild().myCall() = this;
+
+    syn Map<InstComponentDecl, InstFunctionArgument> FAbstractFunctionCall.inputArgMap() =
+            Collections.<InstComponentDecl, InstFunctionArgument>emptyMap();
+    eq InstFunctionCall.inputArgMap() {
+        Map<InstComponentDecl,InstFunctionArgument> res = new HashMap<InstComponentDecl, InstFunctionArgument>();
+        int i = 0;
+        for (InstComponentDecl icd : myInstClassDecl().allInstComponentDecls()) {
+            res.put(icd, i < getNumArg() && icd.isInput() ? getArg(i++) : null);
+        }
+        return res;
+    }
+    eq InstRecordConstructor.inputArgMap() {
+        Map<InstComponentDecl,InstFunctionArgument> res = new HashMap<InstComponentDecl, InstFunctionArgument>();
+        int i = 0;
+        for (InstComponentDecl icd : myInstClassDecl().allInstComponentDecls()) {
+            res.put(icd, getArg(i++));
+        }
+        return res;
+    }
+
+	/**
+	 * Argument nodes representing arguments that are missing or given multiple times do 
+	 * not get a location set when they are created. Set the location for those nodes, do nothing 
+	 * for other nodes.
+	 */
+	public void InstFunctionArgument.setErrorArgLocation(ASTNode node) {}
+    public void InstBadArgument.setErrorArgLocation(ASTNode node) { setLocation(node); }
+	
+	/**
+	 * Returns <code>false</code> if this argument node represents an error, 
+	 * e.g. a missing argument.
+	 */
+	syn boolean InstFunctionArgument.isOKArg() = true;
+    eq InstBadArgument.isOKArg()               = false;
+
+    /**
+     * List of arguments that could not be bound to inputs.
+     */
+    private java.util.List<InstFunctionArgument> InstFunctionCall.unbindableArgs     = Collections.emptyList();
+    private java.util.List<InstFunctionArgument> FInfArgsFunctionCall.unbindableArgs = Collections.emptyList();
+
+	public void FAbstractFunctionCall.setUnbindableArgsList(ArrayList<InstFunctionArgument> list) {
+		throw new UnsupportedOperationException();
+	}
+	public void FInfArgsFunctionCall.setUnbindableArgsList(ArrayList<InstFunctionArgument> list) {
+		unbindableArgs = list;
+	}
+	public void FUnsupportedBuiltIn.setUnbindableArgsList(ArrayList<InstFunctionArgument> list) {
+	}
+
+    /**
+     * Called for inputs that no argument was bound to. Creates an InstDefaultArgument 
+     * if the input has a default value and an InstBadArgument otherwise.
+     */
+    public InstFunctionArgument InstComponentDecl.createInstDefaultArgument() {
+        InstFunctionArgument arg = buildInstDefaultArgument();
+        arg.setBoundInput(this);
+        return arg;
+    }
+
+    public InstFunctionArgument InstComponentDecl.buildInstDefaultArgument() {
+        return new InstUnknownArgument();
+    }
+
+    public InstFunctionArgument InstAssignable.buildInstDefaultArgument() {
+        if (hasBindingFExp()) {
+            return new InstDefaultArgument(myBindingInstExp());
+        } else if (!isModifiable() && surroundingInstClass().isRecord()) {
+            return new InstPositionalArgument(cevalNoBExp(ASTNode.defaultVariableEvaluator(), Index.NULL).buildLiteral(), -1);
+        } else {
+            return new InstMissingArgument();
+        }
+    }
+
+	/**
+	 * Add a new argument to list of arguments. (Only valid for some subclasses.)
+	 * 
+	 * Default implementation does nothing.
+	 */
+	public void FAbstractFunctionCall.addArgument(InstFunctionArgument arg) {}
+	
+	/**
+	 * Add a new argument to list of arguments.
+	 * 
+	 * This implementation adds the argument as a child.
+	 */
+	public void InstFunctionCall.addArgument(InstFunctionArgument arg) {
+		addArg(arg);
+	}
+	
+	/**
+	 * Add a new argument to list of arguments.
+	 * 
+	 * This implementation adds the argument to the original arguments 
+	 * and the expression from the argument as a child.
+	 */
+	public void InstRecordConstructor.addArgument(InstFunctionArgument arg) {
+		addArg(arg);
+	}
+
+    public class InstFunctionCall {
+
+        private static BuiltInTranslator builtInTranslator = new BuiltInTranslator();
+        
+        /**
+         * Helper class for rewrite InstFunctionCall -> FAbstractFunctionCall. 
+         * 
+         * Creates an instance of the specific subclass of FBuiltInFunctionCall matching 
+         * the name of the function, if one matches. 
+         */
+        private static class BuiltInTranslator {
+
+            private HashMap<String, BuiltInCreator> map;
+            private static final String MATH_PREF = "Modelica.Math.";
+            private static final int MATH_LEN = MATH_PREF.length();
+
+            /* Built-In-Type*/
+            public enum BIT {
+                NONE, MATH
+            }
+
+            public FBuiltInFunctionCall create(String name, InstFunctionArgument[] args) {
+                boolean math = name.startsWith(MATH_PREF);
+                if (math) 
+                    name = name.substring(MATH_LEN);
+                BuiltInCreator creator = map.get(name);
+                if (creator == null || (math && !creator.match(BIT.MATH)))
+                    return null;
+                FBuiltInFunctionCall res = creator.create(args);
+                if (res != null)
+                    for (InstFunctionArgument arg : args)
+                        res.addOriginalArg(arg);
+                return res;
+            }
+
+            public boolean isInfArgs(String name) {
+                BuiltInCreator creator = map.get(name);
+                return creator != null && creator.isInfArgs();
+            }
+
+
+            public BuiltInTranslator() {
+                map = new HashMap<String, BuiltInCreator>();
+                //       name                                 math       node                # args
+                map.put("abs",             new BuiltInCreator(BIT.NONE, new FAbsExp(),          1));
+                map.put("sign",            new BuiltInCreator(BIT.NONE, new FSignExp(),         1));
+                map.put("sqrt",            new BuiltInCreator(BIT.NONE, new FSqrtExp(),         1));
+                map.put("Integer",         new BuiltInCreator(BIT.NONE, new FEnumIntegerExp(),  1));
+                map.put("div",             new BuiltInCreator(BIT.NONE, new FDivFuncExp(),      2));
+                map.put("mod",             new BuiltInCreator(BIT.NONE, new FModFuncExp(),      2));
+                map.put("rem",             new BuiltInCreator(BIT.NONE, new FRemFuncExp(),      2));
+                map.put("ceil",            new BuiltInCreator(BIT.NONE, new FCeilFuncExp(),     1));
+                map.put("floor",           new BuiltInCreator(BIT.NONE, new FFloorFuncExp(),    1));
+                map.put("integer",         new BuiltInCreator(BIT.NONE, new FIntegerFuncExp(),  1));
+                map.put("sin",             new BuiltInCreator(BIT.MATH, new FSinExp(),          1));
+                map.put("cos",             new BuiltInCreator(BIT.MATH, new FCosExp(),          1));
+                map.put("tan",             new BuiltInCreator(BIT.MATH, new FTanExp(),          1));
+                map.put("asin",            new BuiltInCreator(BIT.MATH, new FAsinExp(),         1));
+                map.put("acos",            new BuiltInCreator(BIT.MATH, new FAcosExp(),         1));
+                map.put("atan",            new BuiltInCreator(BIT.MATH, new FAtanExp(),         1));
+                map.put("atan2",           new BuiltInCreator(BIT.MATH, new FAtan2Exp(),        2));
+                map.put("sinh",            new BuiltInCreator(BIT.MATH, new FSinhExp(),         1));
+                map.put("cosh",            new BuiltInCreator(BIT.MATH, new FCoshExp(),         1));
+                map.put("tanh",            new BuiltInCreator(BIT.MATH, new FTanhExp(),         1));
+                map.put("exp",             new BuiltInCreator(BIT.MATH, new FExpExp(),          1));
+                map.put("log",             new BuiltInCreator(BIT.MATH, new FLogExp(),          1));
+                map.put("log10",           new BuiltInCreator(BIT.MATH, new FLog10Exp(),        1));
+                map.put("noEvent",         new BuiltInCreator(BIT.NONE, new FNoEventExp(),      1));
+                map.put("smooth",          new BuiltInCreator(BIT.NONE, new FSmoothExp(),       2));
+                map.put("pre",             new BuiltInCreator(BIT.NONE, new InstPreExp(),       1));
+                map.put("edge",            new BuiltInCreator(BIT.NONE, new FEdgeExp(),         1));
+                map.put("change",          new BuiltInCreator(BIT.NONE, new FChangeExp(),       1));
+                map.put("sample",          new BuiltInCreator(BIT.NONE, new FSampleExp(),       2));
+                map.put("initial",         new BuiltInCreator(BIT.NONE, new FInitialExp(),      0));
+                map.put("terminal",        new BuiltInCreator(BIT.NONE, new FTerminalExp(),     0));
+                map.put("terminate",       new BuiltInCreator(BIT.NONE, new FTerminate(),       1));
+                map.put("reinit",          new BuiltInCreator(BIT.NONE, new FReinit(),          2));
+                map.put("identity",        new BuiltInCreator(BIT.NONE, new FIdentity(),        1));
+                map.put("diagonal",        new BuiltInCreator(BIT.NONE, new FDiagonal(),        1));
+                map.put("scalar",          new BuiltInCreator(BIT.NONE, new FScalarExp(),       1));
+                map.put("vector",          new BuiltInCreator(BIT.NONE, new FVectorExp(),       1));
+                map.put("matrix",          new BuiltInCreator(BIT.NONE, new FMatrixExp(),       1));
+                map.put("transpose",       new BuiltInCreator(BIT.NONE, new FTranspose(),       1));
+                map.put("symmetric",       new BuiltInCreator(BIT.NONE, new FSymmetric(),       1));
+                map.put("cross",           new BuiltInCreator(BIT.NONE, new FCross(),           2));
+                map.put("skew",            new BuiltInCreator(BIT.NONE, new FSkew(),            1));
+                map.put("outerProduct",    new BuiltInCreator(BIT.NONE, new FOuterProduct(),    2));
+                map.put("sum",             new BuiltInCreator(BIT.NONE, new FSumExp(),          1));
+                map.put("product",         new BuiltInCreator(BIT.NONE, new FProductExp(),      1));
+                map.put("ndims",           new BuiltInCreator(BIT.NONE, new FNdimsExp(),        1));
+                map.put("linspace",        new BuiltInCreator(BIT.NONE, new FLinspace(),        3));
+                map.put("homotopy",        new BuiltInCreator(BIT.NONE, new FHomotopyExp(),     2));
+                map.put("semiLinear",      new BuiltInCreator(BIT.NONE, new FSemiLinearExp(),   3));
+                map.put("inStream",        new BuiltInCreator(BIT.NONE, new FInStream(),        1));
+                map.put("actualStream",    new BuiltInCreator(BIT.NONE, new FActualStream(),    1));
+                map.put("cardinality",     new BuiltInCreator(BIT.NONE, new FCardinality(),     1));
+                map.put("getInstanceName", new BuiltInCreator(BIT.NONE, new FGetInstanceName(), 0));
+                map.put("Subtask.decouple", 
+                        new BuiltInCreator(BIT.NONE, new FDecouple(),     1));
+                map.put("Modelica.Utilities.Files.loadResource", 
+                        new BuiltInCreator(BIT.NONE, new FLoadResource(), 1));
+                map.put("ModelicaServices.ExternalReferences.loadResource", 
+                        new BuiltInCreator(BIT.NONE, new FLoadResource(), 1));
+                //       name                                            node           # fixed args
+                map.put("array",           new InfArgsBuiltInCreator(new FParseArray(), 0));
+                map.put("ones",            new InfArgsBuiltInCreator(new FOnes(),       0));
+                map.put("zeros",           new InfArgsBuiltInCreator(new FZeros(),      0));
+                map.put("fill",            new InfArgsBuiltInCreator(new FFillExp(),    1));
+                map.put("cat",             new InfArgsBuiltInCreator(new FCatExp(),     1));
+                //       name                                            node          min/max # args
+                map.put("size",            new VarArgsBuiltInCreator(new FSizeExp(),   1, 2));
+                map.put("String",          new VarArgsBuiltInCreator(new FStringExp(), 1, 5));
+                map.put("min",             new VarArgsBuiltInCreator(new FMinExp(),    1, 2));
+                map.put("max",             new VarArgsBuiltInCreator(new FMaxExp(),    1, 2));
+                map.put("assert",          new VarArgsBuiltInCreator(new FAssert(),    2, 3));
+                map.put("delay",           new VarArgsBuiltInCreator(new FDelayExp(),  2, 3));
+                map.put("spatialDistribution", new VarArgsBuiltInCreator(new FSpatialDistExp(), 4, 6, true));
+                //       name                                    math       node              # args
+                map.put("Connections.branch", new BuiltInCreator(BIT.NONE, new FConnBranch(),    2));
+                map.put("Connections.root",   new BuiltInCreator(BIT.NONE, new FConnRoot(),      1));
+                map.put("Connections.isRoot", new BuiltInCreator(BIT.NONE, new FConnIsRoot(),    1));
+                map.put("Connections.rooted", new BuiltInCreator(BIT.NONE, new FConnRooted(),    1));
+                map.put("rooted",             new BuiltInCreator(BIT.NONE, new FConnRootedDep(), 1));
+                //       name                                                      node                  min/max # args
+                map.put("Connections.potentialRoot", new VarArgsBuiltInCreator(new FConnPotentialRoot(), 1, 2));
+                
+                String[] unsupported = new String[] { 
+                        // Ticket 664: Support all function-like operators
+                    };
+                for (String name : unsupported)
+                    if (!map.containsKey(name))
+                        map.put(name, new UnsupportedBuiltInCreator(name));
+                
+                // Not used anymore, but left for possible future needs
+                String[] ignored = new String[] {};
+                for (String name : ignored)
+                    if (!map.containsKey(name))
+                        map.put(name, new IgnoredBuiltInCreator(name));
+            }
+
+			private static class BuiltInCreator {
+				
+                protected BIT type;
+				protected FBuiltInFunctionCall template;
+				protected int numArgs;
+				
+                public BuiltInCreator(BIT t, FBuiltInFunctionCall tmpl, int nArgs) { 
+                    type = t;
+					template = tmpl;
+					numArgs = nArgs;
+				}
+				
+				public FBuiltInFunctionCall create(InstFunctionArgument[] args) {
+					if (args.length < numArgs)
+						return null;
+					FBuiltInFunctionCall res = template.createEmptyNode();
+					setArguments(res, args);
+					return res;
+				}
+				
+				protected void setArguments(FBuiltInFunctionCall res, InstFunctionArgument[] args) {
+                    int o = res.argsOffset();
+                    for (int i = 0; i < numArgs; i++) {
+                        res.setChild(extractFExp(args[i]), i + o);
+                    }
+				}
+				
+				public boolean isInfArgs() {
+					return false;
+				}
+				
+				protected static FExp extractFExp(InstFunctionArgument arg) {
+                    return arg.getOriginalFExp().fullCopy();
+				}
+				
+                public boolean match(BIT t) {
+                    return type == t;
+                }
+				
+			}
+			
+			private static class InfArgsBuiltInCreator extends BuiltInCreator {
+				
+				public InfArgsBuiltInCreator(FBuiltInFunctionCall tmpl, int nFixed) {
+				    super(BIT.NONE, tmpl, nFixed);
+				}
+				
+				protected void setArguments(FBuiltInFunctionCall res, InstFunctionArgument[] args) {
+					List<FExp> exps = new List<FExp>();
+					for (int i = numArgs; i < args.length; i++)
+						exps.add(extractFExp(args[i]));
+                    res.setChild(exps, 1);
+                    int o = res.argsOffset();
+                    for (int i = 0; i < numArgs; i++) {
+                        res.setChild(extractFExp(args[i]), i + o);
+                    }
+				}
+				
+				public boolean isInfArgs() {
+					return true;
+				}
+				
+			}
+			
+			private static class VarArgsBuiltInCreator extends BuiltInCreator {
+                private int maxArgs;
+                public boolean generateMissing = false;
+                
+                public VarArgsBuiltInCreator(FBuiltInFunctionCall tmpl, int minArgs, int maxArgs) {
+                    this(tmpl, minArgs, maxArgs, false);
+                }
+                
+                public VarArgsBuiltInCreator(FBuiltInFunctionCall tmpl, int minArgs, int maxArgs, boolean generateMissing) {
+                    super(BIT.NONE, tmpl, minArgs);
+                    this.maxArgs = maxArgs;
+                    this.generateMissing = generateMissing;
+                }
+                
+                protected void setArguments(FBuiltInFunctionCall res, InstFunctionArgument[] args) {
+                    super.setArguments(res, args);
+                    int o = res.argsOffset();
+                    for (int i = numArgs; i < maxArgs; i++) {
+                        if (generateMissing) {
+                            res.setChild(extractFExp(args[i]), i + o);
+                        } else {
+                            res.setChild(args[i].isGiven() ? new Opt(extractFExp(args[i])) : new Opt(), i + o);
+                        }
+                    }
+                }
+			}
+			
+			private static class UnsupportedBuiltInCreator extends InfArgsBuiltInCreator {
+				
+				private static final FUnsupportedBuiltIn tmpl = new FUnsupportedBuiltIn();
+				
+				private String name;
+				
+				public UnsupportedBuiltInCreator(String name) {
+					this(name, tmpl);
+				}
+				
+				protected UnsupportedBuiltInCreator(String name, FUnsupportedBuiltIn tmpl2) {
+					super(tmpl2, 0);
+					this.name = name;
+				}
+				
+				protected void setArguments(FBuiltInFunctionCall res, InstFunctionArgument[] args) {
+					((FUnsupportedBuiltIn) res).setName(name);
+				}
+				
+			}
+			
+			private static class IgnoredBuiltInCreator extends UnsupportedBuiltInCreator {
+				
+				private static final FIgnoredBuiltIn tmpl = new FIgnoredBuiltIn();
+				
+				public IgnoredBuiltInCreator(String name) {
+					super(name, tmpl);
+				}
+				
+			}
+			
+		}
+		
+	}
+    
+    syn int FExp.argsOffset()            = 0;
+    eq FBuiltInFunctionCall.argsOffset() = super.argsOffset() + 1;
+    eq FInfArgsFunctionCall.argsOffset() = super.argsOffset() + 1;
+    
+	/**
+	 * Change access to point to <code>this</code> class instead of <code>orig</code>.
+	 * 
+	 * Creates new access if necessary.
+	 */
+    public InstAccess InstClassDecl.retargetFrom(InstClassDecl orig, InstAccess access) {
+        if (this == orig)
+            return access;
+        InstAccess part = new InstClassAccess(name());
+        InstClassDecl parent = surroundingInstClass();
+        if (parent == null)
+            return part;
+        access = parent.retargetFrom(orig, access);
+        InstDot dot = (access instanceof InstDot) ? (InstDot) access : new InstDot(new List(access));
+        dot.addInstAccess(part);
+        return dot;
+    }
+
+    public class ArgumentBinding {
+
+        private InstFunctionArgument[] bound;
+        private ArrayList<InstFunctionArgument> unbindable;
+        private ArrayList<InstComponentDecl> modifiableInputs;
+        private ArrayList<InstComponentDecl> allInputs;
+        private InstCallable target;
+        private InstFunctionCall source;
+        private boolean ok = true;
+
+        public ArgumentBinding(InstCallable target, InstFunctionCall source, boolean infArgs) {
+            modifiableInputs = source.myInputsToBind(target);
+            allInputs = modifiableInputs;
+            if (target.isRecord()) {
+                allInputs = new ArrayList<InstComponentDecl>();
+                for (InstComponentDecl icd : target.asInstClassDecl().allInstComponentDecls()) {
+                    allInputs.add(icd);
+                }
+            }
+            unbindable = new ArrayList<InstFunctionArgument>();
+            this.target = target;
+            this.source = source;
+            if (infArgs) 
+                bindInfArgs();
+            else 
+                bindNormal();
+        }
+
+        /**
+         * Is this binding a match?
+         */
+        public boolean isOK() {
+            return ok;
+        }
+
+        /**
+         * Get the target function.
+         */
+        public InstCallable target() {
+            return target;
+        }
+
+        /**
+         * Get the bound arguments.
+         */
+        public InstFunctionArgument[] bound() {
+            return bound;
+        }
+
+        /**
+         * Get the list of arguments that could not be bound to any input.
+         */
+        public ArrayList<InstFunctionArgument> unbindable() {
+            return unbindable;
+        }
+
+        /**
+         * A heuristic score for how well the arguments match the function, including 
+         * type. Lower is better, 0 is a perfect match.
+         */
+        public int typeMatchScore() {
+            int score = unbindable.size() * 2000;
+            int i = 0;
+            for (InstFunctionArgument arg : bound) {
+                if (arg.isOKArg()) {
+                    FType argType = arg.getOriginalFExp().type();
+                    FType inType = modifiableInputs.get(i).type();
+                    if (!inType.dimensionCompatible(argType, true))
+                        score++;
+                    if (!inType.scalarType().typeCompatible(argType.scalarType(), true))
+                        score++;
+                } else {
+                    score += 1000;
+                }
+                i++;
+            }
+            return score;
+        }
+
+        /**
+         * Update the bound inputs of all arguments. Needed when several ArgumentBinding objects 
+         * have been created for the same function call (used for overloaded constructors).
+         */
+        public void updateBoundInputs() {
+            for (int i = 0; i < modifiableInputs.size(); i++) {
+                bound[i].setBoundInput(modifiableInputs.get(i));
+                if (!bound[i].isOKArg())
+                    bound[i].setErrorArgLocation(source);
+            }
+        }
+        
+        private int[] argPositions(ArrayList<InstComponentDecl> icds1, ArrayList<InstComponentDecl> icds2) {
+            int[] pos = new int[icds1.size()];
+            int j = 0;
+            for (int i = 0; i < pos.length; i++) {
+                while (icds2.size() > j && icds1.get(i) != icds2.get(j)) {
+                    j++;
+                }
+                pos[i] = j;
+            }
+            return pos;
+        }
+        
+        private void bindNormal() {
+            // Bind arguments
+            bound = new InstFunctionArgument[allInputs.size()];
+            int[] ap = argPositions(modifiableInputs, allInputs);
+            for (InstFunctionArgument arg : source.getArgs()) {
+                int pos = arg.findArgumentPosition(modifiableInputs);
+                if (!bindArgument(arg, pos, bound, ap)) {
+                    unbindable.add(arg);
+                }
+            }
+            
+            // Add default argument and check for problems.
+            for (int i = 0; i < bound.length; i++) {
+                if (bound[i] == null) {
+                    bound[i] = allInputs.get(i).createInstDefaultArgument();
+                }
+                bound[i].setErrorArgLocation(source);
+                ok = ok && bound[i].isOKArg();
+            }
+            ok = ok && unbindable.isEmpty();
+        }
+        
+        public boolean bindArgument(InstFunctionArgument arg, int p1, InstFunctionArgument[] arr, int[] ap) {
+            if (p1 < 0 || p1 >= modifiableInputs.size()) {
+                return false;
+            }
+            
+            int p2 = ap[p1];
+            
+            if (p2 < 0 || p2 >= arr.length) {
+                return false;
+            }
+            
+            if (arr[p2] == null) {
+                arr[p2] = (InstFunctionArgument) arg.fullCopy();
+            } else {
+                arr[p2] = arr[p2].addMultipleBoundArgument(arg);
+            }
+            
+            arr[p2].setBoundInput(modifiableInputs.get(p1));
+            arr[p2].parent = arg.parent; // Temporarily add to tree
+            return true;
+        }
+
+
+        private void bindInfArgs() {
+            // Just collect all positional arguments
+            ArrayList<InstFunctionArgument> args = new ArrayList<InstFunctionArgument>();
+            for (InstFunctionArgument arg : source.getArgs()) {
+                if (arg instanceof InstPositionalArgument)
+                    args.add(arg);
+                else
+                    unbindable.add(arg);
+            }
+
+            // Make sure we have any fixed arguments
+            for (int i = args.size(); i < modifiableInputs.size(); i++) {
+                InstMissingArgument arg = new InstMissingArgument();
+                args.add(arg);
+                ok = false;
+            }
+            bound = args.toArray(new InstFunctionArgument[args.size()]);
+            updateBoundInputs();
+        }
+
+    }
+
+    /**
+     * Select the function in the given operator for the given type that best fits this call, and 
+     * create an argument binding for it.
+     * 
+     * Returns null if the type does not have any functions for that operator.
+     */
+    public ArgumentBinding InstFunctionCall.matchOverloadedFunctionCall(FType type, String operator) {
+        ArgumentBinding binding = null;
+        InstClassDecl op = type.getOperators().get(operator);
+        if (op != null) {
+            int score = Integer.MAX_VALUE;
+            for (InstClassDecl func : op.operatorFunctions()) {
+                ArgumentBinding binding2 = new ArgumentBinding(func, this, false);
+                int score2 = binding2.typeMatchScore();
+                if (score2 < score) {
+                    score = score2;
+                    binding = binding2;
+                }
+            }
+            if (binding != null)
+                binding.updateBoundInputs();
+        }
+        return binding;
+    }
+
+    /**
+     * Bind arguments to inputs and replace InstFunctionCall with specialized nodes 
+     * for built-in functions.
+     * 
+     * If arguments could not be bound to inputs properly (to few args, to many args, bad 
+     * named args, etc), then the node remains an InstFunctionCall.
+     * 
+     * Any arguments that could not be bound to an input are gathered in unbindableArgs.
+     * 
+     * If function call was rewritten to a FBuiltinFunctionCall, then the InstFunctionArgument 
+     * nodes describing them are gathered in originalArgs.
+     */
+    rewrite InstFunctionCall {
+        when (!bound) to FAbstractFunctionCall {
+            // Make sure we only do this once.
+            bound = true;
+
+            // Get info
+            boolean generated = this.generated;
+            InstCallable target = getName().myInstCallable();
+            InstCallable namedTarget = target;
+            String name = target.qualifiedName();
+            ArgumentBinding binding = null;
+
+            // Handle special cases
+            if (target.isPrimitive()) {
+                // Check if this is an overloaded version of String()
+                // TODO: Error if several perfect matches
+                // TODO: Make toString() match original decl
+                if (target.name().equals("String") && getNumArg() > 0) 
+                    binding = matchOverloadedFunctionCall(getArg(0).getFExp().type(), FExp.OP_STR);
+                if (binding != null) {
+                    target = binding.target();
+                    name = target.qualifiedName();
+                    generated = true;
+                } else {
+                    // If not, look for conversion operator with same name as primitive class (if one exists)
+                    InstLookupResult<InstClassDecl> icd = getName().lookupInstClass("!" + target.name());
+                    if (icd.successful())
+                        target = icd.target();
+                }
+            } else if (target.isExternalObject()) {
+                // Use the external object constructor
+                InstClassDecl icd = target.asInstClassDecl().myConstructor();
+                if (icd.isFunction())
+                    target = icd;
+                generated = true;
+            } else if (target.isOperatorRecord()) {
+                // If the operator record defines constructors, find the one that matches the best
+                // TODO: Error if several perfect matches
+                // TODO: Make toString() match original decl
+                // TODO: handle vectorized constructors
+                binding = matchOverloadedFunctionCall(target.asInstClassDecl().recordType(), FExp.OP_CON);
+                if (binding != null) {
+                    target = binding.target();
+                    generated = true;
+                }
+            }
+
+            /* If we can't resolve the name as a function or record, don't try to bind arguments, 
+             * just leave it for the error check. */
+            if (!target.isCallable())
+                return this;
+
+            // Bind arguments
+            boolean infArgs = builtInTranslator.isInfArgs(name);
+            if (binding == null)
+                binding = new ArgumentBinding(target, this, infArgs);
+
+            // Create replacement node.
+            FAbstractFunctionCall n = null;
+            if (binding.isOK()) 
+                n = builtInTranslator.create(name, binding.bound());
+            if (n == null) {
+                if (target.isRecord() && binding.isOK()) {
+                    n = new InstRecordConstructor(getName(), new List());
+                } else {
+                    InstAccess accessName = generated ? target.asInstClassDecl().retargetFrom(namedTarget.asInstClassDecl(), getName()) : getName();
+                    InstFunctionCall ifc = createEmptyNode();
+                    ifc.setName(accessName);
+                    ifc.generated = generated;
+                    ifc.unbindableArgs = binding.unbindable();
+                    ifc.bound = true;
+                    n = ifc;
+                }
+                for (InstFunctionArgument arg : binding.bound())
+                    n.addArgument(arg);
+            } else if (infArgs) {
+                n.setUnbindableArgsList(binding.unbindable());
+            }
+            n.setLocation(this);
+
+            return n;
+        }
+    }
+    private boolean InstFunctionCall.bound = false;
+    public boolean InstFunctionCall.generated = false;
+    
+    syn ArrayList<InstComponentDecl> InstFunctionCall.myInputsToBind(InstCallable target) = target.myCallInputs();
+    eq InstPartialFunctionCall.myInputsToBind(InstCallable target) {
+        ArrayList<InstComponentDecl> allInputs = super.myInputsToBind(target);
+        FType type = myCorrespondingInput().type();
+        Set<String> filter = new HashSet<String>();
+        boolean error = !type.isFunction();
+        if (error) {
+            /* This call is not matched to a partial function. 
+             * Error will be given by normal typecheck, bind all arguments for now. */
+            
+            // Filter will contain arguments that should be bound (all)
+            for (InstFunctionArgument ifa : getArgs()) {
+                if (ifa instanceof InstNamedArgument) {
+                    filter.add(((InstNamedArgument) ifa).getName().name());
+                }
+            }
+        } else {
+            // Filter will contain arguments that should not be bound
+            FFunctionType t = (FFunctionType) type;
+            for (FRecordComponentType c : t.getInputs()) {
+                filter.add(c.getName());
+            }
+        }
+        ArrayList<InstComponentDecl> res = new ArrayList<InstComponentDecl>();
+        for (InstComponentDecl icd : allInputs) {
+            if (!(error ^ filter.contains(icd.qualifiedName()))) {
+                res.add(icd);
+            }
+        }
+        return res;
+    }
+
+    /**
+     * Calculate if this is a vectorized function call.
+     */
+    rewrite InstFunctionCall {
+        when (bound && !vectorizationChecked) to InstFunctionCall {
+            vectorizationChecked = true;
+            
+            if (isFunctionCallClause() && myLefts().size() != 1)
+                return this;
+            if (getName().myInstClassDecl().isUnknown() || !unbindableArgs.isEmpty())
+                return this;
+            if (!hasOutputs() || !myCallOutputs().get(0).isAssignable())
+                return this;
+            
+            int dims = 0;
+            for (InstFunctionArgument arg : getArgs()) 
+                dims = arg.findVectorizationNdims(dims);
+            if (dims <= 0)
+                return this;
+            
+            InstFunctionCall res = new InstVectorFunctionCall(getName(), getArgs(), dims);
+            res.vectorizationChecked = res.bound = true;
+            res.generated = generated;
+            res.setLocation(this);
+            return res;
+        }
+    }
+    private boolean InstFunctionCall.vectorizationChecked = false;
+
+	/**
+	 * Check if this argument can be a vectorized argument, given the 
+	 * results to calls to this function for previous arguments.
+	 * 
+	 * The argument <code>dims</code> is the result from calls on other 
+	 * parameters. If -1, then the return value should be -1. If 0, then 
+	 * no vectorized arguments have been found so far. If greater than 0, 
+	 * then it is the number of dimensions of the vectorization size.
+	 * 
+	 * If this argument matches the size of the input, <code>dims</code> 
+	 * is returned. If the number of dimensions in the vectorization size 
+	 * that would be required for this to be a correctly vectorized argument 
+	 * differs from <code>dims</code>, then function is definately not a 
+	 * correctly vectorized function, and -1 is returned. Otherwise the 
+	 * vectorization size is returned.
+	 */
+	public int InstFunctionArgument.findVectorizationNdims(int dims) {
+		return dims;
+	}
+
+    public int InstGivenArgument.findVectorizationNdims(int dims) {
+        return combineVectorizationSize(dims, getFExp().ndims(), getBoundInput().ndims());
+    }
+
+	protected int InstFunctionArgument.combineVectorizationSize(int pre, int exp, int var) {
+		int res = exp - var;
+		if (pre < 0 || res == 0)
+			return pre;
+		if (res < 0 || (pre > 0 && pre != res))
+			return -1;
+		return res;
+	}
+
+	
+	/**
+	 * Check if this is an argument to a vectorized function call.
+	 */
+	inh boolean InstFunctionArgument.inVectorizedCall();
+	eq FAbstractFunctionCall.getChild().inVectorizedCall()  = false;
+	eq InstVectorFunctionCall.getChild().inVectorizedCall() = true;
+	eq FDelayExp.getChild().inVectorizedCall()              = isArray();
+	eq FSpatialDistExp.getChild().inVectorizedCall()        = isArray();
+	eq FHomotopyExp.getChild().inVectorizedCall()           = isArray();
+
+    /**
+     * Check if this argument is vectorized.
+     */
+    syn lazy boolean InstFunctionArgument.isVectorized() = false;
+    eq InstGivenArgument.isVectorized()                  = 
+        getFExp().ndims() > getBoundInput().ndims() && inVectorizedCall();
+
+
+	/**
+	 * Replace initial node for construct "array(...)" with permanent one.
+	 */
+	rewrite FParseArray {
+    	when (!isFunctionCallClause()) to FLongArray {
+    		return new FLongArray(getFExps());
+    	}
+	}
+
+    /**
+     * Extract constructor function for external object class.
+     */
+    syn InstClassDecl InstClassDecl.myConstructor() = memberInstClass("constructor").target(INST_UNKNOWN_CLASS, this);
+
+    /**
+     * Extract constructor function for external object class.
+     */
+    syn InstClassDecl InstExternalObject.myConstructor() = myInstClass().myConstructor();
+
+    /**
+     * Extract destructor function for external object class.
+     */
+    syn InstClassDecl InstClassDecl.myDestructor() = memberInstClass("destructor").target(INST_UNKNOWN_CLASS, this);
+
+    /**
+     * Extract destructor function for external object class.
+     */
+    syn InstClassDecl InstExternalObject.myDestructor() = myInstClass().myDestructor();
+
+}

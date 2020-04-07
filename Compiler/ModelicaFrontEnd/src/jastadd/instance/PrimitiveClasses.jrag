@@ -1,0 +1,128 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+aspect UnknownDeclarations {
+
+    syn lazy SrcUnknownClassDecl Program.getSrcUnknownClassDecl() =
+        new SrcUnknownClassDecl(new SrcIdDecl("Unknown"),
+                             false,
+                             false,
+                             new SrcClass(),
+                             false,
+                             false,
+                             false,
+                             false,
+                             false,
+                             new Opt<SrcConstrainingClause>(),
+                             new Opt<SrcComment>(),
+                             new Opt<SrcStringComment>(),
+                             new List<SrcClause>(),
+                             new Opt<SrcExternalClause>(),
+                             new Opt<SrcAnnotation>(),
+                             new SrcEndDecl("Unknown"));
+
+    syn lazy SrcComponentClause Program.getUnknownComponent() =
+        new SrcComponentClause(
+             false,
+             false,
+             false,
+             false,
+             false,
+             new Opt(),
+             new Opt(),
+             new Opt(),
+             new SrcNamedAccess("Unknown"),
+             new Opt(),
+             new List(
+                 new SrcUnknownComponentDecl(
+                     new SrcIdDecl("Unknown"),
+                     new Opt(),
+                     new Opt(),
+                     new Opt(),
+                     new SrcComment())),
+             new Opt(),
+             new SrcComment());
+
+	syn SrcUnknownClassDecl ASTNode.unknownClassDecl() = root().unknownClassDecl();
+	eq SourceRoot.unknownClassDecl()                = getProgram().getSrcUnknownClassDecl();
+	eq SrcUnknownClassDecl.unknownClassDecl()          = this;
+
+    syn SrcUnknownComponentDecl ASTNode.unknownComponentDecl() = root().unknownComponentDecl();
+    eq SourceRoot.unknownComponentDecl()                    = 
+        (SrcUnknownComponentDecl) getProgram().getUnknownComponent().getSrcComponentDecl(0);
+    eq SrcUnknownComponentDecl.unknownComponentDecl()          = this;
+
+	syn boolean SrcClassDecl.isUnknown() = false;
+	eq SrcUnknownClassDecl.isUnknown() = true;
+
+	syn boolean SrcComponentDecl.isUnknown() = false;
+	eq SrcUnknownComponentDecl.isUnknown() = true;
+	
+	syn boolean SrcClassDecl.isPrimitive() = false;
+	eq SrcPrimitiveClassDecl.isPrimitive() = true;
+	eq SrcBuiltInClassDecl.isPrimitive() = true;
+
+
+	syn lazy UnknownInstClassDecl SourceRoot.getUnknownInstClassDecl() = getProgram().getInstProgramRoot().getUnknownInstClassDecl();
+
+	syn lazy UnknownInstComponentDecl SourceRoot.getUnknownInstComponentDecl() = getProgram().getInstProgramRoot().getUnknownInstComponentDecl();
+
+	syn lazy UnknownInstClassDecl InstProgramRoot.getUnknownInstClassDecl() = 
+		new UnknownInstClassDecl(getProgram().getSrcUnknownClassDecl(), new Opt(), new InstMClass(), new Opt());
+    syn lazy UnknownInstComponentDecl InstProgramRoot.getUnknownInstComponentDecl() = 
+        new UnknownInstComponentDecl(
+            "unknown", 
+            new InstParseAccess("Unknown"), 
+            new Opt(), 
+            unknownComponentDecl(), 
+            new Opt(), 
+            new Opt(), 
+            new Opt());
+
+	syn UnknownInstClassDecl ASTNode.unknownInstClassDecl() = root().unknownInstClassDecl();
+	eq SourceRoot.unknownInstClassDecl() = getUnknownInstClassDecl();
+
+	syn UnknownInstComponentDecl ASTNode.unknownInstComponentDecl() = root().unknownInstComponentDecl();
+	eq SourceRoot.unknownInstComponentDecl() = getUnknownInstComponentDecl();
+
+    syn boolean InstNode.isUnknown()        = false;
+    eq UnknownInstClassDecl.isUnknown()     = true;
+    eq UnknownInstComponentDecl.isUnknown() = true;
+
+    syn boolean InstNode.isPrimitive()      = extendsPrimitive();
+	eq InstPrimitiveClassDecl.isPrimitive() = true;
+	eq InstBuiltInClassDecl.isPrimitive()   = true;
+	eq InstPrimitive.isPrimitive()          = true;
+
+	syn boolean InstClassDecl.isAssignable() = isPrimitive() || isRecord();
+    
+    syn boolean InstAccess.isAssignable()        = myInstComponentDecl().isAssignable();
+    syn boolean InstComponentDecl.isAssignable() = false;
+    eq InstAssignable.isAssignable()             = true;
+	
+	syn boolean InstComponentDecl.isRecord() = false;
+	eq InstRecord.isRecord() = true;
+
+    syn boolean CommonAccess.isUnknown();
+    eq FAccess.isUnknown()                   = myFV().isUnknown();
+    eq InstAccess.isUnknown()               = true;
+    eq InstDot.isUnknown()                  = getLastInstAccess().isUnknown();
+    eq InstComponentAccess.isUnknown()      = myInstComponentDecl().isUnknown();
+    eq InstComponentArrayAccess.isUnknown() = myInstComponentDecl().isUnknown();
+    eq InstClassAccess.isUnknown()          = myInstClassDecl().isUnknown();
+
+}

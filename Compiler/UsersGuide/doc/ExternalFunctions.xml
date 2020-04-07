@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<appendix version="5.0" xmlns="http://docbook.org/ns/docbook"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns:xs="http://www.w3.org/2001/XMLSchema"
+         xmlns:xlink="http://www.w3.org/1999/xlink"
+         xmlns:xi="http://www.w3.org/2001/XInclude"
+         xmlns:svg="http://www.w3.org/2000/svg"
+         xmlns:m="http://www.w3.org/1998/Math/MathML"
+         xmlns:html="http://www.w3.org/1999/xhtml"
+         xmlns:db="http://docbook.org/ns/docbook">
+  <title>Using External Functions in Modelica</title>
+
+  <section xml:id="external_function_introduction">
+    <title>Introduction</title>
+
+    <para>
+      External functions to a Modelica model is described by the language
+      specification (3.2r2 Section 12.9 External Function Interface).
+
+      This appendix is intended to describe tool specific behaviour 
+      and common problems in relation to the external functions.
+      
+      JModelica.org supports interfacing with both C and FORTRAN 77 functions.
+    </para>
+  </section>
+
+<!-- Would like to add this section but we don't support it officially.
+
+  <section xml:id="external_function_languages">
+    <title>Languages</title>
+    <para>
+       In addition to
+      that it is possible to interface to C++ code. This is done by declaring
+      the Modelica wrapper function as a C function and using the
+      linkage-specification extern "C" in the C++ function declaration:
+      
+      <programlisting language="cpp">
+        /* In header file */
+        extern "C" double f(double x);
+      </programlisting>
+    </para>
+  </section>
+ -->
+
+  <section xml:id="external_object">
+    <title>External objects</title>
+
+    <para>
+        The variability of external objects will be interpreted as parameter, even if the component
+        is not declared with a variability prefix. This is due to the fact that the constructors 
+        should only be called once and a discrete or continuous external object would have to call
+        its constructor many times. An external object may be dependent on fixed false parameters.
+        In that case the constructor will be called during the solving of the initial system. 
+        External objects are not allowed in algebraic loops. If that is the case an error will be
+        given during compilation.
+    </para>
+
+  </section>
+
+  <section xml:id="external_function_librarydirectory">
+      <title>LibraryDirectory</title>
+      
+    <!-- Would like to include link to original MA ticket, can't find it -->
+    In addition to the base directory specified by the LibraryDirectory annotation
+    the compiler looks for libraries in &lt;base&gt;/&lt;arch&gt; and &lt;base&gt;/&lt;arch&gt;/&lt;comp&gt; with
+    higher priority for the more specific directories.
+    
+    If the function is intended to be used on multiple platforms or with multiple c-compilers 
+    there needs to be a specific version of the library file for each intended use.
+    
+    For example, if a library is to be used on both 32 and 64 bit windows,
+    using both gcc and other c compilers, one would have to add several versions of the library.
+    Each compiled specifically for each platform and compiler combination.
+    
+    Note that the version of the compiler is also specified, since different versions of the
+    same compiler could be incompatible.
+    
+    <programlisting>
+&lt;base&gt;/win32/gcc472/
+&lt;base&gt;/win64/gcc472/
+    </programlisting>
+  </section>
+
+  <section xml:id="external_function_gcc">
+    <title>GCC</title>
+
+    <para>
+        When compiling with GCC we use the -std=c89 flag. This means any header file included
+        must conform to the c89 standard. A common issue is comments. c89 does not allow "//"
+        comments, Only "/* */".
+        
+        When the header file include "//" comments the compilation will fail.
+        The error message usually looks something like this:
+    </para>
+
+    <programlisting>
+sources/Test_Test1_funcs.c:4:1: error: expected identifier or '(' before '/' token
+    </programlisting>
+  </section>
+
+</appendix>

@@ -1,0 +1,80 @@
+#1
+char Aclass(3,11)
+Atrajectory
+1.1
+
+char name(20,28)
+time
+x
+y
+_block_jacobian_check_tol
+_events_default_tol
+_events_tol_factor
+_nle_solver_default_tol
+_nle_solver_min_tol
+_nle_solver_tol_factor
+_log_level
+_nle_solver_log_level
+_block_jacobian_check
+_enforce_bounds
+_nle_solver_check_jac_cond
+_rescale_after_singular_jac
+_rescale_each_step
+_use_Brent_in_1d
+_use_automatic_scaling
+_use_jacobian_scaling
+_use_manual_equation_scaling
+
+char description(20,11)
+Time in [s]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+int dataInfo(20,4)
+0 1 0 -1 # time
+1 2 0 -1 # x
+1 3 0 -1 # y
+1 4 0 -1 # _block_jacobian_check_tol
+1 5 0 -1 # _events_default_tol
+1 6 0 -1 # _events_tol_factor
+1 7 0 -1 # _nle_solver_default_tol
+1 8 0 -1 # _nle_solver_min_tol
+1 9 0 -1 # _nle_solver_tol_factor
+1 10 0 -1 # _log_level
+1 11 0 -1 # _nle_solver_log_level
+1 12 0 -1 # _block_jacobian_check
+1 13 0 -1 # _enforce_bounds
+1 14 0 -1 # _nle_solver_check_jac_cond
+1 15 0 -1 # _rescale_after_singular_jac
+1 16 0 -1 # _rescale_each_step
+1 17 0 -1 # _use_Brent_in_1d
+1 18 0 -1 # _use_automatic_scaling
+1 19 0 -1 # _use_jacobian_scaling
+1 20 0 -1 # _use_manual_equation_scaling
+
+float data_1(2,20)
+0.00000000000000E+00 5.00000000000000E+00 6.00000000000000E+00 1.00000000000000E-06 1.00000000000000E-10 1.00000000000000E-04 1.00000000000000E-10 1.00000000000000E-12 1.00000000000000E-04 3.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 1.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 1.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00
+1.00000000000000E+00         5.00000000000000E+00 6.00000000000000E+00 1.00000000000000E-06 1.00000000000000E-10 1.00000000000000E-04 1.00000000000000E-10 1.00000000000000E-12 1.00000000000000E-04 3.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 1.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00 1.00000000000000E+00 0.00000000000000E+00 0.00000000000000E+00
+
+float data_2(4,1)                            
+ 0.00000000000000E+00
+ 3.43225906488250E-05
+ 3.43260229078899E-01
+ 1.00000000000000E+00

@@ -1,0 +1,1551 @@
+/*
+    Copyright (C) 2010 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileReader;
+import java.io.InputStreamReader;
+import java.io.PrintStream;
+import java.io.StringReader;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Modifier;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.regex.Pattern;
+
+aspect TestAnnotationizer {
+
+/**
+ * Generates a test case annotation for a test model.
+ * 
+ * Helper class for TestAnnotationizer. This class contains a nmuber of inner 
+ * classes that also inherit from it. Each of these inner classes handles the 
+ * test case type with the same name as the inner class. An instance of the 
+ * inner class associated with the desired test case is created using reflection, 
+ * and the task of creating the annotation is then delegeted to that instance.
+ * 
+ * The behaviour when creating the annotations mirrors the behaviour of the test 
+ * case classes.
+ * 
+ * All subclasses should be inner classes, and implement a constructor with the 
+ * same arguments as the constructor of this class. Such inner classes can also be 
+ * added in other JastAdd source files.
+ */
+abstract public class TestAnnotationizerHelper {
+
+    /*
+     *  TODO:   <ul>
+     *              <li>Use more code directly from the test case classes.</li>
+     *              <li>Add support for MethodTestCase to use arguments=[...].</li>
+     *          </ul>
+     *  
+     */
+    
+    /**
+     * This is the main method for creating the annotation.
+     * 
+     * @param filePath     the path to the Modelica file containing the test model
+     * @param testType     the type of test case (case sensitive)
+     * @param modelName    the name of the test model
+     * @param description  the text to put in the "description" field of the test annotation
+     * @param data         any extra data to send to the delegate object
+     * @param opts         comma-separated list of compiler options to override defaults for
+     * @param checkType    check type to use when checking
+     * @param libs         list of libraries needed
+     * @param write        if <code>true</code>, write the annotation directly in the Modelica file
+     */
+    public static void doAnnotation(String filePath, String testType, String modelName, String description,
+            String platform, String[] opts, String data, String checkType, String[] libs, boolean write) throws Exception {
+
+        try {
+            Class cl = getTestCase(testType);
+            Constructor constructor =
+                    cl.getConstructor(String.class, String.class, String.class, String.class, String[].class, Object[].class);
+
+            TestAnnotationizerHelper ta =
+                    (TestAnnotationizerHelper) constructor.newInstance(filePath, modelName, description, platform, opts, new Object[] { data });
+
+            ta.setCheckType(checkType);
+            ta.setModelicaLibraries(libs);
+            ta.createAnnotation(write);
+        } catch (Exception e) {
+            handleException(e);
+        }
+    }
+
+    /**
+     * This is the main method for regenerating an existing annotation.
+     * 
+     * @param filePath     the path to the Modelica file containing the test model
+     * @param modelName    the name of the test model
+     * @param write        if <code>true</code>, write the annotation directly in the Modelica file
+     */
+    public static void doRegenerate(String filePath, String modelName, boolean write) throws Exception {
+        try {
+            SourceRoot root = parse(filePath, modelName, createTestOptions());
+            SrcClassDecl cd = root.getProgram().simpleLookupClass(modelName);
+            if (cd.isUnknown()) {
+                System.err.println("Class " + modelName + " not found");
+                return;
+            }
+            AnnotationNode tests = cd.annotation("__JModelica/UnitTesting/tests");
+            AnnotationNode test = AnnotationNode.NO_ANNOTATION;
+            for (AnnotationNode n : tests) {
+                if (test.exists()) {
+                    System.err.println("Multiple test annotations found in class " + modelName + ".");
+                    System.err.println("TestAnnotationizer is currently unable to regenerate models with multiple tests!");
+                    return;
+                }
+                test = n;
+            }
+            if (!test.exists()) {
+                System.err.println("No test annotation found in class " + modelName);
+                return;
+            }
+            Class cl = getTestCase(test.name());
+            Constructor constructor = cl.getConstructor(SrcClassDecl.class, String.class, String.class);
+            TestAnnotationizerHelper ta = (TestAnnotationizerHelper) constructor.newInstance(cd, filePath, modelName);
+            ta.createAnnotation(write);
+        } catch (Exception e) {
+            handleException(e);
+        }
+    }
+
+    /**
+     * Set type of error checking to be performed.
+     * 
+     * Available for all test types, but only logical to change for error/warning/compliance tests.
+     */
+    public void setCheckType(String val) {
+        if (val != null)
+            checkType = ErrorCheckType.valueOf(ErrorCheckType.class, val.toUpperCase());
+    }
+    
+    /**
+     * Get type of error checking being performed.
+     */
+    public ErrorCheckType getCheckType() {
+        return (checkType == null) ? ErrorCheckType.COMPILE : checkType;
+    }
+
+    /**
+     * Set list of libraries needed by test.
+     */
+    public void setModelicaLibraries(String[] val) {
+        libs = val;
+    }
+
+    /**
+     * Get list of libraries needed by test as comma-separated string.
+     */
+    public String getModelicaLibrariesString() {
+        StringBuilder buf = new StringBuilder();
+        for (String lib : libs) {
+            if (buf.length() > 0)
+                buf.append(',');
+            buf.append(lib);
+        }
+        return buf.toString();
+    }
+
+    /**
+     * Are there any extra libraries needed by test?
+     */
+    public boolean hasModelicaLibraries() {
+        return libs.length > 0;
+    }
+
+    /**
+     * Get the test case generator class for the specified test case name (or prefix thereof).
+     */
+    private static Class getTestCase(String testType) {
+        String ttl = testType.toLowerCase();
+        for (Class cl : TestAnnotationizerHelper.class.getClasses()) {
+            if (cl.getSimpleName().toLowerCase().startsWith(ttl) && !Modifier.isAbstract(cl.getModifiers())) {
+                System.out.println("Creating " + TestAnnotationizerHelper.testClassName(cl.getSimpleName()) + "...");
+                return cl;
+            }
+        }
+        
+        throw new IllegalArgumentException("Test type " + testType + " not found.");
+    }
+
+    /**
+     * Print error message for exception.
+     */
+    private static void handleException(Exception e) {
+        System.out.println("Creating annotation failed:");
+        Throwable cause = (e instanceof InvocationTargetException) ? e.getCause() : e;
+        String message = cause.getMessage();
+        if (message == null || !(cause instanceof ModelicaException))
+            cause.printStackTrace(System.out);
+        else
+            System.out.println(message);
+    }
+
+    /**
+     * Prints a help message and exits.
+     * 
+     * Iterates over all available test case types and prints a usage message for each.
+     */
+    public static void usageError() throws Exception {
+        System.out.println("Usage: java TestAnnotationizer <.mo file path> [options...] [<description>]");
+        System.out.println("  Options:");
+        System.out.println("    -w           write result to file instead of stdout");
+        System.out.println("    -m/-o        create annotation for Modelica/Optimica (default is infer from file path)");
+        System.out.println("    -r           regenerate an already present annotation");
+        System.out.println("    -a           regenerate annotations for all models in test file (implies -r)");
+        System.out.println("    -l=<libs>    comma-separated list of libraries needed by test (except for MSL)");
+        System.out.println("                 paths should be relative to test file");
+        System.out.println("    -t=<type>    set type of test, a unique prefix is enough, e.g. Err for ErrorTestCase");
+        System.out.println("    -c=<class>   set name of class to generate annotation for, if name ");
+        System.out.println("                 does not contain a dot, base name of .mo file is prepended");
+        System.out.println("    -d=<data>    set extra data to send to the specific generator, \\n is interpreted");
+        System.out.println("    -p=<opts>    comma-separated list of compiler options to override defaults for, ");
+        System.out.println("                 example: -p=eliminate_alias_variables=false,default_msl_version=\"2.2\"");
+        System.out.println("    -k=<type>    set the check type to use when error checking");
+        System.out.println("    -h           print this help");
+        System.out.println("  User will be prompted for type and/or class if not set with options.");
+        System.out.println("  Available test types:");
+        for (Class cl : TestAnnotationizerHelper.class.getClasses()) 
+            if (!Modifier.isAbstract(cl.getModifiers()))
+                cl.getMethod("usage", String.class, String.class).invoke(null, cl.getSimpleName(), null);
+    }
+
+	/**
+	 * Prints a usage message for this test case type.
+	 * 
+	 * Prints the class name and, if given in <code>extra</code>, a description of 
+	 * what extra data passed to the test case type is used for.
+	 * 
+	 * Subclasses should override and call this implementation if they use the 
+	 * <code>data</code> argument of their constructor.
+	 */
+	public static void usage(String cl, String extra) {
+		System.out.print("    " + cl);
+		if (extra != null && !extra.equals(""))
+			System.out.print(",  data = " + extra);
+		System.out.println();
+	}
+
+
+    protected String filePath;
+    protected String className;
+    protected String testName;
+    protected String description;
+    protected int beginLine;
+    protected int endLine;
+    protected SourceRoot root;
+    protected Object[] data;
+    protected String platform;
+    protected String[] opts;
+    protected String[] libs;
+    protected OptionRegistry or = null;
+    protected ErrorCheckType checkType = null;
+
+    /**
+     * Standard constructor for test case creators.
+     * 
+     * Parses the Modelica file containing the test model and saves the source root.
+     * 
+     * All subclasses should have a constructor with the same arguments that calls this constructor.
+     * 
+     * @param filePath     the path to the Modelica file containing the test model
+     * @param className    the name of the test model
+     * @param description  the text to put in the "description" field of the test annotation
+     * @param platform     see {@link #doAnnotation(String, String, String, String, String[], String, String, String[], boolean)}
+     * @param opts         comma-separated list of compiler options to override defaults for
+     * @param data         any extra data to send to the delegate object
+     */
+    public TestAnnotationizerHelper(String filePath, String className, String description,
+            String platform, String[] opts, Object[] data) throws Exception {
+
+        this.filePath = filePath;
+        this.className = className;
+        this.description = prepare(description);
+        this.platform = platform;
+        this.opts = opts;
+        this.data = data;
+    }
+
+    /**
+     * Test regeneration constructor for test case creators.
+     * 
+     * Parses the Modelica file containing the test model and saves the source root.
+     * 
+     * All subclasses should have a constructor with the same arguments that calls this constructor.
+     * 
+     * @param filePath     the path to the Modelica file containing the test model
+     * @param className    the name of the test model
+     */
+    public TestAnnotationizerHelper(SrcClassDecl cd, String filePath, String className) throws Exception {
+        this.filePath = filePath;
+        this.className = className;
+        beginLine = cd.beginLine();
+        endLine = cd.endLine();
+        System.out.println("Test class " + className + " begins at line " + beginLine);
+        AnnotationNode a = cd.annotation("__JModelica/UnitTesting/tests").iterator().next();
+        this.description = annotationString(a.forPath("description"), false);
+        this.platform = annotationString(a.forPath("platform"), false);
+        this.data = getData(a, dataNames(), false);
+        setCheckType(annotationString(a.forPath("checkType"), false));
+        String libs = annotationString(a.forPath("modelicaLibraries"), false);
+        setModelicaLibraries((libs == null) ? new String[0] : libs.split(","));
+        ArrayList<String> optStrings = new ArrayList<String>();
+        for (AnnotationNode a2 : a) 
+            if (a2.name().indexOf('_') >= 0) 
+                optStrings.add(a2.name() + '=' + annotationString(a2, true));
+        opts = optStrings.toArray(new String[optStrings.size()]);
+    }
+
+    /*
+     * Note that a special case is needed to handle null values among arguments else constant evaluation fails.
+     */
+    private Object[] getData(AnnotationNode node, String[] annotationNames, boolean option) {
+        int length = annotationNames.length;
+        Object[] data = new Object[length];
+
+        for (int i = 0; i < length; ++i) {
+            try {
+                data[i] = node.forPath(annotationNames[i]).ceval().objectValue();
+                if (data[i] instanceof String) {
+                    data[i] = ((String) data[i]).trim();
+                }
+            } catch (ConstantEvaluationException e) {}
+        }
+        return data;
+    }
+
+	protected static String annotationString(AnnotationNode a, boolean option) {
+		if (a.isStringValue()) {
+			String str = prepare(a.string().trim());
+			return option ? '"' + str + '"' : str;
+		} else {
+			SrcExp exp = a.exp();
+			if (exp != null)
+				return exp.toString();
+		}
+		return null;
+	}
+
+    /**
+     * Get the name of the extra data parameters in the annotation, if any.
+     */
+    protected String[] dataNames() {
+        return new String[] {};
+    }
+
+    /**
+     * Process input and prepare all data needed for creating annotation.
+     * 
+     * Base implementation calculates test name and parses file.
+     */
+    protected void process() throws Exception {
+        testName = className.substring(className.indexOf('.') + 1).replace('.', '_');
+        root = parse(filesToParse(filePath, libs), className, optionRegistry());
+        SrcClassDecl cd = root.getProgram().simpleLookupClass(className);
+        beginLine = cd.beginLine();
+        endLine = cd.endLine();
+    }
+
+    /**
+     * Create list of files and libraries to parse.
+     */
+    private static String[] filesToParse(String filePath, String[] libs) {
+        String[] names = new String[libs.length + 1];
+        names[0] = filePath;
+        File parent = new File(filePath).getParentFile();
+        for (int i = 0; i < libs.length; i++) {
+            names[i + 1] = new File(parent, libs[i]).getAbsolutePath();
+        }
+        return names;
+    }
+
+    /**
+     * Parse a single file.
+     */
+    private static SourceRoot parse(String filePath, String className, OptionRegistry opts) throws Exception {
+        return parse(new String[] { filePath }, className, opts);
+    }
+
+    /**
+     * Parse a set of files.
+     */
+    private static SourceRoot parse(String[] files, String className, OptionRegistry opts) throws Exception {
+        File modelicapath = EnvironmentUtils.getThirdPartyMSL();
+        opts.setStringOption("MODELICAPATH", modelicapath.getPath());
+        SourceRoot root;
+        
+        Collection<LoadInfo> loadInfos = new ArrayList<>();
+        for (String file : files) {
+            loadInfos.add(LoadInfo.create(file));
+        }
+        
+        try {
+            root = TestCase.PARSER_HANDLER.parseModel(UtilInterface.create(opts), loadInfos);
+        } catch (ParserException e) {
+            CompilerException ce = new CompilerException();
+            ce.addProblem(e.getProblem());
+            throw ce;
+        }
+        for (SrcStoredDefinition sd : root.getProgram().getUnstructuredEntitys()) 
+            sd.setFileName(files[0]);
+        return root;
+    }
+
+	/**
+	 * Create an annotation from this helper object.
+	 * 
+	 * @param write  if <code>true</code>, write the annotation directly in the Modelica file
+	 */
+	protected void createAnnotation(boolean write) throws Exception {
+        process();
+		if (write)
+			writeAnnotation();
+		else
+			printAnnotation();
+	}
+
+    /**
+     * Get the options registry to use.
+     * 
+     * Creates one if not already created.
+     */
+    protected OptionRegistry optionRegistry() {
+        if (or == null) {
+            or = createTestOptions();
+            for (String opt : opts) {
+                String parts[] = opt.split("=");
+                if (parts.length != 2)
+                    throw new ModelicaException("Bad compiler option string: " + opt);
+                String key = parts[0];
+                String val = parts[1];
+                if (val.startsWith("\"") && val.endsWith("\"")) {
+                    or.setStringOption(key, val.substring(1, val.length() - 1));
+                } else if (val.equals("true") || val.equals("false")) {
+                    or.setBooleanOption(key, val.equals("true"));
+                } else if (isInteger(val)) {
+                    or.setIntegerOption(key, Integer.parseInt(val));
+                } else if (isReal(val)) {
+                    or.setRealOption(key, Double.parseDouble(val));
+                } else {
+                    throw new ModelicaException("Bad compiler option value: " + opt);
+                }
+            }
+        }
+        return or;
+    }
+
+    /**
+     * Ensures that option additions are loaded, then create a new TestOptions instance.
+     */
+    protected static OptionRegistry createTestOptions() {
+        return OptionRegistry.buildTestOptions();
+    }
+
+	/**
+	 * Check if a string can be parsed as an int.
+	 */
+	protected static boolean isInteger(String str) {
+		try {
+			Integer.parseInt(str);
+			return true;
+		} catch (NumberFormatException e) {
+			return false;
+		}
+	}
+	
+	/**
+	 * Check if a string can be parsed as a double.
+	 */
+	protected static boolean isReal(String str) {
+		try {
+			Double.parseDouble(str);
+			return true;
+		} catch (NumberFormatException e) {
+			return false;
+		}
+	}
+
+    protected ArrayList<String> lines = new ArrayList<>();
+
+    protected void printLine(String line) {
+        lines.add(line);
+    }
+
+    protected void printLine(String name, String value) {
+        int nl = Math.max(value.lastIndexOf('\n'), value.lastIndexOf('\r'));
+        if (nl >= 0) 
+            value = "\n" + value + (nl < value.length() - 1 ? "\n" : "");
+        doPrintLine(name, '"' + value + '"');
+    }
+
+    protected void printLine(String name, double value) {
+        doPrintLine(name, Double.toString(value));
+    }
+
+    protected void printLine(String name, int value) {
+        doPrintLine(name, Integer.toString(value));
+    }
+
+    protected void printLine(String name, boolean value) {
+        doPrintLine(name, Boolean.toString(value));
+    }
+
+    protected void printLine(String name, Object[] value) {
+        doPrintLine(name, arrayString(value));
+    }
+
+    private <T> String arrayString(T[] array) {
+        String arrayString = Arrays.toString(array);
+        return "{ " + arrayString.substring(1, arrayString.length() - 1) + " }";
+    }
+
+    protected void doPrintLine(String name, String value) {
+        lines.add(name + "=" + value);
+    }
+
+    private static final String DEFAULT_INDENT = "    ";
+
+    /**
+     * Prints the resulting test annotation to stdout.
+     */
+    public void printAnnotation() throws Exception {
+        System.out.println("Annotation:\n=====================");
+        outputAnnotation(System.out, false, DEFAULT_INDENT);
+        System.out.println("\n=====================");
+    }
+
+    /**
+     * Writes the resulting test annotation directly in the Modelica file.
+     */
+    public void writeAnnotation() throws Exception {
+        File old = new File(filePath);
+        BufferedReader in = new BufferedReader(TestCase.PARSER_HANDLER.fileReader(null, old));
+        File altered = File.createTempFile(className, ".mo");
+        PrintStream out = new PrintStream(altered, "UTF-8");
+        boolean foundOld = false;
+        boolean lastBlank = false;
+        String indent = DEFAULT_INDENT;
+        for (int i = 1; i < endLine; i++) {
+            String line = in.readLine();
+            if (!foundOld) {
+                int j = -1;
+                if (i > beginLine && (j = line.indexOf(HEADER)) >= 0) {
+                    foundOld = true;
+                    if (line.trim().equals(ANNOTATION + HEADER)) {
+                        out.print(indent + ANNOTATION);
+                    } else {
+                        out.print(line.substring(0, j));
+                        indent = copyIndent(line);
+                    }
+                } else {
+                    if (i == beginLine) {
+                        indent = copyIndent(line);
+                    }
+                    out.println(line);
+                    lastBlank = line.trim().isEmpty();
+                }
+            }
+        }
+        if (!lastBlank && !foundOld) {
+            out.println();
+        }
+        try {
+            outputAnnotation(out, foundOld, indent);
+        } catch (Exception e) {
+            out.close();
+            altered.delete();
+            throw e;
+       }
+        for (String line = in.readLine(); line != null; line = in.readLine())
+            out.println(line);
+        out.close();
+        if (!altered.renameTo(old)) {
+            in = new BufferedReader(TestCase.PARSER_HANDLER.fileReader(null, altered));
+            out = new PrintStream(old, "UTF-8");
+            for (String line = in.readLine(); line != null; line = in.readLine())
+                out.println(line);
+            altered.delete();
+        }
+        System.out.println("File " + old.getName() + " updated.");
+    }
+
+    public static String copyIndent(String line) {
+        return line.split("\\S", 2)[0].replace("\t", "    ");
+    }
+
+    private final static String ANNOTATION = "annotation(";
+    private final static String HEADER = "__JModelica(UnitTesting(tests={";
+
+    /**
+     * Generates the test annotation and ouputs it on the given stream.
+     */
+    public void outputAnnotation(PrintStream out, boolean replace, String indent) throws Exception {
+        if (!replace) {
+            out.print(indent + ANNOTATION);
+        }
+        out.println(HEADER);
+        out.println(indent + "    " + testClassName() + "(");
+        printLine("name", testName);
+        printLine("description", description);
+        if (platform != null)             
+        printLine("platform", platform);
+        if (hasModelicaLibraries())
+        printLine("modelicaLibraries", getModelicaLibrariesString());
+        for (String opt : opts) 
+            printLine(opt);
+        if (checkType != null)
+            printLine("checkType", checkType.toString().toLowerCase());
+        printSpecific();
+        processLines(out, indent + "        ");
+        out.println(")})));");
+    }
+
+    /**
+     * Prints out all registered annotation lines and clears the list.
+     */
+    protected void processLines(PrintStream out, String indent) {
+        Iterator<String> it = lines.iterator();
+        while (it.hasNext()) {
+            String line = it.next();
+            out.print(indent);
+            out.print(line);
+            if (it.hasNext()) {
+                out.println(",");
+            } else {
+                // Get last char of value part (i.e. before the ")
+                int lastIndex = line.length() - 2;
+                if(lastIndex < 0) {
+                    throw new IllegalArgumentException("the line '"+line+"' is too short");
+                }
+                char last = line.charAt(lastIndex);
+                if (last != '\n' && last != '\r') {
+                    out.println();
+                }
+            }
+        }
+    }
+
+    /**
+     * Returns {@link #testClassName(String)} where the parameter {@code String} is
+     * set to the {@link Class#getSimpleName()} of this class.
+     */
+    protected String testClassName() {
+        return testClassName(getClass().getSimpleName());
+    }
+
+    /**
+     * Maps the class name of a subclass of {@link TestAnnotationizerHelper} named
+     * by the parameter {@code name} to the class name of the associated subclass of
+     * {@link TestCase}.
+     * 
+     * @param name
+     *            the class name of a subclass of TestAnnotationizerHelper.
+     */
+    protected static String testClassName(String name) {
+        return name.replace("Helper", "");
+    }
+
+    /**
+     * Escapes unallowed characters in the fields of the test annotation.
+     */
+    protected static String prepare(String str) {
+        return str.replaceAll("\\\\", "\\\\\\\\").replaceAll("\"", "\\\\\"");
+    }
+
+    /**
+     * Performs the instantiation, flattening and transform canonical steps of the compilation.
+     */
+    protected FClass compile() throws Exception {
+        InstClassDecl icl = instantiate();
+        FClass fc = flatten(icl);
+        transformCanonical(fc);
+        return fc;
+    }
+
+	/**
+	 * Performs the instantiation step of the compilation.
+	 */
+	protected InstClassDecl instantiate() throws Exception {
+		InstProgramRoot ipr = root.getProgram().getInstProgramRoot();
+		Collection<Problem> problems = null;
+		try {
+			ipr.checkErrorsInInstClass(className, getCheckType());
+			problems = root.collectWarnings();
+		} catch (CompilerException e) {
+			problems = e.getProblems();
+		}
+		handleCompilerProblems(problems);
+        return ipr.instantiateModel(className);
+	}
+
+    /**
+     * Performs the flattening step of the compilation.
+     */
+    protected FClass flatten(InstClassDecl icd) {
+        FClass fc = FClass.create(icd, null);
+        Collection<Problem> problems = null;
+        try {
+            icd.flattenInstClassDecl(fc);
+            problems = root.collectWarnings();
+        } catch (CompilerException e) {
+            problems = e.getProblems();
+        }
+        handleCompilerProblems(problems);
+        return fc;
+    }
+
+	/**
+	 * Performs the transform canonical step of the compilation.
+	 */
+	protected void transformCanonical(FClass fc) throws Exception {
+		fc.transformCanonical();
+		Collection<Problem> problems = null;
+		try {
+			fc.errorCheck(getCheckType());
+			problems = root.collectWarnings();
+		} catch (CompilerException e) {
+			problems = e.getProblems();
+		}
+		handleCompilerProblems(problems);
+	}
+	
+	/**
+	 * Filters away the Problems that is ignored by test cases and throws an 
+	 *        exception if any remain.
+	 * 
+	 * Called by instantiate() and transformCanonical() after error checking.
+	 */
+	protected void handleCompilerProblems(Collection<Problem> problems) throws CompilerException {
+		CompilerException ce = new CompilerException();
+		for (Problem p : problems) 
+			if (keepProblem(p)) 
+				ce.addProblem(p);
+		if (!ce.getProblems().isEmpty())
+			throw ce;
+	}
+	
+	/**
+	 * Decides what Problems to keep when filtering.
+	 * 
+	 * This implementation filters out warnings and compliance errors.
+	 */
+	protected boolean keepProblem(Problem p) {
+		return p.isTestError(false);
+	}
+
+    /**
+     * Ensure that user has passed extra data for test case.
+     */
+    protected void checkData(Object[] data) throws Exception {
+        if (data == null || data.length == 0) {
+            throw new ModelicaException(getClass().getSimpleName() + " needs extra data.");
+        }
+    }
+
+	/**
+	 * Generate and print the part of the annotation that is specific to 
+	 *        the test case type.
+	 */
+	abstract protected void printSpecific() throws Exception;
+
+	/**
+	 * Base class for code generation tests.
+	 * 
+	 * Extra data is used as the code template.
+	 */
+	public static abstract class CodeGenTestCase extends TestAnnotationizerHelper {
+
+		protected String template;
+		protected String code;
+
+        /**
+         * Constructor for base code generation test.
+         * 
+         * Compiles the model and generates code using the code template passed in 
+         * <code>data</code> and a code generator created by subclass.
+         */
+        public CodeGenTestCase(String filePath, String className, String description,
+                String platform, String[] opts, Object[] data) throws Exception {
+
+            super(filePath, className, description, platform, opts, data);
+        }
+
+		/**
+		 * Test regeneration constructor for base code generation test.
+		 * 
+		 * Delegates to superclass implementation.
+		 * 
+		 * @param filePath     the path to the Modelica file containing the test model
+		 * @param className    the name of the test model
+		 */
+		public CodeGenTestCase(SrcClassDecl cd, String filePath, String className) throws Exception {
+			super(cd, filePath, className);
+		}
+
+        protected String[] dataNames() {
+            return new String[] { "template" };
+        }
+
+        protected void process() throws Exception {
+            super.process();
+            checkData(data);
+            template = prepare(data[0].toString().replaceAll("\\\\n", "\n"));
+            FClass fc = compile();
+            AbstractGenerator generator = createGenerator(fc);
+            ByteArrayOutputStream os = new ByteArrayOutputStream();
+            generator.generate(new StringReader(template), createCodeStream(os));
+            code = prepare(os.toString());
+        }
+
+        private NotNullCodeStream createCodeStream(OutputStream os) {
+            PrintStream ps = CodeStream.createPrintStream(os, or.getBooleanOption("debug_duplicate_generated"));
+            return new UnitTestCodeStream(ps);
+        }
+
+		/**
+		 * Create the code generator to use.
+		 */
+		public abstract AbstractGenerator createGenerator(FClass fc);
+
+		/**
+		 * Generate and print the part of the annotation that is specific to 
+	     *        this test case type.
+		 */
+		@Override
+		protected void printSpecific() throws Exception {
+			printLine("template", template);
+			printLine("generatedCode", code);
+		}
+		
+	}
+
+	/**
+	 * A generic code generation test.
+	 */
+	public static class GenericCodeGenTestCase extends CodeGenTestCase {
+
+        /**
+         * Constructor for generic code generation test.
+         * 
+         * Delegates to super class.
+         */
+        public GenericCodeGenTestCase(String filePath, String className, String description,
+                String platform, String[] opts, Object[] data) throws Exception {
+
+            super(filePath, className, description, platform, opts, data);
+        }
+
+		/**
+		 * Test regeneration constructor for generic code generation test.
+		 * 
+		 * Delegates to superclass implementation.
+		 * 
+		 * @param filePath     the path to the Modelica file containing the test model
+		 * @param className    the name of the test model
+		 */
+		public GenericCodeGenTestCase(SrcClassDecl cd, String filePath, String className) throws Exception {
+			super(cd, filePath, className);
+		}
+		
+		/**
+		 * Prints a usage message for this test case type.
+		 */
+		public static void usage(String cl, String extra) {
+			TestAnnotationizerHelper.usage(cl, "generic code template");
+		}
+
+        /**
+         * Create the code generator to use.
+         * 
+         * Creates a GenericGenerator.
+         */
+        @Override
+        public AbstractGenerator createGenerator(FClass fc) {
+            return new GenericGenerator(ASTNode.prettyPrinter, '$', fc);
+        }
+        
+    }
+
+	/**
+	 * A flattening test.
+	 */
+	public static class FlatteningTestCase extends TestAnnotationizerHelper {
+		
+		protected FClass fc;
+
+        /**
+         * Constructor for flattening test.
+         * 
+         * Performs the flattening and instantiation steps of compilation.
+         */
+        public FlatteningTestCase(String filePath, String className, String description,
+                String platform, String[] opts, Object[] data) throws Exception {
+
+            super(filePath, className, description, platform, opts, data);
+        }
+
+		/**
+		 * Test regeneration constructor for flattening test.
+		 * 
+		 * Delegates to superclass implementation.
+		 * 
+		 * @param filePath     the path to the Modelica file containing the test model
+		 * @param className    the name of the test model
+		 */
+		public FlatteningTestCase(SrcClassDecl cd, String filePath, String className) throws Exception {
+			super(cd, filePath, className);
+		}
+		
+		protected void process() throws Exception {
+			super.process();
+			fc = flatten(instantiate());
+		}
+
+        /**
+         * Generate and print the part of the annotation that is specific to 
+         *        this test case type.
+         */
+        @Override
+        protected void printSpecific() throws Exception {
+            printLine("flatModel", prepare(fc.prettyPrint("")));
+        }
+
+	}
+
+	/**
+	 * A transform canonical test.
+	 */
+	public static class TransformCanonicalTestCase extends FlatteningTestCase {
+
+        /**
+         * Constructor for transform canonical test.
+         * 
+         * Performs the transform canonical step of compilation.
+         * (Superclass performs the flattening and instantiation steps.)
+         */
+        public TransformCanonicalTestCase(String filePath, String className, String description,
+                String platform, String[] opts, Object[] data) throws Exception {
+
+            super(filePath, className, description, platform, opts, data);
+        }
+
+		/**
+		 * Test regeneration constructor for transform canonical test.
+		 * 
+		 * Delegates to superclass implementation.
+		 * 
+		 * @param filePath     the path to the Modelica file containing the test model
+		 * @param className    the name of the test model
+		 */
+		public TransformCanonicalTestCase(SrcClassDecl cd, String filePath, String className) throws Exception {
+			super(cd, filePath, className);
+		}
+		
+		protected void process() throws Exception {
+			super.process();
+			transformCanonical(fc);
+		}
+		
+	}
+
+	/**
+	 * An error test case.
+	 */
+	public static class ErrorTestCaseHelper extends TestAnnotationizerHelper {
+
+		private String message;
+
+        /**
+         * Constructor for error test case.
+         * 
+         * Compiles the model and catches any compiler exceptions thrown. If an 
+         * exception is caught, an error message is composed, to be included in 
+         * the annotation.
+         */
+        public ErrorTestCaseHelper(String filePath, String className, String description,
+                String platform, String[] opts, Object[] data) throws Exception {
+
+            super(filePath, className, description, platform, opts, data);
+        }
+
+		/**
+		 * Test regeneration constructor for error test.
+		 * 
+		 * Delegates to superclass implementation.
+		 * 
+		 * @param filePath     the path to the Modelica file containing the test model
+		 * @param className    the name of the test model
+		 */
+		public ErrorTestCaseHelper(SrcClassDecl cd, String filePath, String className) throws Exception {
+			super(cd, filePath, className);
+		}
+
+        protected void process() throws Exception {
+            super.process();
+            try {
+                compile();
+                noException();
+            } catch (CompilerException e) {
+                gotException(e);
+            }
+        }
+
+        /**
+         * Remove location information from error message, since it is unreliable anyway, 
+         * in addition to escaping characters that aren't allowed in the annotation.
+         */
+        protected String prepareErrorMsg(String str) {
+            ErrorTestCase ec = new ErrorTestCase();
+            ec.setSourceFileName(filePath);
+            ec.setBeginLine(beginLine);
+            str = ec.filterTestResult(str, true);
+            return prepare(str);
+        }
+
+        /**
+         * Handle case where a CompilerException is raised.
+         */
+        protected void gotException(CompilerException e) throws ModelicaException {
+            message = prepareErrorMsg(e.getMessage(true));
+        }
+
+        /**
+         * Handle case where no CompilerException is raised.
+         */
+        protected void noException() throws ModelicaException {
+            throw new ModelicaException(noExceptionMessage());
+        }
+
+		/**
+		 * Returns an error message for when no errors were detected in test model.
+		 */
+		protected String noExceptionMessage() {
+			return "No errors reported in "+getClass().getSimpleName()+".";
+		}
+
+		/**
+		 * Generate and print the part of the annotation that is specific to 
+	     *        this test case type.
+		 */
+		@Override
+		protected void printSpecific() throws Exception {
+			printLine("errorMessage", message);
+		}
+
+	}
+	
+	/**
+	 * A warning test.
+	 */
+	public static class WarningTestCase extends ErrorTestCaseHelper {
+
+        /**
+         * Constructor for warning test.
+         * 
+         * Delegates to super class.
+         */
+        public WarningTestCase(String filePath, String className, String description,
+                String platform, String[] opts, Object[] data) throws Exception {
+
+            super(filePath, className, description, platform, opts, data);
+        }
+
+		/**
+		 * Test regeneration constructor for warning test.
+		 * 
+		 * Delegates to superclass implementation.
+		 * 
+		 * @param filePath     the path to the Modelica file containing the test model
+		 * @param className    the name of the test model
+		 */
+		public WarningTestCase(SrcClassDecl cd, String filePath, String className) throws Exception {
+			super(cd, filePath, className);
+		}
+		
+		/**
+		 * Returns an error message for when no errors were detected in test model.
+		 */
+		protected String noExceptionMessage() {
+			return "No warnings or errors reported in WarningTestCase.";
+		}
+		
+		/**
+		 * Decides what Problems to keep when filtering.
+		 * 
+		 * This implementation keeps all problems.
+		 */
+		protected boolean keepProblem(Problem p) {
+			return true;
+		}
+
+	}
+	
+	/**
+	 * A compliance error test.
+	 */
+	public static class ComplianceErrorTestCase extends ErrorTestCaseHelper {
+
+        /**
+         * Constructor for compliance error test.
+         * 
+         * Delegates to super class.
+         */
+        public ComplianceErrorTestCase(String filePath, String className, String description,
+                String platform, String[] opts, Object[] data) throws Exception {
+
+            super(filePath, className, description, platform, opts, data);
+        }
+
+		/**
+		 * Test regeneration constructor for compliance test.
+		 * 
+		 * Delegates to superclass implementation.
+		 * 
+		 * @param filePath     the path to the Modelica file containing the test model
+		 * @param className    the name of the test model
+		 */
+		public ComplianceErrorTestCase(SrcClassDecl cd, String filePath, String className) throws Exception {
+			super(cd, filePath, className);
+		}
+		
+		/**
+		 * Decides what Problems to keep when filtering.
+		 * 
+		 * This implementation filters out compliance errors.
+		 */
+		protected boolean keepProblem(Problem p) {
+			return p.severity() == ProblemSeverity.ERROR;
+		}
+
+	}
+
+    /**
+     * A generic method test case.
+     */
+    public static abstract class MethodTestCase extends TestAnnotationizerHelper {
+
+        private Object[] arguments;
+        private String methodName;
+        private String methodResult;
+
+        /**
+         * Constructor for generic method test case.
+         * 
+         * Performs any specified processing.
+         */
+        public MethodTestCase(String filePath, String className, String description,
+                String platform, String[] opts, Object[] data) throws Exception {
+
+            super(filePath, className, description, platform, opts, data);
+        }
+
+        /**
+         * Test regeneration constructor for generic method test case.
+         * 
+         * Delegates to superclass implementation.
+         * 
+         * @param filePath     the path to the Modelica file containing the test model
+         * @param className    the name of the test model
+         */
+        public MethodTestCase(SrcClassDecl cd, String filePath, String className) throws Exception {
+            super(cd, filePath, className);
+        }
+        
+        protected String[] dataNames() {
+            return new String[] { "methodName", "arguments" };
+        }
+        
+        protected void callMethod(Object o) throws Exception {
+            checkData(data);
+            methodName = data[0].toString();
+            arguments = (data.length == 1) ? new Object[0] : (Object[]) data[1];
+            Method method = o.getClass().getMethod(methodName, TestCase.unwrapClasses(arguments));
+            methodResult = method.invoke(o, arguments).toString();
+        }
+        
+        /**
+         * Generate and print the part of the annotation that is specific to 
+         *        this test case type.
+         */
+        @Override
+        protected void printSpecific() throws Exception {
+            printLine("methodName", methodName);
+            if (arguments.length > 0) {
+                printLine("arguments", arguments);
+            }
+            printLine("methodResult", prepare(methodResult));
+        }
+        
+        /**
+         * Prints a usage message for this test case type.
+         */
+        public static void usage(String cl, String extra) {
+            TestAnnotationizerHelper.usage(cl, "method name");
+        }
+
+    }
+
+    /**
+     * An FClass method test case.
+     */
+    public static class FClassMethodTestCase extends MethodTestCase {
+
+        
+        /**
+         * Constructor for FClass method test case.
+         * 
+         * Compiles the model.
+         */
+        public FClassMethodTestCase(String filePath, String className, String description,
+                String platform, String[] opts, Object[] data) throws Exception {
+
+            super(filePath, className, description, platform, opts, data);
+        }
+
+        /**
+         * Test regeneration constructor for FClass method test case.
+         * 
+         * Delegates to superclass implementation.
+         * 
+         * @param filePath     the path to the Modelica file containing the test model
+         * @param className    the name of the test model
+         */
+        public FClassMethodTestCase(SrcClassDecl cd, String filePath, String className) throws Exception {
+            super(cd, filePath, className);
+        }
+        
+        protected void process() throws Exception {
+            super.process();
+            callMethod(compile());
+        }
+
+    }
+
+    /**
+     * An FClass method test case.
+     */
+    public static class InstClassMethodTestCase extends MethodTestCase {
+
+        
+        /**
+         * Constructor for InstClassDecl method test case.
+         * 
+         * Compiles the model.
+         */
+        public InstClassMethodTestCase(String filePath, String className, String description, String platform, String[] opts,
+                Object[] data) throws Exception {
+
+            super(filePath, className, description, platform, opts, data);
+        }
+
+        /**
+         * Test regeneration constructor for InstClassDecl method test case.
+         * 
+         * Delegates to superclass implementation.
+         * 
+         * @param filePath     the path to the Modelica file containing the test model
+         * @param className    the name of the test model
+         */
+        public InstClassMethodTestCase(SrcClassDecl cd, String filePath, String className) throws Exception {
+            super(cd, filePath, className);
+        }
+        
+        protected void process() throws Exception {
+            super.process();
+            callMethod(instantiate());
+        }
+
+    }
+
+	/**
+	 * An SourceRoot method test case.
+	 */
+	public static class SourceMethodTestCase extends MethodTestCase {
+
+        /**
+         * Constructor for SourceRoot method test case.
+         *
+         * Compiles the model.
+         */
+        public SourceMethodTestCase(String filePath, String className, String description,
+                String platform, String[] opts, Object[] data) throws Exception {
+
+            super(filePath, className, description, platform, opts, data);
+        }
+
+		/**
+		 * Test regeneration constructor for SourceRoot method test case.
+		 *
+		 * Delegates to superclass implementation.
+		 *
+		 * @param filePath     the path to the Modelica file containing the test model
+		 * @param className    the name of the test model
+		 */
+		public SourceMethodTestCase(SrcClassDecl cd, String filePath, String className) throws Exception {
+			super(cd, filePath, className);
+		}
+
+		protected void process() throws Exception {
+			super.process();
+			callMethod(root);
+		}
+
+	}
+
+	/**
+	 * A constant evaluation test case.
+	 */
+	public static class EvalTestCase extends TestAnnotationizerHelper {
+
+		private String values;
+		private String variables;
+		protected FClass fc;
+
+        /**
+         * Constructor for parameter value evaluation test case.
+         * 
+         * Compiles the model.
+         */
+        public EvalTestCase(String filePath, String className, String description,
+                String platform, String[] opts, Object[] data) throws Exception {
+
+            super(filePath, className, description, platform, opts, data);
+        }
+
+		/**
+		 * Test regeneration constructor for parameter value evaluation test case.
+		 * 
+		 * Delegates to superclass implementation.
+		 * 
+		 * @param filePath     the path to the Modelica file containing the test model
+		 * @param className    the name of the test model
+		 */
+		public EvalTestCase(SrcClassDecl cd, String filePath, String className) throws Exception {
+			super(cd, filePath, className);
+		}
+
+        protected String[] dataNames() {
+            return new String[]{ "variables" };
+        }
+
+        protected void process() throws Exception {
+            super.process();
+            fc = compile();
+            checkData(data);
+            variables = makeVariableList(data[0].toString());
+            values = prepare(evaluateVars(variables.split("[\\n\\r]+")));
+        }
+
+		/**
+		 * Create newline-separated list of scalarized variables from comma-separated list of 
+		 * possibly non-scalarized variables.
+		 */
+		public String makeVariableList(String vars) {
+			String[] list = vars.replace(',', '\n').split("[\\n\\r]+");
+			Set<String> available = fc.variablesMap().flatNameSet();
+			ArrayList<String> names = new ArrayList<String>();
+			for (String name : list) {
+				name = name.trim();
+				int l = names.size();
+				if (available.contains(name)) {
+					names.add(name + "\n");
+				} else {
+					Pattern p = Pattern.compile(name + "[\\[.].*");
+					for (String var : available) 
+						if (p.matcher(var).matches()) 
+							names.add(var + "\n");
+				}
+				if (names.size() == l)
+					throw new IllegalArgumentException("Could not find variable " + name);
+			}
+			Collections.sort(names);
+			StringBuilder res = new StringBuilder();
+			for (String name : names)
+				res.append(name);
+			return res.toString().trim();
+		}
+		
+		/**
+		 * Evaluate variables in an FClass.
+		 * 
+		 * @return the resulting values, as a string, one value per line.
+		 */
+		public String evaluateVars(String[] variables) {
+			StringBuilder res = new StringBuilder();
+			for (int i = 0; i < variables.length; i++) {
+				if (i != 0)
+					res.append('\n');
+				res.append(fc.lookupFV(variables[i]).ceval().toString());
+			}
+			return res.toString();
+		}
+		
+		/**
+		 * Generate and print the part of the annotation that is specific to 
+	     *        this test case type.
+		 */
+		@Override
+		protected void printSpecific() throws Exception {
+			printLine("variables", variables);
+			printLine("values", values);
+		}
+		
+		/**
+		 * Prints a usage message for this test case type.
+		 */
+		public static void usage(String cl, String extra) {
+			TestAnnotationizerHelper.usage(cl, "variable list");
+		}
+
+	}
+
+	/**
+	 * A constant evaluation test case.
+	 */
+	public static class TimeTestCase extends TestAnnotationizerHelper {
+		
+		private double time;
+
+        public TimeTestCase(String filePath, String className, String description,
+                String platform, String[] opts, Object[] data) throws Exception {
+
+            super(filePath, className, description, platform, opts, data);
+        }
+
+		/**
+		 * Test regeneration constructor for compilation time test case.
+		 * 
+		 * Delegates to superclass implementation.
+		 * 
+		 * @param filePath     the path to the Modelica file containing the test model
+		 * @param className    the name of the test model
+		 */
+		public TimeTestCase(SrcClassDecl cd, String filePath, String className) throws Exception {
+			super(cd, filePath, className);
+		}
+
+        protected String[] dataNames() {
+            return new String[] { "maxTime" };
+        }
+
+		protected void process() throws Exception {
+			super.process();
+			time = Double.parseDouble(data[0].toString());
+		}
+		
+		/**
+		 * Generate and print the part of the annotation that is specific to 
+	     *        this test case type.
+		 */
+		@Override
+		protected void printSpecific() throws Exception {
+			printLine("maxTime", time);
+		}
+		
+		/**
+		 * Prints a usage message for this test case type.
+		 */
+		public static void usage(String cl, String extra) {
+			TestAnnotationizerHelper.usage(cl, "maximum execution time");
+		}
+		
+	}
+
+    /**
+     * A class for testing options.
+     */
+    public static class OptionTestCase extends TestAnnotationizerHelper {
+        private Object[] defaults;
+        private String[] names;
+
+        /**
+         * Creates a test case for options.
+         * <p>
+         * Note that this test case accepts a single default value argument for several options. I.e., for N names,
+         * default values can be set to either "defaults=value" or "defaults={ value1, value2, ..., valueN}".
+         * Using "defaults={ value }" also works.
+         * 
+         * @param filePath     the path to the Modelica file containing the test model.
+         * @param className    the name of the test model.
+         * @param description  the text to put in the "description" field of the test annotation.
+         * @param opts         comma-separated list of compiler options to override defaults for.
+         * @param data         any extra data to send to the delegate object.
+         */
+        public OptionTestCase(String filePath, String className,
+                String description, String platform, String[] opts, Object[] data) throws Exception {
+
+            super(filePath, className, description, platform, opts, data);
+        }
+
+        /**
+         * Constructor for test regeneration.
+         * 
+         * @param filePath     the path to the Modelica file containing the test model
+         * @param className    the name of the test model
+         */
+        public OptionTestCase(SrcClassDecl cd, String filePath, String className) throws Exception {
+            super(cd, filePath, className);
+        }
+
+        @Override
+        public String[] dataNames() {
+            return new String[] { "names", "defaults" };
+        }
+
+        @Override
+        protected void printSpecific() throws Exception {
+            printLine("names",  names);
+            printLine("defaults", defaults);
+        }
+
+        @Override
+        protected void process() throws Exception {
+            super.process();
+            defaults = (Object[]) data[0];
+            Object[] opts = (Object[]) data;
+
+            int length = opts.length;
+            names = new String[length];
+            for (int i = 0; i < length; ++i) {
+                names[i] = opts[i].toString();
+            }
+        }
+
+        /**
+         * Prints a usage message for this test case type.
+         */
+        public static void usage(String cl, String extra) {
+            TestAnnotationizerHelper.usage(cl, "names");
+        }
+    }
+
+}
+
+/**
+ * Returns the set of flat names in the map.
+ */
+public Set<String> FlatVariableMap.flatNameSet() {
+	return flatMap.keySet();
+}
+
+}

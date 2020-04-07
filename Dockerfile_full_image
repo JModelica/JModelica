@@ -1,0 +1,36 @@
+ARG DOCKER_LINUX_DIST=jmodelica/ubuntu_base
+ARG DOCKER_DIST_TAG=18.04
+
+FROM $DOCKER_LINUX_DIST:$DOCKER_DIST_TAG
+MAINTAINER Modelon
+
+# TODO Argument checking user need to create images only of tested distributions ...
+
+# The following variables need to get redeclared again .. no idea why 
+ARG DOCKER_LINUX_DIST
+ARG DOCKER_DIST_TAG
+
+ARG DOCKER_JM_TESTS_WS=/home/jenkins/internal/workspace/OCTTeam/JM_Ubuntu-Build/JModelica
+ARG DOCKER_USR_PATH=/home/baseuser
+
+ENV USR_PATH=${DOCKER_USR_PATH}
+ENV JM_TESTS_WS=${DOCKER_JM_TESTS_WS}
+
+COPY --chown=baseuser Docker/*.sh ${USR_PATH}/Docker/build/
+COPY --chown=baseuser Docker/*.py ${USR_PATH}/Docker/build/
+COPY --chown=baseuser / ${USR_PATH}/JModelica.org/
+
+RUN chmod +x ${USR_PATH}/Docker/build/*.sh
+RUN ${USR_PATH}/Docker/build/run_full_scripts.sh
+
+###Tests
+#Need to set the matplotlib backend due to no display (IMPORTANT)
+ENV MPLBACKEND=Agg
+#We will change how we run the tests in a future issue
+#Run the tests
+RUN mkdir -p $JM_TESTS_WS/test_results
+RUN cd ${USR_PATH}/jm_install && printenv && ./jm_tests -i -x "$JM_TESTS_WS/test_results"
+
+###Clean up
+RUN rm -rf ${USR_PATH}/Docker
+RUN rm -rf ${USR_PATH}/JModelica.org

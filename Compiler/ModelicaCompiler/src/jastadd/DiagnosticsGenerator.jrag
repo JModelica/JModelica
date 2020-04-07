@@ -1,0 +1,1129 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.PrintStream;
+import java.util.ArrayDeque;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.Iterator;
+
+aspect DiagnosticsGeneration {
+
+    /**
+     *  Write index.html.
+     */
+    public void DiagnosticsGenerator.writeDiagnostics(FClass fc) {
+        
+        writeIndexFile(fc);
+        
+        // Create BLT diagnostics file (if equation_sorting is true)
+        writeBLTFile(fc);
+        
+        // Create BLT table diagnostics file (if equation_sorting is true)
+        writeBLTTableFile(fc);
+        
+        // Create connection set information file
+        writeConnectionsFile(fc);
+        
+        // Create a file for alias information
+        writeAliasFile(fc);
+    }
+
+
+/**
+ * A class for generating 
+ */
+public class DiagnosticsGenerator {
+
+    private String modelName;
+    private String modelNameUnderscore;
+    private String diagnosticsDirString;
+
+    private IndexFile indexFile;
+    private FlattenedModelFile flattenedModelFile;
+    private TransformedModelFile transformedModelFile;
+    private ProblemsFile problemsFile;
+    private BLTFile bltFile;
+    private InitBLTFile initBLTFile;
+    private BLTTableFile bltTableFile;
+    private AliasFile aliasFile;
+    private ConnectionsFile connectionsFile;
+    private IVFile ivFile;
+
+    // This is not optimal and shouldn't be located here, will do for now!
+    private int numErrors = -1;
+    private int numComplianceErrors = -1;
+    private int numWarnings = -1;
+
+    /**
+     * Default constructor for the Diagnostics generator.
+     *
+     * The diagnostics generator generates a number of HTML files containing
+     * diagnostics for the compilation of a model.
+     */
+    public DiagnosticsGenerator(String modelName, OptionRegistry options) {
+        this.modelName = modelName;
+        this.modelNameUnderscore = modelName;
+        int pos = modelNameUnderscore.indexOf('(');
+        if (pos >= 0)
+            this.modelNameUnderscore = this.modelNameUnderscore.substring(0, pos);
+        this.modelNameUnderscore = this.modelNameUnderscore.replace('.', '_');
+        
+        // Create directory containing the diagnostics files
+        File outDir = new File(options.getStringOption("generate_html_diagnostics_output_directory"));
+        File diagnosticsDir = new File(outDir, this.modelNameUnderscore + "_html_diagnostics");
+        diagnosticsDir.mkdirs();
+        diagnosticsDirString = diagnosticsDir.getAbsolutePath();
+        
+        indexFile = new IndexFile();
+        flattenedModelFile = new FlattenedModelFile();
+        transformedModelFile = new TransformedModelFile();
+        problemsFile = new ProblemsFile();
+        bltFile = new BLTFile();
+        initBLTFile = new InitBLTFile();
+        bltTableFile = new BLTTableFile();
+        aliasFile = new AliasFile();
+        connectionsFile = new ConnectionsFile();
+        ivFile = new IVFile();
+        
+        DiagnosticsFile<?>[] files = new DiagnosticsFile[] {
+                flattenedModelFile,
+                transformedModelFile,
+                problemsFile,
+                bltFile,
+                initBLTFile,
+                bltTableFile,
+                aliasFile,
+                connectionsFile,
+                ivFile
+        };
+        
+        for (DiagnosticsFile<?> file : files)
+            file.clear();
+        for (String file : new String[]{"scripts.js","style.css","zepto.min.js"}) {
+            try {
+                FileUtil.copy(new File("htmldiag/" + file), new File(diagnosticsDir, file));
+            } catch (IOException e) {
+                ASTNode.log.warning("Unable to export resource '" + file + "' from JAR! " + e.getMessage());
+            }
+        }
+    }
+
+    public abstract class DiagnosticsFile<T> {
+
+        protected String title;
+        protected String fileName;
+        protected File path;
+        protected boolean addTitle;
+
+        protected DiagnosticsFile(String title, String suffix, boolean addTitle) {
+            this.title = title;
+            fileName = String.format("%s.html", suffix);
+            path = new File(diagnosticsDirString, fileName).getAbsoluteFile();
+            this.addTitle = addTitle;
+        }
+
+        public final void write(T obj) {
+            CodeStream out = null;
+            try {
+                out = new CodeStream(new PrintStream(path, "UTF-8"));
+                doWrite(obj, out);
+            } catch(FileNotFoundException e) {
+            } catch(UnsupportedEncodingException e) {
+            } finally {
+                if (out != null)
+                    out.close();
+            }
+       }
+
+       protected abstract void doWrite(T obj, CodeStream out);
+
+       public void clear() {
+           PrintStream out;
+           try {
+               out = new PrintStream(path, "UTF-8");
+               out.close();
+           } catch(FileNotFoundException e) {
+           } catch(UnsupportedEncodingException e) {
+           }
+       }
+
+       public void writeLink(CodeStream out) {
+           writeLink(out, "");
+       }
+
+       public void writeLink(CodeStream out, String suffix) {
+           out.println("<p>");
+           out.formatln("<a href=\"%s\">%s</a>%s", fileName, title, suffix);
+           out.println("</p>\n");
+       }
+    }
+
+    public abstract class OldDiagnosticsFile<T> extends DiagnosticsFile<T> {
+        protected OldDiagnosticsFile(String title, String suffix, boolean addTitle) {
+            super(title, suffix, addTitle);
+        }
+
+        @Override
+        protected void doWrite(T obj, CodeStream out) {
+            out.println("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\">");
+            out.println("<html>");
+            out.println("<head>");
+            writeHead(out);
+            out.println("</head>");
+            out.println("<body>");
+            if (addTitle) {
+                if (title != null)
+                    out.format("<h2>%s: %s</h2>\n", title, modelName);
+                else
+                    out.format("<h2>%s</h2>\n", modelName);
+            }
+            writeContents(obj, out);
+            out.println("</body>");
+            out.println("</html>");
+        }
+
+        protected void writeHead(CodeStream out) {
+            out.println("<meta http-equiv=\"Content-Type\" content=\"text/html; charset=iso-8859-1\">");
+            out.println("<title>Model diagnosis</title>\n");
+        }
+
+        public void writeLink(CodeStream out, String suffix) {
+            out.println("<p>");
+            out.formatln("<a href=\"%s\">%s</a>%s", fileName, title, suffix);
+            out.println("</p>\n");
+        }
+
+        protected abstract void writeContents(T obj, CodeStream out);
+    }
+
+    public abstract class FClassDiagnosticsFile extends OldDiagnosticsFile<FClass> {
+
+        protected FClassDiagnosticsFile(String title, String suffix, boolean addTitle) {
+            super(title, suffix, addTitle);
+        }
+
+    }
+
+    /**
+     *  Write a file containing the raw flattened model.
+     */
+    public void writeRawFlattenedModel(FClass fc) {
+        flattenedModelFile.write(fc);
+    }
+
+    public class FlattenedModelFile extends FClassDiagnosticsFile {
+
+        public FlattenedModelFile() {
+            super("Flattened model", "flattened", true);
+        }
+
+        @Override
+        protected void writeContents(FClass fc, CodeStream out) {
+            // Dump model to file
+            out.print("<pre>\n");
+            fc.prettyPrint(out, "");
+            out.print("</pre>\n");
+        }
+    }
+
+    /**
+     *  Write a file containing the transformed scalarized model..
+     */
+    public void writeTransformedFlattenedModel(FClass fc) {
+        transformedModelFile.write(fc);
+    }
+
+    public class TransformedModelFile extends DiagnosticsFile<FClass> {
+
+        public TransformedModelFile() {
+            super("Transformed model", "transformed", true);
+        }
+
+        @Override
+        protected void doWrite(FClass fc, CodeStream out) {
+            // Dump model to file
+            fc.htmlPrint(out, "Transformed model");
+        }
+    }
+
+    /**
+     *  Write a file containing BLT information
+     */
+    public void writeBLTFile(FClass fc) {
+        bltFile.write(fc);
+        initBLTFile.write(fc);
+    }
+
+    public class BLTFile extends DiagnosticsFile<FClass> {
+
+        public BLTFile() {
+            super("BLT for DAE System", "blt", false);
+        }
+
+        @Override
+        protected void doWrite(FClass fc, CodeStream out) {
+            HTMLPrinter p = ASTNode.htmlPrinter;
+            p.startFile(out, title);
+            if (!fc.myOptions().getBooleanOption("equation_sorting")) {
+                out.print("This page is only produced if 'equation_sorting' is set to true!");
+            } else {
+                out.print("<h3> ODE blocks </h3>\n");
+                // Loop over all derivatives
+                for (AbstractEquationBlock eb : fc.getDAEStructuredBLT().getOdeBlocks()) {
+                    p.addLocalObjects(eb.allVariables());
+                    eb.prettyPrintHTML(p, out, "");
+                    p.clearLocalObjects();
+                }
+                out.print("<h3> Real output blocks </h3>\n");
+                for (AbstractEquationBlock eb : fc.getDAEStructuredBLT().getRealOutputBlocks()) {
+                    p.addLocalObjects(eb.allVariables());
+                    eb.prettyPrintHTML(p, out, "");
+                    p.clearLocalObjects();
+                }
+                out.print("<h3> Integer and boolean output blocks </h3>\n");
+                for (AbstractEquationBlock eb : fc.getDAEStructuredBLT().getIntegerBooleanOutputBlocks()) {
+                    p.addLocalObjects(eb.allVariables());
+                    eb.prettyPrintHTML(p, out, "");
+                    p.clearLocalObjects();
+                }
+                out.print("<h3> Other output blocks </h3>\n");
+                for (AbstractEquationBlock eb : fc.getDAEStructuredBLT().getOtherBlocks()) {
+                    p.addLocalObjects(eb.allVariables());
+                    eb.prettyPrintHTML(p, out, "");
+                    p.clearLocalObjects();
+                }
+            }
+            p.endFile(out);
+        }
+    }
+
+    public class InitBLTFile extends DiagnosticsFile<FClass> {
+        
+        public InitBLTFile() {
+            super("BLT for Initialization System", "initBlt", false);
+        }
+        
+        @Override
+        protected void doWrite(FClass fc, CodeStream out) {
+            HTMLPrinter p = ASTNode.htmlPrinter;
+            p.startFile(out, title);
+            if (!fc.myOptions().getBooleanOption("equation_sorting")) {
+                out.print("This page is only produced if 'equation_sorting' is set to true!");
+            } else {
+                for (AbstractEquationBlock eb : fc.getDAEInitBLT()) {
+                    p.addLocalObjects(eb.allVariables());
+                    eb.prettyPrintHTML(p, out, "");
+                    p.clearLocalObjects();
+                }
+            }
+            p.endFile(out);
+        }
+    }
+
+    public void writeIVFile(FClass fc) {
+        ivFile.write(fc);
+    }
+
+    public class IVFile extends FClassDiagnosticsFile {
+
+        public IVFile() {
+            super("Iteration Variables", "iv", false);
+        }
+
+        @Override
+        protected void writeContents(FClass fc, CodeStream out) {
+            if (!fc.myOptions().getBooleanOption("equation_sorting"))
+                return;
+            out.print("<h2>Alias sets of iteration variables:</h2>\n");
+            out.print("<pre>\n");
+            Set<FVariable> vars = new HashSet<FVariable>();
+            for (AbstractEquationBlock eb : fc.getDAEStructuredBLT())
+                if (eb instanceof TornEquationBlock)
+                    vars.addAll(eb.unsolvedVariables());
+            for (AliasManager.AliasSet as : fc.getAliasManager().getAliasSets())
+                if (vars.contains(as.getModelVariable().getFVariable()))
+                    out.println(as.toStringWithStart());
+            out.print("</pre>\n");
+        }
+    }
+
+    /**
+     *  Write a file containing the alias elimination information
+     */
+    public void writeAliasFile(FClass fc) {
+        aliasFile.write(fc);
+    }
+
+    public class AliasFile extends FClassDiagnosticsFile {
+
+        public AliasFile() {
+            super("Alias sets", "alias", true);
+        }
+
+        @Override
+        protected void writeContents(FClass fc, CodeStream out) {
+            out.print("<pre>\n");
+            out.print(fc.aliasDiagnostics());
+            out.print("</pre>\n");
+        }
+    }
+
+    /**
+     *  Write a file containing the alias elimination information
+     */
+    public void writeConnectionsFile(FClass fc) {
+        connectionsFile.write(fc);
+    }
+
+    public class ConnectionsFile extends FClassDiagnosticsFile {
+
+        public ConnectionsFile() {
+            super("Connection sets", "connections", true);
+        }
+
+        @Override
+        protected void writeContents(FClass fc, CodeStream out) {
+            out.print("<pre>\n");
+            out.print(fc.getConnectionSetManager().printConnectionSets());
+            out.print("</pre>\n");
+        }
+    }
+
+	/**
+     *  Write a file containing the problems in the model.
+     */
+    public void writeProblems(Collection<Problem> newProblems) {
+        problemsFile.write(newProblems);
+    }
+
+    public class ProblemsFile extends OldDiagnosticsFile<Collection<Problem>> {
+
+        private Collection<Problem> problems = new TreeSet<Problem>();
+
+        public ProblemsFile() {
+            super("Problems", "errors", true);
+        }
+
+        @Override
+        protected void writeContents(Collection<Problem> newProblems, CodeStream out) {
+            // Add the problems to our set of problems
+            problems.addAll(newProblems);
+            
+            out.print("<pre>\n");
+            StringBuffer errs = new StringBuffer();
+            StringBuffer compErrs = new StringBuffer();
+            StringBuffer warns = new StringBuffer();
+            numErrors = 0;
+            numComplianceErrors = 0;
+            numWarnings = 0;
+            for (Problem p : problems) {
+                if (p.severity() == ProblemSeverity.ERROR &&
+                    p.kind() != ProblemKind.COMPLIANCE) {
+                    errs.append(p.toString() + "\n");
+                    numErrors++;
+                } else if (p.severity() == ProblemSeverity.ERROR &&
+                           p.kind() == ProblemKind.COMPLIANCE) {
+                    compErrs.append(p.toString() + "\n");
+                    numComplianceErrors++;
+                } else if (p.severity() == ProblemSeverity.WARNING) {
+                    warns.append(p.toString() + "\n");
+                    numWarnings++;
+                }
+            }
+            out.print(errs.toString());
+            out.print(compErrs.toString());
+            out.print(warns.toString());
+            out.print("</pre>\n");
+            
+            // Update index file
+            indexFile.write(null);
+        }
+    }
+
+    private String modelDiagnosticsBeforeTransform;
+
+    public void setModelDiagnosticsBeforeTransform(String s) {
+        modelDiagnosticsBeforeTransform = s;
+    }
+
+    public class IndexFile extends FClassDiagnosticsFile {
+        
+        public IndexFile() {
+            super(null, "index", true);
+        }
+
+        @Override
+        protected void writeContents(FClass fc, CodeStream out) {
+            problemsFile.writeLink(out, ":<br />" + numErrors + " errors, " + numComplianceErrors + " compliance errors, " + numWarnings + " warnings");
+            if (fc != null) {
+                out.println("<h3>Model before transformation</h3>");
+                out.println("<p><pre>");
+                // Diagnostics about model sizes
+                out.print(modelDiagnosticsBeforeTransform);
+                out.println("</pre></p>");
+                flattenedModelFile.writeLink(out);
+                connectionsFile.writeLink(out);
+                
+                out.println("<h3>Model after transformation</h3>");
+                out.println("<p><pre>");
+                // Diagnostics about model sizes
+                out.print(fc.modelDiagnostics());
+                out.println("</pre></p>");  
+                // Model name and links to the flattened models
+                transformedModelFile.writeLink(out);
+                aliasFile.writeLink(out, " (" + fc.aliasDiagnosticsShort() + ")");
+                bltFile.writeLink(out);
+                initBLTFile.writeLink(out);
+                bltTableFile.writeLink(out);
+                
+                if (fc.myOptions().getBooleanOption("equation_sorting")) {
+                    ArrayList<Integer> unsolvedDAEInitBlockSizes =
+                        fc.getDAEInitBLT().unsolvedBlockSizes(); 
+                    out.print("<p>Number of unsolved equation blocks in DAE initialization system: " + 
+                              unsolvedDAEInitBlockSizes.size() + ": {");   
+                    int ind = 0;
+                    for (Integer bs : unsolvedDAEInitBlockSizes) {
+                        out.print(bs.toString());
+                        if (ind<unsolvedDAEInitBlockSizes.size()-1) {
+                            out.print(",");
+                        }   
+                        ind++;
+                    }
+                    out.println("}<br />");
+                    if (!fc.onlyInitBLT()) {
+                        ArrayList<Integer> unsolvedDAEBlockSizes =
+                                fc.getDAEBLT().unsolvedBlockSizes(); 
+                        out.print("Number of unsolved equation blocks in DAE system: " + 
+                                unsolvedDAEBlockSizes.size() + ": {");   
+                        ind = 0;
+                        for (Integer bs : unsolvedDAEBlockSizes) {
+                            out.print(bs.toString());
+                            if (ind<unsolvedDAEBlockSizes.size()-1) {
+                                out.print(",");
+                            }   
+                            ind++;
+                        }
+                        out.println("}");
+                    }
+                    out.println("</p>");
+                    if (EquationBlockFactory.canTear(fc.myStepUtil())) {
+                        unsolvedDAEInitBlockSizes = fc.getDAEInitBLT().unsolvedBlockIterationSizes();
+                        out.print("<p>Number of unsolved equation blocks in DAE initialization system after tearing: " + 
+                                  unsolvedDAEInitBlockSizes.size() + ": {");   
+                        ind = 0;
+                        for (Integer bs : unsolvedDAEInitBlockSizes) {
+                            out.print(bs.toString());
+                            if (ind<unsolvedDAEInitBlockSizes.size()-1) {
+                                out.print(",");
+                            }   
+                            ind++;
+                        }
+                        out.println("}<br />");
+                        if (!fc.onlyInitBLT()) {
+                            ArrayList<Integer> unsolvedDAEBlockSizes = fc.getDAEBLT().unsolvedBlockIterationSizes();
+                            out.print("Number of unsolved equation blocks in DAE system after tearing: " + 
+                                      unsolvedDAEBlockSizes.size() + ": {");
+                            ind = 0;
+                            for (Integer bs : unsolvedDAEBlockSizes) {
+                                out.print(bs.toString());
+                                if (ind<unsolvedDAEBlockSizes.size()-1) {
+                                    out.print(",");
+                                }   
+                                ind++;
+                            }
+                            out.print("}");
+                        }
+                        out.println("</p>");
+                    }
+                }
+            }
+        }
+    }
+
+    public void writeIndexFile(FClass fc) {
+        indexFile.write(fc);
+    }
+
+    public void writeBLTTableFile(FClass fc) {
+        bltTableFile.write(fc);
+    }
+
+    public class BLTTableFile extends FClassDiagnosticsFile {
+        
+        public BLTTableFile() {
+            super("BLT diagnostics table", "bltTable", false);
+        }
+
+        @Override
+        protected void writeContents(FClass fc, CodeStream out) {
+            if (!fc.myOptions().getBooleanOption("equation_sorting"))
+                return;
+            out.println("<div id=\"rowHighlight\" style=\"display:none;\"></div>");
+            out.println("<div id=\"colHighlight\" style=\"display:none;\"></div>");
+            out.println("<div id=\"rowLockHighlight\" style=\"display:none;\"></div>");
+            out.println("<div id=\"colLockHighlight\" style=\"display:none;\"></div>");
+
+            out.println("<h1>BLT for Init DAE System</h1>");
+            fc.getDAEInitBLT().diagnostics_generateBLTTable(out, true);
+
+            if (!fc.onlyInitBLT()) {
+                out.println("<h1>BLT for DAE System</h1>");
+                fc.getDAEBLT().diagnostics_generateBLTTable(out, false);
+            }
+        }
+
+        @Override
+        protected void writeHead(CodeStream out) {
+            super.writeHead(out);
+            out.print(BLT_style);
+        }
+
+        private String BLT_style = "\n" +
+                "<style type=\"text/css\">" + 
+                "div.blt {\n" +
+                "    position:relative;\n" +
+                "    margin-left:200px;\n" +
+                "    margin-top:200px;\n" +
+                "    border:1px solid black;\n" +
+                "    font-family:sans-serif;\n" +
+                "    font-size:10px;\n" +
+                "}\n" +
+                "div.block {\n" +
+                "    position:absolute;\n" +
+                "    box-sizing:border-box;\n" +
+                "    border:1px solid black;\n" +
+                "}\n" +
+                "div.incidence {\n" +
+                "    position:absolute;\n" +
+                "    cursor:pointer;\n" +
+                "}\n" +
+                "div.incidence div{\n" +
+                "    width:" + AbstractEquationBlock.DIAGNOSTICS_CELL_SIZE + "px;\n" +
+                "    height:" + AbstractEquationBlock.DIAGNOSTICS_CELL_SIZE + "px;\n" +
+                "    overflow:hidden;\n" +
+                "    display:table-cell;\n" +
+                "    text-align:center;\n" +
+                "    vertical-align:middle;\n" +
+                "}\n" +
+                "div.equation {\n" +
+                "    position:absolute;\n" +
+                "    left:-200px;\n" +
+                "    width:200px;\n" +
+                "    box-sizing:border-box;\n" +
+                "    height:" + (AbstractEquationBlock.DIAGNOSTICS_CELL_SIZE + 1) + "px;\n" +
+                "    border-top:1px solid black;\n" +
+                "    border-bottom:1px solid black;\n" +
+                "    overflow:hidden;\n" +
+                "    white-space:nowrap;\n" +
+                "}\n" +
+                "div.variable {\n" +
+                "    position:absolute;\n" +
+                "    top:-109px;\n" +
+                "    box-sizing:border-box;\n" +
+                "    height:" + (AbstractEquationBlock.DIAGNOSTICS_CELL_SIZE + 1) + "px;\n" +
+                "    width:200px;\n" +
+                "    border-top:1px solid black;\n" +
+                "    border-bottom:1px solid black;\n" +
+                "    overflow:hidden;\n" +
+                "    white-space:nowrap;\n" +
+                "    transform:rotate(270deg);\n" +
+                "    -ms-transform:rotate(270deg);\n" +
+                "    -webkit-transform:rotate(270deg);\n" +
+                "    -moz-transform:rotate(270deg);\n" +
+                "}\n" +
+                "table.incidenceMatrix {\n" +
+                "    border-collapse:collapse;\n" +
+                "}\n" +
+                "\n" +
+                "th.var {\n" +
+                "    border-right:1px solid black;\n" +
+                "    border-left:1px solid black;\n" +
+                "}\n" +
+                "\n" +
+                "div.var {\n" +
+                "    width:30px;\n" +
+                "    overflow:hidden;\n" +
+                "    white-space:nowrap;\n" +
+                "}\n" +
+                "\n" +
+                "th.eqn {\n" +
+                "    text-align:right;\n" +
+                "    border-top:1px solid black;\n" +
+                "    border-bottom:1px solid black;\n" +
+                "}\n" +
+                "\n" +
+                "div.eqn {\n" +
+                "    max-width:200px;\n" +
+                "    overflow:hidden;\n" +
+                "    white-space:nowrap;\n" +
+                "}\n" +
+                "\n" +
+                "table.incidenceMatrix td {\n" +
+                "text-align:center;\n" +
+                "height:30px;\n" +
+                "}\n" +
+                "\n" +
+                "div#rowHighlight,\n" +
+                "div#colHighlight {\n" +
+                "    position:absolute;\n" +
+                "    z-index:1000;\n" +
+                "    background:#999;\n" +
+                "    opacity: 0.3;\n" +
+                "}\n" +
+                "\n" +
+                "div#rowLockHighlight,\n" +
+                "div#colLockHighlight {\n" +
+                "    position:absolute;\n" +
+                "    z-index:900;\n" +
+                "    background:#999;\n" +
+                "    opacity: 0.3;\n" +
+                "}\n" +
+                "\n" +
+                "</style>\n" +
+                "<script tyle=\"text/javascript\">\n" +
+                "\n" +
+                "var currentHightlight = null;\n" +
+                "var currentLockHightlight = null;\n" +
+                "\n" +
+                "function hightlight(incidence) {\n" +
+                "    var row = document.getElementById('rowHighlight');\n" +
+                "    var col = document.getElementById('colHighlight');\n" +
+                "    var blt = incidence.parentElement;\n" +
+                "    setHighlight(incidence, blt, row, col)\n" +
+                "}\n" +
+                "function unhighlight(incidence) {\n" +
+                "    var row = document.getElementById('rowHighlight');\n" +
+                "    row.style.display = 'none';\n" +
+                "    var col = document.getElementById('colHighlight');\n" +
+                "    col.style.display = 'none';\n" +
+                "}\n" +
+                "\n" +
+                "function lockHighlight(incidence) {\n" +
+                "    var row = document.getElementById('rowLockHighlight');\n" +
+                "    var col = document.getElementById('colLockHighlight');\n" +
+                "    var blt = incidence.parentElement;\n" +
+                "    setHighlight(incidence, blt, row, col)\n" +
+                "}\n" +
+                "\n" +
+                "function setHighlight(incidence, blt, row, col) {\n" +
+                "    row.style.width = blt.offsetWidth + 'px';\n" +
+                "    row.style.height = (incidence.offsetHeight + 1)+ 'px';\n" +
+                "    row.style.top = (offsetTop(incidence) + 1) + 'px';\n" +
+                "    row.style.left = offsetLeft(blt) + 'px';\n" +
+                "    row.style.display = 'block';\n" +
+                "    col.style.width = (incidence.offsetWidth + 1) + 'px';\n" +
+                "    col.style.height = blt.offsetHeight + 'px';\n" +
+                "    col.style.top = offsetTop(blt) + 'px';\n" +
+                "    col.style.left = (offsetLeft(incidence) + 1) + 'px';\n" +
+                "    col.style.display = 'block';\n" +
+                "}\n" +
+                "\n" +
+                "function offsetTop(obj) {\n" +
+                "    var res = 0;\n" +
+                "    while (obj != null) {\n" +
+                "        res += obj.offsetTop;\n" +
+                "        obj = obj.offsetParent;\n" +
+                "    }\n" +
+                "    return res;\n" +
+                "}\n" +
+                "function offsetLeft(obj) {\n" +
+                "    var res = 0;\n" +
+                "    while (obj != null) {\n" +
+                "        res += obj.offsetLeft;\n" +
+                "        obj = obj.offsetParent;\n" +
+                "    }\n" +
+                "    return res;\n" +
+                "}\n" +
+                "</script>\n";
+    }
+
+    protected static class TableManager {
+        private int xPos = 0;
+        private int yPos = 0;
+        private String blockPrefix;
+
+        protected TableManager(String blockPrefix) {
+            this.blockPrefix = blockPrefix;
+        }
+
+        public String getBlockPrefix() {
+            return blockPrefix;
+        }
+
+        public void newRow() {
+            yPos++;
+            xPos = 0;
+        }
+
+        public int getYPos() {
+            return yPos;
+        }
+
+        public void newCol() {
+            xPos++;
+        }
+
+        public int getXPos() {
+            return xPos;
+        }
+    }
+}
+
+public void BLT.diagnostics_generateBLTTable(CodeStream out, boolean isInit) {
+    Deque<FVariable> orderList = new ArrayDeque<FVariable>();
+    for (AbstractEquationBlock aeb : this) {
+        orderList.addAll(aeb.diagnostics_generateBLTTable_variables());
+    }
+    FVariable[] order = orderList.toArray(new FVariable[orderList.size()]);
+
+    DiagnosticsGenerator.TableManager tm = new DiagnosticsGenerator.TableManager(isInit ? "block_init_" : "block_");
+
+    out.formatln("<div class=\"blt\" style=\"width:%dpx;height:%dpx;\">", order.length * AbstractEquationBlock.DIAGNOSTICS_CELL_SIZE + 1, order.length * AbstractEquationBlock.DIAGNOSTICS_CELL_SIZE + 1);
+    for (int i = 0; i < order.length; i++) {
+        FVariable fv = order[i];
+        out.formatln("    <div class=\"variable\" style=\"left:%dpx\" title=\"%s\">%s</div>", (i - 6) * AbstractEquationBlock.DIAGNOSTICS_CELL_SIZE - 2, ASTNode.escapeHTML(fv.name()), ASTNode.escapeHTML(fv.name()));
+    }
+
+    for (AbstractEquationBlock aeb : this) {
+        aeb.diagnostics_generateBLTTable_block(order, out, tm);
+    }
+
+    out.println("</div>");
+}
+
+protected Collection<FVariable> AbstractEquationBlock.diagnostics_generateBLTTable_variables() {
+    return allVariables();
+}
+
+@Override
+protected Collection<FVariable> PrePropagationEquationBlock.diagnostics_generateBLTTable_variables() {
+    Collection<FVariable> variables = new ArrayList<FVariable>();
+    for (AbstractEquationBlock block : solvedBlocks()) {
+        variables.addAll(block.diagnostics_generateBLTTable_variables());
+    }
+    return variables;
+}
+
+protected abstract String AbstractEquationBlock.diagnostics_generateBLTTable_color();
+protected String TornEquationBlock.diagnostics_generateBLTTable_color() {
+    return "#F0CCCC";
+}
+
+protected String SimpleEquationBlock.diagnostics_generateBLTTable_color() {
+    return "#CCF0CC";
+}
+
+protected String AlgorithmBlock.diagnostics_generateBLTTable_color() {
+    return "#CCF0CC";
+}
+
+protected String EquationBlock.diagnostics_generateBLTTable_color() {
+    return "#CCCCF0";
+}
+
+protected String PrePropagationEquationBlock.diagnostics_generateBLTTable_color() {
+    return "#EEFF22";
+}
+
+protected String AbstractSubBLTBlock.diagnostics_generateBLTTable_color() {
+    return "#FF00FF";
+}
+
+protected Map<FVariable, Integer> AbstractEquationBlock.EMPTY_VAR_FILTER = Collections.emptyMap();
+
+public static final int AbstractEquationBlock.DIAGNOSTICS_CELL_SIZE = 15;
+
+public void AbstractEquationBlock.diagnostics_generateBLTTable_block(FVariable[] order, CodeStream out, DiagnosticsGenerator.TableManager tm) {
+    int start = tm.getYPos() * DIAGNOSTICS_CELL_SIZE;
+    int numReal = realVariables().size();
+    int numNonReal = nonRealVariables().size();
+    int sizeFrame;
+    int sizeNonReal = (numReal + numNonReal) * DIAGNOSTICS_CELL_SIZE + 1;
+    if (diagnostics_generateBLTTable_printDiscreteFrame()) {
+        sizeFrame = numReal * DIAGNOSTICS_CELL_SIZE + 1;
+        if (numNonReal > 0)
+            out.formatln("    <div class=\"block\" style=\"background:#F0E7CC;left:%dpx;top:%dpx;width:%dpx;height:%dpx;\"></div>", start, start, sizeNonReal, sizeNonReal);
+    } else {
+        sizeFrame = (numReal + numNonReal) * DIAGNOSTICS_CELL_SIZE + 1;
+    }
+    if (numReal > 0)
+        out.formatln("    <div class=\"block\" style=\"background:%s;left:%dpx;top:%dpx;width:%dpx;height:%dpx;\"></div>", diagnostics_generateBLTTable_color(), start, start, sizeFrame, sizeFrame);
+    diagnostics_generateBLTTable_rows(order, out, tm, false, -1, EMPTY_VAR_FILTER);
+}
+
+protected boolean AbstractEquationBlock.diagnostics_generateBLTTable_printDiscreteFrame() {
+    return true;
+}
+
+protected boolean PrePropagationEquationBlock.diagnostics_generateBLTTable_printDiscreteFrame() {
+    return false;
+}
+
+public void AbstractEquationBlock.diagnostics_generateBLTTable_rows(FVariable[] order, CodeStream out, DiagnosticsGenerator.TableManager tm, boolean nested, int size, Map<FVariable, Integer> varFilter) {
+    for (FAbstractEquation equation : allEquations()) {
+        if (varFilter == EMPTY_VAR_FILTER)
+            size = equation.numScalarEquations();
+        String equationStr = ASTNode.escapeHTML(equation);
+        for (int i = 0; i < size; i++) {
+            out.formatln("    <div class=\"equation\" style=\"top:%dpx;\" title=\"%s\">%s</div>", tm.getYPos() * DIAGNOSTICS_CELL_SIZE, equationStr, equationStr);
+            for (FVariable var : order) {
+                Integer pos = varFilter.get(var);
+                boolean contains = equation.referencedFVariables().contains(var) && (pos == null || pos == i);
+                if (contains)
+                    out.formatln("    <div class=\"incidence\" style=\"left:%dpx;top:%dpx;z-index:10000;\" title=\"%s&#13;&#13;%s\" onmouseover=\"hightlight(this);\" onmouseout=\"unhighlight(this);\" onclick=\"lockHighlight(this);\"><div>%s</div></div>", tm.getXPos() * DIAGNOSTICS_CELL_SIZE, tm.getYPos() * DIAGNOSTICS_CELL_SIZE, ASTNode.escapeHTML(var.name()), equationStr, diagnostics_generateBLTTable_solvabilitySymbol(equation.isSolved(var, nested)));
+                tm.newCol();
+            }
+            tm.newRow();
+        }
+    }
+}
+
+private String AbstractEquationBlock.diagnostics_generateBLTTable_solvabilitySymbol(Solvability s) {
+    switch (s) {
+    case ANALYTICALLY_SOLVABLE:
+        return "O";
+    case NUMERICALLY_SOLVABLE:
+        return "@";
+    case UNSOLVABLE:
+        return "X";
+    }
+    throw new IllegalArgumentException("Unsupported solvability type " + s);
+}
+
+public void TornEquationBlock.diagnostics_generateBLTTable_rows(FVariable[] order, CodeStream out, DiagnosticsGenerator.TableManager tm, boolean nested, int size, Map<FVariable, Integer> varFilter) {
+    int numSolved = realVariables().size() - localUnsolvedVariables().size();
+    int solvedStart = tm.getYPos() * DIAGNOSTICS_CELL_SIZE;
+    int solvedSize = numSolved * DIAGNOSTICS_CELL_SIZE + 1;
+    int unsolvedStart = (tm.getYPos() + numSolved) * DIAGNOSTICS_CELL_SIZE;
+    int unsolvedSize = localUnsolvedVariables().size() * DIAGNOSTICS_CELL_SIZE + 1;
+    int numNonReal = localNonRealVariables().size();
+    if (nested)
+        out.formatln("    <div class=\"block\" style=\"background:#F0C7C7;left:%dpx;top:%dpx;width:%dpx;height:%dpx;\"></div>", solvedStart, solvedStart, solvedSize + unsolvedSize - 1, solvedSize + unsolvedSize - 1);
+    out.formatln("    <div class=\"block\" style=\"background:#F0E4E4;left:%dpx;top:%dpx;width:%dpx;height:%dpx;\"></div>", solvedStart, solvedStart, solvedSize, solvedSize);
+    out.formatln("    <div class=\"block\" style=\"background:#F0C0C0;left:%dpx;top:%dpx;width:%dpx;height:%dpx;\"></div>", unsolvedStart, unsolvedStart, unsolvedSize, unsolvedSize);
+    java.util.List<AbstractEquationBlock> blocks = new ArrayList<AbstractEquationBlock>();
+    blocks.addAll(solvedRealBlocks());
+    blocks.addAll(unsolvedBlocks());
+    blocks.addAll(localNonRealBlocks());
+    for (AbstractEquationBlock seb : blocks) {
+        seb.diagnostics_generateBLTTable_rows(order, out, tm, true, size, varFilter);
+    }
+}
+
+public void PrePropagationEquationBlock.diagnostics_generateBLTTable_rows(FVariable[] order, CodeStream out, DiagnosticsGenerator.TableManager tm, boolean nested, int size, Map<FVariable, Integer> varFilter) {
+    for (AbstractEquationBlock seb : solvedBlocks()) {
+        seb.diagnostics_generateBLTTable_rows(order, out, tm, true, size, varFilter);
+    }
+}
+
+
+public void FunctionCallEquationBlock.diagnostics_generateBLTTable_rows(FVariable[] order, CodeStream out, DiagnosticsGenerator.TableManager tm, boolean nested, int size, Map<FVariable, Integer> varFilter) {
+    varFilter = new HashMap<FVariable, Integer>();
+    int index = 0;
+    for (FVariable var : equation().referencedFVariablesInLHS()) {
+        varFilter.put(var, -1);
+    }
+    for (FVariable var : activeVars) {
+        varFilter.put(var, index);
+        index++;
+    }
+    for (FVariable var : equation().referencedFVariablesInRHS()) {
+        varFilter.remove(var);
+    }
+    super.diagnostics_generateBLTTable_rows(order, out, tm, nested, activeVars.size(), varFilter);
+}
+
+public void AlgorithmBlock.diagnostics_generateBLTTable_rows(FVariable[] order, CodeStream out, DiagnosticsGenerator.TableManager tm, boolean nested, int size, Map<FVariable, Integer> varFilter) {
+    varFilter = new HashMap<FVariable, Integer>();
+    int index = 0;
+    for (FVariable var : equation().referencedFVariablesInLHS()) {
+        varFilter.put(var, -1);
+    }
+    for (FVariable var : activeVars) {
+        varFilter.put(var, index);
+        index++;
+    }
+    for (FVariable var : equation().referencedFVariablesInRHS()) {
+        varFilter.remove(var);
+    }
+    super.diagnostics_generateBLTTable_rows(order, out, tm, nested, activeVars.size(), varFilter);
+}
+
+public void AbstractEquationBlock.diagnostics_generateBLTTable_row(FVariable[] order, CodeStream out, DiagnosticsGenerator.TableManager tm, boolean nested, FAbstractEquation equation, Map<FVariable, Integer> varMap) {
+}
+
+protected static String ASTNode.escapeHTML(Object o) {
+    return escapeHTML(o.toString());
+}
+
+protected static String ASTNode.escapeHTML(String str) {
+    str = str.replace("&", "&amp;");
+    str = str.replace("\"", "&quot;");
+    str = str.replace("\'", "&039;");
+    str = str.replace("<", "&lt;");
+    str = str.replace(">", "&gt;");
+    return str;
+}
+
+}
+
+aspect HTMLMarkupPrinter {
+
+    /**
+     * Static printer instance.
+     */
+    public static HTMLPrinter ASTNode.htmlPrinter = new HTMLPrinter();
+
+    public class HTMLPrinter extends Printer {
+        
+        private Set<Object> localObjects = new HashSet<Object>();
+        
+        public HTMLPrinter() {
+            super("&nbsp;&nbsp;");
+        }
+
+        public void print(ASTNode node, CodeStream str, String indent) {
+            String wrapTag = node.htmlPrintWrapTag();
+            String wrapTagClass = node.htmlPrintWrapTagClass();
+            String[][] wrapTagAttributes = node.htmlPrintWrapTagAttributes();
+            if (isLocalObject(node.htmlPrintLocalObject())) {
+                if (wrapTagClass == null) {
+                    wrapTagClass = "localObject";
+                } else {
+                    wrapTagClass += " localObject";
+                }
+            }
+            if (wrapTag == null && (wrapTagClass != null || wrapTagAttributes != null)) {
+                wrapTag = "span";
+            }
+            if (wrapTag != null) {
+                str.format("<%s", wrapTag);
+                if (wrapTagClass != null) {
+                    str.format(" class=\"%s\"", wrapTagClass);
+                }
+                if (wrapTagAttributes != null) {
+                    for (String[] attr : wrapTagAttributes) {
+                        str.format(" %s=\"%s\"", attr[0], attr[1]);
+                    }
+                }
+                str.print(">");
+            }
+            node.htmlPrint(this, str, indent); 
+            if (wrapTag != null) {
+                str.format("</%s>", wrapTag);
+            }
+        }
+
+        public void startFile(CodeStream out, String title) {
+            out.println("<!DOCTYPE html>");
+            out.println("<html>");
+            out.println("<head>");
+            out.println("<meta charset=\"utf-8\" />");
+            out.formatln("<title>%s</title>", title);
+            out.println("<link rel=\"stylesheet\" type=\"text/css\" href=\"style.css\" />");
+            out.println("<script src=\"zepto.min.js\"></script>");
+            out.println("<script src=\"scripts.js\"></script>");
+            out.println("</head>");
+            out.println("<body>");
+            out.println("<div class=\"wrapper\">");
+            if (title != null) {
+                out.formatln("<h2>%s</h2>", title);
+            }
+            out.setLineEnder("<br />\n");
+        }
+
+        public void endFile(CodeStream out) {
+            out.setLineEnder("\n");
+            out.println("</div>");
+            out.println("</body>");
+            out.println("</html>");
+        }
+
+        public void addLocalObjects(Collection<? extends Object> objects) {
+            localObjects.addAll(objects);
+        }
+
+        public void clearLocalObjects() {
+            localObjects.clear();
+        }
+
+        public boolean isLocalObject(Object o) {
+            return localObjects.contains(o);
+        }
+                
+        public void prePrettyPrint(CodeStream str, int indexCounter, String indent) {
+    		str.print(indent+"<font color=\"grey\">" + String.format("%-4s", indexCounter).replaceAll(" ", "&nbsp;") + "</font>");
+    	}
+
+    }
+    
+    public void Printer.prePrettyPrint(CodeStream str, int indexCounter, String indent) {
+    }
+
+    public void ASTNode.htmlPrint(HTMLPrinter p, CodeStream str, String indent) {
+        prettyPrint(p, str, indent);
+    }
+
+    public void ASTNode.htmlPrint(CodeStream out, String title) {
+        HTMLPrinter p = htmlPrinter;
+        p.startFile(out, title);
+        p.print(this, out, "  ");
+        p.endFile(out);
+    }
+
+    syn String ASTNode.htmlPrintWrapTag() = null;
+    syn String ASTNode.htmlPrintWrapTagClass() = null;
+    syn String[][] ASTNode.htmlPrintWrapTagAttributes() = null;
+    syn Object ASTNode.htmlPrintLocalObject() = this;
+
+    eq FClass.htmlPrintWrapTag() = "div";
+    eq FClass.htmlPrintWrapTagClass() = "fclass";
+
+    eq FAccessExp.htmlPrintWrapTagClass() {
+        FAbstractVariable fv = myFV();
+        if (fv != null && fv.isFVariable()) {
+            return "varRef " + fv.asFVariable().zVariability();
+        }
+        return null;
+    }
+    eq FAccessExp.htmlPrintLocalObject() = myFV();
+    eq FAccessExp.htmlPrintWrapTagAttributes() {
+        FAbstractVariable fv = myFV();
+        if (fv == null || !fv.isFVariable()) {
+            return null;
+        }
+        return new String[][] {new String[] {"data-varRef", fv.name()}};
+    }
+    
+    eq FLitExp.htmlPrintWrapTagClass() = "literal";
+    eq FTimeExp.htmlPrintWrapTagClass() = "timeRef";
+    eq FIfExp.htmlPrintWrapTagClass() = "collapsable";
+    
+    eq FVariable.htmlPrintWrapTagAttributes() {
+        return new String[][] {new String[] {"data-varDecl", name()}};
+    }
+    
+
+    public void AbstractEquationBlock.prettyPrintHTML(HTMLPrinter p, CodeStream str, String indent) {
+        str.print("<div class=\"bltBlock\">");
+        prettyPrint(p, str, indent);
+        str.print("</div>");
+    }
+
+}

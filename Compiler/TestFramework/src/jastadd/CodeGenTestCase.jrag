@@ -1,0 +1,75 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+
+import java.io.BufferedReader;
+import java.io.PrintStream;
+import java.io.OutputStream;
+import java.io.StringReader;
+import java.io.ByteArrayOutputStream;
+import java.util.Collection;
+
+public abstract class CodeGenTestCase extends TestCase {
+    private String genCode = null;
+    private String template = null;
+
+    public abstract AbstractGenerator createGenerator(FClass fc);
+
+    /**
+     * Perform tests on flat class after transform canonical step.
+     * 
+     * @return  <code>true</code> if test case shoule stop after this method
+     */
+    protected boolean testTransformed(FClass fc) {
+        ByteArrayOutputStream os = new ByteArrayOutputStream();
+        PrintStream ps = CodeStream.createPrintStream(os, options.getBooleanOption("debug_duplicate_generated"));
+        AbstractGenerator generator = createGenerator(fc);
+        generator.generate(createTemplateReader(), new UnitTestCodeStream(ps));
+        String test = os.toString();
+        String correct = filter(getGeneratedCode());
+        
+        GUIDManager guidManager = fc.guidManager();
+        StringBuilder actual = new StringBuilder();
+        guidManager.setSourceString(test);
+        guidManager.addDependentString(test, actual);
+        guidManager.processDependentFiles();
+        
+        compareResult("Generated code does not match expected.", correct, actual.toString());
+        return true;
+    }
+
+    public String getGeneratedCode() {
+        return genCode;
+    }
+
+    public void setGeneratedCode(String genCode) {
+        this.genCode = genCode;
+    }
+
+    public String getTemplate() {
+        return template;
+    }
+
+    public void setTemplate(String template) {
+        this.template = template;
+    }
+
+    public Reader createTemplateReader() {
+        return (template == null) ? null : new BufferedReader(new StringReader(getTemplate()));
+    }
+
+}

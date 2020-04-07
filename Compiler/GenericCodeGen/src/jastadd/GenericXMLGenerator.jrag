@@ -1,0 +1,451 @@
+import java.io.PrintStream;
+
+/*
+    Copyright (C) 2013 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import org.jmodelica.util.XMLUtil;
+
+/**
+ * A generator class containing basic functionality for generating XML files.
+ * 
+ * Allows generation without a template file (by passing null as the template).
+ */
+public abstract class GenericXMLGenerator extends GenericGenerator {
+
+    private String indentStep;
+    private int indentation;
+    
+    public interface Creator {
+        public GenericXMLGenerator create(Printer expPrinter, char escapeCharacter, FClass fclass);
+    }
+    
+    /**
+     * Returns the string denoting the beginning of the copyright blurb.
+     */
+    protected String startOfBlurb() { return "<!--"; }
+    
+    /**
+     * Returns the string denoting the end of the copyright blurb.
+     */
+    protected String endOfBlurb() { return "-->"; }
+    
+    /**
+     * Returns the indentation step.
+     */
+    protected String indentStep() { return "\t"; }
+    
+    /**
+     * Constructor.
+     * 
+     * @param expPrinter Printer object used to generate code for expressions.
+     * @param escapeCharacter Escape characters used to decode tags.
+     * @param fclass An FClass object used as a basis for the code generation.
+     */
+    public GenericXMLGenerator(Printer expPrinter, char escapeCharacter, FClass fclass) {
+        super(expPrinter,escapeCharacter, fclass);
+        
+        indentStep = indentStep();
+        indentation = 0;
+    }
+
+    /**
+     * See generate(String templateFile, String outputFile).
+     * 
+     * In this implementation, if templateReader is null, then no template is used. 
+     * Instead, the tag returned by {@link #rootTag()} is generated.
+     * 
+     * @param templateReader  a Reader object from which the template file can be used
+     * @param genPrinter      a CodeStream object to which the generated code is written
+     * @param includeDir      directory to look for included files in. If null, includes are not supported
+     */
+    public void generate(Reader templateReader, CodeStream genPrinter, File includeDir) {
+        if (templateReader == null) {
+        	generateXMLDeclaration(genPrinter);
+            rootTag().generate(genPrinter);
+        	
+        } else {
+            super.generate(templateReader, genPrinter, includeDir);
+        }
+    }
+    
+    /**
+     * Generates the XML Declaration.
+     */
+    protected void generateXMLDeclaration(CodeStream printer) {
+        printer.print("<?xml");
+        generateAttribute("version", getXMLVersion(), printer);
+        generateAttribute("encoding", getXMLEncoding(), printer);
+        printer.print("?>\n");
+    }
+    
+    /**
+     * Get the version for the XML Declaration, defalut implementation returns "1.0".
+     */
+    protected String getXMLVersion() {
+    	return "1.0";
+    }
+    
+    /**
+     * Get the encoding for the XML Declaration, defalut implementation returns "UTF-8".
+     */
+    protected String getXMLEncoding() {
+    	return "UTF-8";
+    }
+    
+    /**
+     * Get the root tag, used to generate the file if no template file is given.
+     * 
+     * Default implementation returns the tag with the name returned by {@link #root()}.
+     */
+    protected AbstractTag rootTag() {
+        return getTag(root());
+    }
+    
+    /**
+     * The name of the root tag to use if no template file is given.
+     */
+    protected abstract String root();
+    
+    /**
+     * Get an array of tags from an array of tag names.
+     */
+    protected AbstractTag[] findTags(String[] names) {
+        AbstractTag[] tags = new AbstractTag[names.length];
+        int i = 0;
+        for (String name : names) 
+            tags[i++] = getTag(name);
+        return tags;
+    }
+    
+    /**
+     * Generate the start of an XML tag.
+     * 
+     * @param name     the name of the tag
+     * @param printer  the print stream to use
+     */
+    protected void generateTagStart(String name, CodeStream printer) {
+        indent(printer);
+        printer.print('<');
+        printer.print(name);
+    }
+    
+    /**
+     * Generate the end of an XML opening tag.
+     * 
+     * @param printer  the print stream to use
+     */
+    protected void generateOpenEnd(CodeStream printer) {
+        printer.print(">\n");
+        indentation++;
+    }
+    
+    /**
+     * Generates an open XML start tag. This is the same as first calling
+     * generateTagStart() followed by generateOpenEnd().
+     */
+    protected void generateOpenTag(String name, CodeStream printer) {
+        generateTagStart(name, printer);
+        generateOpenEnd(printer);
+    }
+    
+    /**
+     * Generates an one line tag with text contents inside.
+     */
+    protected void generateOneLineTag(String name, Object contents, CodeStream printer) {
+        generateTagStart(name, printer);
+        printer.print(">", XMLUtil.escape(contents.toString()), "</", name, ">\n");
+    }
+    
+    /**
+     * Generate the end of an XML closed tag.
+     * 
+     * Closed tags can not contain other tags, and ends with "/>".
+     * 
+     * @param printer  the print stream to use
+     */
+    protected void generateClosedEnd(CodeStream printer) {
+        printer.print(" />\n");
+    }
+    
+    /**
+     * Generate an XML closing tag.
+     * 
+     * @param name     the name of the tag
+     * @param printer  the print stream to use
+     */
+    protected void generateClosing(String name, CodeStream printer) {
+        indentation--;
+        indent(printer);
+        printer.print("</", name, ">\n");
+    }
+    
+    /**
+     * Generate an XML attribute.
+     * 
+     * @param name     the name of the attribute
+     * @param value    the value of the attribute
+     * @param printer  the print stream to use
+     */
+    protected void generateAttribute(String name, Object value, CodeStream printer) {
+        printer.print(" ", name, "=\"", XMLUtil.escape(value.toString()), "\"");
+    }
+    
+    /**
+     * Generate an XML attribute.
+     * 
+     * @param name     the name of the attribute
+     * @param variable variable to fetch the value of the attribute from
+     * @param printer  the print stream to use
+     */
+    protected void generateAttributeIfSet(String name, FVariable variable, CodeStream printer) {
+        if (variable.attributeSet(name)) {
+            String value = variable.attributeCValue(name).xmlValue();
+            generateAttribute(name, value, printer);
+        }
+    }
+    
+    /**
+     * Generate an XML attribute representing a list, the entires will be
+     * space separated.
+     * 
+     * @param name     the name of the attribute
+     * @param values   the values of the attribute
+     * @param printer  the print stream to use
+     */
+    protected void generateListAttribute(String name, Iterable<? extends Object> values, CodeStream printer) {
+        printer.print(" ", name, "=\"");
+        boolean first = true;
+        for (Object value : values) {
+            if (!first) {
+                printer.print(" ");
+            }
+            first = false;
+            printer.print(XMLUtil.escape(value.toString()));
+        }
+        printer.print("\"");
+    }
+
+    /**
+     * Generates an XML comment with the provided contents. Special characters
+     * are escaped in the provided content before printing.
+     * 
+     * @param contents Contents of the comment
+     * @param printer the print stream to use
+     */
+    protected void generateComment(String contents, CodeStream printer) {
+        indent(printer);
+        printer.print("<!-- " + XMLUtil.escape(contents) + " -->\n");
+    }
+
+    /**
+     * Print the current indentation to printer.
+     */
+    private void indent(CodeStream printer) {
+        for (int i = 0; i < indentation; i++)
+            printer.print(indentStep);
+    }
+    
+    
+    /**
+     * Base class for tags used to generate XML files.
+     * 
+     * For an XML tag that has attributes described by their own tag classes, 
+     * override {@link #attributes()} to return their names.
+     * For an XML tag that contains child tags described by their own tag classes, 
+     * override {@link #children()} to return their names.
+     * For an XML attribute, override {@link #value()} to return its value.
+     * 
+     * If no specific behavior is needed (looping, etc.), then that is enough. 
+     * Otherwise, override {@link #generate(java.io.PrintStream)}.
+     */
+    protected abstract class XMLTag extends DAETag {
+        
+        private AbstractTag[] childTags;
+        private AbstractTag[] attributeTags;
+        
+        /**
+         * The name to use for the xml tag or attribute.
+         */
+        protected String xml;
+        
+        /**
+         * Construct a tag.
+         * 
+         * @param name        tag name
+         * @param xml         name to use for the xml tag or attribute
+         * @param myGenerator the tag's generator
+         * @param fclass      an FClass to generate code for
+         */
+        public XMLTag(String name, String xml, AbstractGenerator myGenerator, FClass fclass) {
+            super(name, myGenerator, fclass);
+            this.xml = xml;
+        }
+        
+        /**
+         * Get the tags used to generate the children of this node.
+         * 
+         * Default implementation returns all tags named in {@link #children()}.
+         */
+        public AbstractTag[] childTags() {
+            if (childTags == null) 
+                childTags = findTags(children());
+            return childTags;
+        }
+        
+        /**
+         * Get the tags used to generate the attributes of this node.
+         * 
+         * Default implementation returns all tags named in {@link #attributes()}.
+         */
+        public AbstractTag[] attributeTags() {
+            if (attributeTags == null) 
+                attributeTags = findTags(attributes());
+            return attributeTags;
+        }
+        
+        /**
+         * Does this tag have any child tags that are active?
+         */
+        public boolean hasActiveChildren() {
+            return anyTagActive(childTags());
+        }
+        
+        /**
+         * Does this tag have any attribute tags that are active?
+         */
+        public boolean hasActiveAttributes() {
+            return anyTagActive(attributeTags());
+        }
+        
+        /**
+         * Checks if any of the given tags are active.
+         */
+        public boolean anyTagActive(AbstractTag[] tags) {
+            for (AbstractTag tag : tags) {
+                if (tag.isActive()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        /**
+         * Get the names of the tags used to generate the children of this node.
+         * 
+         * Subclasses should override if they can have any children.
+         */
+        public String[] children() {
+            return new String[] {};
+        }
+        
+        /**
+         * Get the names of the tags used to generate the attributes of this node.
+         * 
+         * Subclasses should override if they can have any attributes.
+         */
+        public String[] attributes() {
+            return new String[] {};
+        }
+        
+        /**
+         * The value of the attribute described by this tag.
+         * 
+         * Subclasses that represent an XML attribute should override and return non-null.
+         */
+        public Object value() {
+            return null;
+        }
+        
+        /**
+         * Generate the children of this tag.
+         */
+        public void generateChildren(CodeStream printer) {
+            for (AbstractTag child : childTags()) 
+                child.generateTag(printer);
+        }
+        
+        /**
+         * Generate the attributes of this tag.
+         */
+        public void generateAttributes(CodeStream printer) {
+            for (AbstractTag attribute : attributeTags()) 
+                attribute.generateTag(printer);
+        }
+        
+        /**
+         * Generate the opening tag of an XML node, with attributes as defined by 
+         * {@link #attributeTags()}.
+         * 
+         * @param name     the name of the XML tag
+         * @param printer  the print stream to use
+         */
+        public void generateOpening(String name, CodeStream printer) {
+            generateTagStart(name, printer);
+            generateAttributes(printer);
+            generateOpenEnd(printer);
+        }
+        
+        /**
+         * Generate an XML node, with children and/or attributes as defined by 
+         * {@link #childTags()} and {@link #attributeTags()}.
+         * 
+         * @param name     the name of the XML tag
+         * @param printer  the print stream to use
+         */
+        public void generateNode(String name, CodeStream printer) {
+            generateOpening(name, printer);
+            generateChildren(printer);
+            generateClosing(name, printer);
+        }
+        
+        /**
+         * Generate a closed XML tag, with attributes as defined by {@link #attributeTags()}.
+         * 
+         * @param name     the name of the XML tag
+         * @param printer  the print stream to use
+         */
+        public void generateClosed(String name, CodeStream printer) {
+            generateTagStart(name, printer);
+            generateAttributes(printer);
+            generateClosedEnd(printer);
+        }
+
+        /**
+         * Method for generating code corresponding to the tag.
+         * 
+         * Default implementation does:
+         * <ul>
+         * <li>If {@link #value()} returns non-null, generate an XML attribute with that value.
+         * <li>Otherwise if {@link #childTags()} returns an empty array, generate an XML node as 
+         * per {@link #generateNode(String, CodeStream)}.
+         * <li>Otherwise generate a closed XML tag, as per 
+         * {@link #generateClosed(String, CodeStream)}.
+         * </ul>
+         * 
+         * @param printer A CodeStream object for output of the generated code.
+         */
+        public void generate(CodeStream printer) {
+        	Object val = value();
+            if (val != null)
+                generateAttribute(xml, val, printer);
+            else if (hasActiveChildren())
+                generateNode(xml, printer);
+            else
+                generateClosed(xml, printer);
+        }
+        
+    }
+}

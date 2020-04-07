@@ -1,0 +1,13 @@
+Index: Modelica/Resources/C-Sources/ModelicaRandom.c
+===================================================================
+--- Modelica/Resources/C-Sources/ModelicaRandom.c	(revision 10578)
++++ Modelica/Resources/C-Sources/ModelicaRandom.c	(working copy)
+@@ -118,7 +118,7 @@
+ #endif
+ 
+ /* On Posix systems define a mutex using the single static variable "m" */
+-#if defined(_POSIX_)
++#if defined(_POSIX_) && !defined(NO_MUTEX)
+ #include <pthread.h>
+ static pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;
+ #define MUTEX_LOCK() pthread_mutex_lock(&m)

@@ -1,0 +1,32 @@
+package Ball_Beam
+
+model Ball_Beam "ball and beam"
+    parameter Real k_phi = 4.4;
+    parameter Real k_v = -10.0;
+    Modelica.Blocks.Interfaces.RealInput u "Input voltage";
+    Real phi "Beam angle";
+    Real v "Ball velocity";
+    Real z "Ball position";
+equation
+    der(phi) = k_phi*u;
+    der(v) = k_v*phi;
+    der(z) = v;
+end Ball_Beam;
+
+model Ball_Beam_MPC_Model
+    extends Ball_Beam;
+    parameter Real Q_11 = 0.0;
+    parameter Real Q_22 = 0.1;
+    parameter Real Q_33 = 1.0;
+    parameter Real rho = 1.0;
+    parameter Real z_ref = 0.0;
+end Ball_Beam_MPC_Model;
+
+optimization Ball_Beam_MPC(objectiveIntegrand = Q_11*phi^2 + Q_22*v^2 + Q_33*(z-z_ref)^2 + rho*u^2,
+                           startTime = 0.0, finalTime = 60.0)
+    extends Ball_Beam_MPC_Model(phi(min = -5, max = 5),
+                                z(min = -10, max = 10),
+                                u(min = -5, max = 5));
+end Ball_Beam_MPC;
+
+end Ball_Beam;

@@ -1,0 +1,36 @@
+// This loads the Jenkins pipeline library found in the ci folder.
+def url = scm.getLocations()[0].remote
+def base_url = url - "external/build_externals/Jenkins"
+echo base_url
+library identifier: 'build_externals@ci', retriever: modernSCM([$class: 'SubversionSCMSource', remoteBase: url, credentialsId: ''])
+library identifier: 'JModelica@ci', retriever: modernSCM([$class: 'SubversionSCMSource', remoteBase: base_url, credentialsId: ''])
+library identifier: 'build_thirdparties@ci', retriever: modernSCM([$class: 'SubversionSCMSource', remoteBase: "${base_url}/ThirdParty/build_thirdparties/Jenkins", credentialsId: ''])
+
+// Extract branch info from url variable (this assumes that this Jenkinsfile
+// has been checked out directly by Jenkins as part of pipeline build).
+(JM_SVN_PATH, JM_SVN_TYPE, JM_SVN_NAME) = extractBranchInfo("https://svn.jmodelica.org", base_url)
+
+// Set build name:
+currentBuild.displayName += " (" + (env.TRIGGER_CAUSE == null ? "MANUAL" : env.TRIGGER_CAUSE) + ")"
+
+// Set discard policy
+properties([buildDiscarder(logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '5', daysToKeepStr: '', numToKeepStr: ''))])
+
+
+node ('docker') {
+    checkoutJM("${JM_SVN_PATH}")
+    buildAssimuloDocker("centos", "wheel",  "jenkins_centos_config")
+    buildAssimuloDocker("centos", "folder", "jenkins_centos_config")
+    buildAssimuloDocker("ubuntu", "wheel",  "jenkins_ubuntu_config")
+    buildAssimuloDocker("ubuntu", "folder", "jenkins_ubuntu_config")
+}
+node("JMODELICA-SDK-1.13.2") {
+    checkoutJM("${JM_SVN_PATH}")
+    for (module in ["superlu", "blas", "lapack", "sundials"]) {
+        buildThirdPartyFromMake(null, null, "${pwd()}/build", module)
+    }
+    buildAssimulo(null, null, "${pwd()}/build", "folder")
+    buildAssimulo(null, null, "${pwd()}/build", "wheel")
+}
+
+

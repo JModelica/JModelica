@@ -1,0 +1,52 @@
+/*
+    Copyright (C) 2013-2018 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import org.jmodelica.common.ResourceLoader;
+
+aspect LoadResource {
+
+    /**
+     * Copies all files included by loadResource() to Resource folder.
+     */
+    public void FClass.loadResources(File resourcePath) {
+        Collection<String> errors = resourceLoader().loadResources(resourcePath);
+        for (String error : errors) {
+            error(String.format("loadResource(): " + error));
+        }
+        breakOnErrors();
+    }
+
+    syn lazy ResourceLoader FClass.resourceLoader() {
+        LinkedHashSet<String> s = new LinkedHashSet<String>();
+        collectResourcesToLoad(s);
+        return new ResourceLoader(new ArrayList<>(s));
+    }
+
+    void ASTNode.collectResourcesToLoad(LinkedHashSet<String> list) {
+        for (ASTNode n : this)
+            n.collectResourcesToLoad(list);
+    }
+
+    void FLoadResource.collectResourcesToLoad(LinkedHashSet<String> list) {
+        if (!inFunction()) {
+            list.add(ceval().stringValue());
+        }
+    }
+
+    syn String FLoadResource.loadedResourceRelativePath() {
+        return myFClass().resourceLoader().loadedResourceRelativePath(ceval().stringValue());
+    }
+}

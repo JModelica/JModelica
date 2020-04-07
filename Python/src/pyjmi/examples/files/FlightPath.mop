@@ -1,0 +1,56 @@
+package FlightPath
+
+	model FlightPath
+
+	  //state start values
+	  parameter Real x1_0 = 153.73;
+	  parameter Real x2_0 = 0;
+	  parameter Real x3_0 = 0;
+
+	  //states
+	  Real x1(start = x1_0, fixed=true);
+	  Real x2(start = x2_0, fixed=true);
+	  Real x3(start = x3_0, fixed=true);
+
+	  //control
+	  input Real u;
+	  input Real v;
+
+	  //parameter
+	  parameter Real L = 65.3;
+	  parameter Real D = 3.18;
+	  parameter Real m = 160e3;
+	  parameter Real g = 9.81;
+	  parameter Real c = 6;
+
+	equation 
+	  der(x1) = (-D/m*x1^2-g*sin(x2)+u/m);
+	  der(x2) = L/m*x1*(1-c*x2)-g*cos(x2)/x1+L*c/m*v;
+	  der(x3) = (x1*sin(x2));
+
+	end FlightPath;
+	
+	optimization FlightPath_opt (objective = J(finalTime),
+                            startTime = 0,
+                            finalTime = 100)
+                            
+      extends FlightPath(x1(fixed=true),x2(fixed=true),x3(fixed=true));														
+	  Real J(fixed=true);     
+														  
+   equation
+	  der(J) = x3^2;													   
+   constraint
+	  x1 >= 92;
+	  x1 <= 170;
+	  x2 >= -20*3.14159/180;
+	  x2 <= 25*3.14159/180;
+	  x3 >= -150;
+	  x3 <= 150;
+	  u  >= 60e3;
+	  u  <= 120e3;
+	  v  >= -150;
+	  v  <= 150;
+	  
+   end FlightPath_opt;
+	
+end FligthPath;

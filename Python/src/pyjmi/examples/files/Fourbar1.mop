@@ -1,0 +1,11 @@
+within Fourbar1;
+
+optimization Opt(objectiveIntegrand=(fourbar1.j2.s+0.35)^2 + 1e-8*(u+54.52)^2)
+    Fourbar1.Fourbar1 fourbar1(j1.phi(start=phi_start), j1.w(start=w_start));
+    parameter Real phi_start = 2.9441959151892;
+    parameter Real w_start = 0;
+    input Real u(min=-90, max=90);
+equation
+    fourbar1.u = u;
+end Opt;
+

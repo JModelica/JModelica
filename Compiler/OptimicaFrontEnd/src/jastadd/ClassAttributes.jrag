@@ -1,0 +1,115 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect ClassAttributes {
+
+    syn lazy List SrcOptClassDecl.getClassAttributeList() {
+        List<SrcComponentClause> l = new List<>();
+        
+        // Build a string with a Modelica class that has the class attributes as components
+        String builtInDef = 
+                "model ClassAttributes\n" + 
+                "    Real objective = 1;\n" + 
+                "    Real objectiveIntegrand = 1;\n" + 
+                "    parameter Real startTime = 0;\n" + 
+                "    parameter Real finalTime(initialGuess = 1) = 1;\n" + 
+                "    parameter Boolean static = false;\n" + 
+                "end ClassAttributes;\n";
+        
+        SrcPrimitiveClassDecl pcd = null;
+        try {
+            UtilInterface util = root().getUtilInterface();
+            SourceRoot sr = util.getParserHandler().parseString(util, builtInDef, LoadInfo.empty());
+            Program p = sr.getProgram();
+            SrcFullClassDecl cd = p.getUnstructuredEntity(0).getSrcClassDecl(0).asFullClassDecl();
+            for (SrcComponentClause comp : cd.componentClauses()) {
+                l.add(comp);
+            }
+        } catch(Exception e) {
+            // TODO: Do something constuctive here, and change catch from Exception to only the ones we have to
+        }
+        return l;
+    }
+
+    syn Iterable<SrcComponentDecl> SrcOptClassDecl.classAttributes() = 
+        new NestledIterable<SrcComponentDecl,SrcComponentClause>(getClassAttributes()) {
+            protected Iterable<SrcComponentDecl> subIterable(SrcComponentClause c) {
+                return c.getSrcComponentDecls();
+            }
+        };
+
+    syn SrcOptClassDecl InstOptClassDecl.getSrcOptClassDecl() = (SrcOptClassDecl) getSrcClassDecl();
+
+    syn lazy List InstOptClassDecl.getInstClassAttributeList() {
+        List l = new List();
+        for (SrcComponentDecl cd : getSrcOptClassDecl().classAttributes()) {
+            InstAccess name = cd.getClassName().newInstAccess();
+            l.add(new InstCreateComponentDecl(cd, this));
+        }
+        return l;
+    }
+
+    eq InstOptClassDecl.localInstModifications() {
+        ArrayList<InstModification> l = new ArrayList<InstModification>();
+        // Add modifications from the class modification list
+        if (hasInstClassModification()) {
+            l.add(getInstClassModification());
+        }
+        return l;
+    }
+
+    eq InstOptClassDecl.getInstClassModification().lookupInstComponentInInstElement(String name) {
+        for (InstComponentDecl ica : getInstClassAttributes()) {
+            if (ica.matches(name))
+                return InstLookupResult.found(ica);
+        }
+        return InstLookupResult.notFound();
+    }
+
+    rewrite InstPrimitive {
+        when (!(this instanceof InstClassAttribute) && isClassAttribute()) to InstClassAttribute 
+        copyLocationTo(new InstClassAttribute(
+                name(), getClassName(), getLocalFArraySubscriptsOpt(), getSrcComponentDecl(), 
+                getInstModificationOpt(), getInstConstrainingComponentOpt(), getConditionalAttributeOpt()));
+    }
+
+    inh boolean InstPrimitive.isClassAttribute();
+    eq BaseNode.getChild().isClassAttribute()                      = false;
+    eq InstOptClassDecl.getInstClassAttribute().isClassAttribute() = true;
+
+	// This equation is needed in order to ensure correct lookup of accesses
+	// in the class attribute construct.
+	eq InstOptClassDecl.getInstClassModification().myInstNode() =
+		getInstClassAttribute(0);
+	
+	eq InstOptClassDecl.getInstClassModification().lookupInstComponent(String name) =
+		memberInstComponent(name);
+
+    eq InstOptClassDecl.memberInstComponent(String name) {
+        InstLookupResult<InstComponentDecl> res = super.memberInstComponent(name);
+        if (res.successful())
+            return res;
+        
+        for (InstComponentDecl ica : getInstClassAttributes()) {
+            if (ica.matches(name))
+                return InstLookupResult.found(ica);
+        }
+        
+        return InstLookupResult.notFound();
+    }
+
+    eq InstClassAttribute.isBuiltIn() = true;
+}

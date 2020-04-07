@@ -1,0 +1,341 @@
+/*
+    Copyright (C) 2009-2017 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect FlatAPIAttributes {
+
+    public static final String FAttribute.QUANTITY     = "quantity";
+    public static final String FAttribute.UNIT         = "unit";
+    public static final String FAttribute.DISPLAY_UNIT = "displayUnit";
+    public static final String FAttribute.MIN          = "min";
+    public static final String FAttribute.MAX          = "max";
+    public static final String FAttribute.START        = "start";
+    public static final String FAttribute.FIXED        = "fixed";
+    public static final String FAttribute.NOMINAL      = "nominal";
+    public static final String FAttribute.STATE_SELECT = "stateSelect";
+    public static final String FAttribute.SIZE         = "size()";
+
+    public static final String FAttribute.STATE_SELECT_TYPE = "StateSelect";
+
+    syn lazy FDerivedType FVariable.myFDerivedType() = findFDerivedType(getDerivedType());
+    syn FDerivedType FEnumDecl.myFDerivedType()      = findFDerivedType(name());
+    eq FRecordVariable.myFDerivedType()              = null;
+
+    inh FDerivedType FVariable.findFDerivedType(String name);
+    inh FDerivedType FEnumDecl.findFDerivedType(String name);
+    eq FClass.getChild().findFDerivedType(String name) = derivedTypeMap().get(name);
+    eq Root.getChild().findFDerivedType(String name)   = null;
+
+    syn lazy Map<String,FDerivedType> FClass.derivedTypeMap() {
+        Map<String,FDerivedType> m = new HashMap<String,FDerivedType>();
+        for (FDerivedType t : getFDerivedTypes()) {
+            m.put(t.getName(), t);
+        }
+        return m;
+    }
+
+    eq FAttribute.matches(String str)   = getName().name().equals(str);
+    eq FDerivedType.matches(String str) = getName().equals(str);
+
+    syn FAttribute FVariable.findAttributeLocal(String name) = findMatching(getFAttributes(), name);
+
+    syn lazy FAttribute FVariable.findAttribute(String name) {
+        FAttribute res = findAttributeLocal(name);
+        if (res == null && myFDerivedType() != null)
+            res = myFDerivedType().findAttribute(name);
+        return res;
+    }
+
+    syn FAttribute FAttribute.findAttribute(String name)        = findMatching(getFAttributes(), name);
+    syn FAttribute FDerivedType.findAttribute(String name)      = findMatching(getFAttributes(), name);
+    syn FAttribute FAbstractEquation.findAttribute(String name) = findMatching(getFAttributes(), name);
+    syn FAttribute FFunctionDecl.findAttribute(String name)     = findMatching(getFAttributes(), name);
+    syn boolean FVariable.attributeSet(FAttribute a)   = (a != null) && a.getAttributeSet();
+    syn FExp    FVariable.attributeExp(FAttribute a)   = (a != null && a.hasValue()) ? a.getValue() : null;
+    syn boolean FVariable.attributeSet(String name)    = attributeSet(findAttribute(name));
+    syn FExp    FVariable.attributeExp(String name)    = attributeExp(findAttribute(name));
+    syn String  FVariable.attributeString(String name) = attributeCValueString(name).stringValue();
+
+    syn FExp FRecordVariable.findHierarchicalAttributeValue(FAccessFull name, int n, String attrName) {
+        FAttribute attr = findHierarchicalAttribute(name, n);
+        if (attr != null) {
+            attr = attr.findAttribute(attrName);
+            if (attr != null) {
+                return attr.getValue();
+            }
+        }
+        return null;
+    }
+
+    syn FAttribute FAbstractVariable.findHierarchicalAttribute(FAccessFull name) =
+            findHierarchicalAttribute(name, name.numParts());
+
+    syn FAttribute FAbstractVariable.findHierarchicalAttribute(FAccessFull name, int n) = null;
+    eq FVariable.findHierarchicalAttribute(FAccessFull name, int n) =
+            name.findHierarchicalAttribute(getFAccess().asFAccessFull(), this, n);
+
+    syn FAttribute FAccess.findHierarchicalAttribute(FAccessFull prefix, FVariable var, int n) = asFAccessFull().findHierarchicalAttribute(prefix, var, n);
+    eq FAccessFull.findHierarchicalAttribute(FAccessFull prefix, FVariable var, int n) {
+        int i = prefix.numMatchingParts(this);
+        if (i >= n)
+            return null;
+        FAttribute attr = var.findAttribute(getFAccessPart(i).getName());
+        for (i++; i < n && attr != null; i++)
+            attr = attr.findAttribute(getFAccessPart(i).getName());
+        return attr;
+    }
+
+    syn CValue FVariable.attributeCValue(String name) {
+        FAttribute a = findAttribute(name);
+        return attributeSet(a) ? attributeExp(a).ceval() : CValue.UNKNOWN;
+    }
+
+    syn CValue FVariable.attributeCValueString(String name) {
+        FAttribute a = findAttribute(name);
+        return (attributeSet(a) ? attributeExp(a).ceval() : new CValueString("")).expandArray(size());
+    }
+    syn CValue FVariable.attributeCValueBoolean(String name, boolean def) {
+        FAttribute a = findAttribute(name);
+        return (attributeSet(a) ? attributeExp(a).ceval() : new CValueBoolean(def)).expandArray(size());
+    }
+    syn CValue FVariable.attributeCValueReal(String name, double def) {
+        FAttribute a = findAttribute(name);
+        return (attributeSet(a) ? attributeExp(a).ceval() : new CValueReal(def)).expandArray(size());
+    }
+    syn CValue FVariable.attributeCValueInteger(String name, int def) {
+        FAttribute a = findAttribute(name);
+        return (attributeSet(a) ? attributeExp(a).ceval() : new CValueInteger(def)).expandArray(size());
+    }
+    syn CValue FVariable.attributeCValueEnum(String name, FType type, int def) {
+        FAttribute a = findAttribute(name);
+        return (attributeSet(a) ? attributeExp(a).ceval() : new CValueEnum(type, def)).expandArray(size());
+    }
+
+    public void FVariable.setAttribute(String name, String type, FExp exp) {
+        setAttribute(name, type, exp, 0);
+    }
+
+    public void FVariable.setAttribute(String name, String type, FExp exp, int level) {
+        FAttribute attr = findMatching(getFAttributes(), name);
+        if (attr == null) {
+            attr = new FAttribute(new FAccessString(type), new FIdDecl(name), exp, true, level);
+            addFAttribute(attr);
+        } else {
+            attr.setValue(exp);
+            attr.setLevel(level);
+        }
+    }
+
+    public void FVariable.unsetAttribute(String name) {
+        List<FAttribute> newList = new List<FAttribute>();
+        for (FAttribute attr : getFAttributes()) {
+            if (!attr.matches(name))
+                newList.add(attr);
+        }
+        setFAttributeList(newList);
+        flushCache();
+    }
+
+    // Quantity attribute
+    syn boolean FVariable.quantityAttributeSet()    = attributeSet(FAttribute.QUANTITY);
+    syn FExp    FVariable.quantityAttributeExp()    = attributeExp(FAttribute.QUANTITY);
+    syn CValue  FVariable.quantityAttributeCValue() = attributeCValueString(FAttribute.QUANTITY);
+    syn String  FVariable.quantityAttribute()       = quantityAttributeCValue().stringValue();
+
+    // Unit attribute
+    syn boolean FVariable.unitAttributeSet()    = attributeSet(FAttribute.UNIT);
+    syn FExp    FVariable.unitAttributeExp()    = attributeExp(FAttribute.UNIT);
+    syn CValue  FVariable.unitAttributeCValue() = attributeCValueString(FAttribute.UNIT);
+    syn String  FVariable.unitAttribute()       = unitAttributeCValue().stringValue();
+
+    // Display Unit attribute
+    syn boolean FVariable.displayUnitAttributeSet()    = attributeSet(FAttribute.DISPLAY_UNIT);
+    syn FExp    FVariable.displayUnitAttributeExp()    = attributeExp(FAttribute.DISPLAY_UNIT);
+    syn CValue  FVariable.displayUnitAttributeCValue() = attributeCValueString(FAttribute.DISPLAY_UNIT);
+    syn String  FVariable.displayUnitAttribute()       = displayUnitAttributeCValue().stringValue();
+
+    // min attribute
+    syn boolean FVariable.minAttributeSet()           = attributeSet(FAttribute.MIN);
+    syn FExp    FVariable.minAttributeExp()           = attributeExp(FAttribute.MIN);
+    syn CValue  FRealVariable.minAttributeCValue()    = attributeCValueReal(FAttribute.MIN, -1e20);
+    syn CValue  FIntegerVariable.minAttributeCValue() = attributeCValueInteger(FAttribute.MIN, (int) -1e10);
+    syn CValue  FEnumVariable.minAttributeCValue()    = attributeCValueEnum(FAttribute.MIN, type(), 1);
+    syn double  FRealVariable.minAttribute()          = minAttributeCValue().realValue();
+    syn int     FIntegerVariable.minAttribute()       = minAttributeCValue().intValue();
+    syn int     FEnumVariable.minAttribute()          = minAttributeCValue().intValue();
+
+    // max attribute
+    syn boolean FVariable.maxAttributeSet()           = attributeSet(FAttribute.MAX);
+    syn FExp    FVariable.maxAttributeExp()           = attributeExp(FAttribute.MAX);
+    syn CValue  FRealVariable.maxAttributeCValue()    = attributeCValueReal(FAttribute.MAX, 1e20);
+    syn CValue  FIntegerVariable.maxAttributeCValue() = attributeCValueInteger(FAttribute.MAX, (int) 1e10);
+    syn CValue  FEnumVariable.maxAttributeCValue()    = attributeCValueEnum(FAttribute.MAX, type(), numEnumLiterals());
+    syn double  FRealVariable.maxAttribute()          = maxAttributeCValue().realValue();
+    syn int     FIntegerVariable.maxAttribute()       = maxAttributeCValue().intValue();
+    syn int     FEnumVariable.maxAttribute()          = maxAttributeCValue().intValue();
+
+    // start attribute
+    syn boolean FVariable.useBindingExpAsStart()  =
+        (isIndependentParameter() || variability().knownParameterOrLess()) && hasBindingExp();
+
+    syn boolean FVariable.startAttributeSet()     = attributeSet(FAttribute.START);
+    syn FExp    FVariable.startAttributeExp()     = attributeExp(FAttribute.START);
+    syn FExp    FVariable.createStartAttributeExp() {
+        FExp e = startAttributeExp();
+        return (e == null) ? startAttributeCValue().buildLiteral() : e.fullCopy();
+    }
+
+    syn CValue FVariable.startAttributeCValue()   = CValue.UNKNOWN;
+    eq FRealVariable.startAttributeCValue()       = attributeCValueReal(FAttribute.START, 0.0);
+    eq FDerivativeVariable.startAttributeCValue() = new CValueReal(0.0);
+    eq FIntegerVariable.startAttributeCValue()    = attributeCValueInteger(FAttribute.START, 0);
+    eq FBooleanVariable.startAttributeCValue()    = attributeCValueBoolean(FAttribute.START, false);
+    eq FStringVariable.startAttributeCValue()     = attributeCValueString(FAttribute.START);
+    eq FEnumVariable.startAttributeCValue()       = attributeCValueEnum(FAttribute.START, type(), 1);
+
+    syn double  FRealVariable.startAttribute()    = startAttributeCValue().realValue();
+    syn int     FIntegerVariable.startAttribute() = startAttributeCValue().intValue();
+    syn boolean FBooleanVariable.startAttribute() = startAttributeCValue().booleanValue();
+    syn String  FStringVariable.startAttribute()  = startAttributeCValue().stringValue();
+    syn int     FEnumVariable.startAttribute()    = startAttributeCValue().intValue();
+
+    // fixed attribute
+    syn boolean FVariable.fixedAttributeSet()           = attributeSet(FAttribute.FIXED);
+    syn FExp    FVariable.fixedAttributeExp()           = attributeExp(FAttribute.FIXED);
+    syn CValue  FVariable.fixedAttributeCValue()        = attributeCValueBoolean(FAttribute.FIXED, isParameter() || isConstant());
+    syn boolean FVariable.fixedAttribute()              = fixedAttributeCValue().reduceBooleanOr();
+    public void FVariable.setFixedAttribute(boolean value) { setFixedAttribute(FBooleanLitExp.create(value)); }
+    public void FVariable.setFixedAttribute(FExp value)    { setAttribute(FAttribute.FIXED, "Boolean", value); }
+
+    // Nominal attribute
+    syn boolean FVariable.nominalAttributeSet()    = attributeSet(FAttribute.NOMINAL);
+    syn FExp    FVariable.nominalAttributeExp()    = attributeExp(FAttribute.NOMINAL);
+    syn CValue  FVariable.nominalAttributeCValue() = attributeCValueReal(FAttribute.NOMINAL, 1.0);
+    syn double  FVariable.nominalAttribute()       = nominalAttributeCValue().realValue();
+
+    syn boolean FDerivativeVariable.nominalAttributeSet()    = myDifferentiatedVariable().asFVariable().nominalAttributeSet();
+    syn FExp    FDerivativeVariable.nominalAttributeExp()    = myDifferentiatedVariable().asFVariable().nominalAttributeExp();
+    syn CValue  FDerivativeVariable.nominalAttributeCValue() = myDifferentiatedVariable().asFVariable().nominalAttributeCValue();
+
+    // State Select attribute
+    syn boolean FVariable.stateSelectAttributeSet()        = attributeSet(FAttribute.STATE_SELECT);
+    syn FExp    FRealVariable.stateSelectAttributeExp()    = attributeExp(FAttribute.STATE_SELECT);
+    syn CValue  FRealVariable.stateSelectAttributeCValue() = attributeCValueEnum(FAttribute.STATE_SELECT, stateSelectType(), 3);
+    syn int     FRealVariable.stateSelectAttributeInt()    = stateSelectAttributeCValue().intValue();
+
+    public void FVariable.warnStartAttributeNotSet() {
+        if (!ASTNode.printer_C.C_blockResidualAttributePrinter.attributeSet(this, "start"))
+            warning("Iteration variable \"" + name() + "\" is missing start value!");
+    }
+
+
+    /**
+     * Return the maximum numeric value that this expression can take, considering min/max values of variables.
+     *
+     * Only implemented for a small subset of expressions:
+     *  - flat access to Real or Integer
+     *  - numeric literal
+     *  - negation
+     */
+    syn double FExp.maxRealValue() {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Return the minimum numeric value that this expression can take, considering min/max values of variables.
+     *
+     * Only implemented for a small subset of expressions:
+     *  - flat access to Real or Integer
+     *  - numeric literal
+     *  - negation
+     */
+    syn double FExp.minRealValue() {
+        throw new UnsupportedOperationException();
+    }
+
+    eq FRealLitExp.maxRealValue()    = getValue();
+    eq FRealLitExp.minRealValue()    = getValue();
+    eq FIntegerLitExp.maxRealValue() = getValue();
+    eq FIntegerLitExp.minRealValue() = getValue();
+    eq FNegExp.maxRealValue()        = -getFExp().minRealValue();
+    eq FNegExp.minRealValue()        = -getFExp().maxRealValue();
+    eq FAccessExp.maxRealValue()     = myFV().maxRealValue();
+    eq FAccessExp.minRealValue()     = myFV().minRealValue();
+
+    /**
+     * Return the maximum numeric value that this variable can take.
+     *
+     * Only implemented for Real and Integer variables.
+     */
+    syn double FAbstractVariable.maxRealValue() {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Return the minimum numeric value that this variable can take.
+     *
+     * Only implemented for Real and Integer variables.
+     */
+    syn double FAbstractVariable.minRealValue() {
+        throw new UnsupportedOperationException();
+    }
+
+    eq FRealVariable.maxRealValue()    = variability().knownParameterOrLess() ? ceval().realValue() : maxAttribute();
+    eq FRealVariable.minRealValue()    = variability().knownParameterOrLess() ? ceval().realValue() : minAttribute();
+    eq FIntegerVariable.maxRealValue() = variability().knownParameterOrLess() ? ceval().intValue() : maxAttribute();
+    eq FIntegerVariable.minRealValue() = variability().knownParameterOrLess() ? ceval().intValue() : minAttribute();
+
+
+    /**
+     * Check if this attribute is in an FVariable.
+     */
+    inh boolean FAttribute.isInFV();
+    eq FVariable.getChild().isInFV()         = true;
+    eq FDerivedType.getChild().isInFV()      = false;
+    eq FAbstractEquation.getChild().isInFV() = false;
+    eq FFunctionDecl.getChild().isInFV()     = false;
+    eq FClass.getChild().isInFV()            = false;
+
+    /**
+     * Check if this attribute is in a specific FVariable.
+     */
+    inh boolean FAttribute.isInFV(FVariable fv);
+    eq FVariable.getChild().isInFV(FVariable fv)         = fv == this;
+    eq FDerivedType.getChild().isInFV(FVariable fv)      = false;
+    eq FAbstractEquation.getChild().isInFV(FVariable fv) = false;
+    eq FFunctionDecl.getChild().isInFV(FVariable fv)     = false;
+    eq FClass.getChild().isInFV(FVariable fv)            = false;
+
+    /**
+     * Check if this attribute is in an FDerivedType.
+     */
+    inh boolean FAttribute.isInDerivedType();
+    eq FVariable.getChild().isInDerivedType()         = false;
+    eq FDerivedType.getChild().isInDerivedType()      = true;
+    eq FAbstractEquation.getChild().isInDerivedType() = false;
+    eq FFunctionDecl.getChild().isInDerivedType()     = false;
+    eq FClass.getChild().isInDerivedType()            = false;
+
+    /**
+     * Check if this attribute is in a specific FDerivedType.
+     */
+    inh boolean FAttribute.isInDerivedType(FDerivedType t);
+    eq FVariable.getChild().isInDerivedType(FDerivedType t)         = false;
+    eq FDerivedType.getChild().isInDerivedType(FDerivedType t)      = t == this;
+    eq FAbstractEquation.getChild().isInDerivedType(FDerivedType t) = false;
+    eq FFunctionDecl.getChild().isInDerivedType(FDerivedType t)     = false;
+    eq FClass.getChild().isInDerivedType(FDerivedType t)            = false;
+
+}

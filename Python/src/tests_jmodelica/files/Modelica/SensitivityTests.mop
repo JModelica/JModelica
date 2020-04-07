@@ -1,0 +1,19 @@
+package SensitivityTests
+
+    optimization SensTest1
+        parameter Real a(free=true) = 1.0;
+        parameter Real b = 0.0;
+        Real x1(start=1);
+        Real x2(start=1);
+        Real x3(start=1);
+        Real x4(start=1);
+        Real x5(start=1);
+    equation
+        der(x1)=a;
+        x2=b;
+        x3=a;
+        x4=-a;
+        x1=x5;
+    end SensTest1;
+
+end SensitivityTests;

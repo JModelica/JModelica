@@ -1,0 +1,67 @@
+/*
+    Copyright (C) 2014 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+public class FmiXMLCodeGenTestCase extends CodeGenTestCase {
+
+    public AbstractGenerator createGenerator(FClass fc) {
+        String ver = options.getStringOption("fmi_version");
+        if (ver == OptionRegistry.FMIVersion.FMI20) {
+            return new Fmi2XMLGenerator(ASTNode.prettyPrinter, '$', fc);
+        } else {
+            return new Fmi1XMLGenerator(ASTNode.prettyPrinter, '$', fc);
+        }
+    }
+
+}
+
+aspect FmiXMLTestAnnotationizer {
+
+abstract public class TestAnnotationizerHelper {
+
+    /**
+     * An FMI XML code generation test.
+     */
+    public static class FmiXMLCodeGenTestCase extends CodeGenTestCase {
+
+        public FmiXMLCodeGenTestCase(String filePath, String className, String description,
+                String platform, String[] opts, Object[] data) throws Exception {
+
+            super(filePath, className, description, platform, opts, data);
+        }
+
+        public FmiXMLCodeGenTestCase(SrcClassDecl cd, String filePath, String className) throws Exception {
+            super(cd, filePath, className);
+        }
+
+        public static void usage(String cl, String extra) {
+            TestAnnotationizerHelper.usage(cl, "XML code template");
+        }
+
+        @Override
+        public AbstractGenerator createGenerator(FClass fc) {
+            String ver = optionRegistry().getStringOption("fmi_version");
+            if (ver == OptionRegistry.FMIVersion.FMI20) {
+                return new Fmi2XMLGenerator(ASTNode.prettyPrinter, '$', fc);
+            } else {
+                return new Fmi1XMLGenerator(ASTNode.prettyPrinter, '$', fc);
+            }
+        }
+
+    }
+
+}
+
+}

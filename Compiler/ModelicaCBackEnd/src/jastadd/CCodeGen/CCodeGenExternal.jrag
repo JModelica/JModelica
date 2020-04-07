@@ -1,0 +1,153 @@
+/*
+Copyright (C) 2009 Modelon AB
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, version 3 of the License.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect CCodeGenExternal {
+
+    /**
+     * Generates temporaries for an argument to an external function when necessary.
+     */
+    public void FExternalLanguage.genVarDecls_C(CodePrinter p, CodeStream str, String indent, FExternalStmt stmt, boolean ceval) {
+        for (FExp arg: stmt.getArgs()) {
+            if (extShouldArgConvert(arg, ceval)) {
+                arg.type().printDeclBase_C(p, str, indent, arg.tempName_C(), arg, true);
+            }
+        }
+        if (stmt.hasReturnVar() && stmt.getReturnVar().type().isRecord()) {
+            stmt.getReturnVar().type().printDeclBase_C(p, str, indent, stmt.getReturnVar().tempName_C(), stmt.getReturnVar(), true);
+        }
+    }
+    
+    /**
+     *  Does this external function argument need any conversion?
+     *  Boolean        => int
+     *  Integer        => int
+     *  Fortran matrix => transpose
+     */
+    syn boolean FExternalLanguage.extShouldArgConvert(FExp arg, boolean ceval) = false;
+    eq FCExternalLanguage.extShouldArgConvert(FExp arg, boolean ceval)         = arg.extShouldArgConvert(false, ceval);
+    eq FFortran77ExternalLanguage.extShouldArgConvert(FExp arg, boolean ceval) = arg.extShouldArgConvert(true, ceval);
+    
+    syn boolean FExp.extShouldArgConvert(boolean fortran, boolean ceval) { throw new UnsupportedOperationException(); }
+    eq FLitExp.extShouldArgConvert(boolean fortran, boolean ceval)         = ceval || fortran;
+    eq FSizeExp.extShouldArgConvert(boolean fortran, boolean ceval)        = ceval;
+    eq CommonAccessExp.extShouldArgConvert(boolean fortran, boolean ceval) =
+            type().isInteger() || type().isBoolean() || type().isEnum() || type().isRecord() ||
+            (fortran && type().isReal() && ndims() > 1);
+    
+    
+    @Override
+    public void CommonAccessExp.prepExternalArg(CodePrinter p, CodeStream str, String indent, FExternalLanguage lang, boolean writeback, CodeGenContext cgc) {
+        if (!writeback || myCommonVarDecl().isOutput()) {
+            if (isArray() && !writeback) {
+                type().print(p.createInitPrinter(str), indent, tempName_C(), this, true);
+            }
+            super.prepExternalArg(p, str, indent, lang, writeback, cgc);
+        }
+    }
+    
+    @Override
+    public void FLitExp.prepExternalArg(CodePrinter p, CodeStream str, String indent, FExternalLanguage lang, boolean writeback, CodeGenContext cgc) {
+        if (!writeback)
+            super.prepExternalArg(p, str, indent, lang, writeback, cgc);
+    }
+    
+    @Override
+    public void FSizeExp.prepExternalArg(CodePrinter p, CodeStream str, String indent, FExternalLanguage lang, boolean writeback, CodeGenContext cgc) {
+        if (!writeback)
+            super.prepExternalArg(p, str, indent, lang, writeback, cgc);
+    }
+    
+    public void FExternalLanguage.genFuncCall(CodePrinter p, CodeStream str, String indent, FExternalStmt stmt, CodeGenContext cgc) {}
+    
+    @Override
+    public void FCExternalLanguage.genFuncCall(CodePrinter p, CodeStream str, String indent, FExternalStmt stmt, CodeGenContext cgc) {
+        str.print(stmt.getName()+"(");
+        String prefix = "";
+        for (FExp arg : stmt.getArgs()) {
+            str.print(prefix);
+            arg.genExternalCFuncArgs(p, str, indent, cgc);
+            prefix = ", ";
+        }
+        str.print(");\n");
+    }
+    
+    @Override
+    public void FFortran77ExternalLanguage.genFuncCall(CodePrinter p, CodeStream str, String indent, FExternalStmt stmt, CodeGenContext cgc) {
+        str.print(stmt.getName()+"_(");
+        String prefix = "";
+        for (FExp arg : stmt.getArgs()) {
+            str.print(prefix);
+            arg.genExternalFortranFuncArgs(p, str, indent, cgc);
+            prefix = ", ";
+        }
+        str.print(");\n");      
+    }
+    
+    public void FExternalLanguage.genFuncDecl(CodePrinter p, CodeStream str, String indent, FExternalStmt stmt) {
+        if (stmt.isIncluded()) {
+            return;
+        }
+        
+        boolean fortran = this instanceof FFortran77ExternalLanguage;
+        str.print(indent);
+        str.print("extern ");
+        if (stmt.hasReturnVar()) {
+            str.print(stmt.getReturnVar().type().argType_C(p, false));
+        } else {
+            str.print("void");
+        }
+        str.print(" ");
+        str.print(stmt.getName());
+        if (fortran) {
+            str.print("_");
+        }
+        str.print("(");
+        String prefix = "";
+        for (FExp arg : stmt.getArgs()) {
+            str.print(prefix);
+            str.print(arg.argType_C(p, arg.isExternalArgumentRef(fortran)));
+            prefix = ", ";
+        }
+        str.print(");\n");
+    }
+    
+    syn boolean FExp.isExternalArgumentRef(boolean fortran)   = fortran && !type().isArgTypeBaseRef() || isArray();
+    eq CommonAccessExp.isExternalArgumentRef(boolean fortran) = super.isExternalArgumentRef(fortran) || myCommonVarDecl().isOutput();
+    
+    public void FExp.genExternalFortranFuncArgs(CodePrinter p, CodeStream str, String indent, CodeGenContext cgc) {
+        if (!isArray() && !type().isString()) {
+            str.print("&");
+        }
+        str.print(alias_C(p, cgc));
+        if (isArray()) {
+            str.print("->var");
+        }
+    }
+    
+    public void FExp.genExternalCFuncArgs(CodePrinter p, CodeStream str, String indent, CodeGenContext cgc) {
+        str.print(alias_C(p, cgc));
+        if (isArray()) {
+            str.print("->var");
+        }
+    }
+    
+    @Override
+    public void CommonAccessExp.genExternalCFuncArgs(CodePrinter p, CodeStream str, String indent, CodeGenContext cgc) {
+        if (myCommonVarDecl().isOutput() && !isComposite())
+            str.print("&");
+        super.genExternalCFuncArgs(p, str, indent, cgc);
+    }
+    
+}

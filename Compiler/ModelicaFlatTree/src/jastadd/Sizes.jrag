@@ -1,0 +1,686 @@
+
+/*
+    Copyright (C) 2016 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect AccessSizes {
+    
+    syn Size InstAccess.declarationSize() = Size.SCALAR;
+    eq InstNamedAccess.declarationSize()  = myInstComponentDecl().size();
+    
+    /**
+     * Get the array sizes. 
+     */
+    syn Size FSubscript.size();
+    eq FExpSubscript.size()     = getFExp().size();
+    eq FColonSubscript.size()   = inSubscriptedExp() ? mySize() : accessContextSize();
+    eq FIntegerSubscript.size() = Size.SCALAR;
+    public Size IntegerSubscript.size() { return Size.SCALAR; }
+
+    inh boolean FSubscript.inSubscriptedExp();
+    eq FSubscriptedExp.getFArraySubscripts().inSubscriptedExp()        = true;
+    eq InstArrayAccess.getFArraySubscripts().inSubscriptedExp()        = false;
+    eq InstScalarAccess.getExpandedSubscripts().inSubscriptedExp()     = false;
+    eq InstShortClassDecl.getFArraySubscripts().inSubscriptedExp()     = false;
+    eq InstComponentDecl.getFArraySubscripts().inSubscriptedExp()      = false;
+    eq InstComponentDecl.getLocalFArraySubscripts().inSubscriptedExp() = false;
+    eq FAccessPartArray.getFArraySubscripts().inSubscriptedExp()        = false;
+    eq FAccess.getExpandedSubscripts().inSubscriptedExp()               = false;
+
+    /**
+     * Get the size this subscript(s) would have if all subscripts were colons.
+     */
+    inh Size FSubscript.mySize();
+    inh Size FArraySubscripts.mySize();
+    eq Root.getChild().mySize()                       = Size.SCALAR;
+    eq FArrayExpSubscripts.getFSubscript(int i).mySize() = mySize().contract(i);
+    eq FSubscriptedExp.getFArraySubscripts().mySize() = getFExp().size();
+    eq InstNamedAccess.getChild().mySize()            = declarationSize();
+    
+    inh Size FEndExp.mySize();
+    eq FExpSubscript.getChild().mySize()   = accessContextSize();
+    
+    eq FAccess.getChild().mySize() = calcMySize(numParts());
+    eq FAccessFull.getFAccessPart(int i).mySize() = calcMySize(i+1);
+    
+    syn Size FAccess.calcMySize(int i) = myFV().size();
+    eq FAccessFull.calcMySize(int i)   = getFAccessPart(0).myFV().lookupHierarchicalSize(this, 0, i);
+
+    syn FAccessPart FAccessPart.copyFirstElement() = new FAccessPart(getName());
+    eq FAccessPartArray.copyFirstElement()        = new FAccessPartArray(getName(), accessContextFAS());
+    
+    public Size FAbstractVariable.lookupHierarchicalSize(FAccessFull name, int part, int last) {
+        return type().lookupHierarchical(name, part+1, last).size();
+    }
+
+    public Size FFunctionVariable.lookupHierarchicalSize(FAccessFull name, int part, int last) {
+        if (functionInliner != null) {
+            FType t = functionInliner.lookupType(name.name());
+            if (t != null) {
+                return t.size();
+            }
+        } 
+        return super.lookupHierarchicalSize(name, part, last);
+    }
+
+    public Size FRecordVariable.lookupHierarchicalSize(FAccessFull name, int part, int last) {
+        FExp res = findHierarchicalAttributeValue(name, last, FAttribute.SIZE);
+        if (res != null) {
+            for (int i = part; i < last - 1; i++) {
+                FArraySubscripts fas = name.getFAccessPart(i).getFArraySubscripts();
+                if (fas != null) {
+                    res = res.splitArrayExp(fas.createIndex());
+                }
+            }
+            return new MutableSize(res);
+        }
+        return super.lookupHierarchicalSize(name, part, last);
+    }
+    
+    public Size Size.contract(int i) {
+        if (has(i)) {
+            return contract(i,size.length-i-1);
+        } else {
+            return Size.SCALAR;
+        }
+    }
+    
+    syn Size FSubscript.accessContextSize() = mySize().accessContextSize(this);
+    
+    public Size Size.accessContextSize(FSubscript sub) {
+        return this;
+    }
+    
+    public Size MutableSize.accessContextSize(FSubscript sub) {
+        if (isCircular(0) || size[0] != Size.UNKNOWN) {
+            return super.accessContextSize(sub);
+        }
+        MutableSize ms = new MutableSize(1);
+        ms.set(0, sub.getAccessContextSizeExp());
+        return ms;
+    }
+    
+    syn FExp FSubscript.getAccessContextSizeExp()      = null;
+    syn lazy FExp FColonSubscript.getAccessContextSizeExp() = mySize().buildAccessContextSizeExp(this);
+    syn lazy FExp FExpSubscript.getAccessContextSizeExp()   = mySize().buildAccessContextSizeExp(this);
+    
+    public FExp Size.buildAccessContextSizeExp(FSubscript fs)        { throw new UnsupportedOperationException(); }
+    public FExp MutableSize.buildAccessContextSizeExp(FSubscript fs) {
+        if (exps[0] == null || exps[0] instanceof FColonSizeExp) {
+            return new FUnknownSizeExp(fs.buildAccessContextSizeExp(), fs.myDim());
+        }
+        return exps[0].copyReplaceAccess(new FExp.SizeContextReplacer(fs));
+    }
+    
+    class FExp {
+        public static class SizeContextReplacer implements ContextReplacer {
+            private FSubscript fs;
+            public SizeContextReplacer(FSubscript fs) {
+                this.fs = fs;
+            }
+            
+            @Override
+            public FExp copyReplaceAccess(CommonAccessExp access) {
+                return access.getAccess().buildAccessContextSizeExp(this);
+            }
+            
+            @Override
+            public FExp copyReplaceAccess(FSizeExp exp) {
+                return exp.copyReplaceAccessExp(this);
+            }
+
+            @Override
+            public void addForIndex(InstPrimitive var) {}
+
+            @Override
+            public void removeForIndex(InstPrimitive var) {}
+            
+            public List<InstAccess> buildContext() {
+                 return fs.myInstAccess().accessContextInst();
+            }
+        }
+    }
+    
+    public abstract CommonAccessExp CommonAccess.buildAccessContextSizeExp(FExp.SizeContextReplacer crp);
+    
+    public FAccessExp FAccess.buildAccessContextSizeExp(FExp.SizeContextReplacer crp) {
+        return new FAccessExp(treeCopy());
+    }
+    
+    public InstAccessExp InstAccess.buildAccessContextSizeExp(FExp.SizeContextReplacer crp) {
+        List<InstAccess> res = crp.buildContext();
+        for (InstAccess part : allParts()) {
+            if (hasFArraySubscripts()) {
+                part = new InstAmbiguousArrayAccess(part.name(), part.getFArraySubscripts().copyReplaceAccess(crp));
+            } else {
+                part = part.treeCopy();
+            }
+            res.addChild(part);
+        }
+        return new InstAccessExp(new InstDot(res));
+    }
+    
+    inh CommonAccessExp FSubscript.buildAccessContextSizeExp();
+    eq Root.getChild().buildAccessContextSizeExp()   = null;
+    eq InstNamedAccess.getChild().buildAccessContextSizeExp() =
+            new InstAccessExp(new InstDot(buildAccessContext(name(), null)));
+    eq FAccessPart.getChild().buildAccessContextSizeExp() =
+            new FAccessExp(new FAccessFull(buildAccessContext(name(), null)));
+    eq FAccess.getChild().buildAccessContextSizeExp() =
+            new FAccessExp(new FAccessFull(buildAccessContext()));
+    
+    syn List<FAccessPart> FAccess.buildAccessContext() = null;
+    eq FAccessString.buildAccessContext() {
+        List<FAccessPart> l = new List<FAccessPart>();
+        l.add(new FAccessPart(name()));
+        return l;
+    }
+    eq FAccessFull.buildAccessContext() {
+        FAccessPart last = getFAccessPart(getNumFAccessPart()-1);
+        return last.buildAccessContext(last.name(), null);
+    }
+    
+    public List<InstAccess> InstAccess.buildAccessContext(String name, FArraySubscripts fas) {
+        List<InstAccess> res = accessContextInst();
+        if (fas == null) {
+            res.add(new InstAmbiguousAccess(name));
+        } else {
+            res.add(new InstAmbiguousArrayAccess(name, fas));
+        }
+        return res;
+    }
+    
+    public List<FAccessPart> FAccessPart.buildAccessContext(String name, FArraySubscripts fas) {
+        List<FAccessPart> res = accessContextFlat();
+        if (fas == null) {
+            res.add(new FAccessPart(name));
+        } else {
+            res.add(new FAccessPartArray(name, fas));
+        }
+        return res;
+    }
+    
+    inh List<InstAccess> InstAccess.accessContextInst();
+    eq Root.getChild().accessContextInst()     = new List<InstAccess>();
+    eq FExp.getChild().accessContextInst()     = new List<InstAccess>();
+    eq InstDot.getInstAccess(int i).accessContextInst() = 
+            i == 0 ? new List<InstAccess>() : getInstAccess(i-1).buildAccessContext();
+    
+    inh List<FAccessPart> FAccessPart.accessContextFlat();
+    eq Root.getChild().accessContextFlat()     = new List<FAccessPart>();
+    eq FExp.getChild().accessContextFlat()     = new List<FAccessPart>();
+    eq FAccessFull.getFAccessPart(int i).accessContextFlat() = 
+            i == 0 ? new List<FAccessPart>() : getFAccessPart(i-1).buildAccessContext();
+    
+    syn List<InstAccess> InstAccess.buildAccessContext() = buildAccessContext(name(), accessContextFAS());
+    syn List<FAccessPart> FAccessPart.buildAccessContext() = buildAccessContext(name(), accessContextFAS());
+    
+    syn FArraySubscripts InstAccess.accessContextFAS() {
+        FArraySubscripts res = null;
+        if (declarationDims() > 0) {
+            for (FArraySubscripts fas : allFArraySubscripts()) {
+                res = fas.buildAccessContext();
+            }
+        }
+        return res;
+    }
+    
+    syn FArraySubscripts FAccessPart.accessContextFAS() = null;
+    eq FAccessPartArray.accessContextFAS() = getFArraySubscripts().buildAccessContext();
+    
+    syn FArraySubscripts FArraySubscripts.buildAccessContext() = treeCopy();
+    eq FArrayExpSubscripts.buildAccessContext() {
+        List<FSubscript> list = new List<FSubscript>();
+        for (FSubscript fs : getFSubscripts()) {
+            list.add(fs.buildAccessContext());
+        }
+        return FArraySubscripts.createFArraySubscripts(list);
+    }
+    
+    syn FSubscript FSubscript.buildAccessContext() = treeCopy();
+    eq FColonSubscript.buildAccessContext()   = new FIntegerSubscript(1);
+    eq FExpSubscript.buildAccessContext()     = getFExp().isArray() ? 
+            getFExp().createFirstIndexExp().createFSubscript() : super.buildAccessContext();
+    
+    syn FExp FExp.createFirstIndexExp() {
+        FArraySubscripts fas = new FArrayLitSubscripts();
+        fas.addFSubscript(1);
+        return new FSubscriptedExp(treeCopy(), fas);
+    }
+    
+    eq FRangeExp.createFirstIndexExp() = getFExp(0).treeCopy();
+}
+
+aspect FunctionCallSizes {
+
+    public abstract Size FType.getSize();
+    public abstract FType FType.setSize(Size size);
+
+    @Override
+    public Size FArrayType.getSize() {
+        MutableSize newSize = new MutableSize(getNumFExp());
+        for (FExp e : getFExps()) {
+            newSize.append(e);
+        }
+        return newSize;
+    }
+    @Override
+    public FArrayType FArrayType.setSize(Size size) {throw new InternalCompilerError("FArrayType does not support setSize()");}
+
+    syn Size FAbstractFunctionCall.sizeOfOutput(int i) = (i == 0) ? size() : Size.SCALAR;
+    eq CommonFunctionCall.sizeOfOutput(int i)          = typeOfOutput(i).size();
+    
+    /**
+     * Get array sizes of function argument.
+     */
+    syn Size InstFunctionArgument.size() = null;
+    eq InstDefaultArgument.size()        = getFExp().size();
+    eq InstGivenArgument.size()          = getFExp().size();
+    eq FDeferExp.size()                  = getFExp().size();
+    
+    public FType FType.createSizeFExp(InstFunctionCall call) {
+        FType res = treeCopy();
+        res.replaceSizeFExp(call);
+        return res;
+    }
+    
+    public void ASTNode.replaceSizeFExp(InstFunctionCall call) {
+        for (ASTNode n : this) {
+            n.replaceSizeFExp(call);
+        }
+    }
+    
+    public void FType.replaceSizeFExp(InstFunctionCall call) {
+        setSize(getSize().createSizeFExp(call));
+        super.replaceSizeFExp(call);
+    }
+    
+    public Size Size.createSizeFExp(InstFunctionCall call) {
+        return this;
+    }
+    
+    @Override
+    public Size MutableSize.createSizeFExp(InstFunctionCall call) {
+        
+        for (InstFunctionArgument ifa : call.getArgs()) {
+         // Cash sizes to prevent false circularity in nested function calls
+            ifa.size(); 
+        }
+        
+        MutableSize ms = new MutableSize(ndims());
+        FExp.FunctionSizeContextReplacer crp = new FExp.FunctionSizeContextReplacer(call.inputArgMap());
+        for (int j = 0; j < ndims(); j++) {
+            try {
+                FExp exp = copyReplaceAccess(j, crp);
+                if(!call.inFunction()) {
+                    exp = new FNoEventExp(exp);
+                }
+                ms.append(call.dynamicFExp(exp));
+            } catch (ConstantEvaluationException e) {
+                ms.append(Size.UNKNOWN);
+            }
+        }
+        return ms;
+    }
+    
+    class FExp {
+        public static class FunctionSizeContextReplacer extends FunctionContextReplacer {
+            public FunctionSizeContextReplacer(Map<InstComponentDecl, InstFunctionArgument> varMap) {
+                super(varMap);
+            }
+            
+            @Override
+            public FExp copyReplaceAccess(FSizeExp exp) {
+                return exp.createSizeFExp(this);
+            }
+            
+        }
+    }
+    
+    protected boolean FSizeExp.circ = false;
+    public FExp FSizeExp.createSizeFExp(FExp.FunctionSizeContextReplacer crp) {
+        if (circ) {
+            throw new ConstantEvaluationException();
+        }
+        circ = true;
+        FExp res = getFExp().size().copyReplaceAccess(dimension(), crp);
+        circ = false;
+        return res;
+    }
+    
+    public FExp FUnknownSizeExp.createSizeFExp(FExp.FunctionSizeContextReplacer crp) {
+        if (circ) {
+            throw new ConstantEvaluationException();
+        }
+        circ = true;
+        FExp res = getFExp().copyReplaceAccess(crp).size().createFExp(dimension());
+        circ = false;
+        return res;
+    }
+    
+    /**
+     * Create a copy of this expression suitable for when it is used to describe a size.
+     * 
+     * Default implementation simply returns a copy.
+     */
+    public FExp FExp.createSizeFExp() {
+        return unboundCopy();
+    }
+    
+    public FExp FColonSizeExp.createSizeFExp() {
+        return new FSizeExp(getVariable().createAccessExp(), getDim());
+    }
+    
+    
+    /**
+     * Return the size the function call is expanded to. This is the size of the 
+     * entire function call, and the size of a vectorized argument to a scalar input.
+     * 
+     * If arguments doesn't match, the size matching the most arguments is returned.
+     */
+    syn lazy Size InstVectorFunctionCall.vectorizedSize() {
+        boolean func = inFunction();
+        int tot = getNumArg(), n = 0, ndims = ndims();
+        Size[] candidates = new Size[tot];
+        int[] freq = new int[tot];
+        
+        for (InstFunctionArgument arg : getArgs()) {
+            if (arg.isVectorized()) {
+                Size s = arg.size().contractRight(ndims);
+                for (int i = 0; i < n && s != null; i++) {
+                    if (!candidates[i].equivalent(s, func)) {
+                        if (func && candidates[i].isUnknown())
+                            candidates[i] = candidates[i].createKnown(s);
+                        s = null;
+                        freq[i]++;
+                    }
+                }
+                if (s != null)
+                    candidates[n++] = s;
+            }
+        }
+    
+        int index = 0;
+        for (int i = 1; i < n; i++) 
+            if (freq[index] < freq[i]) 
+                index = i;
+        return candidates[index];
+    }
+    
+    inh Size InstFunctionArgument.vectorizedSize();
+    eq FAbstractFunctionCall.getChild().vectorizedSize() = Size.SCALAR;
+    eq InstVectorFunctionCall.getArg().vectorizedSize()  = vectorizedSize();
+    eq FDelayExp.getChild().vectorizedSize()             = vectorizedSize();
+    eq FSpatialDistExp.getChild().vectorizedSize()       = vectorizedSize();
+}
+
+aspect SizesUtil {
+    
+    class FExp {
+        public interface ContextReplacer {
+            public FExp copyReplaceAccess(CommonAccessExp access);
+            public FExp copyReplaceAccess(FSizeExp exp);
+            public void addForIndex(InstPrimitive var);
+            public void removeForIndex(InstPrimitive var);
+        }
+
+        public static class FunctionContextReplacer implements ContextReplacer {
+            private Map<InstComponentDecl,InstFunctionArgument> varMap;
+            private Set<InstComponentDecl> forIndices;
+            public FunctionContextReplacer(Map<InstComponentDecl,InstFunctionArgument> varMap) {
+                this.varMap = varMap;
+                forIndices = new HashSet<>();
+            }
+
+            @Override
+            public void addForIndex(InstPrimitive var) {
+                forIndices.add(var);
+            }
+
+            @Override
+            public void removeForIndex(InstPrimitive var) {
+                forIndices.remove(var);
+            }
+
+            @Override
+            public FExp copyReplaceAccess(CommonAccessExp access) {
+                FExp res = access.asInstAccess().copyReplaceAccess(this);
+                if (res == null) {
+                    return new FDeferExp(access);
+                }
+                return res;
+            }
+            
+            @Override
+            public FExp copyReplaceAccess(FSizeExp exp) {
+                return exp.copyReplaceAccessExp(this);
+            }
+            
+            public FExp get(InstComponentDecl icd) {
+                if (forIndices.contains(icd)) {
+                    return icd.createAccessExp();
+                } else {
+                    return lookupInMap(icd);
+                }
+            }
+            
+            protected FExp lookupInMap(InstComponentDecl icd) {
+                if (varMap.containsKey(icd)) {
+                    InstFunctionArgument ifa = varMap.get(icd);
+                    return ifa == null ? icd.getBindingFExp().copyReplaceAccess(this) : ifa.getFExp();
+                }
+                return null;
+            }
+        }
+        
+        public static class ExpFunctionContextReplacer extends FunctionContextReplacer {
+            private Map<InstComponentDecl,FExp> expMap;
+            public ExpFunctionContextReplacer(Map<InstComponentDecl,FExp> expMap) {
+                super(null);
+                this.expMap = expMap;
+            }
+            
+            @Override
+            public FExp lookupInMap(InstComponentDecl icd) {
+                if (expMap.containsKey(icd)) {
+                    FExp exp = expMap.get(icd);
+                    return exp == null ? icd.getBindingFExp().copyReplaceAccess(this) : exp;
+                }
+                return null;
+            }
+        }
+    }
+    
+    /**
+     * Create a copy of this FExp with variable uses and function calls replaced with expressions 
+     * that allow calculations of unknown sizes.
+     * 
+     * For non-FExp nodes, this simply makes a full copy.
+     */
+    public ASTNode ASTNode.copyReplaceAccess(FExp.ContextReplacer crp) {
+        return treeCopy();
+    }
+    
+    public List List.copyReplaceAccess(FExp.ContextReplacer crp) {
+        List node = new List();
+        for (ASTNode ch : this)
+            node.add(ch.copyReplaceAccess(crp));
+        return node;
+    }
+    
+    public Opt Opt.copyReplaceAccess(FExp.ContextReplacer crp) {
+        return getNumChild() == 0 ? new Opt() : new Opt(getChild(0).copyReplaceAccess(crp));
+    }
+    
+    public FExp FExp.copyReplaceAccess(FExp.ContextReplacer crp) {
+        FExp exp = copy();
+        for (int i = 0; i < getNumChild(); i++) {
+            exp.setChild(getChild(i).copyReplaceAccess(crp), i);
+        }
+        return exp;
+    }
+    
+    public FExp FSizeExp.copyReplaceAccess(FExp.ContextReplacer crp) {
+        return crp.copyReplaceAccess(this);
+    }
+    
+    public FExp FIterExp.copyReplaceAccess(FExp.ContextReplacer crp) {
+        for (CommonForIndex i : getForIndexs()) {
+            i.addToContextReplacer(crp);
+        }
+        FExp res = super.copyReplaceAccess(crp);
+        for (CommonForIndex i : getForIndexs()) {
+            i.removeFromContextReplacer(crp);
+        }
+        return res;
+    }
+    
+    public void CommonForIndex.addToContextReplacer(FExp.ContextReplacer crp) {}
+    public void InstForIndex.addToContextReplacer(FExp.ContextReplacer crp) {
+        crp.addForIndex(getInstPrimitive());
+    }
+    
+    public void CommonForIndex.removeFromContextReplacer(FExp.ContextReplacer crp) {}
+    public void InstForIndex.removeFromContextReplacer(FExp.ContextReplacer crp) {
+        crp.removeForIndex(getInstPrimitive());
+    }
+    
+    public FExp FSizeExp.copyReplaceAccessExp(FExp.ContextReplacer crp) {
+        return super.copyReplaceAccess(crp);
+    }
+    
+    public FExp InstFunctionCall.copyReplaceAccess(FExp.ContextReplacer crp) {
+        InstAccess name = InstAccess.fromName(getName().myInstCallable().actualInstCallable().qualifiedName());
+        return new InstFunctionCall(name, getArgs().copyReplaceAccess(crp));
+    }
+    
+    public FExp InstRecordConstructor.copyReplaceAccess(FExp.ContextReplacer crp) {
+        InstAccess name = InstAccess.fromName(getRecord().myInstCallable().actualInstCallable().qualifiedName());
+        return new InstRecordConstructor(name, getArgs().copyReplaceAccess(crp));
+    }
+    
+    public InstFunctionArgument InstFunctionArgument.copyReplaceAccess(FExp.ContextReplacer crp) {
+        return fullCopy();
+    }
+    
+    public InstPositionalArgument InstPositionalArgument.copyReplaceAccess(FExp.ContextReplacer crp) {
+        return new InstPositionalArgument(getFExp().copyReplaceAccess(crp), getPos());
+    }
+    
+    public InstNamedArgument InstNamedArgument.copyReplaceAccess(FExp.ContextReplacer crp) {
+        return new InstNamedArgument(getFExp().copyReplaceAccess(crp), getName().fullCopy());
+    }
+    
+    public FExp CommonAccessExp.copyReplaceAccess(FExp.ContextReplacer crp) {
+        return crp.copyReplaceAccess(this);
+    }
+
+    public FExp InstAccess.copyReplaceAccess(FExp.FunctionContextReplacer crp) {
+        InstComponentDecl var = myInstComponentDecl();
+        FExp arg = copyReplaceAccessParent(crp);
+        if (arg == null) {
+            arg = crp.get(myInstComponentDecl());
+        } else {
+            arg = arg.component(name());
+        }
+        if (arg != null) {
+            return arg.cell(crp, getFArraySubscripts());
+        } else {
+            return null;
+        }
+    }
+
+    @Override
+    public FExp InstDot.copyReplaceAccess(FExp.FunctionContextReplacer crp) {
+        return getLastInstAccess().copyReplaceAccess(crp);
+    }
+    
+    inh FExp InstAccess.copyReplaceAccessParent(FExp.FunctionContextReplacer crp);
+    eq BaseNode.getChild().copyReplaceAccessParent(FExp.FunctionContextReplacer crp) = null;
+    eq InstDot.getInstAccess(int i).copyReplaceAccessParent(FExp.FunctionContextReplacer crp) = 
+            i == 0 ? copyReplaceAccessParent(crp) : getInstAccess(i-1).copyReplaceAccess(crp);
+
+    public FExp FExp.cell(FExp.FunctionContextReplacer crp, FArraySubscripts fas) {
+        if (fas != null) {
+            if (fas.variability().knownParameterOrLess()) {
+                try {
+                    return cell(fas.createIndex());
+                } catch (ConstantEvaluationException e) {
+                    
+                }
+            }
+            return new FSubscriptedExp(this, fas.copyReplaceAccess(crp));
+        }
+        return this;
+    }
+
+    syn FExp FExp.cell(Index i) = i.ndims() > 0 && ndims() > 0 ? getArray().get(i) : this;
+    eq FDeferExp.cell(Index i)  = getFExp().cell(i);
+
+    public FArraySubscripts FArraySubscripts.copyReplaceAccess(FExp.ContextReplacer crp) {
+        return treeCopy();
+    }
+    public FArraySubscripts FArrayExpSubscripts.copyReplaceAccess(FExp.ContextReplacer crp) {
+        List<FSubscript> list = new List<>();
+        for (FSubscript f : getFSubscripts()) {
+            list.add(f.copyReplaceAccess(crp));
+        }
+        return FArraySubscripts.createFArraySubscripts(list);
+    }
+    
+    public FArraySubscripts FArrayLitSubscripts.copyReplaceAccess(FExp.ContextReplacer crp) {
+        return treeCopy();
+    }
+    
+    public FSubscript FSubscript.copyReplaceAccess(FExp.ContextReplacer crp) {
+        return treeCopy();
+    }
+    
+    public FSubscript FExpSubscript.copyReplaceAccess(FExp.ContextReplacer crp) {
+        return getFExp().copyReplaceAccess(crp).createFSubscript();
+    }
+    
+    /**
+     * Create an FExp that describes the length of dimension <code>d</code>, 
+     *        given the supplied variable values.
+     *        
+     * @param varMap  a map of variables to replace and expressions to replace them with
+     */
+    public FExp Size.copyReplaceAccess(int d, FExp.ContextReplacer crp) {
+        checkDimension(d);
+        if (isUnknown(d)) {
+            throw new ConstantEvaluationException();
+        }
+        return new FIntegerLitExp(get(d));
+    }
+    
+    public FExp MutableSize.copyReplaceAccess(int d, FExp.ContextReplacer crp) {
+        checkDimension(d);
+        FExp exp = exps[d];
+        if (exp == null || exp.variability().knownParameterOrLess()) {
+            evaluate(d);
+            return super.copyReplaceAccess(d, crp);
+        } else {
+            return exps[d].copyReplaceAccess(crp);
+        }
+    }
+    
+    public void Size.checkDimension(int d) {
+        if (d < 0 || d >= ndims() || isCircular(d)) {
+            throw new ConstantEvaluationException();
+        }
+    }
+
+}

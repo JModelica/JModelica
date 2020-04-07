@@ -1,0 +1,84 @@
+/*
+    Copyright (C) 2018 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+aspect AbsoluteValue {
+    
+    /*
+     * Calculation
+     */
+
+    syn      boolean FVariable                 .isAbsoluteValue() = isAbsoluteValue(null);
+    syn      boolean InstAssignable            .isAbsoluteValue() = true;
+    eq               InstPrimitive             .isAbsoluteValue() = isAbsoluteValue(myInstClass());
+    syn      boolean InstClassDecl             .isAbsoluteValue() = true;
+    syn lazy boolean InstAbstractShortClassDecl.isAbsoluteValue() = isAbsoluteValue(myTargetInstClassDecl());
+
+    syn boolean ASTNode.isAbsoluteValue(InstClassDecl superClass) {
+        AnnotationNode an = annotation("absoluteValue");
+        if (an.exists()) {
+            return !an.isBoolValue() || an.bool();
+        } else {
+            return superClass == null || superClass.isAbsoluteValue();
+        } 
+    }
+
+    /*
+     * Error check
+     */
+    
+    public void InstNode.checkAbsoluteValue() {
+        AnnotationNode an = annotation("absoluteValue");
+        if (an.exists()) {
+            if (!isPrimitiveType()) {
+                ASTNode.ABSOLUTE_VALUE_LOCATION.invoke(an.ast());
+            }
+
+            final SrcExp srcExp = an.exp();
+            if (srcExp == null || !srcExp.isBooleanLiteral()) {
+                ASTNode.ABSOLUTE_VALUE.invoke(an.ast());
+            }
+        }
+    }
+
+    public static final SimpleProblemProducer ASTNode.ABSOLUTE_VALUE_LOCATION =
+            new SimpleErrorProducer("ABSOLUTE_VALUE_LOCATION", ProblemKind.SEMANTIC,
+                    "absoluteValue annotation only allowed on simple types or components of simple types");
+
+    public static final SimpleProblemProducer ASTNode.ABSOLUTE_VALUE =
+            new SimpleErrorProducer("ABSOLUTE_VALUE", ProblemKind.SEMANTIC,
+                    "absoluteValue annotation only allows scalar boolean literal values 'true' or 'false'");
+
+    /*
+     * Contribution
+     */
+    private static AttributeContributer ASTNode.ABSOLUTE_VALUE_CONTRIBUTER =
+            addAttributeContributer(new AttributeContributer.AbsoluteValueContributer());
+
+    public abstract class AttributeContributer {
+        public static class AbsoluteValueContributer extends AttributeContributer {
+            public AbsoluteValueContributer() {
+                super("AbsoluteValueContributer");
+            }
+            
+            protected void contribute(Flattener f, InstAssignable src, FVariable dest) {
+                if (!src.isAbsoluteValue()) {
+                    dest.annotation("absoluteValue").setValue(new FBooleanLitExpFalse());
+                }
+            }
+        }
+    }
+}

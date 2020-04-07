@@ -1,0 +1,160 @@
+/*
+Copyright (C) 2016 Modelon AB
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, version 3 of the License.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect StepPrinter {
+    
+    public abstract class CodePrinter extends Printer {
+        public abstract class StepPrinter {
+            public CodePrinter codePrinter() { return CodePrinter.this; }
+            public abstract void print(ASTNode n, CodeStream str, String indent);
+            public abstract void printIO(FExp n, CodeStream str, String indent);
+            public void print(CodeStream str, String s) {
+                
+            }
+        }
+        
+        public StepPrinter DeclStep  = new DeclCodePrinter();
+        public StepPrinter PreStep   = new PreCodePrinter();
+        public ExecuteCodePrinter ExecStep  = new ExecuteCodePrinter();
+        public StepPrinter PostStep  = new PostCodePrinter();
+        
+        public ExecuteCodePrinter getExecStep() {
+            return ExecStep;
+        }
+        
+        class DeclCodePrinter extends StepPrinter {
+            @Override
+            public void print(ASTNode n, CodeStream str, String indent) {
+                codePrinter().printVarDecls(n, str, indent);
+            }
+            @Override
+            public void printIO(FExp n, CodeStream str, String indent) {
+                print(n, str, indent);
+                codePrinter().printIODecl(n, str, indent);
+            }
+        }
+        
+        class PreCodePrinter extends StepPrinter {
+            @Override
+            public void print(ASTNode n, CodeStream str, String indent) {
+                codePrinter().printPreSteps(n, str, indent);
+            }
+            @Override
+            public void printIO(FExp n, CodeStream str, String indent) {
+                print(n, str, indent);
+                codePrinter().printIOPre(n, str, indent);
+            }
+        }
+        
+        class ExecuteCodePrinter extends StepPrinter {
+            
+            public boolean isDer() { //Hook to facilitate extensions
+                return false;
+            }
+
+            @Override
+            public void print(ASTNode n, CodeStream str, String indent) {
+                codePrinter().print(n, str, indent);
+            }
+            @Override
+            public void printIO(FExp n, CodeStream str, String indent) {
+                codePrinter().printIOExec(n, str, indent);
+            }
+            
+            @Override
+            public void print(CodeStream str, String s) {
+                str.print(s);
+            }
+
+            public void print(FFunctionVariable v, CodeStream str, String indent, IOComputation ioc) {
+                ioc.print(v, this, str, indent);
+            }
+
+            public void print(FFunctionVariable v, FExp arg, CodeStream str, String indent, IOComputation ioc) {
+                ioc.print(v, arg, this, str, indent);
+            }
+
+            public void print(FFunctionVariable v, FFunctionCallLeft arg, CodeStream str, String indent,
+                    IOComputation ioc) {
+                ioc.print(v, arg, this, str, indent);
+            }
+
+            public void printEmptyOutput(FFunctionVariable v, CodeStream str, String indent, String sep) {
+                str.print(sep);
+                str.print("NULL");
+            }
+
+            public String returnName(FFunctionVariable v) {
+                return v.nameReturn_C();
+            }
+            
+            public String name(Named_C exp) {
+                if (needsTemp(exp)) {
+                    return exp.tempName_C();
+                } else {
+                    return exp.name_C();
+                }
+            }
+            
+            public String type(FAbstractVariable v) {
+                return v.type_C(codePrinter());
+            }
+            
+            public String tempName(FAbstractVariable v, TempScope ts) {
+                return ts.tempName_C(v);
+            }
+            
+            public String guardedFunctionName(FExp exp) {
+                return exp.guardedFunctionName_C();
+            }
+
+            public String residual() {
+                return "res";
+            }
+        }
+        
+        class PostCodePrinter extends StepPrinter {
+            @Override
+            public void print(ASTNode n, CodeStream str, String indent) {
+                codePrinter().printPostSteps(n, str, indent);
+            }
+            @Override
+            public void printIO(FExp n, CodeStream str, String indent) {
+                print(n, str, indent);
+            }
+        }
+    }
+    
+    public abstract class CodePrinter {
+        public abstract void printIODecl(FExp n, CodeStream str, String indent);
+        public abstract void printIOPre(FExp n, CodeStream str, String indent);
+        public abstract void printIOExec(FExp n, CodeStream str, String indent);
+    }
+    
+    public void ASTNode.genTempArg(CodePrinter.StepPrinter p, CodeStream str, String indent) {
+        for (ASTNode n : this) {
+            n.genTempArg(p, str, indent);
+        }
+    }
+    
+    public void FExp.genTempArg(CodePrinter.StepPrinter p, CodeStream str, String indent) {
+        p.printIO(this, str, indent);
+    }
+    
+    public void FIfExp.genTempArg(CodePrinter.StepPrinter p, CodeStream str, String indent) {
+        p.print(this, str, indent);
+    }
+}

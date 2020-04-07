@@ -1,0 +1,24 @@
+#
+#	Copyright (C) 2018 Modelon AB
+#
+#	This program is free software: you can redistribute it and/or modify
+#	it under the terms of the GNU General Public License version 3 as published 
+#	by the Free Software Foundation, or optionally, under the terms of the 
+#	Common Public License version 1.0 as published by IBM.
+#
+#	This program is distributed in the hope that it will be useful,
+#	but WITHOUT ANY WARRANTY; without even the implied warranty of
+#	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#	GNU General Public License, or the Common Public License, for more details.
+#
+#	You should have received copies of the GNU General Public License
+#	and the Common Public License along with this program.  If not, 
+#	see <http://www.gnu.org/licenses/> or 
+#	<http://www.ibm.com/developerworks/library/os-cpl.html/> respectively.
+
+mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))
+mkfile_dir := $(dir $(mkfile_path))
+include $(mkfile_dir)/win
+EXTRA_CMAKE_FLAGS=-DCMAKE_C_FLAGS="-m32" -DCMAKE_CXX_FLAGS="-m32" -DCMAKE_SHARED_LINKER_FLAGS="-m32" -DCMAKE_EXE_LINKER_FLAGS="-m32"
+FMIL_BUILD_DIR=${BUILD_DIR}/fmil32
+FMIL_INSTALL=${BUILD_DIR}/fmil_install32

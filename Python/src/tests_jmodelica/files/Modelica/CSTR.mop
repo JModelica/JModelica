@@ -1,0 +1,348 @@
+package CSTR
+
+model CSTR "A CSTR"
+ 
+  parameter Modelica.SIunits.VolumeFlowRate F0=100/1000/60 "Inflow";
+  parameter Modelica.SIunits.Concentration c0=1000 "Concentration of inflow"; 
+  Modelica.Blocks.Interfaces.RealInput Tc "Cooling temperature"; 
+  parameter Modelica.SIunits.VolumeFlowRate F=100/1000/60 "Outflow"; 
+  parameter Modelica.SIunits.Temp_K T0 = 350;
+  parameter Modelica.SIunits.Length r = 0.219;
+  parameter Real k0 = 7.2e10/60;
+  parameter Real EdivR = 8750;
+  parameter Real U = 915.6;
+  parameter Real rho = 1000;
+  parameter Real Cp = 0.239*1000;
+  parameter Real dH = -5e4;
+  parameter Modelica.SIunits.Volume V = 100 "Reactor Volume";
+  parameter Modelica.SIunits.Concentration c_init = 1000;
+  parameter Modelica.SIunits.Temp_K T_init = 350;
+  Real c(start=c_init,fixed=true,nominal=c0);
+  Real T(start=T_init,fixed=true,nominal=T0);
+equation 
+  der(c) = F0*(c0-c)/V-k0*c*exp(-EdivR/T);
+  der(T) = F0*(T0-T)/V-dH/(rho*Cp)*k0*c*exp(-EdivR/T)+2*U/(r*rho*Cp)*(Tc-T);
+end CSTR;
+
+model CSTR_elim_vars "A CSTR"
+ 
+  parameter Modelica.SIunits.VolumeFlowRate F0=100/1000/60 "Inflow";
+  parameter Modelica.SIunits.Concentration c0=1000 "Concentration of inflow"; 
+  Modelica.Blocks.Interfaces.RealInput Tc "Cooling temperature"; 
+  parameter Modelica.SIunits.VolumeFlowRate F=100/1000/60 "Outflow"; 
+  parameter Modelica.SIunits.Temp_K T0 = 350;
+  parameter Modelica.SIunits.Length r = 0.219;
+  parameter Real k0 = 7.2e10/60;
+  parameter Real EdivR = 8750;
+  parameter Real U = 915.6;
+  parameter Real rho = 1000;
+  parameter Real Cp = 0.239*1000;
+  parameter Real dH = -5e4;
+  parameter Modelica.SIunits.Volume V = 100 "Reactor Volume";
+  parameter Modelica.SIunits.Concentration c_init = 1000;
+  parameter Modelica.SIunits.Temp_K T_init = 350;
+  Real c(start=c_init,fixed=true,nominal=c0);
+  Real T(start=T_init,fixed=true,nominal=T0);
+  Real cdiff = c0-c;
+  Real Tdiff = T0-T;  
+equation 
+  der(c) = F0*(cdiff)/V-k0*c*exp(-EdivR/T);
+  der(T) = F0*(Tdiff)/V-dH/(rho*Cp)*k0*c*exp(-EdivR/T)+2*U/(r*rho*Cp)*(Tc-T);
+end CSTR_elim_vars;
+
+model CSTR_Init
+  extends CSTR(c(fixed=false),T(fixed=false));
+initial equation
+  der(c) = 0;
+  der(T) = 0;
+end CSTR_Init;
+
+model CSTR_Init_Optimization
+
+  CSTR cstr "CSTR component";
+  input Real Tc_ref "Target input value";
+  parameter Real Tc_0 = 300 "Initial input value";
+  Real Tc(start=Tc_0,fixed=true) "Filtered input";
+  Real u = Tc;
+  parameter Real a_filt = 1/20 "Filter coefficient";
+  Real cost(start=0,fixed=true);
+
+  parameter Real c_ref = 500;
+  parameter Real T_ref = 320;
+  parameter Real q_c = 1;
+  parameter Real q_T = 1;
+  parameter Real q_Tc = 1;	
+
+equation
+  1/a_filt*der(Tc) = -Tc + Tc_ref;
+  cstr.Tc = Tc; 
+  der(cost) = q_c*(c_ref-cstr.c)^2 + q_T*(T_ref-cstr.T)^2 + 
+                  q_Tc*(Tc_ref-cstr.Tc)^2;
+
+end CSTR_Init_Optimization;
+
+optimization CSTR_Opt(objective=(cost(finalTime)),
+                      startTime=0.0,
+                      finalTime=150)
+ 
+  input Real u(start = 350,initialGuess=350)=cstr.Tc;
+  CSTR cstr(c(initialGuess=300),T(initialGuess=300),Tc(initialGuess=350));
+
+  Real cost(start=0,fixed=true,initialGuess=500);
+  parameter Real c_ref = 500;
+  parameter Real T_ref = 320;
+  parameter Real Tc_ref = 300;
+  parameter Real q_c = 1;
+  parameter Real q_T = 1;
+  parameter Real q_Tc = 1;	
+equation
+  der(cost) = q_c*(c_ref-cstr.c)^2 + q_T*(T_ref-cstr.T)^2 + 
+                  q_Tc*(Tc_ref-cstr.Tc)^2;
+constraint
+  cstr.T<=350;
+  u>=230;
+  u<=370;
+end CSTR_Opt;
+
+optimization CSTR_Opt_Bounds_Lagrange(
+    objectiveIntegrand = 1e-4*(q_c*(c_ref-cstr.c)^2 + q_T*(T_ref-cstr.T)^2 + 
+                               q_Tc*(Tc_ref-cstr.Tc)^2),
+    startTime=0.0, finalTime=150)
+ 
+  input Real u(start=350, initialGuess=350, min=230, max=370) = cstr.Tc; 
+  CSTR cstr(c(initialGuess=300), T(initialGuess=300, max=350), Tc(initialGuess=350),
+            c_init=956.271065, T_init=250.051971);
+
+  parameter Real c_ref = 338.775766;
+  parameter Real T_ref = 280.099198;
+  parameter Real Tc_ref = 280;
+  parameter Real q_c = 1;
+  parameter Real q_T = 1;
+  parameter Real q_Tc = 1;
+end CSTR_Opt_Bounds_Lagrange;
+
+optimization CSTR_Opt_Bounds_Mayer(objective=(cost(finalTime)),
+                                   startTime=0.0, finalTime=150)
+ 
+  input Real u(start=350, initialGuess=350, min=230, max=370) = cstr.Tc; 
+  CSTR cstr(c(initialGuess=300), T(initialGuess=300, max=350), Tc(initialGuess=350),
+            c_init=956.271065, T_init=250.051971);
+
+  Real cost(start=0, fixed=true, initialGuess=500);
+  parameter Real c_ref = 338.775766;
+  parameter Real T_ref = 280.099198;
+  parameter Real Tc_ref = 280;
+  parameter Real q_c = 1;
+  parameter Real q_T = 1;
+  parameter Real q_Tc = 1;
+
+equation
+  der(cost) = 1e-4*(q_c*(c_ref-cstr.c)^2 + q_T*(T_ref-cstr.T)^2 + 
+                    q_Tc*(Tc_ref-cstr.Tc)^2);  
+end CSTR_Opt_Bounds_Mayer;
+
+optimization CSTR_Opt_Dependent_Parameter(objective=(cost(finalTime)),
+                                          startTime=0.0, finalTime=150)
+ 
+  input Real u(start=350, initialGuess=350, min=230, max=370) = cstr.Tc; 
+  CSTR cstr(c(initialGuess=300), T(initialGuess=300, max=350), Tc(initialGuess=350),
+            c_init=956.271065, T_init=250.051971, F=cstr.F0);
+
+  Real cost(start=0, fixed=true, initialGuess=500);
+  parameter Real c_ref = 338.775766;
+  parameter Real T_ref = 280.099198;
+  parameter Real Tc_ref = 280;
+  parameter Real q_c = 1;
+  parameter Real q_T = 1;
+  parameter Real q_Tc = 1;
+
+equation
+  der(cost) = 1e-4*(q_c*(c_ref-cstr.c)^2 + q_T*(T_ref-cstr.T)^2 + 
+                    q_Tc*(Tc_ref-cstr.Tc)^2);  
+end CSTR_Opt_Dependent_Parameter;
+
+optimization CSTR_Opt_Extends(
+    objectiveIntegrand = 1e-4*(q_c*(c_ref-c)^2 + q_T*(T_ref-T)^2 + 
+                               q_Tc*(Tc_ref-Tc)^2),
+    startTime=0.0, finalTime=150)
+ 
+  extends CSTR(c(initialGuess=300), T(initialGuess=300, max=350),
+               Tc(initialGuess=350, min=230, max=370), c_init=956.271065,
+               T_init=250.051971);
+  
+  parameter Real c_ref = 338.775766;
+  parameter Real T_ref = 280.099198;
+  parameter Real Tc_ref = 280;
+  parameter Real q_c = 1;
+  parameter Real q_T = 1;
+  parameter Real q_Tc = 1;
+end CSTR_Opt_Extends;
+
+optimization CSTR_Opt_Scaled_Min_Time(objective=tf) 
+
+  parameter Real tf(free=true, min=0.2, initialGuess=100);
+
+  parameter Modelica.SIunits.VolumeFlowRate F0=100/1000/60 "Inflow";
+  parameter Modelica.SIunits.Concentration c0=1000 "Concentration of inflow"; 
+  Modelica.Blocks.Interfaces.RealInput Tc(initialGuess=350, min=230, max=370) "Cooling temperature"; 
+  parameter Modelica.SIunits.VolumeFlowRate F=100/1000/60 "Outflow"; 
+  parameter Modelica.SIunits.Temp_K T0 = 350;
+  parameter Modelica.SIunits.Length r = 0.219;
+  parameter Real k0 = 7.2e10/60;
+  parameter Real EdivR = 8750;
+  parameter Real U = 915.6;
+  parameter Real rho = 1000;
+  parameter Real Cp = 0.239*1000;
+  parameter Real dH = -5e4;
+  parameter Modelica.SIunits.Volume V = 100 "Reactor Volume";
+  parameter Modelica.SIunits.Concentration c_init = 956.271065;
+  parameter Modelica.SIunits.Temp_K T_init = 250.051971;
+  Real c(start=c_init,fixed=true,nominal=c0,initialGuess=300);
+  Real T(start=T_init,fixed=true,nominal=T0,initialGuess=300, max=350);
+  
+  parameter Real c_ref = 338.775766;
+  parameter Real T_ref = 280.099198;
+  
+equation 
+  der(c) = tf * (F0*(c0-c)/V-k0*c*exp(-EdivR/T));
+  der(T) = tf * (F0*(T0-T)/V-dH/(rho*Cp)*k0*c*exp(-EdivR/T)+2*U/(r*rho*Cp)*(Tc-T));
+
+constraint
+  c(finalTime) = c_ref;
+  T(finalTime) = T_ref;
+
+end CSTR_Opt_Scaled_Min_Time;
+
+optimization CSTR_Opt_Unscaled_Min_Time(objective=finalTime, startTime=0,
+    finalTime(min=0.2, free=true, initialGuess=100))
+                                                 
+  extends CSTR(c(initialGuess=300), T(initialGuess=300, max=350),
+               Tc(initialGuess=350, min=230, max=370), c_init=956.271065,
+               T_init=250.051971);
+
+  parameter Real c_ref = 338.775766;
+  parameter Real T_ref = 280.099198;
+
+constraint
+  c(finalTime) = c_ref;
+  T(finalTime) = T_ref;
+
+end CSTR_Opt_Unscaled_Min_Time;
+
+optimization CSTR_Opt_Min_Time_No_Initial_Guess(objective=finalTime,
+    startTime=0, finalTime(min=0.2, free=true))
+                                                 
+  extends CSTR(T(max=350), Tc(min=230, max=370),
+               c_init=956.271065, T_init=250.051971);
+
+  parameter Real c_ref = 338.775766;
+  parameter Real T_ref = 280.099198;
+
+constraint
+  c(finalTime) = c_ref;
+  T(finalTime) = T_ref;
+
+end CSTR_Opt_Min_Time_No_Initial_Guess;
+
+optimization CSTR_Opt_Unscaled_Min_Time_FMUX(objective=finalTime, startTime=0,
+    finalTime(min=0.2, free=true, initialGuess=100))
+                                                 
+  extends CSTR(c(initialGuess=300), T(initialGuess=300, max=350),
+               Tc(initialGuess=350, min=230, max=370), c_init=956.271065,
+               T_init=250.051971);
+
+  parameter Real c_ref = 338.775766;
+  parameter Real T_ref = 280.099198;
+
+constraint
+  c(1) = c_ref;
+  T(1) = T_ref;
+
+end CSTR_Opt_Unscaled_Min_Time_FMUX;
+
+optimization CSTR_Opt_MPC(objective=(cost(finalTime)),
+                      startTime=0.0,
+                      finalTime=50)
+ 
+  input Real u(start = 350,initialGuess=350)=cstr.Tc; 
+  CSTR cstr(c(initialGuess=300),T(initialGuess=300),Tc(initialGuess=350));
+
+  Real cost(start=0,fixed=true,initialGuess=500);
+  parameter Real c_ref = 500;
+  parameter Real T_ref = 320;
+  parameter Real Tc_ref = 300;
+  parameter Real q_c = 1;
+  parameter Real q_T = 1;
+  parameter Real q_Tc = 1;	
+equation
+  der(cost) = q_c*(c_ref-cstr.c)^2 + q_T*(T_ref-cstr.T)^2 + 
+                  q_Tc*(Tc_ref-cstr.Tc)^2 + 
+                  1000*(noEvent(if cstr.T <= 345 then 0 else (cstr.T-345)^4));
+constraint
+  cstr.T<=350;
+  u>=230;
+  u<=370;
+end CSTR_Opt_MPC;
+
+optimization CSTR_Opt_MPC_casadi(objective=(cost(finalTime)),
+                      startTime=0.0,
+                      finalTime=150)
+ 
+  input Real u(start = 350,initialGuess=350)=cstr.Tc;
+  CSTR cstr(c(initialGuess=300),T(initialGuess=300),Tc(initialGuess=350));
+
+  Real cost(start=0,fixed=true,initialGuess=500);
+  parameter Real c_ref = 500;
+  parameter Real T_ref = 320;
+  parameter Real Tc_ref = 300;
+  parameter Real q_c = 1;
+  parameter Real q_T = 1;
+  parameter Real q_Tc = 1;	
+equation
+  der(cost) = q_c*(c_ref-cstr.c)^2 + q_T*(T_ref-cstr.T)^2 + 
+                  q_Tc*(Tc_ref-cstr.Tc)^2+
+		1000*(noEvent(if cstr.T <= 350 then 0 else (cstr.T-350)^4));
+constraint
+  u>=230;
+  u<=370;
+end CSTR_Opt_MPC_casadi;
+
+model CSTR_MPC_Model
+  extends CSTR;
+  parameter Real c_ref = 338.775766; 
+  parameter Real T_ref = 280.099198;
+  parameter Real Tc_ref = 280;
+end CSTR_MPC_Model;
+
+model CSTR_elim_vars_MPC_Model
+  extends CSTR_elim_vars;
+  parameter Real c_ref = 338.775766; 
+  parameter Real T_ref = 280.099198;
+  parameter Real Tc_ref = 280;
+end CSTR_elim_vars_MPC_Model;
+
+optimization CSTR_MPC(objectiveIntegrand = (c_ref-c)^2 + (T_ref-T)^2 + (Tc_ref-Tc)^2,
+    				startTime=0.0, finalTime=150)
+
+extends CSTR_MPC_Model(Tc(min=230, max=370), T(min=0, max=350));
+
+end CSTR_MPC;
+
+optimization CSTR_elim_vars_MPC(objectiveIntegrand = (c_ref-c)^2 + (T_ref-T)^2 + (Tc_ref-Tc)^2,
+    				startTime=0.0, finalTime=150)
+
+extends CSTR_elim_vars_MPC_Model(Tc(min=230, max=370), T(min=0, max=350));
+
+end CSTR_elim_vars_MPC;
+
+optimization CSTR_MPC_Parameter(objectiveIntegrand = (c_ref-c)^2 + (T_ref-T)^2 + p*(Tc_ref-Tc)^2,
+    				startTime=0.0, finalTime=150)
+
+extends CSTR_MPC_Model(Tc(min=230, max=370), T(min=0, max=350));
+
+parameter Real p(free=true, min=1, initialGuess=2);
+
+
+end CSTR_MPC_Parameter;
+
+end CSTR;

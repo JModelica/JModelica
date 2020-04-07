@@ -1,0 +1,111 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import java.io.File;
+import java.util.ArrayList;
+
+import org.jmodelica.util.CompiledUnit;
+import org.jmodelica.util.logging.units.LoggingUnit;
+import org.jmodelica.util.test.GenericTestCase;
+import org.jmodelica.util.test.GenericTestSuite;
+import org.jmodelica.util.test.Assert;
+import org.jmodelica.util.test.TestTree;
+
+public class TestSuite implements GenericTestSuite {
+    String name;
+    private ArrayList<TestCase> l;
+    private TestTree tree = null;
+    private TestTree currentTree = null;
+
+    public TestSuite() {
+        l = new ArrayList<TestCase>();
+    }
+
+    public TestSuite(String fileName, String className, Assert asserter) {
+        name = className;
+        l = new ArrayList<TestCase>();
+        SourceRoot sr = null;
+        File modelicapath = EnvironmentUtils.getThirdPartyMSL();
+        OptionRegistry options = OptionRegistry.buildTestOptions();
+        options.MODELICAPATH.setValue(modelicapath.getPath());
+        ASTNode.log = new SysErrLogger();
+        try {
+            sr = TestCase.PARSER_HANDLER.parseFile(UtilInterface.create(options), LoadInfo.create(fileName));
+        } catch (Exception e) {
+            asserter.fail("Error when parsing file: " + fileName + "\n" + e);
+        }
+        
+        sr.collectTestCases(this, className);
+    }
+
+    public void add(TestCase tc) {
+        l.add(tc);
+        currentTree.add(tc);
+    }
+
+    public void enterClass(String className) {
+        if (currentTree == null) {
+            currentTree = tree = new TestTree(className);
+        } else {
+            currentTree = currentTree.enter(className);
+        }
+    }
+
+    public void exitClass() {
+        currentTree = currentTree.exit();
+    }
+
+    public TestCase get(int i) {
+        return l.get(i);
+    }
+
+    public java.util.List<? extends GenericTestCase> getAll() {
+        return l;
+    }
+
+    public TestTree getTree() {
+        return tree;
+    }
+
+    /**
+     * @return the name
+     */
+    public String getName() {
+        return name;
+    }
+
+    /**
+     * @param name the name to set
+     */
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    private static class SysErrLogger extends ModelicaLogger {
+        public SysErrLogger() {
+            super(Level.WARNING);
+        }
+
+        @Override
+        public void close() {}
+
+        @Override
+        protected void write(Level level, Level alreadySentLevel, LoggingUnit unit) {
+            System.err.println(unit.print(level));
+        }
+
+    }
+}

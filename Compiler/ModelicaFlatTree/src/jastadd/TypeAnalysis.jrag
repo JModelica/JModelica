@@ -1,0 +1,1554 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.TreeSet;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.Iterator;
+
+import org.jmodelica.util.collections.ParallelIterable;
+
+
+aspect FlatTypeInterface {
+
+    public interface CommonType {
+        public CommonType cell(Index index);
+        public CommonType expand(Size size);
+        public CommonType contract(int ndims);
+        public CommonType scalarType();
+        public CommonType arrayType(Size size);
+        public CommonType sizedType(Size size);
+        public boolean typeCompatible(CommonType type);
+        public boolean typeCompatible(CommonType type, boolean unknownAllowed);
+        public boolean isUnknown();
+        public Size size();
+        public int ndims();
+        public FType asFType();
+        
+        public boolean isBoolean();
+        public boolean isInteger();
+        public boolean isReal();
+        public boolean isNumeric();
+        public boolean isString();
+        public boolean isEnum();
+        public boolean isRecord();
+        public boolean isFunction();
+        public boolean isExternalObject();
+    }
+    
+    FType implements CommonType;
+    syn FType FType.asFType() = this;
+    syn FType FType.expand(Size size) = sizedType(size().expand(size));
+    syn FType FType.contract(int ndims) = sizedType(size().contractLeft(ndims));
+    
+    public class ArrayType<T extends HasType> implements CommonType {
+        
+        private Indices indices;
+        private Map<Index, T> cells;
+        private CommonType scalarType;
+        
+        public ArrayType(Indices indices, Map<Index, T> cells, CommonType scalarType) {
+            this.indices = indices;
+            this.cells = cells;
+            this.scalarType = scalarType;
+        }
+        
+        public CommonType expand(Size size) {
+            Map<Index, T> expandedCells = new HashMap<>();
+            for (Map.Entry<Index, T> entry : cells.entrySet()) {
+                for (Index index : Indices.create(size)) {
+                    expandedCells.put(index.expand(entry.getKey()).fix(), entry.getValue());
+                }
+            }
+            cells = expandedCells;
+            indices = Indices.create(indices.size().expand(size));
+            return this;
+        }
+        
+        public CommonType contract(int ndims) {
+            int ndimsDiff = ndims() - ndims;
+            Indices newIndices = Indices.create(size().contractLeft(ndims));
+            Map<Index, T> newCells = new HashMap<>();
+            
+            for (Index index : indices) {
+                newCells.put(index.subIndex(ndimsDiff), cells.get(index));
+            }
+            return new ArrayType(newIndices, newCells, scalarType);
+        }
+        
+        public CommonType cell(Index index) {
+            if (indices.isValid(index)) {
+                return cells.get(index).type().scalarType();
+            }
+            if (index.ndims() == 0) {
+                return this;
+            }
+            return FUnknownType.SCALAR;
+        }
+        
+        public CommonType scalarType() {
+            return scalarType;
+        }
+        
+        public CommonType arrayType(Size size) {
+            return scalarType().arrayType(size); // Not perfect, but will do for now.
+        }
+        
+        public CommonType sizedType(Size size) {
+            return size.ndims() > 0 ? arrayType(size) : scalarType();
+        }
+        
+        public boolean typeCompatible(CommonType type) {
+            return typeCompatible(type, false);
+        }
+        
+        public boolean typeCompatible(CommonType type, boolean unknownAllowed) {
+            if (!indices.size().equivalent(type.size(), unknownAllowed)) {
+                return false;
+            }
+            for (Index i : indices) {
+                if (!cell(i).typeCompatible(type.cell(i))) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        
+        public boolean isUnknown() {
+            for (T cell : cells.values()) {
+                if (cell.type().isUnknown()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        public Size size() {
+            return indices.size();
+        }
+        
+        public int ndims() {
+            return indices.ndims();
+        }
+        
+        public FType asFType() {
+            return scalarType().asFType().sizedType(size());
+        };
+        
+        public String toString() {
+            return scalarType.toString() + (ndims() > 0 ? size() : "");
+        };
+        
+        public boolean isBoolean() { return scalarType().isBoolean(); }
+        public boolean isInteger() { return scalarType().isInteger(); }
+        public boolean isReal() { return scalarType().isReal(); }
+        public boolean isNumeric() { return scalarType().isNumeric(); }
+        public boolean isString() { return scalarType().isString(); }
+        public boolean isEnum() { return scalarType().isEnum(); }
+        public boolean isRecord() { return scalarType().isRecord(); }
+        public boolean isFunction() { return scalarType().isFunction(); }
+        public boolean isExternalObject() { return scalarType().isExternalObject(); }
+    }
+
+}
+
+aspect FlatTypeAnalysis {
+
+    syn lazy FType FAbstractVariable.type();
+    eq FGlobalVariable.type()           = getFType();
+    eq FRealVariable.type()             = fRealType(size());
+    eq FIntegerVariable.type()          = fIntegerType(size());
+    eq FBooleanVariable.type()          = fBooleanType(size());
+    eq FStringVariable.type()           = fStringType(size());
+    eq FEnumVariable.type()             = getType();
+    eq FRecordVariable.type()           = getType();
+    eq FDerivativeVariable.type()       = fRealScalarType();
+    eq FFunctionVariable.type()         = getType();
+    eq UnknownFVariable.type()          = fUnknownType();
+    eq FExternalObjectVariable.type()   = getType();
+
+    syn FType FRealVariable.stateSelectType() = myFClass().stateSelectType();
+    syn lazy FType FClass.stateSelectType() {
+        FEnumType type = new FEnumType(Size.SCALAR, "StateSelect", new List());
+        for (String el : new String[] { "never", "avoid", "default", "prefer", "always" }) 
+            type.addFEnumLiteralType(new FEnumLiteralType(Size.SCALAR, el));
+        return type;
+    }
+    
+    syn FType FRecordVariable.getType() = myFRecordDecl().type().sizedType(size());
+
+    syn FType FEnumVariable.getType() = myFEnumDecl().type().sizedType(size());
+
+    syn nta FType FExternalObjectVariable.getType() = getConstructor().myFCallable().myOutputs().get(0).type().sizedType(size());
+
+
+    public FExternalStmt FAlgorithm.getFExternalStmt() {
+        for (FStatement stmt : getFStatements())
+            if (stmt instanceof FExternalStmt)
+                return (FExternalStmt) stmt;
+        return null;
+    }
+
+    inh CommonVariableDecl FExternalStmt.myConstructorOutput();
+    eq Root.getChild().myConstructorOutput() = null;
+    eq FFunctionDecl.getChild().myConstructorOutput()     = myOutputs().get(0);
+    eq InstFullClassDecl.getChild().myConstructorOutput() = myOutputs().get(0);
+
+    public ArrayList<FExp> FExternalStmt.myConstructorArgs() {
+        ArrayList<FExp> res = new ArrayList<FExp>();
+        for (FExp arg : getArgs()) {
+            if (arg.isConstructorTypeArg()) {
+                res.add(arg);
+            }
+        }
+        return res;
+    }
+
+    syn boolean FExp.isConstructorTypeArg() = false;
+    eq CommonAccessExp.isConstructorTypeArg()     = !myCommonVarDecl().isOutput();
+    eq FSizeExp.isConstructorTypeArg()      = true;
+
+    // TODO: Reduce code duplication here
+    syn lazy FRecordType FRecordDecl.type() {
+        FRecordType type = new FRecordType(Size.SCALAR, name(), new List(), myFClass());
+        for (FVariable fv : getFVariables()) 
+            type.addComponent(new FRecordComponentType(fv.name(), (FType) fv.type().fullCopy()));
+        return type;
+    }
+
+    public class FRecordComponentType implements Comparable<FRecordComponentType> {
+        public int compareTo(FRecordComponentType other) {
+            return getName().compareTo(other.getName());
+        }
+    }
+
+    syn lazy FType FEnumDecl.type() {
+        FEnumType type = new FEnumType(Size.SCALAR, name(), new List());
+        for (FEnumLiteral el : enumLiterals()) 
+            type.addFEnumLiteralType(new FEnumLiteralType(Size.SCALAR, el.name()));
+        return type;
+    }
+
+    syn FType FEnumLiteral.type() = myFEnumDecl().type();
+    eq FEnumLitExp.type()     = hasType() ? getType() : myFEnumDecl().type();
+
+
+    public FType FExp.promoteTypeForFExpList(Iterable<FExp> exps) {
+        Iterator<FExp> it = exps.iterator();
+        if (!it.hasNext())
+            return fUnknownType();
+        FType tot = it.next().type();
+        while (it.hasNext())
+            tot = tot.typePromotion(it.next().type());
+        return tot;
+    }
+
+    syn lazy FType FAbstractEquation.type() = fUnknownType();
+    eq FEquation.type() = getRight().type().typePromotion(getLeft().type());
+
+    syn lazy FType FStatement.type() = fUnknownType();
+    eq FAssignStmt.type()            = getRight().type().typePromotion(getLeft().type());
+    eq FFunctionCallStmt.type()      = getCall().type();
+    eq FInitArrayStmt.type()         = getType();
+    
+    syn FType FInitArrayStmt.getType() {
+        if (getShallow() && getNumSize() > 0) {
+            MutableSize ms = new MutableSize(getNumSize());
+            for (FExp size : getSizes()) {
+                ms.append(size);
+            }
+            return getFAccessExp().myFV().type().arrayType(ms);
+        } else {
+            return getFAccessExp().myFV().type().treeCopy();
+        }
+    }
+    
+    /**
+     * True if this equation exclusively equates real types.
+     */
+    syn boolean FAbstractEquation.isReal() = isReal(true);
+
+    /**
+     * True if this equation exclusively equates non-real types.
+     */
+    syn boolean FAbstractEquation.isNonReal() = !isReal(false);
+
+    /**
+     * True if this equation equates at least one real type and one non real type.
+     */
+    syn boolean FAbstractEquation.isMixed() {
+        return !isReal(true) && isReal(false);
+    }
+
+    syn boolean FAbstractEquation.isReal(boolean exclusive) {
+        boolean res = exclusive;
+        for (FVariable fv : referencedFVariablesInLHS()) {
+            boolean fvRes = fv.isReal();
+            res = exclusive ? res && fvRes : res || fvRes;
+        }
+        return res;
+    }
+    eq FEquation.isReal(boolean exclusive) = type().isReal();
+
+    eq FIfWhenElseEquation.isReal(boolean exclusive) {
+        boolean res = exclusive;
+        for (FAbstractEquation equation : getFAbstractEquations()) {
+            boolean fvRes = equation.isReal(exclusive);
+            res = exclusive ? res && fvRes : res || fvRes;
+        }
+        return res;
+    }
+    eq FIfEquation.isReal(boolean exclusive) {
+        return super.isReal(exclusive) && (!exclusive || (!hasElse() || getElse().isReal()));
+    }
+
+    syn boolean FRelExp.isRealComparison()    = comparisonType().isReal();
+    syn boolean FRelExp.isIntegerComparison() = comparisonType().isInteger();
+    syn boolean FRelExp.isBooleanComparison() = comparisonType().isBoolean();
+    syn boolean FRelExp.isStringComparison()  = comparisonType().isString();
+
+    syn FType FRelExp.comparisonType() = getRight().type().numericPromotion(getLeft().type());
+
+    syn FType FExp.type() = fUnknownType();
+    
+    eq FNoExp.type() = fNoType();
+    
+    syn lazy FType FAbstractArrayExp.type() = super.type();
+
+    eq FUnaryExp.type()   = 
+        shouldUseOverloadedOperator() ? getFExp().type().matchOverloadedOperatorType(null, operatorName()) : getFExp().type();
+    eq FArtmBinExp.type() = getLeft().type().looseNumericPromotion(getRight().type(), false, operatorName());
+    eq FSubExp.type()     = getLeft().type().numericPromotion(getRight().type(), false, operatorName());
+    eq FNegExp.type()     = getFExp().type().hasNeg() ? super.type() : fUnknownType();
+
+    eq FDotAddExp.type() {
+        FType t = rawType();
+        return t.hasAdd() ? t : fUnknownType();
+    }
+
+    syn FType FDotAddExp.rawType() = getLeft().type().looseTypePromotion(getRight().type(), false, operatorName());
+    eq FAddExp.rawType()           = getLeft().type().typePromotion(getRight().type(), false, operatorName());
+
+    eq FUnaryBuiltIn.type() = getFExp().type();
+    eq FEdgeExp.type()      = fBooleanType(size());
+    eq FChangeExp.type()    = fBooleanType(size());
+    eq FLoadResource.type() = fStringScalarType();
+
+    eq FDimensionConvert.type() = getFExp().type().sizedType(size());
+
+    eq FDotDivExp.type() {
+        FType t = super.type();
+        if (t.isInteger())
+            t = fRealType(t.size());
+        return t;
+    }
+
+    eq FDivExp.type() {
+        if (getRight().type().isScalar() || shouldUseOverloadedOperator())
+            return super.type();
+        else
+            return fUnknownType();
+    }
+
+    eq FMulExp.type() {
+        FType res = null;
+        if (ndims() < 0)
+            return fUnknownType();
+        if (isElementWise())
+            return super.type();
+        Size left = getLeft().size();
+        Size right = getRight().size();
+        if (shouldUseOverloadedOperator()) {
+            res = getLeft().type().matchOverloadedOperatorType(getRight().type(), operatorName());
+            if (!res.isUnknown())
+                return res;
+        }
+        if (!left.equivalentDim(right, inFunction(), left.ndims() - 1, 0))
+            return fUnknownType();
+        if (left.ndims() > 2 || right.ndims() > 2)
+            return fUnknownType();
+        if (left.ndims() == 1 && right.ndims() > 0 && shouldUseOverloadedOperator())
+            return fUnknownType();
+        res = getLeft().type().scalarNumericPromotion(getRight().type(), operatorName());
+        if (left.ndims() == 1 && right.ndims() == 1) 
+            return res;
+        else
+            return res.arrayType(size());
+    }
+
+    eq FDotPowExp.type() {
+        FType t = getLeft().type().looseNumericPromotion(getRight().type());
+        return (t.isUnknown() || shouldUseOverloadedOperator()) ? t : fRealType(t.size());
+    }
+
+    eq FPowExp.type() {
+        if (shouldUseOverloadedOperator()) {
+            FType res = getLeft().type().matchOverloadedOperatorType(getRight().type(), operatorName());
+            if (!res.isUnknown())
+                return res;
+        }
+        if (getRight().type().isUnknown() || getRight().ndims() != 0)
+            return fUnknownType();
+        if (getLeft().ndims() == 0)
+            return super.type();
+        // Left operand is not scalar, must be matrix exponentiation
+        if (ndims() != 2 || size().get(0) != size().get(1))
+            return fUnknownType();
+        if (!getRight().type().isInteger() || !getRight().isConstantExp())
+            return fUnknownType();
+        if (getRight().ceval().intValue() < 0)
+            return fUnknownType();
+        return fRealArrayType(size());
+    }
+
+    eq FEnumIntegerExp.type() = getFExp().type().isEnumScalar() ? fIntegerScalarType() : fUnknownType();
+    eq FStringExp.type()      = fStringScalarType();
+
+    eq FEventGenExp.type()    = fRealType(size());
+    eq FIntegerFuncExp.type() = fIntegerType(size());
+    eq FBinEventGenExp.type() = argType();
+
+    eq FHomotopyExp.type()    = getActual().type();
+    eq FSemiLinearExp.type()  = fRealType(size());
+
+    // Should be safe, FDSDerExp are introduced by index reduction and represent
+    // derivatives which always are continuous and real typed.
+    eq FDSDerExp.type()       = FRealType.SCALAR;
+
+    syn FType FEventGenExp.argType() = getX().type();
+    eq FBinEventGenExp.argType() = 
+            getX().type().scalarType().numericPromotion(getY().type().scalarType()).sizedType(size());
+
+    eq FRecordConstructor.type() = getType();
+
+    syn FType FRecordConstructor.getType() = getRecord().recordType().forConstructor(getArgs());
+
+    public FType FRecordType.forConstructor(List<? extends HasType> args) {
+        FRecordType frt = treeCopy();
+        for (int i = 0; i < frt.getNumComponent(); i++) {
+            frt.updateComponent(args.getChild(i).type(), i);
+        }
+        return frt;
+    }
+    
+    private void FRecordType.updateComponent(FType type, int i) {
+        if (getComponent(i).getFType().isRecord() && type.isRecord()) {
+            getComponent(i).setFType(type.treeCopy());
+        } else {
+            getComponent(i).getFType().transferSizes(type);
+        }
+    }
+
+    public interface HasType {
+        public FType type();
+    }
+
+    FExp implements HasType;
+    InstFunctionArgument implements HasType;
+    InstComponentDecl implements HasType;
+
+    syn FType InstFunctionArgument.type() = getFExp().type();
+
+    syn FRecordType FRecordAccess.recordType() = myFRecordDecl().type();
+
+    eq FTranspose.type() = 
+        getFExp().ndims() < 2 ? 
+            fUnknownType() : 
+            getFExp().type().arrayType(size());
+
+    eq FSymmetric.type() = getFExp().ndims() == 2 && getFExp().size().get(0) == getFExp().size().get(1) ?
+        getFExp().type() : 
+        fUnknownType();
+
+    eq FCross.type() = getX().type().numericPromotion(getY().type());
+    eq FSkew.type()  = getFExp().type().arrayType(size());
+
+    eq FOuterProduct.type() { 
+        if (getX().ndims() != 1 || getY().ndims() != 1)
+            return fUnknownType();
+        FType scalar = getX().type().scalarType().numericPromotion(getY().type().scalarType());
+        return scalar.sizedType(size());
+    }
+
+    eq FNdimsExp.type() = fIntegerScalarType();
+
+    eq FSizeExp.type() {
+        if (hasDim()) {
+            if (!getDim().variability().parameterOrLess())
+                return fUnknownType();
+            if (!getDim().type().isIntegerScalar())
+                return fUnknownType();
+            int dim = dimension();
+            if (dim < 0 || dim > getFExp().ndims() - 1)
+                return fUnknownType();
+            return fIntegerScalarType();
+        } else {
+            return fIntegerArrayType(size());
+        }
+    }
+
+    eq FMinMaxExp.type() = 
+        hasY() ? 
+            getX().type().scalarType().typePromotion(getY().type().scalarType()) : 
+            getX().type().scalarType();
+
+    eq FRangeExp.type() {
+        FType tot = promoteTypeForFExpList(getFExps());
+        if (!tot.isScalar() || !tot.canBeRange() || (!tot.isNumeric() && hasStep()))
+                return fUnknownType();
+        return tot.arrayType(size());
+    }
+
+    syn boolean FType.canBeRange() = false;
+    eq FIntegerType.canBeRange()   = true;
+    eq FRealType.canBeRange()      = true;
+    eq FBooleanType.canBeRange()   = true;
+    eq FEnumType.canBeRange()      = true;
+
+    eq FDeferExp.type() = getFExp().type();
+
+    eq FLinspace.type() {
+        // TODO: check that endpoints are real
+        if (hasValidN() || inFunction()) {
+            return fRealArrayType(size());
+        } else {
+            return fUnknownType();
+        }
+    }
+
+    syn boolean FLinspace.hasValidN() {
+        if (getN().variability().parameterOrLess()) {
+            try {
+                CValue val = getN().ceval();
+                return val.hasIntValue() && val.intValue() >= 2;
+            } catch (ConstantEvaluationException e) {}
+        }
+        return false;
+    }
+
+    eq FRelExp.type() {
+        if (shouldUseOverloadedOperator()) 
+            return getLeft().type().matchOverloadedOperatorType(getRight().type(), operatorName());
+        FType left = getLeft().type();
+        if (left.equivalentTo(getRight().type()) && left.isScalar()) {
+            if (left.isRecord()) {
+                return left;
+            } else {
+                return fBooleanScalarType();
+            }
+        }
+        else
+            return fUnknownType();
+    }
+    eq FLogBinExp.type() {
+        if (shouldUseOverloadedOperator()) 
+            return getLeft().type().matchOverloadedOperatorType(getRight().type(), operatorName());
+        FType left = getLeft().type();
+        if (left.typeCompatible(getRight().type()) && left.isBoolean())
+            return left;
+        else
+            return fUnknownType();
+    }
+    eq FNotExp.type() = shouldUseOverloadedOperator() ? 
+            getFExp().type().matchOverloadedOperatorType(null, operatorName()) : 
+            (getFExp().type().isBoolean() ? getFExp().type() : fUnknownType());
+
+    eq FIfExp.type() {
+        FType thenType = getThenExp().type();
+        FType elseType = getElseExp().type();
+        if (!getIfExp().isOKTestExp() || thenType.ndims() != elseType.ndims())
+            return fUnknownType();
+        
+        return fypeSelection(thenType, elseType);
+    }
+
+    syn FType FIfExp.fypeSelection(FType thenType, FType elseType) = 
+        thenType.typePromotion(elseType, inFunction(), null);
+
+    syn FType InstIfExp.fypeSelection(FType thenType, FType elseType) {
+        if (thenType.equivalentTo(elseType))
+            return thenType.typePromotion(elseType);
+        
+        if (isParameterIf()) {
+            try {
+                FExp sel = cevalSelectExp();
+                FType scalar = thenType.scalarType();
+                scalar = scalar.typePromotion(elseType.scalarType());
+                return scalar.arrayType(sel.size());
+            } catch (ConstantEvaluationException e) {
+            }
+        }
+        
+        // Test doesn't seem to be parameter expression - require sizes to be same
+        return thenType.typePromotion(elseType, inFunction(), null);
+    }
+
+    syn boolean InstIfExp.isParameterIf() = getIfExp().variability().parameterOrLess();
+
+    syn boolean FExp.isOKTestExp() = type().isBoolean() && type().isScalar();
+
+    eq FRealLitExp.type()     = fRealScalarType();
+    eq FIntegerLitExp.type()  = fIntegerScalarType();
+    eq FBooleanLitExp.type()  = fBooleanScalarType();
+    eq FStringLitExp.type()   = fStringScalarType();
+    eq FTimeExp.type()        = fRealScalarType();
+    eq FAbstractDerExp.type() = fRealType(size());
+    eq FInStreamEpsExp.type() = fRealScalarType();
+
+    eq FVectUnaryBuiltIn.type() = scalarType().sizedType(size());
+
+    eq FExInStream.type() = fRealType(size());
+
+    eq FSmoothExp.type() = getFExp().type();
+
+    eq FConnectionsOp.type() = fNoType();
+    eq FConnBoolOp.type()    = fBooleanScalarType();
+
+    eq FCardinality.type() = fIntegerScalarType();
+    eq FDecouple.type()    = getFExp().type();
+
+    eq FTerminate.type() = fNoType();
+    eq FReinit.type() = fNoType();
+    eq FAssert.type() = getTest().type(); /* For scalarizing record type asserts. Needed for TestExternalRecordCeval */
+    eq FGetInstanceName.type() = fStringScalarType();
+
+    eq FDelayExp.type() = getFExp().type();
+    eq FSpatialDistExp.type() = getIn0().type();
+
+    eq FIndicatorExp.type() = FRealType.SCALAR;
+
+    /**
+     * The scalar type of the expression.
+     * 
+     * Base implementation assumes same as argument.
+     */
+    syn FType FVectUnaryBuiltIn.scalarType() = getFExp().type().scalarType();
+    eq FSignExp.scalarType() = fIntegerScalarType();
+
+    // TODO: expand to handle boolean and enum index
+    eq FEndExp.type() = fIntegerScalarType();
+
+    eq FSampleExp.type() {
+        for (FExp ch : childFExps())
+            if (!ch.variability().parameterOrLess())
+                return fUnknownType();
+        return fBooleanScalarType();
+    }
+
+    eq FSimulationStateBuiltIn.type() = fBooleanScalarType();
+
+    /**
+     * Check if this FArray is on the form "{exp for i in exp}".
+     */
+    syn boolean FArray.isIterArray() = getNumFExp() == 1 && getFExp(0).isIterExp();
+
+    /**
+     * Check if this FExp is on the form "exp for i in exp".
+     */
+    syn boolean FExp.isIterExp() = false;
+    eq FIterExp.isIterExp()      = true;
+
+    /**
+     * Returns the expression being iterated over in an FIterExp child. 
+     *        Only valid if {@link #isIterExp()} returns <code>true</code>.
+     */
+    public FExp FReductionExp.iterExp() { return ((FIterExp) getFExp()).getFExp(); }
+
+    eq FArray.type() {
+        if (isIterArray())
+            return getFExp(0).type();
+        
+        // Check that the types of the elements are consistent
+        int n = getNumFExp();
+        FType t = n > 0 ? getFExp(0).type() : fUnknownType();
+        boolean func = inFunction();
+        for (int i = 1; i < n && !t.isUnknown(); i++) {
+            t = mergeArrayCellTypes(t, getFExp(i).type(), func);
+        }
+        return t.arrayType(size());
+    }
+    
+    syn FType FArray.mergeArrayCellTypes(FType t1, FType t2, boolean func) {
+        if (t1.isNoType()) {
+            return t2;
+        } else if (t2.isNoType()) {
+            return t1;
+        } else {
+            return t1.typePromotion(t2, func, null);
+        }
+    }
+    
+    syn boolean FExp.isNoExp() = false;
+    eq FNoExp.isNoExp() = true;
+    
+    syn boolean FType.isNoType() = false;
+    eq FNoType.isNoType() = true;
+
+    eq FAbstractCat.type() {
+        if (!dimensionIsOk())
+            return fUnknownType();
+        int dim = dimension();
+        
+        FType t = getFExp(0).type().scalarType();
+        Size s = getFExp(0).size().promote(ndimsForArg(0));
+        boolean func = inFunction();
+        for (int i = 1; i < getNumFExp(); i++) {
+            // Check that the types of the elements are consistent
+            FType t2 = getFExp(i).type().scalarType();
+            if (!t.equivalentTo(t2, func)) 
+                return fUnknownType();
+            if (t.isNumeric()) 
+                t = t.numericPromotion(t2, func, null);
+            
+            // Check that the sizes are consistent
+            Size s2 = getFExp(i).size().promote(ndimsForArg(i));
+            if (!s.equivalentExcept(s2, func, dim))
+                return fUnknownType();
+        }
+        return t.arrayType(size());
+    }
+
+    syn int FAbstractCat.ndimsForArg(int i) = ndims();
+    eq FCatExp.ndimsForArg(int i)           = getFExp(i).ndims();
+
+    eq FReductionExp.type() {
+        if (getFExp().isIterExp())
+            return iterExp().type();
+        return getFExp().type().scalarType();
+    }
+
+    eq FIterExp.type() {
+        if (ndims() < 0)
+            return fUnknownType();
+        return getFExp().type().arrayType(size());
+    }
+
+    eq FIdentity.type() {
+        if (!getFExp().variability().parameterOrLess() && !inFunction())
+            return fUnknownType();
+        return fIntegerArrayType(size());
+    }
+    eq FDiagonal.type() = getFExp().type().arrayType(size());
+
+    eq FSubscriptedExp.type() = getFExp().type().sizedType(size());
+    eq FComponentExp.type()   = getFExp().type().componentType(getName());
+
+    eq FArrayDimAsArgsExp.type() = (size().ndims() > 0) ? fIntegerArrayType(size()) : fUnknownType();
+    eq FFillExp.type()           = (size().ndims() > 0) ? getFillExp().type().arrayType(size()) : fUnknownType();
+
+    eq CommonAccessExp.type() = getAccess().type(); // When converting to the new type interface, this should compute 
+                                                    // type for every element in getArray() for arrays of records.
+    
+    eq FDSRefExp.type() = getOrg().type();
+
+    syn FType CommonAccess.type();
+    
+    eq FAccess.type() = myFV().type().sizedType(size());
+
+    eq InstAccess.type() {
+        if (myInstComponentDecl().isAssignable()) {
+            InstAssignable ip = (InstAssignable) myInstComponentDecl();
+            if (ip.type().isRecord()) {
+                CommonType t = ip.commonType();
+                int ndimsWithoutFAS = ndims() + (hasFArraySubscripts() ? getFArraySubscripts().ndims() - getFArraySubscripts().accessNdims() : 0);
+                // Using expand here is insufficient for record arrays where the elements have different sizes.
+                // Very difficult to fix here, should be fixed in CommonAccessExp.type() instead.
+                t = t.expand(size().contractRight(ndimsWithoutFAS - ip.ndims()));
+                try {
+                    t = t.cell(accessIndex()).asFType();
+                } catch (ConstantEvaluationException e) {
+                    t = ndims() > 0 ? t.arrayType(size()) : t.scalarType();
+                }
+                return t.asFType();
+            } else {
+                return ip.type().sizedType(size());
+            }
+        } else if (myInstClassDecl().isEnum()) {
+            return myInstClassDecl().enumType();
+        } else if (myInstClassDecl().isBoolean()) {
+            return myInstClassDecl().fBooleanType(size());
+        } else {
+            return fUnknownType();
+        }
+	}
+
+    eq FIgnoredBuiltIn.type() = fUnknownType();
+
+    inh FType FFunctionCallLeft.type();
+    eq FFunctionCallEquation.getLeft(int i).type() = getCall().typeOfOutput(i);
+    eq FFunctionCallStmt.getLeft(int i).type()     = getCall().typeOfOutput(i);
+
+	syn FType FAbstractFunctionCall.typeOfOutput(int i) = typeOutput(i) ? type() : fUnknownType();
+    eq FFunctionCall.typeOfOutput(int i)                = getFType().component(i);
+    eq FPartialFunctionCall.typeOfOutput(int i)         = getFType();
+    eq InstFunctionCall.typeOfOutput(int i)             = getFType().component(i);
+    eq InstPartialFunctionCall.typeOfOutput(int i)      = getFType();
+    
+    syn boolean FAbstractFunctionCall.typeOutput(int i) = i == 0;
+    eq FSpatialDistExp.typeOutput(int i)                = i == 1 || super.typeOutput(i);
+    
+    syn FType FType.component(int i)  = fUnknownType();
+    eq FFunctionType.component(int i) = nullUnknown(getOutput(i)).vectorized(getSize());
+    
+    syn FType FType.nullUnknown(FRecordComponentType t) = t == null ? fUnknownType() : t.getFType();
+    
+    syn FType FType.vectorized(Size s) {
+        if (s == Size.SCALAR) {
+            return this;
+        }
+        MutableSize s2 = s.mutableClone();
+        s2.append(getSize());
+        return sizedType(s2);
+    }
+    
+    eq FFunctionCall.type()    = hasOutputs() ? typeOfOutput(0) : fNoType();
+    eq FMathematicalFunctionCall.type() = fRealType(size());
+    eq FPartialFunctionCall.type() {
+        List<FRecordComponentType> inputs = new List<FRecordComponentType>();
+        Set<String> s = new HashSet<String>();
+        for (CommonAccess u : getArgNames()) {
+            s.add(u.name());
+        }
+        for (CommonVariableDecl cvd : myFCallable().myInputs()) {
+            if (!s.contains(cvd.name()))
+                inputs.add(new FRecordComponentType(cvd.name(), cvd.type()));
+        }
+        List<FRecordComponentType> outputs = new List<FRecordComponentType>();
+        for (CommonVariableDecl cvd : myFCallable().myOutputs()) {
+            outputs.add(new FRecordComponentType(cvd.name(), cvd.type()));
+        }
+        return new FFunctionType(size(), name(), inputs, outputs, myFClass());
+    }
+
+    // TODO: expand to handle boolean and enum index (see #3597)
+    syn FType FSubscript.type();
+    syn lazy FType FColonSubscript.type() = fIntegerArrayType(size());
+    eq FIntegerSubscript.type() = fIntegerScalarType();
+    eq FExpSubscript.type()     = getFExp().type();
+    public FType IntegerSubscript.type() { return FIntegerType.SCALAR; }
+
+    public FType FType.lookupHierarchical(FAccess name, int part, int last) {
+        return this;
+    }
+    
+    public FType FRecordType.lookupHierarchical(FAccess name, int part, int last) {
+        if (part == last) {
+            return this;
+        }
+        FAbstractVariable res = null;
+        String pn = name.partName(part);
+        for (FRecordComponentType frct : getComponents())
+            if (frct.getName().equals(pn))
+                return frct.getFType().lookupHierarchical(name, part + 1, last);
+        return null;
+    }
+    
+    syn FType FType.cell(Index index) {
+        if (index.ndims() == 0) {
+            return this;
+        }
+        if (indices().isValid(index)) {
+            return scalarType();
+        }
+        return FUnknownType.SCALAR;
+    }
+
+
+}
+
+
+aspect TypePromotion {
+
+    /**
+     * Combine two types to the broadest common denominator.
+     * 
+     * If types are not compatible, the unknown type is returned.
+     * An integer type combined with a real type results in a real type.
+     */
+    syn FType FType.typePromotion(FType type) = typePromotion(type, false, null);
+
+    /**
+     * Combine two types to the broadest common denominator.
+     * 
+     * If scalar types are not compatible or if both are array and sizes 
+     * doesn't match, the unknown type is returned.
+     * An integer type combined with a real type results in a real type.
+     */
+    syn FType FType.looseTypePromotion(FType type) = looseTypePromotion(type, false, null);
+
+    /**
+     * Combine two types to the broadest common numeric denominator.
+     * 
+     * If either is non-numeric or if sizes doesn't match, 
+     * the unknown type is returned.
+     * An integer type combined with a real type results in a real type.
+     */
+    syn FType FType.numericPromotion(FType type) = numericPromotion(type, false, null);
+
+    /**
+     * Combine two types to the broadest common numeric denominator.
+     * 
+     * If either is non-numeric or if both are array and sizes doesn't match, 
+     * the unknown type is returned. 
+     * An integer type combined with a real type results in a real type.
+     */
+    syn FType FType.looseNumericPromotion(FType type) = looseNumericPromotion(type, false, null);
+
+    /**
+     * Combine two types to the broadest common denominator.
+     * 
+     * If types are not compatible, the unknown type is returned.
+     * An integer type combined with a real type results in a real type.
+     * If <code>allowUnknown</code> is <code>true</code>, then unknown 
+     * lengths are considered equal to any length. If non-<code>null</code>, 
+     * <code>operator</code> defines what operator to use in operator 
+     * overloading.
+     */
+    syn FType FType.typePromotion(FType type, boolean allowUnknown, String operator) {
+        if ((isOperatorRecord() || type.isOperatorRecord()) && operator != null) {
+            return matchOverloadedOperatorType(type, operator, false, allowUnknown);
+        } else if (isNumeric()) {
+            return numericPromotion(type, allowUnknown, operator);
+        } else if (!equivalentTo(type, allowUnknown)) {
+            if (isRecord()) {
+                return mergeRecordType(type);
+            }
+            return fUnknownType();
+        } else {
+            return this;
+        }
+    }
+    
+    syn FType FType.mergeRecordType(FType other) {
+        FType res = treeCopy();
+        res.setSize(getSize().mergeRecordType(other.getSize()));
+        return res;
+    }
+    eq FRecordType.mergeRecordType(FType other) {
+        if (ndims() != other.ndims() || !other.isRecord()) {
+            return fUnknownType();
+        }
+        FRecordType rec = (FRecordType) other;
+        if (getNumComponent() != rec.getNumComponent()) {
+            return fUnknownType();
+        }
+        Map<String, FRecordComponentType> comps = new HashMap<>();
+        Iterable<FRecordComponentType[]> iter = new ParallelIterable(
+                new FRecordComponentType[2], true, componentTreeSet(), rec.componentTreeSet());
+        for (FRecordComponentType[] frct : iter) {
+            if (frct[0] == null || frct[1] == null || 
+                    !frct[0].getName().equals(frct[1].getName())) {
+                return fUnknownType();
+            }
+            FType comp = frct[0].getFType().mergeRecordType(frct[1].getFType());
+            if (comp.isUnknown()) {
+                return fUnknownType();
+            }
+            String name = frct[0].getName();
+            comps.put(name, new FRecordComponentType(name, comp));
+        }
+        
+        List<FRecordComponentType> compList = new List<>();
+        for (FRecordComponentType comp : getComponents()) {
+            compList.add(comps.get(comp.getName()));
+        }
+        
+        Size size = getSize().mergeRecordType(other.getSize());
+        return new FRecordType(size, getName(), compList, getFClass());
+    }
+    
+    syn TreeSet<FRecordComponentType> FRecordType.componentTreeSet() {
+        TreeSet<FRecordComponentType> res = new TreeSet<FRecordComponentType>();
+        for (FRecordComponentType frct : getComponents()) {
+            res.add(frct);
+        }
+        return res;
+    }
+    
+    public Size Size.mergeRecordType(Size other) {
+        if (ndims() == 0) {
+            return this;
+        }
+        int[] merged = new int[ndims()];
+        for (int i = 0; i < ndims(); i++) {
+            int s = get(i);
+            if (s != other.get(i)) {
+                s = Size.UNKNOWN;
+            }
+            merged[i] = s;
+        }
+        return new Size(merged);
+    }
+    
+    /**
+     * Combine two types to the broadest common denominator.
+     * 
+     * If scalar types are not compatible or if both are array and sizes 
+     * doesn't match, the unknown type is returned.
+     * An integer type combined with a real type results in a real type.
+     * If <code>allowUnknown</code> is <code>true</code>, then unknown 
+     * lengths are considered equal to any length. If non-<code>null</code>, 
+     * <code>operator</code> defines what operator to use in operator 
+     * overloading.
+     */
+    syn FType FType.looseTypePromotion(FType type, boolean allowUnknown, String operator) {
+        if ((isOperatorRecord() || type.isOperatorRecord()) && operator != null) {
+            return matchOverloadedOperatorType(type, operator, true, allowUnknown);
+        } else if (looslyDimensionCompatible(type, allowUnknown)) {
+            FType scalar = scalarType().typePromotion(type.scalarType(), false, operator);
+            return scalar.sizedType(isScalar() ? type.size() : size());
+        } else {
+            return fUnknownType();
+        }
+    }
+
+    /**
+     * Combine two types to the broadest common numeric denominator.
+     * 
+     * If either is non-numeric or if sizes doesn't match, 
+     * the unknown type is returned. Operator records with suitable 
+     * overloaded operators are considered numeric for this purpose.
+     * An integer type combined with a real type results in a real type.
+     * If <code>allowUnknown</code> is <code>true</code>, then unknown 
+     * lengths are considered equal to any length. If non-<code>null</code>, 
+     * <code>operator</code> defines what operator to use in operator 
+     * overloading.
+     */
+    syn FType FType.numericPromotion(FType type, boolean allowUnknown, String operator) {
+        if (isOperatorRecord() || type.isOperatorRecord()) {
+            return matchOverloadedOperatorType(type, operator, false, allowUnknown);
+        } else if (dimensionCompatible(type, allowUnknown)) {
+            return scalarNumericPromotion(type, operator).arrayType(size());
+        } else {
+            return fUnknownType();
+        }
+    }
+
+    /**
+     * Combine two types to the broadest common numeric denominator.
+     * 
+     * If either is non-numeric or if both are array and sizes doesn't match, 
+     * the unknown type is returned. Operator records with suitable 
+     * overloaded operators are considered numeric for this purpose.
+     * An integer type combined with a real type results in a real type.
+     * If <code>allowUnknown</code> is <code>true</code>, then unknown 
+     * lengths are considered equal to any length. If non-<code>null</code>, 
+     * <code>operator</code> defines what operator to use in operator 
+     * overloading.
+     */
+    syn FType FType.looseNumericPromotion(FType type, boolean allowUnknown, String operator) {
+        if (isOperatorRecord() || type.isOperatorRecord()) {
+            return matchOverloadedOperatorType(type, operator, true, allowUnknown);
+        } else if (looslyDimensionCompatible(type, allowUnknown)) {
+            return scalarNumericPromotion(type, operator).sizedType(isScalar() ? type.size() : size());
+        } else {
+            return fUnknownType();
+        }
+    }
+
+    /**
+     * Combine two types to the broadest common scalar numeric denominator.
+     * 
+     * If either is non-numeric, the unknown type is returned.
+     * An integer type combined with a real type results in a real type.
+     * If non-<code>null</code>, <code>operator</code> defines what operator 
+     * to use in operator overloading.
+     */
+    syn FType FType.scalarNumericPromotion(FType type, String operator) = 
+        scalarType().matchOverloadedOperatorType(type.scalarType(), operator, false, false);
+    eq FPrimitiveNumericType.scalarNumericPromotion(FType type, String operator) {
+        if (isOperatorRecord() || type.isOperatorRecord()) {
+            return scalarType().matchOverloadedOperatorType(type.scalarType(), operator, false, false);
+        } else if (type.isNumeric()) 
+            return isReal() ? scalarType() : type.scalarType();
+        else 
+            return super.scalarNumericPromotion(type, operator);
+    }
+    eq FArrayType.scalarNumericPromotion(FType type, String operator) {
+        return scalarType().scalarNumericPromotion(type.scalarType(), operator);
+    }
+
+}
+
+
+aspect FTypeCompatibility {
+
+    syn boolean FType.typeCompatible(CommonType type) = typeCompatible(type, false);
+
+    syn boolean FType.typeCompatible(CommonType type, boolean allowUnknown) = false;
+    eq FRealType.typeCompatible(CommonType type, boolean allowUnknown) = 
+        (type.isReal() || type.isInteger()) && dimensionCompatible(type, allowUnknown);
+    eq FIntegerType.typeCompatible(CommonType type, boolean allowUnknown) = 
+        type.isInteger() && dimensionCompatible(type, allowUnknown);
+    eq FBooleanType.typeCompatible(CommonType type, boolean allowUnknown) = 
+        type.isBoolean() && dimensionCompatible(type, allowUnknown);
+    eq FStringType.typeCompatible(CommonType type, boolean allowUnknown) = 
+        type.isString() && dimensionCompatible(type, allowUnknown);
+    eq FRecordType.typeCompatible(CommonType type, boolean allowUnknown) = 
+        typeMatches(type, true, allowUnknown);
+    eq FEnumType.typeCompatible(CommonType type, boolean allowUnknown) = 
+        typeMatches(type, true, allowUnknown);
+    eq FExternalObjectType.typeCompatible(CommonType type, boolean allowUnknown) = 
+        typeMatches(type, true, allowUnknown);
+    eq FFunctionType.typeCompatible(CommonType type, boolean allowUnknown) =
+        typeMatches(type, true, allowUnknown);
+    
+    syn boolean FType.typeMatches(CommonType type, boolean compatible, boolean allowUnknown) =
+        compatible ? typeCompatible(type, allowUnknown) : equivalentTo(type, allowUnknown);
+    eq FRecordType.typeMatches(CommonType type, boolean compatible, boolean allowUnknown) {
+        if (!dimensionCompatible(type, allowUnknown) || !type.isRecord())
+            return false;
+        FRecordType rec = (FRecordType) type;
+        if (getNumComponent() != rec.getNumComponent())
+            return false;
+        return typeMatches(componentTreeSet(), rec.componentTreeSet(), compatible, true);
+    }
+    eq FExternalObjectType.typeMatches(CommonType type, boolean compatible, boolean allowUnknown) {
+        if (!dimensionCompatible(type, allowUnknown) || !type.isExternalObject())
+            return false;
+        FExternalObjectType obj = (FExternalObjectType) type;
+        if (getName().equals(obj.getName())) 
+            return true;
+        return false;
+    }
+    eq FEnumType.typeMatches(CommonType type, boolean compatible, boolean allowUnknown) {
+        if (!dimensionCompatible(type, allowUnknown) || !type.isEnum())
+            return false;
+        FEnumType enu = (FEnumType) type;
+        if (getName().equals(enu.getName())) 
+            return true;
+        int n1 = getNumFEnumLiteralType(), n2 = enu.getNumFEnumLiteralType();
+        if (n1 != n2)
+            return n1 == 0 || n2 == 0;
+        Iterator<FEnumLiteralType> it = enu.getFEnumLiteralTypes().iterator();
+        for (FEnumLiteralType elt : getFEnumLiteralTypes())
+            if (!elt.getName().equals(it.next().getName()))
+                return false;
+        return true;
+    }
+    eq FFunctionType.typeMatches(CommonType type, boolean compatible, boolean allowUnknown) {
+        if (!dimensionCompatible(type, allowUnknown) || !type.isFunction())
+            return false;
+        FFunctionType obj = (FFunctionType) type;
+        if (!compatible && !getName().equals(obj.getName())) 
+            return false;
+        if (getNumInput() != obj.getNumInput())
+            return false;
+        if (getNumOutput() > obj.getNumOutput())
+            return false;
+        
+        return typeMatches(getInputs(), obj.getInputs(), compatible, allowUnknown) &&
+                typeMatches(getOutputs(), obj.getOutputs(), compatible, allowUnknown);
+    }
+    
+    syn boolean FType.typeMatches(Iterable<FRecordComponentType> comps1, Iterable<FRecordComponentType> comps2, 
+            boolean compatible, boolean allowUnknown) {
+        Iterator<FRecordComponentType> i1 = comps1.iterator();
+        Iterator<FRecordComponentType> i2 = comps2.iterator();
+        while (i1.hasNext()) {
+            if (!i1.next().typeMatches(i2.next(), compatible, allowUnknown))
+                return false;
+        }
+        return true;
+    }
+    
+    syn boolean FRecordComponentType.typeMatches(FRecordComponentType type, boolean compatible, boolean allowUnknown) {
+        return getName().equals(type.getName()) && getFType().typeMatches(type.getFType(), compatible, allowUnknown);
+    }
+    
+    syn boolean FType.dimensionCompatible(CommonType type) = dimensionCompatible(type, false);
+    syn boolean FType.dimensionCompatible(CommonType type, boolean allowUnknown) = 
+        size().equivalent(type.size(), allowUnknown);
+
+    syn boolean FType.looslyDimensionCompatible(FType type, boolean allowUnknown) = 
+        isScalar() || type.isScalar() || dimensionCompatible(type, allowUnknown);
+
+    /**
+     * Check if types are compatible except for array lengths, i.e. if the scalar types and the number of array 
+     * dimensions are the same.
+     */
+    syn boolean FType.typeCompatibleExceptLengths(FType type) = 
+        ndims() == type.ndims() && scalarType().typeCompatible(type.scalarType());
+
+}
+
+
+aspect FTypeEquivalent {
+
+    /* The function equivalentTo is used in equation type checking where equations like
+     * x=0
+     * where x is declared as Real is ok.
+     */
+    syn boolean FType.equivalentTo(CommonType type) = equivalentTo(type, false);
+
+    syn boolean FType.equivalentTo(CommonType type, boolean allowUnknown) = false;
+    eq FPrimitiveNumericType.equivalentTo(CommonType type, boolean allowUnknown) = 
+        type.isNumeric() && dimensionCompatible(type, allowUnknown);
+    eq FBooleanType.equivalentTo(CommonType type, boolean allowUnknown) = 
+        type.isBoolean() && dimensionCompatible(type, allowUnknown);
+    eq FStringType.equivalentTo(CommonType type, boolean allowUnknown) = 
+        type.isString() && dimensionCompatible(type, allowUnknown);
+    eq FRecordType.equivalentTo(CommonType type, boolean allowUnknown) = 
+        typeMatches(type, false, allowUnknown);
+    eq FEnumType.equivalentTo(CommonType type, boolean allowUnknown) = 
+        typeMatches(type, false, allowUnknown);
+    eq FExternalObjectType.equivalentTo(CommonType type, boolean allowUnknown) = 
+        typeMatches(type, false, allowUnknown);
+    eq FFunctionType.equivalentTo(CommonType type, boolean allowUnknown) =
+        typeMatches(type, false, allowUnknown);
+
+    /**
+     * Check if types are equivalent except for array lengths, i.e. if the scalar types and the number of array 
+     * dimensions are the same.
+     */
+    syn boolean FType.equivalentExceptLengths(FType type) = 
+        ndims() == type.ndims() && scalarType().equivalentTo(type.scalarType());
+
+}
+
+
+aspect BuiltInFlatTypes {
+
+    public static final FRealType    FRealType.SCALAR                   = new FRealType(Size.SCALAR);
+    public static final FIntegerType FIntegerType.SCALAR                = new FIntegerType(Size.SCALAR);
+    public static final FBooleanType FBooleanType.SCALAR                = new FBooleanType(Size.SCALAR);
+    public static final FStringType  FStringType.SCALAR                 = new FStringType(Size.SCALAR);
+    public static final FUnknownType FUnknownType.SCALAR                = new FUnknownType(Size.SCALAR);
+    public static final FNoType      FNoType.SCALAR                     = new FNoType(Size.SCALAR);
+
+    syn boolean FType.isReal()                  = false;
+    eq FArrayType.isReal()                      = getFPrimitiveType().isReal();
+    eq FRealType.isReal()                       = true;
+    syn boolean FType.isInteger()               = false;
+    eq FArrayType.isInteger()                   = getFPrimitiveType().isInteger();
+    eq FIntegerType.isInteger()                 = true;
+    syn boolean FType.isBoolean()               = false;
+    eq FArrayType.isBoolean()                   = getFPrimitiveType().isBoolean();
+    eq FBooleanType.isBoolean()                 = true;
+    syn boolean FType.isString()                = false;
+    eq FArrayType.isString()                    = getFPrimitiveType().isString();
+    eq FStringType.isString()                   = true;
+    syn boolean FType.isRecord()                = false;
+    eq FRecordType.isRecord()                   = true;
+    syn boolean FType.isOperatorRecord()        = false;
+    eq FOperatorRecordType.isOperatorRecord()   = true;
+    syn boolean FType.isEnum()                  = false;
+    eq FArrayType.isEnum()                      = getFPrimitiveType().isEnum();
+    eq FEnumType.isEnum()                       = true;
+    syn boolean FType.isExternalObject()        = false;
+    eq FExternalObjectType.isExternalObject()   = true;
+    syn boolean FType.isFunction()              = false;
+    eq FFunctionType.isFunction()               = true;
+
+    syn boolean FType.isArray()  = getSize() != Size.SCALAR;
+    syn boolean FType.isScalar() = getSize() == Size.SCALAR;
+
+    syn boolean FType.isNumeric()        = false;
+    eq FArrayType.isNumeric()            = getFPrimitiveType().isNumeric();
+    eq FPrimitiveNumericType.isNumeric() = true;
+
+    syn boolean FType.isPrimitive() = false;
+    eq FPrimitiveType.isPrimitive() = true;
+
+    syn boolean FType.isRealScalar()            = isScalar() && isReal();
+    syn boolean FType.isRealArray()             = isReal() && isArray();
+    syn boolean FType.isIntegerScalar()         = isScalar() && isInteger();
+    syn boolean FType.isIntegerArray()          = isInteger() && isArray();
+    syn boolean FType.isBooleanScalar()         = isScalar() && isBoolean();
+    syn boolean FType.isBooleanArray()          = isBoolean() && isArray();
+    syn boolean FType.isStringScalar()          = isScalar() && isString();
+    syn boolean FType.isStringArray()           = isString() && isArray();
+    syn boolean FType.isRecordScalar()          = isScalar() && isRecord();
+    syn boolean FType.isRecordArray()           = isRecord() && isArray();
+    syn boolean FType.isEnumScalar()            = isScalar() && isEnum();
+    syn boolean FType.isEnumArray()             = isEnum() && isArray();
+    syn boolean FType.isNumericScalar()         = isScalar() && isNumeric();
+    syn boolean FType.isNumericArray()          = isNumeric() && isArray();
+    syn boolean FType.isPrimitiveScalar()       = isScalar() && isPrimitive();
+    syn boolean FType.isPrimitiveArray()        = isPrimitive() && isArray();
+    syn boolean FType.isExternalObjectScalar()  = isScalar() && isExternalObject();
+    syn boolean FType.isExternalObjectArray()   = isExternalObject() && isArray();
+
+    syn boolean FType.isType(FType type);
+    eq FArrayType.isType(FType type) = getFPrimitiveType().isType(type);
+    eq FCellType.isType(FType type) {
+        throw new UnsupportedOperationException("isType() is not supported for class type " + getClass().getSimpleName());
+    }
+    eq FRealType.isType(FType type) = type.isReal();
+    eq FIntegerType.isType(FType type) = type.isInteger();
+    eq FBooleanType.isType(FType type) = type.isBoolean();
+    eq FStringType.isType(FType type) = type.isString();
+    eq FRecordType.isType(FType type) = type.isRecord();
+    eq FOperatorRecordType.isType(FType type) = type.isOperatorRecord();
+    eq FEnumType.isType(FType type) = type.isEnum();
+    eq FExternalObjectType.isType(FType type) = type.isExternalObject();
+    eq FFunctionType.isType(FType type) = type.isFunction();
+
+    public abstract boolean FType.containsType(FType type);
+    syn boolean FArrayType.containsType(FType type) = getFPrimitiveType().containsType(type);
+    syn boolean FCellType.containsType(FType type) = isType(type);
+    eq FRecordType.containsType(FType type) {
+        for (FRecordComponentType component : getComponents())
+            if (component.getFType().containsType(type))
+                return true;
+        return false;
+    }
+
+    syn boolean FType.containsReal()           = containsType(FRealType.SCALAR);
+    syn boolean FType.containsInteger()        = containsType(FIntegerType.SCALAR);
+    syn boolean FType.containsBoolean()        = containsType(FBooleanType.SCALAR);
+
+    // For type comparisons ending with "or records of such types"
+    public abstract class FType {
+        protected static interface TypeChecker {
+            public boolean check(FType t);
+        }
+        
+        private static final TypeChecker IS_REAL = new TypeChecker() {
+            public boolean check(FType t) { return t.isReal(); }
+        };
+    }
+
+    protected boolean FType.recursiveTypeCheck(TypeChecker ch) {
+        return ch.check(this);
+    }
+
+    protected boolean FRecordType.recursiveTypeCheck(TypeChecker ch) {
+        for (FRecordComponentType c : getComponents())
+            if (!c.getFType().recursiveTypeCheck(ch))
+                return false;
+        return true;
+    }
+
+    syn boolean FType.onlyContainsReal() = recursiveTypeCheck(IS_REAL);
+
+    syn boolean FType.hasAdd()        = false;
+    eq FPrimitiveNumericType.hasAdd() = true;
+    eq FStringType.hasAdd()           = true;
+
+    syn boolean FType.hasNeg()        = false;
+    eq FPrimitiveNumericType.hasNeg() = true;
+
+    syn boolean FType.canBeIndex() = false;
+    eq FIntegerType.canBeIndex()   = true;
+    eq FBooleanType.canBeIndex()   = true;
+    eq FEnumType.canBeIndex()      = true;
+
+    syn int FType.ndims() = getSize().ndims();
+
+    syn Size FType.size() = getSize();
+
+    syn FType FType.sizedType(Size s) = 
+        (s == Size.SCALAR) ? scalarType() : arrayType(s);
+
+    syn FType FType.scalarType() {
+        if (isScalar() && !isFunction())
+            return this;
+        FType copy = (FType) fullCopy();
+        copy.setSize(Size.SCALAR);
+        return copy;
+    }
+    eq FArrayType.scalarType()          = getFPrimitiveType();
+    eq FUnknownType.scalarType()        = this;
+    eq FNoType.scalarType()             = this;
+    eq FRealType.scalarType()           = FRealType.SCALAR;
+    eq FIntegerType.scalarType()        = FIntegerType.SCALAR;
+    eq FBooleanType.scalarType()        = FBooleanType.SCALAR;
+    eq FStringType.scalarType()         = FStringType.SCALAR;
+
+    syn boolean FType.isUnknown() = false;
+    eq FUnknownType.isUnknown()   = true;
+
+    syn FType ASTNode.fUnknownType() = FUnknownType.SCALAR;
+    syn FType ASTNode.fNoType()      = FNoType.SCALAR;
+
+    syn FPrimitiveType ASTNode.fRealScalarType()            = FRealType.SCALAR;
+    syn FPrimitiveType ASTNode.fIntegerScalarType()         = FIntegerType.SCALAR;
+    syn FPrimitiveType ASTNode.fBooleanScalarType()         = FBooleanType.SCALAR;
+    syn FPrimitiveType ASTNode.fStringScalarType()          = FStringType.SCALAR;
+
+    syn FPrimitiveType ASTNode.fRealArrayType(Size size)            = new FRealType(size);
+    syn FPrimitiveType ASTNode.fIntegerArrayType(Size size)         = new FIntegerType(size);
+    syn FPrimitiveType ASTNode.fBooleanArrayType(Size size)         = new FBooleanType(size);
+    syn FPrimitiveType ASTNode.fStringArrayType(Size size)          = new FStringType(size);
+
+    syn FPrimitiveType ASTNode.fRealType(Size size) = 
+        (size == Size.SCALAR) ? fRealScalarType() : fRealArrayType(size);
+    syn FPrimitiveType ASTNode.fIntegerType(Size size) = 
+        (size == Size.SCALAR) ? fIntegerScalarType() : fIntegerArrayType(size);
+    syn FPrimitiveType ASTNode.fBooleanType(Size size) = 
+        (size == Size.SCALAR) ? fBooleanScalarType() : fBooleanArrayType(size);
+    syn FPrimitiveType ASTNode.fStringType(Size size) = 
+        (size == Size.SCALAR) ? fStringScalarType() : fStringArrayType(size);
+
+    syn FType FType.arrayType(Size size) {
+        if (size == size())
+            return this;
+        FType copy = (FType) fullCopy();
+        copy.setSize(size);
+        return copy;
+    }
+    eq FArrayType.arrayType(Size size) = getFPrimitiveType().arrayType(size);
+    eq FUnknownType.arrayType(Size size)        = this;
+
+    /**
+     * Create a literal with the zero value for this type, if applicable.
+     * 
+     * For operator records, a record constructor call is created.
+     */
+     public FExp FType.sizedZeroLiteral() {
+         if (isArray()) {
+             return size().fillDimsOfExp(createArrayZeroLiteralNoSize());
+         } else {
+             return zeroLiteral();
+         }
+     }
+
+     /**
+      * Create a literal with the zero value for the scalar version of this type, if applicable.
+      * 
+      * For operator records, a record constructor call is created.
+      */
+    public FExp FType.zeroLiteral()        { return new FNoExp(); }
+    public FExp FRealType.zeroLiteral()    { return new FRealLitExp(0.0); }
+    public FExp FIntegerType.zeroLiteral() { return new FIntegerLitExp(0); }
+    public FExp FStringType.zeroLiteral()  { return new FStringLitExp(""); }
+    public FExp FBooleanType.zeroLiteral() { return new FBooleanLitExpFalse(); }
+    public FExp FEnumType.zeroLiteral()    { return new FEnumLitExp(this, 1); }
+    public FExp FRecordType.zeroLiteral()  {
+        if (getFClass() != null) {
+            List<FExp> args = new List<FExp>();
+            for (FRecordComponentType t : getComponents()) {
+                args.add(t.getFType().zeroLiteral());
+            }
+            return new FRecordConstructor(new FRecordAccess(getName()), args);
+        } else {
+            List<InstFunctionArgument> args = new List<InstFunctionArgument>();
+            int i = 1;
+            for (FRecordComponentType t : getComponents()) {
+                args.add(new InstPositionalArgument(t.getFType().zeroLiteral(), i++));
+            }
+            return new InstRecordConstructor(new InstGlobalAccess(InstAccess.fromName(getName())), args);
+        }
+    }
+
+    /**
+     * Create a fill or zeros expression, as appropriate to describe a zero-value 
+     * literal of this type, without the size filled in.
+     */
+   protected FArrayDimAsArgsExp FType.createArrayZeroLiteralNoSize() {
+       return new FFillExp(new List<FExp>(), zeroLiteral());
+   }
+   protected FArrayDimAsArgsExp FPrimitiveNumericType.createArrayZeroLiteralNoSize() {
+       return new FZeros();
+   }
+
+    /**
+     * Create a literal with the given integer value for this type, if applicable.
+     */
+   public FExp FType.createSizedLiteral(int v) {
+       if (isArray()) {
+           return size().fillDimsOfExp(createArrayLiteralNoSize(v));
+       } else {
+           return createLiteral(v);
+       }
+   }
+
+   /**
+    * Create a literal with the given integer value for the scalar version of this type, if applicable.
+    */
+    public FExp FType.createLiteral(int v)        { throw new UnsupportedOperationException(); }
+    public FExp FIntegerType.createLiteral(int v) { return new FIntegerLitExp(v); }
+    public FExp FRealType.createLiteral(int v)    { return new FRealLitExp(v); }
+    public FExp FEnumType.createLiteral(int v)    { return new FEnumLitExp(this, v); }
+    public FExp FBooleanType.createLiteral(int v) { 
+        return (v == 1 || v == 2) ? FBooleanLitExp.create(v == 2) : null; 
+    }
+
+    /**
+     * Create a fill, zeros or ones expression, as appropriate for the given integer value, 
+     * without the size filled in.
+     */
+   protected FArrayDimAsArgsExp FType.createArrayLiteralNoSize(int v) {
+       return new FFillExp(new List<FExp>(), createLiteral(v));
+   }
+   protected FArrayDimAsArgsExp FPrimitiveNumericType.createArrayLiteralNoSize(int v) {
+       switch (v) {
+       case 0:
+           return new FZeros();
+       case 1:
+           return new FOnes();
+       default:
+           return super.createArrayLiteralNoSize(v);
+       }
+   }
+
+}
+
+
+aspect ExternalObjectTypes {
+    
+    public interface FCallable {
+        public boolean isConstructor();
+        public boolean isDestructor();
+    }
+
+    syn boolean FExp.isConstructorCall()    = false;
+    eq InstFunctionCall.isConstructorCall() = getName().myInstClassDecl().isConstructor();
+    eq FFunctionCall.isConstructorCall()    = myFCallable().isConstructor();
+    syn boolean FExp.isDestructorCall()     = false;
+    eq InstFunctionCall.isDestructorCall()  = getName().myInstClassDecl().isDestructor();
+    eq FFunctionCall.isDestructorCall()     = myFCallable().isDestructor();
+
+    syn boolean InstClassDecl.isDestructor()      = name().equals("destructor") && inExternalObject();
+    syn boolean FFunctionDecl.isDestructor()      = false;
+    syn boolean FFunctionVariable.isDestructor()  = false;
+    eq FDestructorDecl.isDestructor()             = true;
+    syn boolean InstClassDecl.isConstructor()     = name().equals("constructor") && inExternalObject();
+    syn boolean FFunctionDecl.isConstructor()     = false;
+    syn boolean FFunctionVariable.isConstructor() = false;
+    eq FConstructorDecl.isConstructor()           = true;
+
+    syn boolean FExternalObjectVariable.hasConstructorCall() {
+        if (hasBindingExp()) {
+            return getBindingExp().isConstructorCall();
+        } else {
+            for (FAccessExp use : uses()) {
+                if (use.isConstructorAssign()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+    }
+
+    inh boolean CommonAccessExp.isConstructorAssign();
+    eq BaseNode.getChild().isConstructorAssign() = false;
+    eq FEquation.getLeft().isConstructorAssign() = getRight().isConstructorCall();
+
+}
+
+aspect AliasTypes {
+
+    syn boolean FType.typeAliasCompatible(FType type) = typeCompatible(type);
+    eq FRealType.typeAliasCompatible(FType type)      = type.isReal() && typeCompatible(type);
+
+}

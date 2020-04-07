@@ -1,0 +1,186 @@
+/*
+    Copyright (C) 2016-2017 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+aspect SizeAsserts {
+    /**
+     * Creates assert statements to check sizes in assignments between known
+     * and unknown sizes. 
+     */
+    public void FStatement.addSizeAsserts(Scalarizer.Algorithm s) {
+        if (!inFunction()) {
+            return;
+        }
+        
+        Set<String> vis = new HashSet<String>();
+        for (FAssert a : sizeAssertsColl()) {
+            if (vis.add(a.prettyPrint(""))) {
+                a.createArrayTemporaries(s);
+                s.add(new FFunctionCallStmt(new List<FFunctionCallLeft>(), (FAssert)a.scalarize(s)));
+            }
+        }
+    }
+    coll ArrayList<FAssert> FStatement.sizeAssertsColl() [new ArrayList<FAssert>()] 
+            with addAll root FFunctionDecl;
+    FAssignStmt contributes sizeAsserts()
+        to FStatement.sizeAssertsColl() for this;
+    FFunctionCallLeft contributes sizeAsserts() when hasFExp()
+        to FStatement.sizeAssertsColl() for getFExp().myFStatement();
+    FFunctionCall contributes sizeAsserts() 
+        to FStatement.sizeAssertsColl() for myFStatement();
+    FRecordConstructor contributes getRecord().myFRecordDecl().sizeAsserts(this)
+        to FStatement.sizeAssertsColl() for myFStatement();
+    FAbstractCat contributes sizeAsserts()
+        to FStatement.sizeAssertsColl() for myFStatement();
+    FDimensionConvert contributes sizeAsserts() when getFExp().size().isUnknown() && getFExp().ndims() > ndims()
+        to FStatement.sizeAssertsColl() for myFStatement();
+                
+    syn ArrayList<FAssert> FAssignStmt.sizeAsserts() {
+        ArrayList<FAssert> a = new ArrayList<FAssert>();
+        getLeft().size().sizeAsserts(a, getRight().size(), getLeft());
+        getRight().size().sizeAsserts(a, getLeft().size(), getLeft());
+        return a;
+    }
+    syn ArrayList<FAssert> FFunctionCallLeft.sizeAsserts() {
+        ArrayList<FAssert> a = new ArrayList<FAssert>();
+        if (hasFExp()) {
+            Size fs = getFExp().myFunctionCall().typeOfOutput(getParent().getIndexOfChild(this)).size();
+            fs.sizeAsserts(a, getFExp().size(), getFExp());
+            getFExp().size().sizeAsserts(a, fs, getFExp());
+        }
+        return a;
+    }
+    
+    syn ArrayList<FAssert> FFunctionCall.sizeAsserts() {
+        ArrayList<FAssert> a = new ArrayList<FAssert>();
+        Iterator<FFunctionVariable> inputs = myCallInputs().iterator();
+        for (FExp arg : getArgs()) {
+            inputs.next().size().sizeAsserts(a, arg.size(), arg);
+        }
+        return a;
+    }
+    
+    syn ArrayList<FAssert> FRecordDecl.sizeAsserts(FRecordConstructor frc) {
+        ArrayList<FAssert> a = new ArrayList<FAssert>();
+        for (FRecordComponentType comp : type().getComponents()) {
+            FExp arg = extractArg(frc, comp.getName());
+            comp.getFType().size().sizeAsserts(a, arg.size(), arg);
+        }
+        return a;
+    }
+    syn ArrayList<FAssert> FAbstractCat.sizeAsserts() {
+        int catDim = dimension();
+        FExp firstArg = getFExp(0);
+        ArrayList<FAssert> res = new ArrayList<FAssert>();
+        
+        for (int i = 0; i < ndims(); i++) {
+            if (i != catDim) {
+                FExp le = firstArg.size().has(i) ? firstArg.size().createFExp(i) : new FIntegerLitExp(1);
+                String ls = le.prettyPrint("");
+                for (FExp arg : getFExps()) {
+                    if (arg != firstArg) {
+                        FExp re = arg.size().has(i) ? arg.size().createFExp(i) : new FIntegerLitExp(1);
+                        String rs = re.prettyPrint("");
+                        if (!ls.equals(rs)) {
+                            res.add(sizeAssert(orNotIfExpConds(new FEqExp(le.unboundCopy(), re)), i));
+                        }
+                    }
+                }
+            }
+        }
+        return res;
+    }
+    
+    syn ArrayList<FAssert> FDimensionConvert.sizeAsserts();
+    
+    eq FScalarExp.sizeAsserts() {
+        ArrayList<FAssert> res = new ArrayList<FAssert>();
+        Size s = getFExp().size();
+        for (int i = 0; i < s.ndims(); i++) {
+            if (s.isUnknown(i)) {
+                FExp e = new FEqExp(s.createFExp(i), new FIntegerLitExp(1));
+                res.add(sizeAssert(e, i));
+            }
+        }
+        return res;
+    }
+    
+    eq FVectorExp.sizeAsserts() {
+        ArrayList<FAssert> res = new ArrayList<FAssert>();
+        Size s = getFExp().size();
+        FExp prod = s.createFExp(0);
+        FExp sum  = s.createFExp(0);
+        for (int i = 1; i < s.ndims(); i++) {
+            prod = new FMulExp(prod, s.createFExp(i));
+            sum  = new FAddExp(sum,  s.createFExp(i));
+        }
+        // prod <= sum - n + 1
+        FExp e = new FLeqExp(prod, new FAddExp(new FSubExp(sum, new FIntegerLitExp(s.ndims())), new FIntegerLitExp(1)));
+        res.add(sizeAssert(e, -1));
+        return res;
+    }
+    
+    eq FMatrixExp.sizeAsserts() {
+        ArrayList<FAssert> res = new ArrayList<FAssert>();
+        Size s = getFExp().size();
+        for (int i = 2; i < s.ndims(); i++) {
+            res.add(sizeAssert(new FEqExp(s.createFExp(i), new FIntegerLitExp(1)), i));
+        }
+        return res;
+    }
+    
+    public FAssert FExp.sizeAssert(FExp e, int i) {
+        String dim = i < 0 ? "" : String.format("dimension %d of ", i+1);
+        return (FAssert)dynamicFExp(new FAssert(e, new FStringLitExp(String.format("Mismatching size in %sexpression %s in function %s",
+                dim, prettyPrint(""), containingFFunctionDecl().name())), new Opt<FExp>()));
+    }
+    
+    /**
+     * Adds an assert statement to <code>asserts</code> for all dimensions where
+     * size is known in this size but unknown in <code>other</code>.
+     */
+    public void Size.sizeAsserts(Collection<FAssert> asserts, Size other, FExp context) {
+        Size l = evaluated();
+        other = other.evaluated();
+        for (int i = 0; i < l.size.length; i++) {
+            if (l.size[i] != UNKNOWN && other.size[i] == UNKNOWN) {
+                FAssert a = new FAssert(
+                        context.orNotIfExpConds(new FEqExp(other.createFExp(i), l.createFExp(i))),
+                        new FStringLitExp("Mismatching sizes in " + context.containingFFunctionDecl().name()), new Opt<FExp>());
+                asserts.add((FAssert)context.dynamicFExp(a));
+            }
+        }
+    }
+    
+    public FExp FExp.orNotIfExpConds(FExp e1) {
+        FExp e2 = enclosingIfExpCond();
+        if (e2 != null)
+            e1 = new FOrExp(e1, new FNotExp(e2));
+        return e1;
+    }
+    
+    inh FExp FExp.enclosingIfExpCond();
+    eq Root.getChild().enclosingIfExpCond() = null;
+    eq FStatement.getChild().enclosingIfExpCond() = null;
+    eq FIfExp.getThenExp().enclosingIfExpCond() = andIfExpConds(getIfExp().fullCopy());
+    eq FIfExp.getElseExp().enclosingIfExpCond() = andIfExpConds(new FNotExp(getIfExp().fullCopy()));
+    private FExp FIfExp.andIfExpConds(FExp e1) {
+        FExp e2 = enclosingIfExpCond();
+        if (e2 != null)
+            e1 = new FAndExp(e2,e1);
+        return e1;
+    }
+}

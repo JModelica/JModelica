@@ -1,0 +1,2049 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Collections;
+
+aspect Scalarization {
+
+    public abstract class Scalarizer {
+        
+        private List vars;
+        private List clauses;
+        private ForNames forNames;
+        private TypePrefixVariability variability;
+        
+        public Scalarizer(List vars, List clauses, ForNames forNames, TypePrefixVariability variability) {
+            this.vars = vars;
+            this.clauses = clauses;
+            this.forNames = forNames;
+            this.variability = variability;
+        }
+        
+        public void add(ASTNode clause) {
+            clauses.add(clause);
+        }
+        
+        public abstract void add(List<FFunctionCallLeft> lefts, FAbstractFunctionCall call);
+        
+        public void add(FAbstractVariable fv) {
+            vars.add(fv);
+        }
+        
+        public List getVars() {
+            return vars;
+        }
+        
+        public List getClauses() {
+            return clauses;
+        }
+        
+        public ForNames getNames() {
+            return forNames;
+        }
+        
+        public void createForLoops(List<FStatement> inner, FExp exp) {
+            createForLoops(inner, exp.size());
+        }
+        
+        public void createForLoops(List<FStatement> inner, Size size) {
+            forNames.createForLoops(this, clauses, inner, size);
+        }
+        
+        public void createForLoops(FAssignableExp left, FExp right, FExp exp) {
+            List<FStatement> l = new List<FStatement>();
+            l.add(new FAssignStmt(left, right));
+            createForLoops(l, exp.size());
+        }
+        
+        public FExp scalarizeAccessExp(FAccessExp accessExp) {
+            FExp res = accessExp.myFV().scalarizeIterIndex(this);
+            if (res == null) {
+                res = accessExp.createNode(accessExp.getFAccess().scalarize(this, accessExp.indexNames));
+            }
+            return accessExp.setLocationOf(res);
+        }
+        
+        public abstract void add(FExp left, FExp right);
+        
+        public void add(List v) {
+            vars.addAll(v);
+        }
+        
+        public void addTempVar(FType type, String name, boolean addVar, boolean init) {
+            if (addVar) {
+                type.createTempFVariables(getVars(), new FAccessString(name), variability);
+            }
+        }
+        
+        public void addTempVar(FExp source, boolean init) {
+            addTempVar(source.type(), source.tempVarName(), !source.useTempVar, init);
+        }
+        
+        public abstract<T extends Scalarizer> T block(List clauses);
+        public abstract<T extends Scalarizer> T block(List vars, List clauses);
+        
+        public TypePrefixVariability getVariability() {
+            return variability;
+        }
+        
+        public boolean inFunction() {
+            return false;
+        }
+        
+        public boolean unroll() {
+            return true;
+        }
+        
+        public static class Variable {
+            
+            public List vars;
+            public Scalarizer.Equation si;
+            public Scalarizer.Equation sp;
+            public Scalarizer.Equation sc;
+            
+            public Variable(List vars) {
+                this.vars = vars;
+                si = new Scalarizer.Equation(vars, new List<FAbstractEquation>(), Variability.INITIALPARAMETER);
+                sp = new Scalarizer.Equation(vars, new List<FAbstractEquation>(), Variability.FIXEDPARAMETER);
+                sc = new Scalarizer.Equation(vars, new List<FAbstractEquation>(), Variability.CONTINUOUS);
+            }
+            
+            public Scalarizer.Equation select(TypePrefixVariability variability) {
+                if (variability.fixedParameterOrLess()) {
+                    return sp;
+                } else if (variability.parameterOrLess()) {
+                    return si;
+                } else {
+                    return sc;
+                }
+            }
+        }
+        
+        public static class Equation extends Scalarizer {
+            
+            public Equation(List vars, List equs, TypePrefixVariability variability) {
+                this(vars, equs, new ForNames(), variability);
+            }
+            
+            public Equation(List vars, List equs, ForNames forNames, TypePrefixVariability variability) {
+                super(vars, equs, forNames, variability);
+            }
+            
+            public Scalarizer.Equation block(List clauses) {
+                return block(getVars(), clauses);
+            }
+            
+            public Scalarizer.Equation block(List vars, List clauses) {
+                return new Equation(vars, clauses, getNames(), getVariability());
+            }
+            
+            public void add(FExp left, FExp right) {
+				// TODO: Not 100% correct, should be equation.setLocationOf(...)
+                add(left.setLocationOf(new FEquation(left, right)));
+            }
+            
+            @Override
+            public void add(List<FFunctionCallLeft> lefts, FAbstractFunctionCall call) {
+                add(new FFunctionCallEquation(lefts, call));
+            }
+            
+            @Override
+            public void addTempVar(FExp source, boolean init) {
+                if (!source.useTempVar) {
+                    super.addTempVar(source, init);
+                    source.notifyIfWhenEquationsOfTemporaryVar();
+                }
+            }
+        }
+        
+        public Scalarizer.Algorithm algorithm(List<FStatement> stmts) {
+            return new Algorithm(getVars(), stmts, getNames(), false, true, variability);
+        }
+        
+        public static Scalarizer.Algorithm function(List<FFunctionVariable> vars, List<FStatement> stmts, boolean unroll) {
+            return new Algorithm(vars, stmts, new ForNames(), true, unroll, Variability.DISCRETE);
+        }
+        
+        public static class Algorithm extends Scalarizer {
+            private boolean func;
+            private boolean unroll;
+            
+            public Algorithm(List vars, List clauses, ForNames forNames, boolean func, boolean unroll, TypePrefixVariability variability) {
+                super(vars, clauses, forNames, variability);
+                this.func = func;
+                this.unroll = !func || unroll;
+            }
+            
+            public Scalarizer.Algorithm block(List clauses) {
+                return block(getVars(), clauses);
+            }
+            
+            public Scalarizer.Algorithm block(List vars, List clauses) {
+                return new Algorithm(vars, clauses, getNames(), func, unroll, getVariability());
+            }
+            
+            public void add(FExp left, FExp right) {
+                add(new FAssignStmt((FAssignableExp)left, right));
+            }
+            
+            @Override
+            public void add(List<FFunctionCallLeft> lefts, FAbstractFunctionCall call) {
+                add(new FFunctionCallStmt(lefts, call));
+            }
+            
+            @Override
+            public void addTempVar(FType type, String name, boolean addVar, boolean init) {
+                if (func) {
+                    if (addVar) {
+                        type = type.treeCopy();
+                        add(new FFunctionVariable(VisibilityType.TEMPORARY, type, name));
+                    }
+                    if (init && type.isArray()) {
+                        FInitArrayStmt stmt = new FInitArrayStmt(new FAccessExp(name), true, type.size().scalarizedSizeExpressions(this));
+                        add(stmt);
+                    }
+                } else {
+                    super.addTempVar(type, name, addVar, init);
+                }
+            }
+            
+            public void addTempVar(FAssignStmt source, boolean init) {
+                FType type = source.getLeft().size().isUnknown() ? source.getLeft().type() : source.getRight().type();
+                addTempVar(type, source.tempVarName(), true, init);
+            }
+            
+            @Override
+            public boolean inFunction() {
+                return func;
+            }
+            
+            @Override
+            public boolean unroll() {
+                return unroll;
+            }
+        }
+    }
+    
+    public List<FAbstractEquation> TypePrefixVariability.selectEquations(List<FAbstractEquation> iEqus,
+            List<FAbstractEquation> pEqus, List<FAbstractEquation> equs) { return equs; }
+    public List<FAbstractEquation> Parameter.selectEquations(List<FAbstractEquation> iEqus,
+            List<FAbstractEquation> pEqus, List<FAbstractEquation> equs) { return pEqus; }
+    public List<FAbstractEquation> InitialParameter.selectEquations(List<FAbstractEquation> iEqus,
+            List<FAbstractEquation> pEqus, List<FAbstractEquation> equs) { return iEqus; }
+    
+	/**
+	 * Flag indicating if a variable is scalarized.
+	 */
+	boolean FAccess.scalarized = false;
+
+	/**
+	 * Flag indicating if a flat class is scalarized.
+	 */
+	boolean FClass.scalarized = false;
+	
+	syn boolean FVariable.isScalarized() = getFAccess().isScalarized();
+	syn boolean FAccess.isScalarized() = scalarized;
+
+    public class FClass {
+        /**
+         * Scalarize all variables and equations in the flat model.
+         */
+        public class scalarize extends Transformation {
+            public void perform() {
+                List<FVariable> vars = new List<FVariable>();
+                Scalarizer.Variable sv = new Scalarizer.Variable(vars);
+                scalarizeVars(sv);
+                setFVariableList(vars);
+                scalarizeFuncs();
+                scalarizeTypes();
+                scalarizeAttributes(sv.sp);
+                getConnectionSetManager().scalarize();
+                scalarized = true;
+                scalarizationCleanup();
+                scalarizationErrorCheck();
+            }
+        }
+    }
+    
+    /**
+     * Scalarize variable declarations and equations.
+     */
+    protected void FClass.scalarizeVars(Scalarizer.Variable sv) {
+        
+        FAbstractEquation.scalarizeList(sv.sc, getFAbstractEquations());
+        FAbstractEquation.scalarizeList(sv.si, getFInitialEquations());
+        FAbstractEquation.scalarizeList(sv.sp, getParameterEquations());
+        
+        for (FVariable fv : getFVariables()) {
+            fv.scalarize(sv);
+        }
+        
+        setFAbstractEquationList(sv.sc.getClauses());
+        setFInitialEquationList(sv.si.getClauses());
+        setParameterEquationList(sv.sp.getClauses());
+    }
+    
+    protected void FClass.scalarizeFuncs() {
+        boolean unroll = myOptions().getBooleanOption("unroll_functions");
+        for (FFunctionDecl f : getFFunctionDecls()) {
+            f.scalarize(unroll);
+        }
+    }
+    
+    /**
+     * Handles scalarization of the FAttributes that are declared in the FClass
+     */
+    private void FClass.scalarizeAttributes(Scalarizer s) {
+        List<FAttribute> attrs = new List<FAttribute>();
+        for (FAttribute a : getFAttributes())
+            a.scalarize(attrs, Index.NULL, s);
+        setFAttributeList(attrs);
+    }
+	
+	/**
+	 * Scalarize type declarations by removing array-valued attributes. 
+	 * They have been copied to the variables when the variables were scalarized. 
+	 */
+	protected void FClass.scalarizeTypes() {
+		for (FDerivedType t : getFDerivedTypes())
+			t.removeArrayValuedAttributes();
+	}
+	
+	/**
+	 * Removing all array-valued attributes. 
+	 */
+	public void FDerivedType.removeArrayValuedAttributes() {
+		List<FAttribute> list = new List<FAttribute>();
+		for (FAttribute a : getFAttributes())
+			if (!a.removeArrayValuedAttributes())
+				list.add(a);
+		setFAttributeList(list);
+	}
+	
+	/**
+	 * Removing all array-valued attributes.
+	 * 
+	 * @return  true if the attribute should be removed
+	 */
+	public boolean FAttribute.removeArrayValuedAttributes() {
+		boolean keep = false;
+		List<FAttribute> list = null;
+		if (getNumFAttribute() > 0) {
+			list = new List<FAttribute>();
+			for (FAttribute a : getFAttributes())
+				if (!a.removeArrayValuedAttributes())
+					list.add(a);
+			keep = list.getNumChild() > 0;
+		}
+		if (hasValue()) {
+			if (getValue().isArray()) {
+				if (keep)
+					setValueOpt(new Opt());
+			} else {
+				keep = true;
+			}
+		}
+		if (keep && list != null)
+			setFAttributeList(list);
+		return !keep;
+	}
+
+    protected void FClass.scalarizationCleanup() {
+        flush();  // Must flush before traversing
+    }
+    
+    public static void FAbstractEquation.scalarizeList(Scalarizer.Equation s, List<FAbstractEquation> fromList) {
+        for (FAbstractEquation ae : fromList) {
+            ae.scalarize(s);
+        }
+    }
+    
+    /**
+     * Scalarize the FVariable and put all scalarized variables in the
+     * list vars.
+     */
+    public void FVariable.scalarize(Scalarizer.Variable s) {
+        try {
+            if (size().isZero())
+                return;
+            createArrayTemporaries(s);
+            doScalarize(s);
+        } catch (ModelicaException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new org.jmodelica.util.exceptions.InternalCompilerError("Exception caught while scalarizing component'" + name() + "'", e);
+        }
+    }
+    
+    public void FVariable.doScalarize(Scalarizer.Variable s) {
+        for (Index i : indices()) {
+            createScalarFVariable(s, i);
+        }
+    }
+    
+    @Override
+    public void FRecordVariable.doScalarize(Scalarizer.Variable s) {
+        scalarRecordFVariables(s, new ScalarizingVariableInstance(s, this));
+    }
+    
+    public void FVariable.createArrayTemporaries(Scalarizer.Variable s) {
+        if (hasBindingExp()) {
+            getBindingExp().createArrayTemporaries(s.select(variability()));
+        }
+        for (FAttribute fab : getFAttributes()) {
+            fab.createArrayTemporaries(s, variability(), type());
+        }
+    }
+    
+    public void FAttribute.createArrayTemporaries(Scalarizer.Variable s, TypePrefixVariability variability, FType type) {
+        type = type.componentType(name());
+        if (type.isUnknown()) {
+            variability = Variability.FIXEDPARAMETER;
+        } else {
+            variability = variability.component(name());
+        }
+        if (hasValue()) {
+            getValue().createArrayTemporaries(s.select(variability));
+        }
+        for (FAttribute fab : getFAttributes()) {
+            fab.createArrayTemporaries(s, variability, type);
+        }
+    }
+	
+	/**
+	 * Create a scalar FVariable for a single cell or an already scalar FVariable.
+	 * 
+	 * @param i  the Index of the cell to create an FVariable for. Should be Index.NULL for 
+	 *           already scalar FVariables.
+	 */
+    protected FVariable FVariable.createScalarFVariable(Scalarizer.Variable s, Index i) {
+		// Create new variable and copy fields that should be same
+		FVariable fv = createEmptyNode();
+		fv.setVisibilityType(getVisibilityType());
+		fv.setTypePrefixVariability(getTypePrefixVariability());
+		fv.setTypePrefixInputOutput(getTypePrefixInputOutput());
+		if (hasFStringComment())
+			fv.setFStringComment(getFStringComment().fullCopy());
+
+        fv.setFAccess(scalarizeVariableName(i));
+
+        // Scalarize binding expressions
+        if (hasBindingExp()) {
+            FExp bexp = getBindingExp().cell(i).scalarize(s.select(variability()));
+            if (keepBExp(variability(), getBindingExp())) {
+                fv.setBindingExp(bexp);
+            } else {
+                s.select(variability()).add(setLocationOf(new FAccessExp(scalarizeVariableUse(i))), bexp);
+            }
+        }
+
+		// Iterate over all attributes and scalarize.
+        List<FAttribute> attrs = new List<FAttribute>();
+        attrs.addAll(fv.getFAttributes());
+        for (FAttribute a : getFAttributes()) {
+            a.scalarize(attrs, i, s.sp);
+        }
+        fv.setFAttributeList(attrs);
+		fv.setDerivedType(getDerivedType());
+        fv.addArrayAttributesFromType(s, i, myFDerivedType());
+
+		fv.setLocation(this);
+		
+        s.select(variability()).add(fv);
+        return fv;
+	}
+
+    /**
+     * Create an FAccess for the scalarized variable.
+     * Separate method for extensibility.
+     */
+    protected FAccess FVariable.scalarizeVariableName(Index i) {
+        String name = getFAccess().name();
+        if (i.ndims() > 0) {
+            name = name + i;
+        }
+        return new FAccessString(name);
+    }
+
+    /**
+     * Create an FAccess for the scalarized binding equation.
+     * Separate method for extensibility.
+     */
+    protected FAccess FVariable.scalarizeVariableUse(Index i) {
+        return scalarizeVariableName(i);
+    }
+
+    @Override
+    protected FExternalObjectVariable FExternalObjectVariable.createScalarFVariable(Scalarizer.Variable s, Index i) {
+        FExternalObjectVariable fex = (FExternalObjectVariable) super.createScalarFVariable(s, i);
+		fex.setConstructor(getConstructor().fullCopy());
+		return fex;
+	}
+	
+    @Override
+    protected FEnumVariable FEnumVariable.createScalarFVariable(Scalarizer.Variable s, Index i) {
+        FEnumVariable fv = (FEnumVariable) super.createScalarFVariable(s, i);
+		fv.setEnum(getEnum().fullCopy());
+		return fv;
+	}
+	
+	/**
+	 * Copy any attributes with array values from type, selecting the scalar value corresponding 
+	 * to the given index. 
+	 */
+    protected void FVariable.addArrayAttributesFromType(Scalarizer.Variable s, Index i, FDerivedType t) {
+        if (t != null && i != Index.NULL) {
+            for (FAttribute a : t.getFAttributes()) {
+                List<FAttribute> attrs = new List<FAttribute>();
+                attrs.addAll(getFAttributes());
+                a.addArrayAttributesTo(s, i, attrs);
+                setFAttributeList(attrs);
+            }
+        }
+	}
+	
+	/**
+	 * Copy any attributes with array values to the given list, selecting the scalar value corresponding 
+	 * to the given index. 
+	 * 
+	 * @return  true if any attribute was added to the list 
+	 */
+    protected boolean FAttribute.addArrayAttributesTo(Scalarizer.Variable s, Index i, List<FAttribute> list) {
+		FAttribute match = findMatching(list, getName().name());
+		if (match != null) {
+			list = match.getFAttributes();
+			for (FAttribute a : getFAttributes())
+				a.addArrayAttributesTo(s, i, list);
+			return false;
+		}
+		
+		boolean isArray = hasValue() && getValue().isArray();
+		boolean add = isArray;
+		List<FAttribute> subList = null;
+		if (add || getNumFAttribute() > 0) {
+			subList = new List<FAttribute>();
+			for (FAttribute a : getFAttributes())
+				add = a.addArrayAttributesTo(s, i, subList) || add;
+		}
+		if (add) {
+			FAttribute res = new FAttribute(getType().fullCopy(), getName().fullCopy(), new Opt(), 
+					getAttributeSet(), getLevel(), getFEachOpt().fullCopy(), getFFinalOpt().fullCopy(), subList);
+			if (hasValue()) {
+				FExp val = getValue();
+				if (isArray) {
+					if (val.ndims() < i.ndims())
+						i = i.subIndex(i.ndims() - val.ndims());
+					val = val.getArray().get(i);
+				}
+                res.setValue(val.scalarize(s.sp));
+			}
+			list.add(res);
+		}
+		return add;
+	}
+	
+    /**
+     * Generate scalar FVariables for this record or record component.
+     * 
+     * @param s Scalarization visitor
+     * @param bes        Instance representation of this variable
+     */
+    public void FVariable.scalarRecordFVariables(Scalarizer.Variable s, ScalarizingVariableInstance bes) {
+        try {
+            for (Index i : bes.indices(this)) {
+                scalarRecordCellFVariables(s, bes.create(s, i));
+            }
+        } catch (ModelicaException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new org.jmodelica.util.exceptions.InternalCompilerError("Exception caught while scalarizing component'" + bes.name() + "'", e);
+        }
+    }
+    
+    public String ScalarizingVariableInstance.name() {
+        return name.toString();
+    }
+    
+    /**
+     * Generate scalar FVariables for a single array cell of this record or record component.
+     * 
+     * @param s Scalarization visitor
+     * @param bes        Instance representation of this variable
+     * @param i          the index of this scalar variable in an array, or Index.NULL for scalar components
+     */
+    public void FVariable.scalarRecordCellFVariables(Scalarizer.Variable s, ScalarizingVariableInstance bes) {
+        bes.createScalarized(s, this);
+    }
+    
+    public void FRecordVariable.scalarRecordCellFVariables(Scalarizer.Variable s, ScalarizingVariableInstance bes) {
+        for (FVariable comp : myFRecordDecl().getFVariables()) {
+            comp.scalarRecordFVariables(s, bes.create(s, comp));
+        }
+    }
+    
+    /**
+     * Check if this FExp is in an binding exp that will still be a binding exp after scalarization 
+     */
+    inh boolean FExp.inKeptBExp();
+    eq Root.getChild().inKeptBExp() = false;
+    eq FVariable.getBindingExp().inKeptBExp() = keepBExp(variability(), getBindingExp());
+    
+    /**
+     * Check if this FVariable should have a binding exp after scalarization
+     */
+    syn boolean FVariable.keepBExp(TypePrefixVariability variability, FExp bexp) =
+            variability.knownParameterOrLess() ||
+            (variability.parameterVariability() && bexp.isIndependentParameterExp());
+    
+    /**
+     * Lightweight representation of an FVariable used to scalarize record variables.
+     */
+    public class ScalarizingVariableInstance {
+        
+        private TypePrefixVariability variability; 
+        
+        private VisibilityType visibility;
+        
+        // Binding expression
+        private FExp bExp;
+        
+        // (Mapped) attributes of this variable
+        private Map<String, FAttribute> mattrs; 
+        
+        // Full name of this variable
+        private String name;
+        
+        // input/output prefix of top-level variable
+        private TypePrefixInputOutput inputOutput;
+        
+        private Index index;
+        
+        private ScalarizingVariableInstance(String name, Map<String, FAttribute> mattrs, FExp be,
+                TypePrefixVariability variability, VisibilityType visibility, TypePrefixInputOutput inputOutput, Index i)  {
+            bExp = be;
+            this.name = name;
+            index = i;
+            this.mattrs = mattrs;
+            this.variability = variability;
+            this.visibility = visibility;
+            this.inputOutput = inputOutput;
+        }
+        
+        private ScalarizingVariableInstance(String name, List<FAttribute> attrs, FExp be,
+                TypePrefixVariability variability, VisibilityType visibility, TypePrefixInputOutput inputOutput, Index i)  {
+            this(name, ScalarizingVariableInstance.mapped(attrs), be, variability, visibility, inputOutput, i);
+        }
+        
+        public ScalarizingVariableInstance(Scalarizer.Variable s, FVariable fv) {
+            this(fv.name(), fv.getFAttributes(),
+                    fv.hasBindingExp() ? fv.getBindingExp().dynamicFExp(fv.getBindingExp().scalarize(s.select(fv.variability()))) : null,
+                    fv.variability(), fv.getVisibilityType(), fv.getTypePrefixInputOutput(), Index.NULL);
+        }
+        
+        private static Map<String, FAttribute> mapped(List<FAttribute> as) {
+            Map<String, FAttribute> m;
+            if (as != null && as.getNumChild() > 0) {
+                m = new LinkedHashMap<String, FAttribute>();
+                for (FAttribute a : as) {
+                    m.put(a.name(), a);
+                }
+            } else {
+                m = Collections.<String, FAttribute>emptyMap();
+            }
+            return m;
+        }
+        
+        public Indices indices(FVariable comp) {
+            FAttribute sa = mattrs.get(FAttribute.SIZE);
+            if (sa != null && sa.hasValue()) {
+                return Indices.create(new MutableSize(sa.getValue().splitArrayExp(index)));
+            } else {
+                return comp.indices();
+            }
+        }
+        
+        public ScalarizingVariableInstance create(Scalarizer.Variable s, Index i) {
+            FExp nbexp = bExp;
+            Index ti = index.expand(i);
+            if (nbexp != null && nbexp.isArray()) {
+                Index ni = ti.subIndex(ti.ndims() - nbexp.ndims());
+                nbexp = nbexp.fArrayCell(ni, 0);
+            }
+            return new ScalarizingVariableInstance(i.ndims() > 0 ? name + i : name, mattrs, nbexp, variability,
+                    visibility, inputOutput, ti);
+        }
+        
+        public ScalarizingVariableInstance create(Scalarizer.Variable s, FVariable comp) {
+            String cName = comp.name();
+            
+            TypePrefixVariability nv = variability.component(cName);
+            
+            List<FAttribute> attrs = null;
+            FAttribute a = mattrs.get(cName);
+            if (a != null) {
+                attrs = a.getFAttributes();
+            }
+            
+            FExp nbexp = bExp;
+            if (nbexp == null) {
+                if (a != null) {
+                    nbexp = a.getValue();
+                }
+                if (nbexp != null) {
+                    nbexp = nbexp.dynamicFExp(nbexp.scalarize(s.select(nv)));
+                }
+            } else {
+                nbexp = nbexp.component(cName);
+            }
+            
+            return new ScalarizingVariableInstance(name + "." + cName, attrs, nbexp, nv, visibility, inputOutput, index);
+        }
+        
+        public void createScalarized(Scalarizer.Variable s, FVariable comp) {
+            Scalarizer.Equation se = s.select(variability);
+            Index cell = index.subIndex(index.ndims() - comp.ndims());
+            FVariable fv = comp.copyForName(s, name, cell);
+            fv.setVisibilityType(VisibilityType.mostRestrictive(fv.getVisibilityType(), visibility));
+            if (bExp != null) {
+                bExp.resetOriginalReferences(); /* Workaround for test RecordArray12 */
+                if (comp.keepBExp(variability, bExp)) {
+                    fv.setBindingExp(bExp);
+                } else {
+                    se.add(new FAccessExp(name), bExp);
+                    fv.setBindingExpOpt(new Opt());
+                }
+            } else {
+                fv.setBindingExpOpt(new Opt());
+            }
+            fv.setTypePrefixVariability(variability);
+            fv.setTypePrefixInputOutput(inputOutput);
+            List<FAttribute> attrs = new List<FAttribute>();
+            for (FAttribute attr : mattrs.values()) {
+                attr.scalarize(attrs, index, s.sp);
+            }
+            fv.setFAttributeList(attrs);
+            fv.addArrayAttributesFromType(s, cell, comp.myFDerivedType());
+            if (!comp.isAbsoluteValue()) {
+                fv.annotation("absoluteValue").setValue(new FBooleanLitExpFalse());
+            }
+            se.add(fv);
+        }
+    }
+    
+	/**
+	 * Create a copy of the variable with a specific name.
+	 * 
+	 * The new variable is marked as scalarized, and if it refers to a specific cell in an array, 
+	 * then attributes are updated accordingly.
+	 */
+    public FVariable FVariable.copyForName(Scalarizer.Variable s, String name, Index cell) {
+		FVariable fv = createEmptyNode();
+        fv.setFAccess(new FAccessString(name));
+		fv.getFAccess().scalarized = true;
+		fv.setVisibilityType(getVisibilityType());
+		fv.setTypePrefixVariability(getTypePrefixVariability());
+		fv.setTypePrefixInputOutput(getTypePrefixInputOutput());
+		fv.setDerivedType(getDerivedType());
+		if (hasBindingExp())
+			fv.setBindingExp(getBindingExp().fullCopy());
+		if (hasFStringComment())
+			fv.setFStringComment(getFStringComment().fullCopy());
+		
+		for (FAttribute a : getFAttributes())
+			if (!a.isInternal())
+                fv.addFAttribute(a.copyForCell(s, cell));
+		return fv;
+	}
+
+    public FEnumVariable FEnumVariable.copyForName(Scalarizer.Variable s, String name, Index cell) {
+        FEnumVariable fv = (FEnumVariable) super.copyForName(s, name, cell);
+		fv.setEnum(getEnum().fullCopy());
+		return fv;
+	}
+    
+    public FExternalObjectVariable FExternalObjectVariable.copyForName(Scalarizer.Variable s, String name, Index cell) {
+        FExternalObjectVariable fv = (FExternalObjectVariable) super.copyForName(s, name, cell);
+        fv.setConstructor(getConstructor().fullCopy());
+        return fv;
+    }
+    
+	/**
+	 * Create a copy of the attibute with dimensions removed from all array expressions according 
+	 * to an index.
+	 */
+    public FAttribute FAttribute.copyForCell(Scalarizer.Variable s, Index i) {
+        if (i == Index.NULL)
+			return fullCopy();
+		FAttribute res = createEmptyNode();
+		res.setType(getType().fullCopy());
+		res.setName(getName().fullCopy());
+        res.setLevel(getLevel());
+		if (hasValue()) {
+			FExp val = getValue();
+			if (val.ndims() < i.ndims() || isInternal())
+                val = val.scalarize(s.sp);
+			else
+				val = val.dynamicFExp(val.splitArrayExp(i).unboundCopy()).scalarize(s.sp);
+			res.setValue(val);
+		}
+		res.setAttributeSet(getAttributeSet());
+		if (hasFEach())
+			res.setFEach(getFEach().fullCopy());
+		if (hasFFinal())
+			res.setFFinal(getFFinal().fullCopy());
+		for (FAttribute a : getFAttributes())
+            res.addFAttribute(a.copyForCell(s, i));
+		return res;
+	}
+	
+    public void FAttribute.scalarize(List<FAttribute> attrs, Index i, Scalarizer s) {
+        if (!name().equals(FAttribute.SIZE)) {
+            scalarizeInternal(attrs, i, s);
+        }
+    }
+    /**
+     * Scalarize the attribute, picking out the specific element from an array 
+     *        expression or removing "each".
+     */
+    public FAttribute FAttribute.scalarizeInternal(List<FAttribute> attrs, Index i, Scalarizer s) {
+        FAttribute attr = createEmptyNode();
+        List<FAttribute> l = new List<FAttribute>();
+        for (FAttribute a : getFAttributes()) {
+            a.scalarize(l, i, s);
+        }
+        attr.setFAttributeList(l);
+        attr.setType(getType().fullCopy());
+        attr.setName(getName().fullCopy());
+        attr.setAttributeSet(getAttributeSet());
+        attr.setLevel(getLevel());
+        attr.setFFinalOpt(getFFinalOpt().fullCopy());
+        if (hasValue()) 
+            attr.setValue(scalarizeValue(i, s));
+        attrs.add(attr);
+        return attr;
+    }
+	
+    @Override
+    public void FAnnotationAttribute.scalarize(List<FAttribute> attrs, Index i, Scalarizer s) {
+        if (i.ndims() == 0)
+            scalarize(attrs, s);
+        else
+            scalarizeInternal(attrs, i, s);
+    }
+    /**
+     * Scalarize the attribute and create multiple instances for non-scalar
+     * attributes.
+     * An attribute is scalarized if it has no value and all its child
+     * attributes have value and are of the same size.
+     */
+    public void FAttribute.scalarize(List<FAttribute> attrs, Scalarizer s) {
+        if (hasValue()) {
+            scalarizeInternal(attrs, Index.NULL, s);
+        } else {
+            Size size = null;
+            boolean keepScalar = false;
+            for (FAttribute attr : getFAttributes()) {
+                if (!attr.hasValue())
+                    keepScalar = true;
+                else if (size == null)
+                    size = attr.getValue().size();
+                else if (!attr.hasFEach() && !attr.getValue().size().equals(size))
+                    keepScalar = true;
+            }
+            if (size == null || keepScalar)
+                size = Size.SCALAR;
+            for (Index i : Indices.create(size)) {
+                scalarizeInternal(attrs, i, s);
+            }
+        }
+    }
+
+    /**
+     * Scalarize the value of this attribute, picking out the specific element from an array 
+     * expression.
+     * 
+     * Returns null if attribute has no value.
+     */
+    public FExp FAttribute.scalarizeValue(Index i, Scalarizer s) {
+        if (!hasValue()) 
+            return null;
+        if (i.ndims() > getValue().ndims()) {
+            i = i.subIndex(i.ndims() - getValue().ndims());
+        }
+        return getValue().cell(i).scalarize(s);
+    }
+
+    /*
+     * Attributes for creating FTempIdExps and function temps.
+     */
+    syn FTempAccessExp FExp.tempExp() = tempExp(indexNames);
+    syn FTempAccessExp FExp.tempExp(String name)          = tempExp(name, (FArraySubscripts)null);
+    syn FTempAccessExp FExp.tempExp(Index i)              = tempExp(tempVarName(), i);
+    syn FTempAccessExp FExp.tempExp(FArraySubscripts fas) = tempExp(tempVarName(), fas);
+    syn FTempAccessExp FExp.tempExp(FExp[] subs) {
+        FArraySubscripts fas = null;
+        if (subs != null && subs.length > 0) {
+            List<FSubscript> l = new List<FSubscript>();
+            for (FExp e : subs) {
+                l.add(e.treeCopy().createFSubscript());
+            }
+            fas = new FArrayExpSubscripts(l);
+        }
+        return tempExp(tempVarName(), fas);
+    }
+
+    public FTempAccessExp FExp.tempExp(String name, Index i) {
+        FTempAccessExp res;
+        if (inFunction()) {
+            res = new FTempAccessExp(new FAccessFull(name, i.createFArraySubscripts()));
+        } else {
+            res = new FTempAccessExp(new FAccessString(name + i));
+        }
+        return (FTempAccessExp) dynamicFExp(res);
+    }
+
+    public FTempAccessExp FExp.tempExp(String name, FArraySubscripts fas) {
+        FTempAccessExp res;
+        if (inFunction()) {
+            res = new FTempAccessExp(new FAccessFull(name, fas));
+        } else {
+            if (fas == null) {
+                res = new FTempAccessExp(new FAccessString(name));
+            } else {
+                res = new FTempAccessExp(new FAccessString(name + fas));
+            }
+        }
+        return (FTempAccessExp) dynamicFExp(res);
+    }
+
+    /**
+     * Stores FSubscripts to be uses by <code>scalarize()</code>
+     */
+    public FExp[] FExp.indexNames = null;
+    public FExp FColonSubscript.indexName = null;
+    
+    public CommonAccessExp CommonAccessExp.createUseFas(String name) {
+        if (indexNames != null && indexNames.length > 0) {
+            return new FAccessExp(name, createIndexNameFas());
+        } else {
+            return new FAccessExp(name);
+        }
+    }
+    
+    public FArraySubscripts CommonAccessExp.createIndexNameFas() {
+        List<FSubscript> l = new List<FSubscript>();
+        for (FExp e : indexNames) {
+            l.add(e.treeCopy().createFSubscript());
+        }
+        return new FArrayExpSubscripts(l);
+    }
+    
+    public List<FAttribute> FAbstractEquation.scalarizeAttributeList(Index i, Scalarizer s) {
+        List<FAttribute> scalarized = new List<FAttribute>();
+        for (FAttribute a : getFAttributes()) 
+            a.scalarize(scalarized, i, s);
+        return scalarized;
+    }
+	
+    public void FAbstractEquation.scalarize(Scalarizer.Equation s) {}
+	
+	/**
+	 * Scalarize equation and put all resulting equations in list eqns.
+	 */
+    @Override
+    public void FEquation.scalarize(Scalarizer.Equation s) {
+		//log.debug("FEquation.scalarize() " + ndims());
+        if (size().isZero())
+            return;
+        
+        createArrayTemporaries(s);
+		if (ndims()==0) {
+			/*
+			 * If the equation is of dimension 0, i.e, already scalar,
+			 * the equations is "scalarized" into a simple equation where
+			 * e.g. built in functions are replaced by elementary operations.
+			 */
+			
+            List<FAttribute> attrs = scalarizeAttributeList(Index.NULL, s);
+            createScalarFEquations(s, attrs, getLeft(), getRight());
+		} else if (ndims() > 0) {
+			/*
+			 * If the expression is an array expression, then the FExp.getArray()
+			 * element is used to generate scalar equations.
+			 */
+			// Iterate over array elements and create scalarized equation for each
+			for (Index i : indices()) {
+                List<FAttribute> attrs = scalarizeAttributeList(i, s);
+                createScalarFEquations(s, attrs, getLeft().getArray().get(i), getRight().getArray().get(i));
+			}
+		} else {
+			throw new UnsupportedOperationException("Bad equation: ndims() for equation '" + 
+					this + "' returned " + ndims()); 
+		}
+	}
+	
+    @Override
+    public void FAlgorithm.scalarize(Scalarizer.Equation s) {
+		List<FStatement> stmts = new List<FStatement>();
+        FStatement.scalarizeStmtList(s.algorithm(stmts), getFStatements());
+        s.add(new FAlgorithm(stmts));
+	}
+	
+	/**
+	 * Scalarize left and right expressions and create new scalar equations.
+	 */
+    public void FEquation.createScalarFEquations(Scalarizer.Equation s, List<FAttribute> attrs, FExp left, FExp right) {
+        if (left.inferType().isRecord()) {
+            left.inferType().scalarRecordClauses(s, new FAccessEmpty(), left, right);
+        } else {
+            s.add(this.setLocationOf(createNode(attrs, left.scalarize(s), right.scalarize(s))));
+        }
+	}
+	
+	// TODO: Introduce parameter object?
+	/**
+	 * Generate scalar clauses for this record or record component.
+	 * 
+     * @param s         Scalarization visitor
+	 * @param suffix    add this as a suffix to the name of the uppermost record in uses
+	 * @param left      the left expression from the original equation
+	 * @param right     the right expression from the original equation
+	 */
+    public void FType.scalarRecordClauses(Scalarizer s, FAccess suffix, FExp left, FExp right) {
+        left = left.scalarRecordFExp(s, suffix);
+        right = right.scalarRecordFExp(s, suffix);
+        s.add(left, right);
+    }
+    
+    @Override
+    public void FRecordType.scalarRecordClauses(Scalarizer s, FAccess suffix, FExp left, FExp right) {
+        for (FRecordComponentType comp : getComponents()) {
+            FAccess next = suffix.copyAndAppend(comp.getName()).asFAccessFull();
+            comp.getFType().scalarRecordComponentClauses(s, next, left, right);
+        }
+    }
+    
+	/**
+	 * Generate scalar clauses for this record component.
+	 * 
+     * @param s         Scalarization visitor
+	 * @param suffix    add this as a suffix to the name of the uppermost record in uses
+	 * @param left      the left expression from the original equation
+	 * @param right     the right expression from the original equation
+	 */
+    public void FType.scalarRecordComponentClauses(Scalarizer s, FAccess suffix, FExp left, FExp right) {
+		if (isArray()) {
+			FAccessFull fullSuffix = suffix.copyAsFAccessFull();
+			Indices ind = null;
+            if (!size().isUnknown())
+				ind = indices(); 
+			else  // TODO: This is calculated each time - introduce some kind of lazy attribute?
+                ind = left.dynamicFExp(left.scalarRecordFExp(s, suffix)).indices();
+			for (Index i : ind) {
+				fullSuffix.addFArraySubscripts(i.createFArraySubscripts());
+                scalarRecordClauses(s, fullSuffix, left, right);
+			}
+		} else {
+            scalarRecordClauses(s, suffix, left, right);
+		}
+	}
+	
+	/**
+	 * Create an FExp that represents a specific scalar component of this record.
+	 * 
+	 * @param suffix    the suffix to add to a use of the record to access the specific component
+	 */
+    public FExp FExp.scalarRecordFExp(Scalarizer s, String suffix) {
+        return scalarRecordFExp(s, new FAccessString(suffix));
+    }
+    
+    public FExp FExp.scalarRecordFExp(Scalarizer s, FAccess suffix) {
+        if (useTempVar) {
+            return tempExp().scalarRecordFExp(s, suffix);
+        }
+        return scalarize(s);
+    }
+
+    public FExp FRecordConstructor.scalarRecordFExp(Scalarizer s, FAccess suffix) {
+        return suffix.scalarRecordFExpForCon(s, this);
+    }
+
+    public FExp FNoEventExp.scalarRecordFExp(Scalarizer s, FAccess suffix) {
+        return createNode(getFExp().scalarRecordFExp(s, suffix));
+    }
+
+    public FExp FIfExp.scalarRecordFExp(Scalarizer s, FAccess suffix) {
+        FIfExp res = new FIfExp();
+        res.setIfExp(getIfExp().scalarize(s));
+        res.setThenExp(getThenExp().scalarRecordFExp(s, suffix));
+        res.setElseExp(getElseExp().scalarRecordFExp(s, suffix));
+        return res;
+    }
+
+    public FExp FAccessExp.scalarRecordFExp(Scalarizer s, FAccess suffix) {
+      FAccess access = getFAccess();
+      if (indexNames != null) {
+          access = access.copyAndAddFas(createIndexNameFas());
+      }
+      access = access.asFAccessFull().treeCopy().append(suffix);
+      access.scalarized = false;
+      FExp res = createNode(access);
+      res = dynamicFExp(res).scalarize(s);
+      res.setLocation(this);
+      return res;
+    }
+
+    public FExp FSubscriptedExp.scalarRecordFExp(Scalarizer s, FAccess suffix) {
+        if (indexVariability().indexParameterOrLess() && !getFExp().size().isUnknown()) {
+            try {
+                return select().scalarRecordFExp(s, suffix);
+            } catch (ConstantEvaluationException e) {
+                
+            }
+        }
+        return new FSubscriptedExp(getFExp().scalarRecordFExp(s, suffix), getFArraySubscripts().scalarize(s));
+    }
+
+    public FExp FArray.scalarRecordFExp(Scalarizer s, FAccess suffix) {
+        if (useTempVar) {
+            return tempExp().scalarRecordFExp(s, suffix);
+        }
+        if (isIterArray())
+            return super.scalarRecordFExp(s, suffix);
+        FArray res = createEmptyNode();
+        for (FExp e : getFExps())
+            res.addFExp(e.scalarRecordFExp(s, suffix));
+        return res;
+    }
+
+    /**
+     * Create an FExp that represents a specific scalar component of the given record constructor.
+     * 
+     * @param s
+     * @param con       the record constructor to extract an expression from
+     * 
+     * @see FExp#scalarRecordFExp(Map, FAccess)
+     */
+    public FExp FAccess.scalarRecordFExpForCon(Scalarizer s, FRecordConstructor con) {
+        throw new UnsupportedOperationException();
+    }
+
+    public FExp FAccessString.scalarRecordFExpForCon(Scalarizer s, FRecordConstructor con) {
+        return con.component(getName()).scalarize(s);
+    }
+
+    public FExp FAccessFull.scalarRecordFExpForCon(Scalarizer s, FRecordConstructor con) {
+        FAccessPart first = getFAccessPart(0);
+        FExp arg = con.component(first.getName());
+        if (first.hasFArraySubscripts()) {
+            if (arg.useTempVar()) {
+                arg = arg.tempExp(first.getFArraySubscripts());
+            } else {
+                arg = arg.extractArrayCell(s, first.getFArraySubscripts().createIndex());
+            }
+        }
+        return copySuffix().scalarRecordFExp(s, arg);
+    }
+
+    public FExp FAccess.scalarRecordFExp(Scalarizer s, FExp exp) {
+        return exp.scalarRecordFExp(s, this);
+    }
+
+    public FExp FAccessEmpty.scalarRecordFExp(Scalarizer s, FExp exp) {
+        return exp.scalarize(s);
+    }
+
+
+    public FExp FExp.extractArrayCell(Scalarizer s, int... index) {
+        return extractArrayCell(s, new Index(index));
+    }
+
+    public FExp FExp.extractArrayCell(Scalarizer s, Index i) {
+        if (type().isUnknown() || size().isUnknown()) {
+            int[] ind = i.index();
+            FExp[] subs = new FExp[ind.length];
+            for (int k = 0; k < ind.length; k++) {
+                subs[k] = new FIntegerLitExp(ind[k]);
+            }
+            return extractArrayCell(s, subs);
+        } else {
+            return cell(i);
+        }
+    }
+
+    public FExp FExp.extractArrayCell(Scalarizer s, FExp... subs) {
+        addArrayUsesToIndexMap(s, subs);
+        return dynamicFExp(scalarize(s));
+    }
+
+    public FExp CommonAccessExp.extractArrayCell(Scalarizer s, Index i) {
+        return dynamicFExp(createSpecifiedNode(i, true));
+    }
+
+    public FExp FTempAccessExp.extractArrayCell(Scalarizer s, Index i) {
+        return dynamicFExp(createNode(getFAccess().copyAndAddFas(i)));
+    }
+
+    public FExp FIfExp.extractArrayCell(Scalarizer s, Index i) {
+        FIfExp res = new FIfExp();
+        res.setIfExp(getIfExp().scalarize(s));
+        res.setThenExp(getThenExp().extractArrayCell(s, i));
+        res.setElseExp(getElseExp().extractArrayCell(s, i));
+        return dynamicFExp(res);
+    }
+
+	/**
+	 * Scalarize equation and put all scalarized equations in list eqns.
+	 */
+    public void FFunctionCallEquation.scalarize(Scalarizer.Equation s) {
+        if (getCall().isOperatorWithoutOutputs()) {
+            createArrayTemporaries(s);
+            getCall().scalarizeOperatorWithoutOutputs(s);
+        } else {
+            getCall().createArrayTemporaries(s);
+            getLefts().createArrayTemporaries(s);
+        }
+    }
+    
+    syn boolean FAbstractFunctionCall.isOperatorWithoutOutputs() = false;
+    eq FReinit.isOperatorWithoutOutputs()                        = true;
+    eq FAssert.isOperatorWithoutOutputs()                        = true;
+    eq FTerminate.isOperatorWithoutOutputs()                     = true;
+    
+    public void FExp.scalarizeOperatorWithoutOutputs(Scalarizer s) {
+        if (isArray()) {
+            for (FExp e : getArray().iterable()) {
+                e.scalarizeOperatorWithoutOutputs(s);
+            }
+        } else if (type().isRecord()) {
+            for (FRecordComponentType frct : ((FRecordType)type()).getComponents()) {
+                component(frct.getName()).scalarizeOperatorWithoutOutputs(s);
+            }
+        } else {
+            FAbstractFunctionCall call = (FAbstractFunctionCall) scalarizeExp(s);
+            List<FFunctionCallLeft> lefts = new List<FFunctionCallLeft>();
+            s.add(lefts, call);
+        }
+    }
+    
+    public FExp FEndExp.scalarizeExp(Scalarizer s) {
+        return mySize().createFExp(0);
+    }
+	
+    @Override
+    public void FIfWhenElseEquation.scalarize(Scalarizer.Equation s) {
+        List<FAbstractEquation> l = new List<FAbstractEquation>();
+        scalarizeList(s.block(l), getFAbstractEquations());
+        FIfWhenElseEquation res = createEmptyNode();
+        res.setType(getType());
+        res.setFAbstractEquationList(l);
+        scalarizeTestAndElse(s, res);
+        s.add(res);
+    }
+
+    @Override
+    public void FIfEquation.scalarize(Scalarizer.Equation s) {
+        boolean lockedBranch = false;
+        if (getTest().variability().indexParameterOrLess()) {
+            try {
+                CValue cval = getTest().ceval();
+                if (cval.hasBooleanValue()) {
+                    if (cval.booleanValue()) {
+                        scalarizeList(s, getFAbstractEquations());
+                    } else if (hasElse()) {
+                        scalarizeList(s, getElse().getFAbstractEquations());
+                    }
+                    lockedBranch = true;
+                }
+            } catch (ConstantEvaluationException e) {}
+        }
+        if (!lockedBranch) {
+            super.scalarize(s);
+        }
+    }
+
+    public void FIfWhenElseEquation.scalarizeTestAndElse(Scalarizer.Equation s, FIfWhenElseEquation res) {}
+
+    public void FIfWhenEquation.scalarizeTestAndElse(Scalarizer.Equation s, FIfWhenElseEquation res) {
+		FIfWhenEquation res2 = (FIfWhenEquation) res;
+        res2.setTest(getTest().scalarize(s));
+		if (hasElse()) {
+	        ArrayList<FExp> tempsToAddToElse = branchTemporaries;
+	        branchTemporaries = null;
+            List<FAbstractEquation> l = new List();
+            getElse().scalarize(s.block(l));
+            res2.setElse((FIfWhenElseEquation)l.getChild(0));
+			res2.addDummyEqnsForTemps(branchTemporaries, tempsToAddToElse);
+		}
+        branchTemporaries = null;
+	}
+	
+	public void FIfWhenElseEquation.addDummyEqnsForTemps(ArrayList<FExp> tempsForThen, ArrayList<FExp> tempsForElse) {
+        if (tempsForThen != null) 
+            for (FExp e : tempsForThen)
+                e.type().addDummyEqnsForTemp(getFAbstractEquations(), e.tempVarName());
+	}
+    
+    public void FIfWhenEquation.addDummyEqnsForTemps(ArrayList<FExp> tempsForThen, ArrayList<FExp> tempsForElse) {
+        super.addDummyEqnsForTemps(tempsForThen, tempsForElse);
+        if (hasElse())
+            getElse().addDummyEqnsForTemps(tempsForElse, tempsForElse);
+    }
+    
+    public void FType.addDummyEqnsForTemp(List<FAbstractEquation> l, String name) {
+        if (isArray()) {
+            FType scalar = scalarType();
+            for (Index i : indices()) 
+                scalar.addDummyEqnsForTemp(l, name + i);
+        } else {
+            l.add(new FEquation(new FAccessExp(name), zeroLiteral()));
+        }
+    }
+    
+    public void FRecordType.addDummyEqnsForTemp(List<FAbstractEquation> l, String name) {
+        if (isArray()) {
+            super.addDummyEqnsForTemp(l, name);
+        } else {
+            for (FRecordComponentType comp : getComponents())
+                comp.getFType().addDummyEqnsForTemp(l, name + '.' + comp.getName());
+        }
+    }
+	
+	public void FExp.notifyIfWhenEquationsOfTemporaryVar() {
+	    FIfWhenEquation myIf = surroundingIfOrElse();
+	    if (myIf != null) 
+	        myIf.addBranchTemporary(this);
+	}
+	
+	public void FIfWhenEquation.addBranchTemporary(FExp e) {
+	    if (branchTemporaries == null)
+	        branchTemporaries = new ArrayList<FExp>();
+	    branchTemporaries.add(e);
+        FIfWhenEquation myIf = surroundingIfOrElse();
+        if (myIf != null) 
+            myIf.addBranchTemporary(e);
+	}
+	
+	private ArrayList<FExp> FIfWhenEquation.branchTemporaries = null;
+	
+	/**
+	 * Surrounding if or else equation, if any.
+	 * 
+	 * Only valid in flat tree.
+	 */
+    inh FIfWhenEquation FExp.surroundingIfOrElse();
+    inh FIfWhenEquation FAbstractEquation.surroundingIfOrElse();
+    eq FClass.getChild().surroundingIfOrElse()                      = null;
+    eq InstNode.getChild().surroundingIfOrElse()                    = null;
+    eq Root.getChild().surroundingIfOrElse()                        = null;
+    eq FIfWhenEquation.getFAbstractEquation().surroundingIfOrElse() = this;
+    eq FIfWhenEquation.getElse().surroundingIfOrElse()              = this;
+
+	/**
+	 * Create a record constructor (or FArray of record constructors),  
+	 *        with the arguments taken from a record variable with the given name.
+	 */
+	public FExp FType.createRecordConstructor(Scalarizer s, FExp exp) {
+        if (isArray() || exp.isArray()) {
+            return createRecordConstructorArray(s, exp, indices().iterator(), 0);
+        } else {
+            return createRecordConstructorCell(s, exp);
+        }
+	}
+	
+	/**
+	 * Create an FArray of expressions, with the arguments taken from a record 
+	 * variable or member with the given name.
+	 */
+	public FExp FType.createRecordConstructorArray(Scalarizer s, FExp exp, Iterator<Index> it, int dim) {
+        if (isEmpty()) {
+            return createEmptyExp();
+        }
+		FArray arr = new FArray();
+		boolean last = dim == ndims() - 1;
+		for (int i = 0, n = size().get(dim); i < n; i++) {
+			FExp res;
+            if (last) {
+                FExp subExp = exp.extractArrayCell(s, it.next());
+                FType t = subExp.type();
+                if (t.isUnknown()) {
+                    t = this;
+                }
+                res = t.createRecordConstructorCell(s, subExp);
+            } else {
+                res = createRecordConstructorArray(s, exp, it, dim + 1);
+            }
+			arr.addFExp(res);
+		}
+		return arr;
+	}
+	
+    syn boolean FType.isEmpty() = size().isEmpty();
+    syn FExp FType.createEmptyExp() {
+        Size s = size();
+        List<FExp> dims = new List<FExp>();
+        for (int i = 0, n = s.ndims(); i < n ; i++) {
+            dims.add(s.createFExp(i));
+        }
+        return new FFillExp(dims, zeroLiteral());
+    }
+	
+	/**
+	 * Create a record constructor with the arguments taken from a record 
+	 *        variable with the given name.
+	 * 
+	 * Assumes that <code>name</code> refers to a non-array variable 
+	 * (or a specific cell in an array variable).
+	 */
+    public FExp FType.createRecordConstructorCell(Scalarizer s, FExp exp) {
+        return exp.scalarize(s);
+    }
+
+    public FExp FRecordType.createRecordConstructorCell(Scalarizer s, FExp exp) {
+		FRecordConstructor rc = new FRecordConstructor(new FRecordAccess(getName()), new List());
+		for (FRecordComponentType comp : getComponents()) {
+             FExp next = exp.scalarRecordFExp(s, comp.getName());
+             if (exp.type().isUnknown() || exp.useTempVar) {
+                 // Work around for expanding FTempAccessExp which doesnt know its type
+                 next = comp.getFType().createRecordConstructor(s, exp.dynamicFExp(next));
+             }
+             rc.addArg(next);
+		}
+		return rc;
+	}
+
+	/* Scalarization of expressions is needed in order to compute a simple
+	 * scalar expression from an expression with ndims==0. For example, an
+	 * CommonAccess 'x[2]' needs to be marked as scalarized, and the expression
+	 * scalar(x*A*x) needs to be replaced by a double sum.
+	 */
+
+	/**
+	 * Flag that signals that this expression should be replaced with a use of a temporary variable.
+	 */
+	protected boolean FExp.useTempVar = false;
+    syn boolean FExp.useTempVar() = useTempVar;
+	
+	/**
+	 * Scalarize expressions, replacing array expressions with FArrays of scalarized subexpressions.
+	 * 
+	 * The FArrays are needed because function calls need arrays to be passed as arrays.
+	 */
+    public FExp FExp.scalarize(Scalarizer s) {
+        FExp exp = useTempVar ? tempExp() : this;
+        if (scalarizeExpanded(s)) {
+            return type().createRecordConstructor(s, exp);
+        } else {
+            return exp.scalarizeExp(s);
+        }
+    }
+    
+    public FExp FFunctionCall.scalarize(Scalarizer s) {
+        FExp exp = super.scalarize(s);
+        indexNames = null;
+        return exp;
+    }
+
+    syn boolean FExp.scalarizeExpanded(Scalarizer s);
+    eq FExp           .scalarizeExpanded(Scalarizer s) = isComposite() && indexNames == null && s.unroll() && !(useTempVar && isForIndexExp());
+    eq CommonAccessExp.scalarizeExpanded(Scalarizer s) = super.scalarizeExpanded(s) && (!s.inFunction() || isSlice());
+    eq FFunctionCall  .scalarizeExpanded(Scalarizer s) = super.scalarizeExpanded(s) && ((useTempVar && !s.inFunction()) || isVectorized());
+    eq FIfExp         .scalarizeExpanded(Scalarizer s) = super.scalarizeExpanded(s) && !isFunctionCallIO()
+            && !type().isRecord(); /* Workaround for test RecordScalarize52 */
+    
+    syn boolean FFunctionCall.isVectorized() = false;
+    eq FVectorFunctionCall.isVectorized() = true;
+
+	/**
+	 * Scalarize expressions.
+	 */
+	public FExp FExp.scalarizeExp(Scalarizer s) {
+        return treeCopy();
+	}
+
+	public FExp FArray.scalarizeExp(Scalarizer s) {
+		if (isIterArray())
+			return getFExp(0).scalarize(s);
+		FArray res = new FArray();
+		for (FExp e : getFExps())
+			res.addFExpNoTransform(e.scalarize(s));
+		return res;
+	}
+
+    public FExp FAccessExp.scalarizeExp(Scalarizer s) {
+        return s.scalarizeAccessExp(this);
+    }
+
+    public FExp FTempAccessExp.scalarizeExp(Scalarizer s) {
+        if (indexNames != null) {
+            FAccess access = getFAccess().scalarize(s);
+            access = access.asFAccessFull().addFArraySubscripts(createIndexNameFas());
+            return setLocationOf(new FAccessExp(access));
+        }
+        return super.scalarizeExp(s);
+    }
+
+    @Override
+    public FExp FDerExp.scalarizeExp(Scalarizer s) {
+        return new FDerExp(getFAccess().scalarize(s, indexNames), order());
+    }
+    
+    @Override
+    public FExp FPreExp.scalarizeExp(Scalarizer s) {
+        return new FPreExp(getFAccess().scalarize(s, indexNames));
+    }
+
+    public FAccess FAccess.scalarize(Scalarizer s, FExp[] indexNames) {
+        FAccess access = scalarize(s);
+        if (indexNames != null) {
+            access = access.asFAccessFull().addFArraySubscripts(getExpandedSubscripts().scalarize(s));
+        }
+        return access;
+    }
+
+	public abstract FAccess FAccess.scalarize(Scalarizer s);
+	
+	public FAccess FAccessEmpty.scalarize(Scalarizer s) {
+		return new FAccessEmpty();
+	}
+	
+	public FAccess FAccessString.scalarize(Scalarizer s) {
+		return new FAccessString(getName());
+	}
+
+    public FRecordAccess FRecordAccess.scalarize(Scalarizer s) {
+        return new FRecordAccess(getName());
+    }
+
+    public FAccess FAccessFull.scalarize(Scalarizer s) {
+        if (!inFunction() && !isGlobalAccess()) {
+            StringBuilder name = new StringBuilder();
+            getFAccessPart(0).scalarizeAsString(name);
+            for (int i = 1; i < getNumFAccessPart(); i++) {
+                name.append(".");
+                getFAccessPart(i).scalarizeAsString(name);
+            }
+            return new FAccessString(name.toString());
+        } else {
+            FAccessFull access = new FAccessFull(new List());
+            for (FAccessPart accessp : getFAccessParts()) 
+                access.addFAccessPart(accessp.scalarize(s));
+            return access;
+        }
+    }
+
+    public void FAccessPart.scalarizeAsString(StringBuilder sb) {
+        sb.append(name());
+    }
+
+    public void FAccessPartArray.scalarizeAsString(StringBuilder sb) {
+        super.scalarizeAsString(sb);
+        sb.append(getFArraySubscripts().createIndex());
+    }
+
+    public FAccessPart FAccessPart.scalarize(Scalarizer s) {
+        return new FAccessPart(getName());
+    }
+    
+    public FAccessPartArray FAccessPartArray.scalarize(Scalarizer s) {
+        return new FAccessPartArray(getName(), getFArraySubscripts().scalarize(s));
+    }
+
+    public FArraySubscripts FArraySubscripts.scalarize(Scalarizer s) {
+        return treeCopy();
+    }
+
+    public FArraySubscripts FArrayExpSubscripts.scalarize(Scalarizer s) {
+        FArrayExpSubscripts fas = new FArrayExpSubscripts();
+        for (FSubscript fs : getFSubscripts()) {
+            fas.addFSubscript(fs.scalarize(s));
+        }
+        return fas;
+    }
+
+    public FSubscript FSubscript.scalarize(Scalarizer s) {
+        return treeCopy();
+    }
+    
+    public FSubscript FColonSubscript.scalarize(Scalarizer s) {
+        if (indexName == null) {
+            return treeCopy();
+        }
+        return indexName.treeCopy().createFSubscript();
+    }
+    
+    public FSubscript FExpSubscript.scalarize(Scalarizer s) {
+        return getFExp().scalarize(s).createFSubscript();
+    }
+
+
+
+
+    public FExp FIfExp.scalarizeExp(Scalarizer s) {
+        if (getIfExp().variability().indexParameterOrLess()) {
+            try {
+                return cevalSelectExp().scalarize(s);
+            } catch (ConstantEvaluationException e) {}
+        }
+        return new FIfExp(getIfExp().scalarize(s),
+                getThenExp().scalarize(s),
+                getElseExp().scalarize(s));
+    }
+
+	public FExp FMulExp.scalarizeExp(Scalarizer s) {
+		if (getLeft().isArray() && !isArray()) 
+			return dynamicFExp(composeMulScalarCellExp(Index.NULL)).scalarize(s);
+		else
+			return super.scalarizeExp(s);
+	}
+	
+	public FExp FRangeExp.scalarizeExp(Scalarizer s) {
+        if (indexNames == null) {
+            return treeCopy();
+        }
+        return scalarizeWithIndex(s, indexNames[0].treeCopy());
+	}
+	
+    public FExp FLinspace.scalarizeExp(Scalarizer s) {
+        FExp index = new FSubExp(indexNames[0].fullCopy(), new FIntegerLitExp(1));
+        FExp len  = new FSubExp(getStopExp().fullCopy(), getStartExp().fullCopy());
+        FExp step = new FDivExp(len, new FSubExp(getN().fullCopy(), new FIntegerLitExp(1)));
+        FExp res = new FAddExp(getStartExp().fullCopy(), new FMulExp(index, step));
+        return res;
+    }
+
+	
+	public FExp FSizeExp.scalarizeExp(Scalarizer s) {
+        if (getFExp().isSlice() || !getFExp().size().isUnknown(dimension())) {
+            return getFExp().size().scalarize(s, dimension());
+        } else {
+            return new FSizeExp(getFExp().scalarize(s), new Opt<FExp>(getDim().scalarize(s)));
+        }
+	}
+	
+    public FExp FUnknownSizeExp.scalarizeExp(Scalarizer s) {
+        return new FSizeExp(getFExp().scalarize(s), new Opt<FExp>(getDim().scalarize(s)));
+    }
+	
+	public FExp FNdimsExp.scalarizeExp(Scalarizer s) {
+		return ceval().buildLiteral();
+	}
+
+    public FExp FSubscriptedExp.scalarizeExp(Scalarizer s) {
+        if (indexVariability().indexParameterOrLess() && !getFExp().size().isUnknown()) {
+            try {
+                return select().scalarize(s);
+            } catch (ConstantEvaluationException e) {
+                
+            }
+        }
+        FArraySubscripts fas = getFArraySubscripts().scalarize(s);
+        if (inFunction()) {
+            return new FAccessExp(getFExp().tempVarName(), fas);
+        } else {
+            FSubscriptedExp res = createEmptyNode();
+            res.setFExp(getFExp().scalarize(s));
+            res.setFArraySubscripts(fas);
+            return res;
+        }
+    }
+
+    public FExp FCardinality.scalarizeExp(Scalarizer s) {
+        return new FIntegerLitExp(getFExp().cardinalityValue());
+    }
+
+	public FExp FMinMaxExp.scalarizeExp(Scalarizer s) {
+		if (hasY())
+			return createNode(getX().scalarize(s), getY().scalarize(s));
+		else
+			return getX().reduceToScalarized(this, s);
+	}
+	
+	public FExp FReductionExp.scalarizeExp(Scalarizer s) {
+		if (getFExp().size().numElements() == 0)
+			return reduceStartValue().buildLiteral();
+		else
+			return getFExp().reduceToScalarized(scalarReduceExp(), s);
+	}
+	
+	syn FBinExp FReductionExp.scalarReduceExp();
+	eq FSumExp.scalarReduceExp()     = new FAddExp();
+	eq FProductExp.scalarReduceExp() = new FMulExp();
+	
+	public FExp FIterExp.scalarizeExp(Scalarizer s) {
+		return getFExp().scalarize(s);
+	}
+	
+    /**
+     * Scalarize an expression by recursively scalarizing and combining the contents in its Array.
+     * 
+     * New nodes are created with <code>template.createNodeBinary()</code>.
+     */
+    public FExp FExp.reduceToScalarized(FExp template, Scalarizer s) {
+        if (isArray()) {
+            java.util.List<FExp> scalarizedExps = new ArrayList<FExp>();
+            Iterator<FExp> it = getArray().iteratorFExp();
+            while (it.hasNext()) {
+                scalarizedExps.add(it.next().scalarize(s));
+            }
+            return createBalancedBinaryTree(template, scalarizedExps);
+        } else {
+            return scalarize(s);
+        }
+    }
+
+    /**
+     * Constructs a balanced binary tree based on the expression list exps with
+     * the operation as specified by template.
+     */
+    public static FExp FExp.createBalancedBinaryTree(FExp template, java.util.List<FExp> exps) {
+        return createBalancedBinaryTree(template, exps, 0, exps.size());
+    }
+
+    private static FExp FExp.createBalancedBinaryTree(FExp template, java.util.List<FExp> exps, int start, int end) {
+        if (start == end) {
+            return null;
+        }
+        if (start == end - 1) {
+            return exps.get(start);
+        }
+        // We want a left heavy tree, hence the modulo part
+        int half = (start + end) / 2 + (start + end) % 2;
+        FExp left = createBalancedBinaryTree(template, exps, start, half);
+        FExp right = createBalancedBinaryTree(template, exps, half, end);
+        return template.createNodeBinary(left, right);
+    }
+
+	public FExp FBinExp.scalarizeExp(Scalarizer s) { return createNode(getLeft().scalarize(s), getRight().scalarize(s)); }
+	public FExp FUnaryExp.scalarizeExp(Scalarizer s) { return createNode(getFExp().scalarize(s)); }
+	public FExp FMathematicalFunctionCall.scalarizeExp(Scalarizer s) { return createNode(getFExp().scalarize(s)); }
+	public FExp FAtan2Exp.scalarizeExp(Scalarizer s)     { return createNode(getFExp().scalarize(s), getY().scalarize(s)); }
+	public FExp FUnaryBuiltIn.scalarizeExp(Scalarizer s) { return createNode(getFExp().scalarize(s)); }
+	public FExp FTranspose.scalarizeExp(Scalarizer s)    { return getFExp().scalarize(s); }
+	
+	public FExp FNoArgBuiltIn.scalarizeExp(Scalarizer s) { return createEmptyNode(); }
+	public FExp FEventGenExp.scalarizeExp(Scalarizer s) { return createNode(getX().scalarize(s)); }
+	public FExp FBinEventGenExp.scalarizeExp(Scalarizer s) { return createNode(getX().scalarize(s),getY().scalarize(s)); }
+	
+	public FExp FLitExp.scalarizeExp(Scalarizer s) { return (FLitExp) fullCopy(); }
+	public FExp FEnumLitExp.scalarizeExp(Scalarizer s) { 
+	    return inArraySubscripts() ? new FIntegerLitExp(ceval().intValue()) : super.scalarizeExp(s);
+	}
+	public FExp FBooleanLitExp.scalarizeExp(Scalarizer s) { 
+	    return inArraySubscripts() ? new FIntegerLitExp(ceval().intValue()) : super.scalarizeExp(s);
+    }
+	
+	public FExp FSmoothExp.scalarizeExp(Scalarizer s)     { return new FSmoothExp(getOrder().scalarize(s), getFExp().scalarize(s)); }
+	public FExp FSampleExp.scalarizeExp(Scalarizer s)     { return new FSampleExp(getOffset().scalarize(s), getInterval().scalarize(s)); }
+	public FExp FSemiLinearExp.scalarizeExp(Scalarizer s) { return new FSemiLinearExp(getX().scalarize(s), getPosSlope().scalarize(s), getNegSlope().scalarize(s)); }
+	public FExp FHomotopyExp.scalarizeExp(Scalarizer s)   { return new FHomotopyExp(getActual().scalarize(s), getSimplified().scalarize(s)); }
+	
+	public FExp FStringExp.scalarizeExp(Scalarizer s)  {
+		FStringExp scalarized = new FStringExp();
+		scalarized.setValue(getValue().scalarize(s));
+		if (hasMinimumLength())
+			scalarized.setMinimumLength(getMinimumLength().scalarize(s));
+		if (hasLeftJustified())
+			scalarized.setLeftJustified(getLeftJustified().scalarize(s));
+		if (hasSignificantDigits())
+			scalarized.setSignificantDigits(getSignificantDigits().scalarize(s));
+		if (hasFormat())
+			scalarized.setFormat(getFormat().scalarize(s));
+		return scalarized;
+	}
+	
+	public FExp FRecordConstructor.scalarizeExp(Scalarizer s) {
+        FRecordConstructor rc = new FRecordConstructor(getRecord().scalarize(s), new List());
+        for (FExp arg : getArgs()) {
+            rc.addArg(arg.scalarize(s));
+        }
+		return rc;
+	}
+	
+	public FExp FZeros.scalarizeExp(Scalarizer s) {
+		return new FIntegerLitExp(0);
+	}
+	
+	public FExp FOnes.scalarizeExp(Scalarizer s) {
+		return new FIntegerLitExp(1);
+	}
+    
+    public FExp FScalarExp.scalarizeExp(Scalarizer s) {
+        int[] t = new int[getFExp().ndims()];
+        Arrays.fill(t, 1);
+        return dynamicFExp(getFExp().extractArrayCell(s, new Index(t))).scalarize(s);
+    }
+    
+	public FExp FFillExp.scalarizeExp(Scalarizer s) {
+		return getFillExp().fullCopy();
+	}
+	
+    public FFunctionCall FFunctionCall.scalarizeExp(Scalarizer s) {
+        List<FExp> args = new List<FExp>();
+        for (FExp arg : getArgs()) {
+            args.add(arg.scalarize(s));
+        }
+        FFunctionCall res = createScalarized(getName().treeCopy(), args, null);
+        res.setFType(getFType().scalarize(s, res));
+        return res;
+    }
+    
+    public abstract FType FType.scalarize(Scalarizer s, FExp context);
+
+    @Override
+    public FType FCellType.scalarize(Scalarizer s, FExp context) {
+        FCellType res = treeCopy();
+        res.scalarizeTypeSizes(s, context);
+        return res;
+    }
+
+    @Override
+    public FType FArrayType.scalarize(Scalarizer s, FExp context) {
+        FArrayType res = treeCopy();
+        for (int i = 0; i < getFExps().numChildren(); i++) {
+            res.setFExp(getFExp(i).scalarize(s), i);
+        }
+        return res;
+    }
+    
+    @Override
+    public FType FFunctionType.scalarize(Scalarizer s, FExp context) {
+        List<FRecordComponentType> inputs = new List<FRecordComponentType>();
+        for (FRecordComponentType frct : getInputs()) {
+            inputs.add(frct.scalarize(s, context));
+        }
+        List<FRecordComponentType> outputs = new List<FRecordComponentType>();
+        for (FRecordComponentType frct : getOutputs()) {
+            outputs.add(frct.scalarize(s, context));
+        }
+        FFunctionType res = new FFunctionType(getSize(), getName(), inputs, outputs, getFClass());
+        res.setSize(getSize().scalarize(s, context));
+        return res;
+    }
+    
+    @Override
+    public FType FRecordType.scalarize(Scalarizer s, FExp context) {
+        List<FRecordComponentType> comps = new List<FRecordComponentType>();
+        for (FRecordComponentType frct : getComponents()) {
+            comps.add(frct.scalarize(s, context));
+        }
+        FRecordType res = new FRecordType(getSize(), getName(), comps, getFClass());
+        res.setSize(getSize().scalarize(s, context));
+        return res;
+    }
+
+    public FRecordComponentType FRecordComponentType.scalarize(Scalarizer s, FExp context) {
+        FRecordComponentType res = treeCopy();
+        res.setFType(getFType().scalarize(s, context));
+        return res;
+    }
+
+    public abstract void FType.scalarizeTypeSizes(Scalarizer s, FExp context);
+
+    @Override
+    public void FArrayType.scalarizeTypeSizes(Scalarizer s, FExp context) {
+        scalarizeFExps(s);
+    }
+
+    private void FArrayType.scalarizeFExps(Scalarizer s) {
+        for (int i = 0; i < getNumFExp(); i++) {
+            getFExp(i).createArrayTemporaries(s);
+            setFExp(getFExp(i).scalarize(s), i);
+        }
+    }
+
+    @Override
+    public void FCellType.scalarizeTypeSizes(Scalarizer s, FExp context) {
+        setSize(getSize().scalarize(s, context));
+    }
+    
+    public Size Size.scalarize(Scalarizer s, FExp context) {
+        return this;
+    }
+    
+    @Override
+    public Size MutableSize.scalarize(Scalarizer s, FExp context) {
+        MutableSize res = new MutableSize(ndims());
+        for (int i = 0; i < exps.length; i++) {
+            res.size[i] = size[i];
+            if (exps[i] != null) {
+                res.exps[i] = exps[i].scalarize(s);
+                context.dynamicFExp(res.exps[i]);
+            }
+        }
+        return res;
+    }
+    
+    public FExp Size.scalarize(Scalarizer s, int i) {
+        return createFExp(i);
+    }
+    
+    @Override
+    public FExp MutableSize.scalarize(Scalarizer s, int i) {
+        if (exps[i] != null) {
+            return exps[i].scalarize(s);
+        } else {
+            return super.scalarize(s, i);
+        }
+    }
+    
+    /**
+     * Create a scalarized list of size expressions.
+     * Also performs createArrayTemporaries.
+     */
+    public List<FExp> Size.scalarizedSizeExpressions(Scalarizer s) {
+        List<FExp> sizes = new List<FExp>();
+        for (int i = 0; i < ndims(); i++) {
+            createArrayTemporaries(s, i);
+            sizes.add(scalarize(s, i));
+        }
+        return sizes;
+    }
+    
+    protected FFunctionCall FFunctionCall.createScalarized(FAccess name, List<FExp> args, FType type) {
+        return setLocationOf(new FFunctionCall(name, args, type)); 
+    }
+    
+    protected FFunctionCall FPartialFunctionCall.createScalarized(FAccess name, List<FExp> args, FType type) {
+        return new FPartialFunctionCall(name, args, type, getArgNames().treeCopy()); 
+    }
+    
+	public FAssert FAssert.scalarizeExp(Scalarizer s) {
+		Opt level = hasLevel() ? new Opt(getLevel().scalarize(s)) : new Opt();
+        return createNode(getTest().scalarize(s), getMsg().scalarize(s), level);
+	}
+
+    public FReinit FReinit.scalarizeExp(Scalarizer s) {
+        return new FReinit(getVar().scalarize(s), getFExp().scalarize(s));
+    }
+
+    public FDelayExp FDelayExp.scalarizeExp(Scalarizer s) {
+        Opt max = hasMax() ? new Opt(getMax().scalarize(s)) : new Opt();
+        return createNode(getFExp().scalarize(s), getDelay().scalarize(s), max);
+    }
+    
+    public FSpatialDistExp FSpatialDistExp.scalarizeExp(Scalarizer s) {
+        return new FSpatialDistExp(getIn0().scalarize(s), getIn1().scalarize(s),
+                getX().scalarize(s), getPositiveVelocity().scalarize(s),
+                getInitialPoints().scalarize(s), getInitialValues().scalarize(s));
+    }
+
+    public FForIndex FForIndex.scalarize(Scalarizer s) {
+        return new FForIndex(getFVariable().fullCopy(), getFExp().scalarizeIndexExp(s));
+    }
+
+	/**
+	 * Scalarize the expression of an FForIndex. 
+	 */
+	public FExp FExp.scalarizeIndexExp(Scalarizer s) {
+		return scalarize(s);
+	}
+	
+	public FRangeExp FRangeExp.scalarizeIndexExp(Scalarizer s) {
+		List<FExp> exps = new List<FExp>();
+		for (FExp e : getFExps())
+			exps.add(e.scalarize(s));
+		return new FRangeExp(exps);
+	}
+
+    public FExInStream FExInStream.scalarizeExp(Scalarizer s) {
+        FExInStream res = new FExInStream(getDefault().scalarize(s), getEps().scalarize(s), new List<FExp>());
+        for (FExp e : getVars()) {
+            res.addVarNoTransform(e.scalarize(s));
+        }
+        return res;
+    }
+
+	public void ConnectionSetManager.scalarize() {
+		for (ConnectionSet set : list)
+			set.scalarize();
+		Map<String, CSENameMapEntry> oldCSEStreamMap = cseStreamMap;
+		cseStreamMap = new HashMap<String, CSENameMapEntry>();
+		for (CSENameMapEntry entry : oldCSEStreamMap.values()) {
+            if (entry.outsideCSE != null)
+                updateCSEMapEntry(entry.outsideCSE, entry.outside);
+            if (entry.insideCSE != null)
+                updateCSEMapEntry(entry.insideCSE, entry.inside);
+		}
+	}
+	
+	public void ConnectionSet.scalarize() {
+		for (ConnectionSetEntry e : this)
+			e.scalarize();
+	}
+	
+	public void ConnectionSetEntry.scalarize() {
+		if (access.accessNdims() == 0) {
+			// Can't use FAccess.scalarize(), since it relies on rewrites
+			access = new FAccessString(access.scalarName());
+		} else {
+			Indices ind = Indices.createFromFas(access.getFArraySubscripts());
+			scalarNames = new String[ind.numElements()];
+			int j = 0;
+			for (Index i : ind)
+				scalarNames[j++] = access.copyAndAddFas(i.createFArraySubscripts()).scalarName();
+		}
+	}
+
+    syn lazy List<FStatement> FForStmt.getUnrolledForStmtList() {
+        List<FStatement> unrolledForStmts = new List<>();
+        
+        FVariable index = getIndex().getFVariable();
+        FExp loopExp = getIndex().getFExp();
+        for (FExp e : loopExp.getArray().iterable()) {
+            UnrollingScalarizer s = new UnrollingScalarizer(unrolledForStmts, index, e);
+            scalarizeStmtList(s, getForStmts());
+        }
+        return unrolledForStmts;
+    }
+    
+    public class FForStmt {
+        private class UnrollingScalarizer extends Scalarizer.Algorithm {
+            
+            private FAbstractVariable indexVariable;
+            private FExp indexValue;
+            
+            public UnrollingScalarizer(List<FStatement> stmts, FAbstractVariable indexVariable, FExp indexValue) {
+                super(new List<FFunctionVariable>(), stmts, new ForNames(), true, true, Variability.DISCRETE);
+                this.indexVariable = indexVariable;
+                this.indexValue = indexValue;
+            }
+            
+            @Override
+            public FExp scalarizeAccessExp(FAccessExp accessExp) {
+                if (indexVariable.equals(accessExp.myFV())) {
+                    return accessExp.setLocationOf(indexValue);
+                }
+                return super.scalarizeAccessExp(accessExp);
+            }
+            
+            @Override
+            public Algorithm block(List clauses) {
+                return new UnrollingScalarizer(clauses, indexVariable, indexValue);
+            }
+            
+            @Override
+            public Algorithm block(List vars, List clauses) {
+                return new UnrollingScalarizer(clauses, indexVariable, indexValue);
+            }
+        }
+    }
+}

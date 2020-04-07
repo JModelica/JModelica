@@ -1,0 +1,44 @@
+package QuadTank
+
+model QuadTank "quadruple tank setup"
+    parameter Real A = 4.9;
+    parameter Real a = 0.03;
+    parameter Real k = 1.6;
+    parameter Real g = 981;
+    parameter Real gamma = 0.3;
+    parameter Real u1_e = 0.0;
+    parameter Real u2_e = 0.0;
+    Modelica.Blocks.Interfaces.RealInput u1;
+    Modelica.Blocks.Interfaces.RealInput u2;
+    Real h1;
+    Real h2;
+    Real h3;
+    Real h4;
+equation
+    der(h1) = -a/A*(2*g*h1)/sqrt(2*g*h1+1e-3) + a/A*(2*g*h3)/sqrt(2*g*h3+1e-3) + gamma*k/A*(u1+u1_e);
+    der(h2) = -a/A*(2*g*h2)/sqrt(2*g*h2+1e-3) + a/A*(2*g*h4)/sqrt(2*g*h4+1e-3) + gamma*k/A*(u2+u2_e);
+    der(h3) = -a/A*(2*g*h3)/sqrt(2*g*h3+1e-3) + (1-gamma)*k/A*(u2+u2_e);
+    der(h4) = -a/A*(2*g*h4)/sqrt(2*g*h4+1e-3) + (1-gamma)*k/A*(u1+u1_e);
+end QuadTank;
+
+model QuadTank_MPC_Model
+    extends QuadTank;
+    parameter Real h1_ref = 10.0;
+    parameter Real h2_ref = 10.0;
+    parameter Real Q = 1.0;
+end QuadTank_MPC_Model;
+
+optimization QuadTank_MPC(objectiveIntegrand = Q*((h1-h1_ref)^2 + (h2-h2_ref)^2),
+                          startTime = 0.0, finalTime = 30.0)
+    extends QuadTank_MPC_Model(u1(min = 0, max = 10),
+                               u2(min = 0, max = 10),
+                               h1(min = 0, max = 20),
+                               h2(min = 0, max = 20),
+                               h3(min = 0, max = 20),
+                               h4(min = 0, max = 20));
+constraint
+    u1 + u1_e >= 0;
+    u2 + u2_e >= 0;
+end QuadTank_MPC;
+
+end QuadTank;

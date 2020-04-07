@@ -1,0 +1,1222 @@
+/*
+    Copyright (C) 2013 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect ExpandableConnectors {
+    
+    public class ExpandableConnectorSets {
+        
+        private Map<InstComponentDecl,ExpandableSet> map;
+        private Set<ExpandableSet> sets;
+        private java.util.List<Connection> connections;
+        private java.util.List<InstAccess> uses;
+        private boolean expansionDone;
+
+        
+        public ExpandableConnectorSets() {
+            map = new LinkedHashMap<>();
+            sets = new LinkedHashSet<>();
+            connections = new ArrayList<>();
+            uses = new ArrayList<>();
+            expansionDone = false;
+        }
+        
+        /**
+         * Calculate the components present in each expandable connector and apply connections 
+         * involving them.
+         */
+        public void elaborate(ConnectionSetManager csm) {
+            boolean ok = true;
+            for (ExpandableSet set : sets()) 
+                set.addNested();
+            for (ExpandableSet set : sets()) 
+                if (!set.expand())
+                    ok = false;
+            
+            if (ok) {
+                expansionDone = true;
+                for (Connection conn : connections) {
+                    conn.connect(csm);
+                }
+                for (InstComponentDecl icd : map.keySet()) {
+                    icd.buildConnectionSets(null, csm, true);
+                    icd.getInstComponentDecls().collectErrors(ErrorCheckType.GENERATED);
+                }
+                for (InstAccess use : uses) {
+                    use.flushAllRecursiveClearFinal();
+                    if (use.myInstComponentDecl().isUnknown()) {
+                        // TODO: Improve error message and move to new problem framework
+                        use.error("Using member of expandable connector is only allowed if the member is connected to in the connection set");
+                    }
+                }
+            }
+        }
+        
+        /**
+         * Add an expandable connector to sets.
+         */
+        public void addConnector(InstComponentDecl conn) {
+            setFor(conn);
+        }
+        
+        /**
+         * Add a use of a member of an expandable connector.
+         */
+        public void addUse(InstAccess use) {
+            uses.add(use);
+        }
+
+        /**
+         * Add information about a connection introducing a new component to an expandable connector.
+         */
+        public void addIntroducingConnection(InstAccess unknown, InstAccess known,
+                FAccess prefix, ConnectionEdge source) {
+            InstAccess expPart = unknown.findExpandableConnectorPart();
+            InstAccess unknownPart = expPart.getNextInstAccess();
+            if (expPart.combinedNdims() > 0) {
+                Indices knownInd = known.indices();
+                Indices expInd = expPart.combinedIndices();
+                Size size = known.size().contract(expInd.ndims(), 0);
+                for (Index i : expInd) {
+                    Index iKnown = knownInd.translate(i);
+                    Index iExp = expInd.translate(i);
+                    InstComponentDecl cellKnown = known.lookupWithIndex(iKnown);
+                    InstComponentDecl cellExp   = expPart.lookupAsPartWithIndex(iExp);
+                    addIntroducingConnectionForCell(unknown, unknownPart, cellKnown, known, cellExp, size);
+                }
+            } else {
+                InstComponentDecl expandable = expPart.findReferencedExpandableConnector();
+                addIntroducingConnectionForCell(unknown, unknownPart, 
+                        known.lookupEvaluatingIndices(), known, expandable, null);
+            }
+            connections.add(new Connection(prefix, source));
+       }
+
+        private void addIntroducingConnectionForCell(
+                InstAccess unknown, InstAccess unknownPart, InstComponentDecl knownComp, 
+                InstAccess known, InstComponentDecl expandable, Size knownSize) {
+            ExpandableSet set = setFor(expandable);
+            set.addMember(knownComp, known, unknown, unknownPart, knownSize);
+        }
+
+        /**
+         * Add information about a connection between two expandable connectors.
+         */
+        public void addSpanningConnection(InstComponentDecl leftComp, InstComponentDecl rightComp,
+                FAccess prefix, ConnectionEdge source) {
+            connectExpandableConnectors(leftComp, rightComp);
+            connections.add(new Connection(prefix, source));
+        }
+
+        /**
+         * Check if elaboration is already done.
+         */
+        public boolean isExpansionDone() {
+            return expansionDone;
+        }
+        
+        private void connectExpandableConnectors(InstComponentDecl leftComp, InstComponentDecl rightComp) {
+            if (!leftComp.isArray()) {
+                setFor(leftComp).mergeFor(rightComp);
+            }
+            
+            SortedSet<InstComponentDecl> rightChildren = rightComp.containedInstComponents();
+            for (InstComponentDecl leftChild : leftComp.containedInstComponents()) {
+                if (leftChild.isExpandableConnector() && rightChildren.contains(leftChild)) {
+                    InstComponentDecl rightChild = rightChildren.tailSet(leftChild).first();
+                    if (rightChild.isExpandableConnector())
+                        connectExpandableConnectors(leftChild, rightChild);
+                }
+            }
+        }
+        
+        /**
+         * Add a new binding to the map and the list of sets to process.
+         */
+        private void bind(InstComponentDecl conn, ExpandableSet set) {
+            map.put(conn, set);
+            sets.add(set);
+        }
+        
+        private ExpandableSet setFor(InstComponentDecl comp) {
+            InstComponentDecl org = comp.duplicateOriginal();
+            ExpandableSet set = map.get(org);
+            if (set == null) {
+                set = new ExpandableSet(org);
+            }
+            if (org != comp) {
+                set.addConnector(comp);
+            }
+            return set;
+        }
+
+        private Iterable<ExpandableSet> sets() {
+            return new GrowableSetIterable(sets);
+        }
+
+        private class Connection {
+            
+            public final FAccess prefix;
+            public final FConnectClause source;
+            private EvaluationValueCache values;
+            
+            public Connection(FAccess prefix, ConnectionEdge source) {
+                this.prefix = prefix;
+                this.source = (FConnectClause) source;
+                values = new EvaluationValueCache(this.source);
+            }
+            
+            public void connect(ConnectionSetManager csm) {
+                source.flushAllRecursiveClearFinal(); // Depends on FConnectClause not resetting is$Final
+                values.apply();
+                source.buildConnectionSets(prefix, csm, true);
+                values.reset();
+            }
+            
+            public String toString() {
+                return source.toString();
+            }
+            
+        }
+        
+        private class ExpandableSet {
+            
+            private Set<InstComponentDecl> connectors;
+            private Set<ExpandableSet> parentSets;
+            private Map<String,ConnectorMember> members;
+            private Map<ConnectorMember,Index> owningMembers;
+            private ExpandableSet replacement = null;
+            private boolean expanded;
+            private boolean nestedDone;
+            private boolean isOk;
+            
+            public ExpandableSet() {
+                connectors = new LinkedHashSet<>();
+                parentSets = new HashSet<>();
+                members = new HashMap<>();
+                owningMembers = new HashMap<>();
+                expanded = false;
+                nestedDone = false;
+                isOk = true;
+            }
+            
+            public ExpandableSet(InstComponentDecl connector) {
+                this();
+                addConnector(connector);
+            }
+            
+            public ExpandableSet(ConnectorMember member, Index i) {
+                this();
+                owningMembers.put(member, i);
+            }
+            
+            /**
+             * Calculate the components present in each expandable connector, if not already done.
+             * 
+             * @return  <code>false</code> if any errors were found
+             */
+            public boolean expand() {
+                if (!expanded) {
+                    expanded = true;
+                    for (ExpandableSet parentSet : parentSets()) {
+                        parentSet.expand();
+                    }
+                    
+                    ConnectorMember[] sorted = members.values().toArray(new ConnectorMember[members.size()]);
+                    Arrays.sort(sorted);
+                    for (ConnectorMember member : sorted) {
+                        isOk = member.check() && isOk;
+                    }
+                    if (isOk) { 
+                        for (InstComponentDecl conn : connectors()) {
+                            expandConnector(conn, sorted);
+                        }
+                    }
+                }
+                return isOk;
+            }
+
+            private Iterable<InstComponentDecl> connectors() {
+                return new GrowableSetIterable(connectors);
+            }
+
+            /**
+             * Add all nested expandable connector to their parent's sets.
+             */
+            public void addNested() {
+                if (!nestedDone && !members.isEmpty()) {
+                    nestedDone = true;
+                    for (InstComponentDecl conn : connectors) {
+                        InstComponentDecl p = conn.findExpandableAncestor();
+                        if (p != null) {
+                            InstComponentDecl c = conn.ancestorChild(p, conn);
+                            ExpandableSet set = setFor(p);
+                            set.addDeclared(c.name());
+                            set.addNested();
+                        }
+                    }
+                }
+            }
+            
+            /**
+             * Merge two sets of expandable connectors, keeping this one.
+             */
+            public void merge(ExpandableSet other) {
+                // TODO: Keep a record of who has references to the set, and update references 
+                //       on merge instead of using actual(). Maybe using a redirection object?
+                if (other == null || other == this)
+                    return;
+                
+                for (InstComponentDecl conn : other.connectors) {
+                    addConnector(conn);
+                }
+                other.replaceWith(this);
+                
+                parentSets().addAll(other.parentSets());
+                
+                for (ConnectorMember member : other.members.values()) {
+                    ConnectorMember local = members.get(member.name);
+                    if (local == null) {
+                        local = new ConnectorMember(member);
+                        local.addParentSet(this);
+                        members.put(local.name, local);
+                    } else {
+                        local.merge(member);
+                    }
+                    local.removeParentSet(other);
+                }
+                
+                for (Map.Entry<ConnectorMember,Index> entry : other.owningMembers.entrySet()) {
+                    ConnectorMember member = entry.getKey();
+                    Index i = entry.getValue();
+                    owningMembers.put(member, i);
+                    member.replaceSet(i, this);
+                }
+            }
+            
+            /**
+             * Add <code>comp</code> as a connector and merge any set for it.
+             */
+            public void mergeFor(InstComponentDecl comp) {
+                ExpandableSet other = map.get(comp);
+                if (other == null) {
+                    addConnector(comp);
+                } else {
+                    merge(other);
+                }
+            }
+            
+            private ExpandableSet actual() {
+                if (replacement == null) {
+                    return this;
+                } else {
+                    replacement = replacement.actual();
+                    return replacement;
+                }
+            }
+            
+            private void replaceWith(ExpandableSet other) {
+                replacement = other.actual();
+                // Don't process this set
+                expanded = true;
+                nestedDone = true;
+            }
+            
+            /**
+             * Add a member to the connectors of the set, possibly as expandable connector members 
+             * that members are recursively added to.
+             */
+            public void addMember(InstComponentDecl knownComp, InstAccess known, 
+                    InstAccess unknown, InstAccess unknownPart, Size sourceSize) {
+                String name = unknownPart.name();
+                ConnectorMember member = members.get(name);
+                if (unknownPart == unknown.getLastInstAccess()) {
+                    FArraySubscripts fas = unknownPart.hasFArraySubscripts() ? unknownPart.getFArraySubscripts() : null;
+                    if (member == null) {
+                        member = new ConnectorMember(name, knownComp, known, fas, sourceSize, unknownPart);
+                        members.put(name, member);
+                    } else {
+                        member.addConnection(knownComp, known, fas, sourceSize, unknownPart);
+                    }
+                } else {
+                    if (member == null) {
+                        // TODO: isn't size/fas/etc needed here?
+                        member = new ConnectorMember(name, unknown);
+                        members.put(name, member);
+                    }
+                    // TODO: what is sourceSize in this case? probably shouldn't just toss it
+                    Indices indices = unknownPart.accessIndices();
+                    for (Index i : indices) {
+                        member.set(i).addMember(knownComp, known, unknown, unknownPart.getNextInstAccess(), null);
+                    }
+                }
+                member.addParentSet(actual());
+            }
+            
+            /**
+             * Add a declared member to the connectors of the set.
+             * 
+             * This is only used to include nested expandable connectors.
+             */
+            public void addDeclared(String name) {
+                ConnectorMember member = members.get(name);
+                if (member == null) {
+                    members.put(name, new ConnectorMember(name, true));
+                }
+            }
+            
+            /**
+             * Add a duplicate version of the expandable connector.
+             * 
+             * All encountered duplicate versions are expanded.
+             */
+            public void addConnector(InstComponentDecl connector) {
+                connectors.add(connector);
+                bind(connector, this);
+            }
+            
+            /**
+             * Add another set as a parent to this one.
+             * 
+             * All parent sets will be expanded before this one.
+             */
+            public void addParentSet(ExpandableSet parentSet) {
+                parentSets.add(parentSet);
+            }
+
+            /**
+             * Remove another set from list of parents.
+             */
+            public void removeParentSet(ExpandableSet parentSet) {
+                parentSets.remove(parentSet);
+            }
+            
+            /**
+             * Get the list of sets that need to be expanded before this one, 
+             * updated for replacements.
+             */
+            private Set<ExpandableSet> parentSets() {
+                // TODO: Cluncy, update existing set instead
+                boolean replace = false;
+                for (ExpandableSet parent : parentSets) {
+                    replace |= parent.replacement != null;
+                }
+                if (replace) {
+                    Set<ExpandableSet> replacement = new HashSet<>();
+                    for (ExpandableSet parent : parentSets) {
+                        replacement.add(parent.actual());
+                    }
+                    parentSets = replacement;
+                }
+                return parentSets;
+            }
+            
+            /**
+             * Create a list with the components each connector in this set should have.
+             * 
+             * @param members  the members of this set, sorted by name
+             */
+            public void expandConnector(InstComponentDecl parent, ConnectorMember[] members) {
+                List<InstComponentDecl> memberList = new List<InstComponentDecl>();
+                memberList.setParent(parent); // Make sure inherited attributes work at once
+                InstComponentDecl[] templates = new InstComponentDecl[members.length];
+                int i = 0;
+                for (ConnectorMember member : members) {
+                    memberList.add(member.createInstComponent(parent));
+                    templates[i++] = member.template(parent);
+                }
+                // TODO: If there were declared expandable members, we should probably remove 
+                //       them from their sets after merging.
+                parent.expandConnector(memberList, templates);
+                i = 0;
+                for (ConnectorMember member : members) {
+                    member.connectExpandableMember(parent.getInstComponentDecl(i++));
+                }
+            }
+            
+            /**
+             * Check if the given expandable set describes a set of connectors that will contain 
+             * one of the connectors described by this set (directly or indirectly).
+             */
+            private boolean isOrAncestor(ExpandableSet other) {
+                return other == this || isOrAncestorHelper(other, new HashSet<ExpandableSet>());
+            }
+            
+            private boolean isOrAncestorHelper(ExpandableSet other, Set<ExpandableSet> visited) {
+                /* If we have already been here, we either have a loop among the ancestors, 
+                 * or a diamond pattern in the graph. Neither case means that there is a loop 
+                 * involving other.
+                 */
+                if (visited.add(this)) {
+                    for (ExpandableSet parent : parentSets) {
+                        if (parent == other || parent.isOrAncestorHelper(other, visited)) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+            
+            public String toString() {
+                StringBuilder buf = new StringBuilder("Connectors:");
+                for (InstComponentDecl c : connectors) {
+                    buf.append("\n  ");
+                    buf.append(c.qualifiedName());
+                }
+                buf.append("\nMembers:");
+                for (ConnectorMember m : members.values()) {
+                    buf.append("\n  ");
+                    buf.append(m.name);
+                }
+                return buf.toString();
+            }
+            
+            private class ConnectorMember implements Comparable<ConnectorMember> {
+                
+                public final String name;
+                private Map<Index,ExpandableSet> sets;
+                private java.util.List<Source> sources;
+                private java.util.List<InstAccess> nestledAccesses;
+                private InstComponentDecl template;
+                private Map<InstComponentDecl,InstComponentDecl> templateMap;
+                private FArraySubscripts subscripts;
+                private boolean error;
+                private boolean calculated;
+                private boolean isExpandable;
+                
+                public ConnectorMember(String name, boolean expandable) {
+                    this.name = name;
+                    sources = new ArrayList<Source>(4);
+                    nestledAccesses = new ArrayList<InstAccess>(2);
+                    template = null;
+                    templateMap = null;
+                    subscripts = null;
+                    calculated = false;
+                    error = false;
+                    sets = new HashMap<>();
+                    isExpandable = expandable;
+                }
+                
+                public ConnectorMember(String name, InstComponentDecl targetComp, 
+                        InstAccess target, FArraySubscripts fas, Size targetSize, InstAccess unknownPart) {
+                    this(name, false);
+                    addConnection(targetComp, target, fas, targetSize, unknownPart);
+                }
+                
+                public ConnectorMember(String name, InstAccess unknown) {
+                    this(name, true);
+                    nestledAccesses.add(unknown);
+                }
+                
+                public ConnectorMember(ConnectorMember other) {
+                    this(other.name, false);
+                    merge(other);
+                }
+                
+                public int compareTo(ConnectorMember other) {
+                    return name.compareTo(other.name);
+                }
+                
+                public void addConnection(InstComponentDecl targetComp, 
+                        InstAccess target, FArraySubscripts fas, Size targetSize, InstAccess unknownPart) {
+                    sources.add(new Source(targetComp, target, fas, targetSize));
+                    if (targetComp.isExpandableConnector()) {
+                        Indices indices = unknownPart.accessIndices();
+                        if (indices.ndims() == 0 && target.isArray()) {
+                            indices = target.indices(); // TODO: This is not correct if first part of unknown is an array, 
+                                                        // if so, some of the dimensions should be contracted, (use targetSize instead?)
+                        }
+                        for (Index i : indices) {
+                            Index ti = indices.translate(i);
+                            
+                            // TODO: This is not always correct, targetComp may already be specified.
+                            // Only specify if target is slice? Or if target is array?
+                            InstComponentDecl specified = targetComp.specify(ti);
+                            
+                            ExpandableSet otherSet = map.get(specified);
+                            if (otherSet == null) {
+                                set(i).addConnector(specified);
+                            } else {
+                                mergeSet(otherSet, i);
+                            }
+                        }
+                    }
+                }
+                
+                public void merge(ConnectorMember other) {
+                    if (isExpandable || other.isExpandable) {
+                        for (Index i : other.sets.keySet()) {
+                            mergeSet(other.sets.get(i), i);
+                        }
+                        nestledAccesses.addAll(other.nestledAccesses);
+                        isExpandable = true;
+                    }
+                    for (Source s : other.sources) {
+                        sources.add(new Source(s));
+                    }
+                }
+                
+                private void mergeSet(ExpandableSet otherSet, Index i) {
+                    ExpandableSet set = sets.put(i, otherSet);
+                    if (set != null) {
+                        otherSet.merge(set);
+                    }
+                    isExpandable = true;
+                }
+                
+                public ExpandableSet set(Index i) {
+                    ExpandableSet set = sets.get(i);
+                    if (set == null) {
+                        i = i.fix();
+                        set = new ExpandableSet(this, i);
+                        sets.put(i, set);
+                        isExpandable = true;
+                    }
+                    return set.actual();
+                }
+                
+                public void replaceSet(Index i, ExpandableSet newSet) {
+                    sets.put(i, newSet);
+                }
+                
+                public void addParentSet(ExpandableSet parentSet) {
+                    for (ExpandableSet set : sets.values()) {
+                        set.addParentSet(parentSet);
+                    }
+                }
+                
+                public void removeParentSet(ExpandableSet parentSet) {
+                    for (ExpandableSet set : sets.values()) {
+                        set.removeParentSet(parentSet);
+                    }
+                }
+                
+                /**
+                 * Check if all connections to this member are consistent.
+                 * 
+                 * @return  <code>false</code> if any errors were found
+                 */
+                public boolean check() {
+                    if (!calculated)
+                        calculateVariable();
+                    return !error;
+                }
+                
+                /**
+                 * Is this an array member?
+                 */
+                public boolean isArray() {
+                    return subscripts() != null && subscripts.ndims() > 0;
+                }
+                
+                public InstComponentDecl createInstComponent(InstComponentDecl parent) {
+                    InstComponentDecl tmpl = template(parent);
+                    InstComponentDecl res;
+                    if (tmpl.name().equals(name) && tmpl.isChildOf(parent)) {
+                        if (subscripts() != null) {
+                            tmpl.setLocalFArraySubscripts(subscripts());
+                        }
+                        res = tmpl;
+                    } else {
+                        SrcComponentDecl cd = tmpl.getSrcComponentDecl();
+                        res = tmpl.myInstClass().newInstComponentDeclCopy(
+                                name, subscripts(), cd, cd.getClassName());
+                    }
+                    return res;
+                    // TODO: handle input/output (or is that really needed?)
+                }
+                
+                public void connectExpandableMember(InstComponentDecl created) {
+                    if (isExpandable) {
+                        for (Source s : sources) {
+                            s.connectExpandableMember(created);
+                        }
+                        for (Index i : created.indices()) {
+                            set(i).mergeFor(created.arrayCell(i));
+                        }
+                    }
+                }
+                
+                private InstComponentDecl template(InstComponentDecl parent) {
+                    if (!calculated) {
+                        calculateVariable();
+                    }
+                    if (templateMap != null) {
+                        InstComponentDecl declared = templateMap.get(parent);
+                        if (declared != null) {
+                            return declared;
+                        }
+                    }
+                    return template;
+                }
+                
+                private FArraySubscripts subscripts() {
+                    if (!calculated)
+                        calculateVariable();
+                    return subscripts;
+                }
+                
+                private void calculateVariable() {
+                    error = false;
+                    
+                    // Check for recursive structure first.
+                    if (isExpandable) {
+                        for (Source src : sources) {
+                            if (!src.checkRecursion(ExpandableSet.this)) {
+                                error = true;
+                            }
+                        }
+                        if (error) {
+                            return;  // We risk infinite recursion if we continue
+                        }
+                    }
+                    
+                    // Collect instances of this member from declarations
+                    ArrayList<InstComponentDecl> declared = new ArrayList<InstComponentDecl>();
+                    Map<InstComponentDecl,InstComponentDecl> declaredMap = new HashMap<>();
+                    for (InstComponentDecl conn : connectors) {
+                        InstLookupResult<InstComponentDecl> res = conn.memberInstComponent(name);
+                        if (res.successful()) {
+                            InstComponentDecl decl = res.target();
+                            declared.add(decl);
+                            declaredMap.put(conn, decl);
+                        }
+                    }
+                    
+                    // Pick a variable to use as template
+                    ASTNode templateErrorNode = null;
+                    if (sources.isEmpty() && declared.isEmpty()) {
+                        error = true;
+                        // TODO: This is no longer compliance error, spec has changed.
+                        for (InstAccess nestledAccess : nestledAccesses)
+                            nestledAccess.compliance("Nested expandable connectors where some of the intermediate expandable connectors are neither connected to or declared are not supported");
+                    } else if (declared.isEmpty()) {
+                        template = sources.get(0).template();
+                        templateErrorNode = sources.get(0).errorNode();
+                    } else {
+                        template = declared.get(0);
+                        templateErrorNode = template;
+                        templateMap = declaredMap;
+                    }
+                    
+                    // Check types against template
+                    if (template != null && !template.checkAsExpandableMemberTemplate(templateErrorNode))
+                        error = true;
+                    for (Source src : sources)
+                        src.checkType(template);
+                    for (InstComponentDecl decl : declared) {
+                        if (!decl.connectableTypes(template)) {
+                            error = true;
+                            // TODO: Improve error message and move to new problem framework
+                            decl.error("Type of declared member of expandable connector does not match declarations in other expandable connectors in same connection set");
+                        }
+                    }
+                    
+                    // Calculate size
+                    SummedSize ss = new SummedSize();
+                    for (InstComponentDecl decl : declared)
+                        ss.updateFromDeclaration(decl);
+                    for (Source src : sources)
+                        src.collectSize(ss);
+                    Size s = ss.size;
+                    if (template != null && template.ndims() > template.localNdims()) {
+                        s = s.contract(0, template.ndims() - template.localNdims());
+                    }
+                    
+                    // Create subscripts for size
+                    if (s != Size.SCALAR && s != null) {
+                        subscripts = s.createFArrayExpSubscripts();
+                    }
+                    
+                    // Check against connections to non-existing members of non-expandable connectors
+                    if (!sources.isEmpty()) {
+                        for (ExpandableSet set : sets.values()) {
+                            if (set.connectors.isEmpty() && !set.members.isEmpty()) {
+                                for (ConnectorMember m : set.members.values()) {
+                                    error = !m.checkNonExisting(template) || error;
+                                }
+                            }
+                        }
+                    }
+                    // TODO: Also check for other confusion with non-expandable vs expandable
+                    
+                    // Check array index types. If there is a declaration they are checked in FExpSubscript.typeCheckAsIndex;
+                    if (declared.isEmpty()) {
+                        Source tmpl = null;
+                        for (Source src : sources) {
+                            if (tmpl == null)
+                                tmpl = src;
+                            if (!src.checkIndexType(tmpl))
+                                break;
+                        }
+                    }
+                    calculated = true;
+                }
+                
+                private boolean checkNonExisting(InstComponentDecl parentTemplate) {
+                    boolean res = true;
+                    InstComponentDecl myTemplate = (parentTemplate != null) ? parentTemplate.memberInstComponent(name).targetOrNull() : null;
+                    if (myTemplate == null) {
+                        for (Source s : sources) {
+                            // TODO: Improve error message and move to new problem framework
+                            s.errorNode().error("Can not connect to non-existing member of non-expandable connector in expandable connector");
+                        }
+                        res = false;
+                    }
+                    for (ExpandableSet set : sets.values()) {
+                        for (ConnectorMember m : set.members.values()) {
+                            res = m.checkNonExisting(myTemplate) && res;
+                        }
+                    }
+                    return res;
+                }
+                
+                public String toString() {
+                    return name + ": " + sources.toString();
+                }
+                
+                private class Source {
+                    
+                    private InstAccess targetAccess;
+                    private InstComponentDecl targetComp;
+                    private FArraySubscripts fas;
+                    private Indices localIndices;
+                    
+                    private boolean errorReported = false;
+                    private Size s;
+                    private boolean[] fixed;
+                    
+                    public Source(InstComponentDecl targetComponent, InstAccess targetAccess, 
+                            FArraySubscripts fas, Size targetSize) {
+                        this.targetAccess = targetAccess;
+                        this.targetComp = targetComponent;
+                        this.fas = fas;
+                        localIndices = (fas == null) ? null : Indices.createFromFas(fas);
+                        calculateSize(targetSize);
+                    }
+                    
+                    public Source(Source other) {
+                        this.targetAccess = other.targetAccess;
+                        this.targetComp   = other.targetComp;
+                        this.fas          = other.fas;
+                        this.localIndices = other.localIndices;
+                        this.s            = other.s;
+                        this.fixed        = other.fixed;
+                    }
+                    
+                    private void calculateSize(Size ts) {
+                        if (ts == null) {
+                            // Target size not given, calculate it
+                            ts = targetAccess.size();
+                        }
+                        if (fas != null) {
+                            MutableSize ms = new MutableSize(fas.ndims());
+                            fixed = new boolean[ms.ndims()];
+                            int tspos = 0;
+                            for (int i = 0; i < fixed.length; i++) {
+                                Subscript sub = fas.subscript(i);
+                                int len = (tspos < ts.ndims()) ? ts.get(tspos) : 1;
+                                if (!sub.calculateExpandableConnectorSize(ms, i, len)) 
+                                    localError();
+                                fixed[i] = sub.isColon();
+                                if (sub.ndims() > 0) 
+                                    tspos++;
+                            }
+                            if (tspos != ts.ndims())
+                                localError();
+                            s = ms;
+                        } else {
+                            s = (ts == Size.SCALAR) ? ts : ts.mutableClone();
+                            fixed = new boolean[s.ndims()];
+                            Arrays.fill(fixed, true);
+                        }
+                    }
+                    
+                    public void collectSize(SummedSize ss) {
+                        if (errorReported)
+                            return;
+                        
+                        // Merge with other sizes in set
+                        if (!ss.merge(s, fixed))
+                            mismatchError();
+                    }
+                    
+                    public void connectExpandableMember(InstComponentDecl member) {
+                        if (targetAccess.isArray()) {
+                            InstAccess targ = targetAccess.getLastInstAccess();
+                            Indices memberInd = (localIndices == null) ?
+                                Indices.create(subscripts.declarationSize()) :
+                                localIndices;
+                            Indices targetInd = targ.indices();
+                            for (Index[] i : new ParallelIterable<Index>(new Index[2], memberInd, targetInd)) {
+                                Index memberI = memberInd.translate(i[0]);
+                                Index targetI = targetInd.translate(i[1]);
+                                InstComponentDecl memberCell = member.arrayCell(memberI.iterator());
+                                InstComponentDecl targetCell = targetComp.arrayCell(targetI.iterator());
+                                setFor(targetCell).mergeFor(memberCell);
+                            }
+                        } else {
+                            if (localIndices != null) {
+                                Index memberI = localIndices.translate(Index.NULL);
+                                member = member.arrayCell(memberI.iterator());
+                            }
+                            setFor(targetComp).mergeFor(member);
+                        }
+                    }
+                    
+                    public void checkType(InstComponentDecl template) {
+                        if (!targetAccess.myInstComponentDecl().connectableTypes(template))
+                            // TODO: Improve error message and move to new problem framework
+                            error("Type of component introduced to external connector does not match other connections to same name in connection set or component declared in connector");
+                    }
+                    
+                    public boolean checkIndexType(Source other) {
+                        if (fas == null || other.fas == null)
+                            return true;
+                        for (int dim = 0; dim < Math.min(fas.ndims(), other.fas.ndims()); dim++) {
+                            if (!fas.subscript(dim).type().scalarType().typeCompatible(
+                                    other.fas.subscript(dim).type().scalarType())) {
+                                // TODO: Improve error message and move to new problem framework
+                                error("Array index type of component introduced to external connector does not match other"
+                                        + " connections to same name in connection set");
+                                return false;
+                            }
+                        }
+                        return true;
+                    }
+                    
+                    public boolean checkRecursion(ExpandableSet parent) {
+                        ExpandableSet ancestor = map.get(targetAccess.myInstComponentDecl());
+                        if (ancestor != null && parent.isOrAncestor(ancestor)) {
+                            // TODO: Move to new problem framework
+                            error("Connect introduces a copy of " + targetAccess + 
+                                  " into a connector that is (possibly indirectly) connected back to " + targetAccess + 
+                                  ". This creates an infinite recursive structure, and is not allowed:\n    " + 
+                                  errorNode());
+                            return false;
+                        }
+                        return true;
+                    }
+                    
+                    private void mismatchError() {
+                        // TODO: Improve error message and move to new problem framework
+                        error("Size introduced for external connector member does not match other connections to same name in connection set or component declared in connector");
+                    }
+                    
+                    private void localError() {
+                        // TODO: Improve error message and move to new problem framework
+                        error("Can not match size of connector to access introducing member in external connector");
+                    }
+                    
+                    private void error(String err) {
+                        error = true;
+                        if (!errorReported) {
+                            errorReported = true;
+                            errorNode().error(err);
+                        }
+                    }
+                    
+                    public InstComponentDecl template() {
+                        return targetComp;
+                    }
+                    
+                    public ASTNode errorNode() {
+                        return targetAccess.getParent();
+                    }
+                    
+                    public String toString() {
+                        return targetAccess.toString() + ((fas != null) ? (" (" + fas + ")") : "");
+                    }
+                    
+                }
+                
+                private class SummedSize {
+                    
+                    public Size size = null;
+                    public boolean[] fixed = null;
+                    
+                    public void updateFromDeclaration(InstComponentDecl icd) {
+                        if (!mergeKnownFixed(icd.size())) {
+                            error = true;
+                            // TODO: Improve error message and move to new problem framework
+                            icd.error("Size of declared member of expandable connector does not match declarations in other expandable connectors in same connection set");
+                        }
+                    }
+    
+                    private boolean mergeKnownFixed(Size s) {
+                        if (s != Size.SCALAR)
+                            s = s.mutableClone();
+                        boolean[] sFixed = new boolean[s.ndims()];
+                        for (int i = 0; i < sFixed.length; i++)
+                            sFixed[i] = s.hasValue(i);
+                        return merge(s, sFixed);
+                    }
+    
+                    public boolean merge(Size s, boolean[] sFixed) {
+                        if (size == null) {
+                            size = s;
+                            fixed = sFixed;
+                        } else if (sFixed.length != fixed.length) {
+                            return false;
+                        } else {
+                            for (int i = 0; i < fixed.length; i++) {
+                                int diff = s.get(i) - size.get(i);
+                                if (sFixed[i]) {
+                                    if (diff == 0) {
+                                        fixed[i] = true;
+                                    } else if (diff < 0) {
+                                        return false;
+                                    }
+                                } 
+                                if (diff > 0) {
+                                    if (fixed[i]) {
+                                        return false;
+                                    } else {
+                                        fixed[i] = sFixed[i];
+                                        ((MutableSize) size).set(i, s, i);
+                                    }
+                                }
+                            }
+                        }
+                        return true;
+                    }
+                    
+                }
+        }
+
+        }
+        
+    }
+    
+    public void InstComponentDecl.expandConnector(List<InstComponentDecl> members, InstComponentDecl[] templates) {
+        throw new UnsupportedOperationException();
+    }
+    
+    public void InstExpandableConnectorDecl.expandConnector(List<InstComponentDecl> members, InstComponentDecl[] templates) {
+        expandedMembers = members;
+        this.templates = templates;
+        flushAll();
+    }
+    
+    public void InstReplacingExpandableConnectorDecl.expandConnector(List<InstComponentDecl> members, InstComponentDecl[] templates) {
+        expandedMembers = members;
+        this.templates = templates;
+        flushAll();
+    }
+    
+    public void InstArrayExpandableConnector.expandConnector(List<InstComponentDecl> members, InstComponentDecl[] templates) {
+        expandedMembers = members;
+        this.templates = templates;
+        flushAll();
+    }
+    
+    
+    /**
+     * Find the closest ancestor component that is an expandable connector, if any.
+     */
+    inh InstComponentDecl InstComponentDecl.findExpandableAncestor();
+    eq InstComponentDecl.getChild().findExpandableAncestor() = 
+        (isExpandableConnector() && !isArray()) ? this : findExpandableAncestor();
+    eq InstClassDecl.getChild().findExpandableAncestor()     = null;
+    eq InstRoot.getChild().findExpandableAncestor()          = null;
+    eq Root.getChild().findExpandableAncestor()              = null;
+    
+    /**
+     * Find the ancestor component that is a direct child of the given component.
+     * 
+     * @param a  the ancestor to find child of
+     * @param c  the child being considered, always use <code>this</code>
+     */
+    inh InstComponentDecl InstComponentDecl.ancestorChild(InstComponentDecl a, InstComponentDecl c);
+    eq InstComponentDecl.getChild().ancestorChild(InstComponentDecl a, InstComponentDecl c) = 
+        (this == a) ? c : ancestorChild(a, this);
+    eq InstClassDecl.getChild().ancestorChild(InstComponentDecl a, InstComponentDecl c)     = null;
+    eq InstRoot.getChild().ancestorChild(InstComponentDecl a, InstComponentDecl c)          = null;
+    eq Root.getChild().ancestorChild(InstComponentDecl a, InstComponentDecl c)              = null;
+    
+
+    private static final BinaryOperation<CValue> FExpSubscript.INT_MAX_OP = new BinaryOperation<CValue>() {
+        public CValue op(CValue a, CValue b) { 
+            return (a.intValue() >= b.intValue()) ? a : b;
+        }
+    };
+    
+    public abstract boolean FSubscript.calculateExpandableConnectorSize(MutableSize s, int i, int len);
+    
+    public boolean FExpSubscript.calculateExpandableConnectorSize(MutableSize s, int i, int len) {
+        CValue val = ceval();
+        if (ndims() > 0) 
+            val = val.reduce(INT_MAX_OP, new CValueInteger(1));
+        s.set(i, val.intValue());
+        return ndims() == 0 || size().get(0) == len;
+    }
+    
+    public boolean FIntegerSubscript.calculateExpandableConnectorSize(MutableSize s, int i, int len) {
+        s.set(i, getValue());
+        return true;
+    }
+    
+    public boolean IntegerSubscript.calculateExpandableConnectorSize(MutableSize s, int i, int len) {
+        s.set(i, value);
+        return true;
+    }
+    
+    public boolean FColonSubscript.calculateExpandableConnectorSize(MutableSize s, int i, int len) {
+        s.set(i, len);
+        return true;
+    }
+    
+    /**
+     * Check that this component would be allowed as a member of an expandable connector.
+     * 
+     * @param errorNode  node to report any errors found on
+     * @return  <code>true</code> if the component is OK
+     */
+    public boolean InstComponentDecl.checkAsExpandableMemberTemplate(ASTNode errorNode) {
+        for (InstComponentDecl child : getInstComponentDecls()) {
+            if (child.isExpandableConnector()) {
+                errorNode.compliance("Expandable connectors containing a non-expandable connector component, that in turn contains an expandable connector, is not supported");
+                return false;
+            } else if (!child.checkAsExpandableMemberTemplate(errorNode))
+                return false;
+        }
+        return true;
+    }
+    
+    public boolean InstExpandableConnectorDecl.checkAsExpandableMemberTemplate(ASTNode errorNode) {
+        return true;
+    }
+    
+    public boolean InstReplacingExpandableConnectorDecl.checkAsExpandableMemberTemplate(ASTNode errorNode) {
+        return true;
+    }
+    
+    public boolean InstArrayExpandableConnector.checkAsExpandableMemberTemplate(ASTNode errorNode) {
+        return true;
+    }
+    
+    public void InstAccess.buildConnectionSets(FAccess prefix, ConnectionSetManager csm, boolean connect) {
+        if (isExpandableConnectorPart())
+            csm.getExpandable().addUse(this);
+    }
+    
+    public void InstExpandableConnectorDecl.buildConnectionSets(FAccess prefix, ConnectionSetManager csm, boolean connect) {
+        buildConnectionSetsForExpandableConnector(prefix, csm, connect);
+    }
+    
+    public void InstReplacingExpandableConnectorDecl.buildConnectionSets(FAccess prefix, ConnectionSetManager csm, boolean connect) {
+        buildConnectionSetsForExpandableConnector(prefix, csm, connect);
+    }
+    
+    public void InstArrayExpandableConnector.buildConnectionSets(FAccess prefix, ConnectionSetManager csm, boolean connect) {
+        buildConnectionSetsForExpandableConnector(prefix, csm, connect);
+    }
+    
+    public void InstComponentDecl.buildConnectionSetsForExpandableConnector(FAccess prefix, ConnectionSetManager csm, boolean connect) {
+        if (useInFlattening()) {
+            if (!isArray()) {
+                if (csm.isExpandableConnectorsDone()) {
+                    for (InstComponentDecl icd : getInstComponentDecls()) {
+                        if (icd.isArray() && !icd.isExpandableConnector()) {
+                            icd.addExpandableArrayMembersTopLevel(csm);
+                        }
+                    }
+                } else {
+                    csm.getExpandable().addConnector(this);
+                }
+            }
+            super.buildConnectionSets(prefix, csm, connect);
+        }
+    }
+    
+    /**
+     * Add all variables to connection set manager, to get "= 0" equations if they are not connected.
+     */
+    public void InstComponentDecl.addExpandableArrayMembersTopLevel(ConnectionSetManager csm) {
+        for (InstComponentDecl icd : allInstComponentDecls()) {
+            icd.addExpandableArrayMembers(csm);
+        }
+    }
+    
+    public void InstPrimitive.addExpandableArrayMembersTopLevel(ConnectionSetManager csm) {
+        if (!variability().parameterOrLess()) {
+            for (Index i : indices()) {
+                csm.addExpandableArrayMember(this, getFAccess(i));
+            }
+        }
+    }
+    
+    /**
+     * Add all variables to connection set manager, to get "= 0" equations if they are not connected.
+     */
+    public void InstComponentDecl.addExpandableArrayMembers(ConnectionSetManager csm) {
+        for (InstComponentDecl icd : allInstComponentDecls()) {
+            icd.addExpandableArrayMembers(csm);
+        }
+    }
+    
+    public void InstPrimitive.addExpandableArrayMembers(ConnectionSetManager csm) {
+        if (!variability().parameterOrLess()) {
+            csm.addExpandableArrayMember(this, getFAccess(Index.NULL));
+        }
+    }
+    
+    
+    syn boolean InstAccess.isExpandableConnectorPart() = false;
+    eq InstDot.isExpandableConnectorPart() {
+        InstComponentDecl conn = findReferencedExpandableConnector();
+        return conn != null && conn != getLastInstAccess().findReferencedExpandableConnector();
+    }
+    
+    syn InstComponentDecl InstAccess.findReferencedExpandableConnector() = null;
+    eq InstComponentAccess.findReferencedExpandableConnector() {
+        InstComponentDecl icd = myInstComponentDecl();
+        return icd.isExpandableConnector() ? icd : null;
+    }
+    eq InstComponentArrayAccess.findReferencedExpandableConnector() {
+        InstComponentDecl icd = lookupArrayElement(myInstComponentDecl());
+        return (icd != null && icd.isExpandableConnector()) ? icd : null;
+    }
+    eq InstDot.findReferencedExpandableConnector() {
+        for (int i = getNumInstAccess() - 1; i >= 0; i--) {
+            InstComponentDecl conn = getInstAccess(i).findReferencedExpandableConnector();
+            if (conn != null)
+                return conn;
+        }
+        return null;
+    }
+    
+    syn InstAccess InstAccess.findExpandableConnectorPart() = null;
+    eq InstDot.findExpandableConnectorPart() {
+        for (int i = getNumInstAccess() - 2; i >= 0; i--) 
+            if (getInstAccess(i).findReferencedExpandableConnector() != null)
+                return getInstAccess(i);
+        return null;
+    }
+    
+    // We need to make sure lookups work properly after flush
+    public void InstAmbiguousAccess.flushAllRecursiveClearFinal() {
+        super.flushAllRecursiveClearFinal();
+        rewritten = false;
+        is$Final = false;
+    }
+
+    public void InstAmbiguousArrayAccess.flushAllRecursiveClearFinal() {
+        super.flushAllRecursiveClearFinal();
+        rewritten = false;
+        is$Final = false;
+    }
+
+}

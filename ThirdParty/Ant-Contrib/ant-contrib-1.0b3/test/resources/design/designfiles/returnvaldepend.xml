@@ -1,0 +1,6 @@
+<design>
+
+<package name="dummy" package="mod.dummy"/>
+<package name="client" package="mod.returnvaldepend"/>
+
+</design>

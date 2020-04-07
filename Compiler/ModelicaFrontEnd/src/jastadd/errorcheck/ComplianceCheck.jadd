@@ -1,0 +1,394 @@
+/*
+    Copyright (C) 2010 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import org.jmodelica.util.ErrorCheckType;
+import org.jmodelica.util.problemHandling.SimpleProblemProducer;
+import org.jmodelica.util.problemHandling.SimpleWarningProducer;
+import org.jmodelica.util.problemHandling.SimpleErrorProducer;
+import org.jmodelica.util.problemHandling.ComplianceFMUOnlyProducer;
+
+aspect ComplianceCheck {
+
+    /**
+     * Check for code that is not allowed in its current context.
+     * 
+     * Examples would be checking that classes follow the requirements of 
+     * their restriction. 
+     */
+    public void ASTNode.complianceCheck(ErrorCheckType checkType) {}
+
+    public abstract class ErrorChecker {
+        public static class ComplianceChecker extends ErrorChecker {
+            public ComplianceChecker() {
+                super("ComplianceCheck");
+            }
+
+            @Override
+            public void check(ASTNode node, ErrorCheckType checkType) {
+                node.complianceCheck(checkType);
+            }
+        }
+    }
+
+    private static ErrorChecker ASTNode.COMPLIANCE_CHECKER = addErrorChecker(new ErrorChecker.ComplianceChecker());
+
+    public static final SimpleProblemProducer ASTNode.ONLY_FMU_IF_STATEMENTS =
+            new ComplianceFMUOnlyProducer("ONLY_FMU_IF_STATEMENTS", "Using if statements is");
+
+    public void FIfWhenClause.complianceCheck(ErrorCheckType checkType) {
+        super.complianceCheck(checkType);
+        if (!getTest().variability().parameterOrLess())
+            ONLY_FMU_IF_STATEMENTS.invoke(this);
+    }
+
+    public static final SimpleProblemProducer ASTNode.ONLY_FMU_WHILE_STATEMENTS =
+            new ComplianceFMUOnlyProducer("ONLY_FMU_WHILE_STATEMENTS", "Using while statements is");
+
+    public void FWhileStmt.complianceCheck(ErrorCheckType checkType) {
+        super.complianceCheck(checkType);
+        if (!getTest().variability().parameterOrLess())
+            ONLY_FMU_WHILE_STATEMENTS.invoke(this);
+    }
+
+    public static final SimpleProblemProducer ASTNode.UNSUPPORTED_EVENT_GENERATING_EXPRESSION_IN_WHILE_STATEMENT =
+            new SimpleErrorProducer("UNSUPPORTED_EVENT_GENERATING_EXPRESSION_IN_WHILE_STATEMENT", ProblemKind.COMPLIANCE, "Event generating expressions are not supported in while statements");
+
+    public void FRelExp.complianceCheck(ErrorCheckType checkType) {
+        super.complianceCheck(checkType);
+        if (!inFunction() && generatesEvent() && inWhile())
+            UNSUPPORTED_EVENT_GENERATING_EXPRESSION_IN_WHILE_STATEMENT.invoke(this);
+    }
+
+    public static final SimpleProblemProducer ASTNode.ONLY_FMU_FUNCTION_LIKE_OPERATOR =
+            new ComplianceFMUOnlyProducer("ONLY_FMU_FUNCTION_LIKE_OPERATOR", "The %s() function-like operator is");
+
+    public void FEventGenExp.complianceCheck(ErrorCheckType checkType) {
+        super.complianceCheck(checkType);
+        ONLY_FMU_FUNCTION_LIKE_OPERATOR.invoke(this, name());
+        if (!inFunction() && generatesEvent() && inWhile())
+            UNSUPPORTED_EVENT_GENERATING_EXPRESSION_IN_WHILE_STATEMENT.invoke(this);
+    }
+
+    inh boolean FRelExp.inWhile();
+    inh boolean FEventGenExp.inWhile();
+    eq FWhileStmt.getChild().inWhile() = true;
+    eq Root.getChild().inWhile() = false;
+    eq FAlgorithm.getChild().inWhile() = false;
+	
+    public static final SimpleProblemProducer ASTNode.ONLY_FMU_NON_FIXED_RECORD_ARRAY_INDEX =
+            new ComplianceFMUOnlyProducer("ONLY_FMU_NON_FIXED_RECORD_ARRAY_INDEX", "Using arrays of records with indices of higher than parameter variability is");
+    public static final SimpleProblemProducer ASTNode.EXTERNAL_OBJECT_CONSTANT_IN_COMPOSITE =
+            new SimpleErrorProducer("EXTERNAL_OBJECT_CONSTANT_IN_COMPOSITE", ProblemKind.COMPLIANCE, "Access to external object constants in arrays or records is not supported");
+    
+
+    public void InstAccess.complianceCheck(ErrorCheckType checkType) {
+        super.complianceCheck(checkType);
+        InstComponentDecl decl = myInstComponentDecl();
+        if (decl.isRecord() && hasFArraySubscripts() && inFunction() && 
+                !getFArraySubscripts().variability().parameterOrLess()) {
+            ONLY_FMU_NON_FIXED_RECORD_ARRAY_INDEX.invoke(this);
+        }
+        if (decl.isExternalObject() && decl.isConstant() && (decl.inRecord() || decl.isArray())) {
+            EXTERNAL_OBJECT_CONSTANT_IN_COMPOSITE.invoke(this);
+        }
+    }
+
+    public static final SimpleProblemProducer ASTNode.ONLY_FMU_WHEN_EQUATIONS =
+            new ComplianceFMUOnlyProducer("ONLY_FMU_WHEN_EQUATIONS", "When equations are");
+
+    public void FWhenEquation.complianceCheck(ErrorCheckType checkType) {
+        ONLY_FMU_WHEN_EQUATIONS.invoke(this);
+    }
+
+    @Deprecated
+    public void ASTNode.complianceOnlyFMU(String message) {
+        if (!myOptions().getBooleanOption("generate_ode"))
+            compliance(message + " currently only supported when compiling FMUs");
+    }
+
+    public static final SimpleProblemProducer ASTNode.UNSUPPORTED_EQUATION_TYPE =
+            new SimpleErrorProducer("UNSUPPORTED_EQUATION_TYPE", ProblemKind.COMPLIANCE, "Unsupported equation type");
+
+    public void FUnsupportedEquation.collectErrors(ErrorCheckType checkType) {
+        UNSUPPORTED_EQUATION_TYPE.invoke(this);
+    }
+
+    public static final SimpleProblemProducer ASTNode.UNSUPPORTED_EXPRESSION_TYPE =
+            new SimpleErrorProducer("UNSUPPORTED_EXPRESSION_TYPE", ProblemKind.COMPLIANCE, "Unsupported expression type");
+
+    public void FUnsupportedExp.collectErrors(ErrorCheckType checkType) {
+        UNSUPPORTED_EXPRESSION_TYPE.invoke(this);
+    }
+
+    public static final SimpleProblemProducer ASTNode.UNSUPPORTED_FUNCTION_LIKE_OPERATOR =
+            new SimpleErrorProducer("UNSUPPORTED_FUNCTION_LIKE_OPERATOR", ProblemKind.COMPLIANCE, "The %s() function-like operator is not supported");
+
+    public void FUnsupportedBuiltIn.complianceCheck(ErrorCheckType checkType) {
+        UNSUPPORTED_FUNCTION_LIKE_OPERATOR.invoke(this, getName());
+    }
+
+    public void FSampleExp.complianceCheck(ErrorCheckType checkType) {
+        ONLY_FMU_FUNCTION_LIKE_OPERATOR.invoke(this, "sample");
+    }
+
+    public void InstPreExp.complianceCheck(ErrorCheckType checkType) {
+        ONLY_FMU_FUNCTION_LIKE_OPERATOR.invoke(this, "pre");
+    }
+
+    public void FEdgeExp.complianceCheck(ErrorCheckType checkType) {
+        ONLY_FMU_FUNCTION_LIKE_OPERATOR.invoke(this, "edge");
+    }
+
+    public void FChangeExp.complianceCheck(ErrorCheckType checkType) {
+        ONLY_FMU_FUNCTION_LIKE_OPERATOR.invoke(this, "change");
+    }
+
+    public void FInitialExp.complianceCheck(ErrorCheckType checkType) {
+        ONLY_FMU_FUNCTION_LIKE_OPERATOR.invoke(this, "initial");
+    }
+
+    public void FSignExp.complianceCheck(ErrorCheckType checkType) {
+        ONLY_FMU_FUNCTION_LIKE_OPERATOR.invoke(this, "sign");
+    }
+
+    public void FSemiLinearExp.complianceCheck(ErrorCheckType checkType) {
+        ONLY_FMU_FUNCTION_LIKE_OPERATOR.invoke(this, "semiLinear");
+    }
+
+    public static final SimpleProblemProducer ASTNode.DEPRECATED_DECOUPLE =
+            new SimpleWarningProducer("DEPRECATED_DECOUPLE", ProblemKind.SEMANTIC, "The Subtask.decouple() function-like operator is removed as of Modelica version 3.2r2");
+
+    public void FDecouple.complianceCheck(ErrorCheckType checkType) {
+        DEPRECATED_DECOUPLE.invoke(this);
+    }
+
+    public static final SimpleProblemProducer ASTNode.DEPRECATED_CARDINALITY =
+            new SimpleWarningProducer("DEPRECATED_CARDINALITY", ProblemKind.SEMANTIC, "The cardinality() function-like operator is deprecated, and will be removed in a future version of Modelica");
+
+    public static final SimpleProblemProducer ASTNode.INCORRECT_USE_OF_CARDINALITY =
+            new SimpleErrorProducer("INCORRECT_USE_OF_CARDINALITY", ProblemKind.COMPLIANCE, "The cardinality() function-like operator is only supported in asserts and in the tests of if clauses that do not contain connect()");
+
+    public void FCardinality.complianceCheck(ErrorCheckType checkType) {
+        DEPRECATED_CARDINALITY.invoke(this);
+        if (!inAssert() && !inIfTestWithoutConnect()) 
+            INCORRECT_USE_OF_CARDINALITY.invoke(this);
+    }
+
+    public void FDelayExp.complianceCheck(ErrorCheckType checkType) {
+        ONLY_FMU_FUNCTION_LIKE_OPERATOR.invoke(this, "delay");
+    }
+    
+    public static final SimpleProblemProducer ASTNode.INCORRECT_USE_OF_SPATIAL_DISTRIBUTION =
+            new SimpleErrorProducer("INCORRECT_USE_OF_SPATIAL_DISTRIBUTION", ProblemKind.COMPLIANCE, "The spatialDistribution() function-like operator is not supported vectorized in function call equations");
+    
+    public void FSpatialDistExp.complianceCheck(ErrorCheckType checkType) {
+        ONLY_FMU_FUNCTION_LIKE_OPERATOR.invoke(this, "spatialDistribution");
+        FAbstractEquation equation = myFEquation();
+        if (isArray() && equation != null && equation instanceof FFunctionCallEquation) {
+            INCORRECT_USE_OF_SPATIAL_DISTRIBUTION.invoke(this);
+        }
+    }
+
+	inh boolean FCardinality.inAssert();
+	eq FAssert.getChild().inAssert()  = true;
+	eq Root.getChild().inAssert()     = false;
+	eq InstNode.getChild().inAssert() = false;
+	
+	inh boolean FCardinality.inIfTestWithoutConnect();
+	eq FIfEquation.getTest().inIfTestWithoutConnect() = !containsConnect();
+	eq Root.getChild().inIfTestWithoutConnect()       = false;
+	eq InstNode.getChild().inIfTestWithoutConnect()   = false;
+	
+	syn boolean FAbstractEquation.containsConnect() = false;
+	eq FConnectClause.containsConnect()             = true;
+	eq FForClauseE.containsConnect()                = containsConnect(getFAbstractEquations());
+	eq FIfWhenElseEquation.containsConnect()        = containsConnect(getFAbstractEquations());
+	eq FIfWhenEquation.containsConnect()            = 
+		super.containsConnect() || (hasElse() && getElse().containsConnect());
+	
+	public static boolean FAbstractEquation.containsConnect(List<FAbstractEquation> eqns) {
+		for (FAbstractEquation eqn : eqns)
+			if (eqn.containsConnect())
+				return true;
+		return false;
+	}
+
+    public static final SimpleProblemProducer ASTNode.UNSUPPORTED_IN_FUNCTION_UNKNOWN_SIZE_OPERATOR =
+            new SimpleErrorProducer("UNSUPPORTED_IN_FUNCTION_UNKNOWN_SIZE_OPERATOR", ProblemKind.COMPLIANCE, "Unknown sizes in operator %s is not supported in functions");
+
+    public void FUnaryBuiltIn.complianceCheck(ErrorCheckType checkType) {
+        super.complianceCheck(checkType);
+        if (!unknownSizeSupported() && inFunction() && getFExp().size().isUnknown()) {
+            UNSUPPORTED_IN_FUNCTION_UNKNOWN_SIZE_OPERATOR.invoke(this, name() + "()");
+        }
+    }
+
+	syn boolean FUnaryBuiltIn.unknownSizeSupported() = true;
+	eq FSymmetric.unknownSizeSupported()             = false;
+
+    public static final SimpleProblemProducer ASTNode.UNSUPPORTED_NON_FIXED_FOR_INDEX =
+            new SimpleErrorProducer("UNSUPPORTED_NON_FIXED_FOR_INDEX", ProblemKind.COMPLIANCE, "For index with higher than parameter variability is not supported in equations and algorithms");
+
+    public void InstForIndexWithExp.complianceCheck(ErrorCheckType checkType) {
+        super.complianceCheck(checkType);
+        if (!getFExp().variability().parameterOrLess() && !inFunction()) {
+            UNSUPPORTED_NON_FIXED_FOR_INDEX.invoke(this);
+        }
+    }
+
+    public void InstForIndex.contentCheck(ErrorCheckType checkType) {
+    }
+
+    public void FPowExp.complianceCheck(ErrorCheckType checkType) {
+        super.complianceCheck(checkType);
+        if (inFunction() && getLeft().size().isUnknown()) {
+            UNSUPPORTED_IN_FUNCTION_UNKNOWN_SIZE_OPERATOR.invoke(this, "^");
+        }
+    }
+
+    public static final SimpleProblemProducer ASTNode.UNSUPPORTED_FUNCTION_LIKE_OPERATOR_IGNORED =
+            new SimpleWarningProducer("UNSUPPORTED_FUNCTION_LIKE_OPERATOR_IGNORED", ProblemKind.COMPLIANCE, "The %s() function-like operator is not supported, and is currently ignored");
+
+    public void FIgnoredBuiltIn.complianceCheck(ErrorCheckType checkType) {
+        UNSUPPORTED_FUNCTION_LIKE_OPERATOR_IGNORED.invoke(this, name());
+    }
+
+    public static final SimpleProblemProducer ASTNode.UNSUPPORTED_FUNCTION_LIKE_OPERATOR_EVAL_FALSE =
+            new SimpleWarningProducer("UNSUPPORTED_FUNCTION_LIKE_OPERATOR_EVAL_FALSE", ProblemKind.COMPLIANCE, "The %s() function-like operator is not supported, and is currently evaluated to false");
+
+    public void FTerminalExp.complianceCheck(ErrorCheckType checkType) {
+        UNSUPPORTED_FUNCTION_LIKE_OPERATOR_EVAL_FALSE.invoke(this, name());
+    }
+
+    public void FTerminate.complianceCheck(ErrorCheckType checkType) {
+        ONLY_FMU_FUNCTION_LIKE_OPERATOR.invoke(this, "terminate");
+    }
+
+    public void FReinit.complianceCheck(ErrorCheckType checkType) {
+        ONLY_FMU_FUNCTION_LIKE_OPERATOR.invoke(this, "reinit");
+    }
+
+    public static final SimpleProblemProducer ASTNode.UNSUPPORTED_NON_FIXED_STRING_ARGUMENT =
+            new SimpleErrorProducer("UNSUPPORTED_NON_FIXED_STRING_ARGUMENT", ProblemKind.COMPLIANCE, "%s with higher than parameter variability is not supported");
+
+    public void FStringExp.complianceCheck(ErrorCheckType checkType) {
+        super.complianceCheck(checkType);
+        boolean func = inFunction();
+        if (!func && hasMinimumLength()) {
+            getMinimumLength().markAsStructuralParameter(checkType);
+            if (!getMinimumLength().variability().parameterOrLess())
+                UNSUPPORTED_NON_FIXED_STRING_ARGUMENT.invoke(getMinimumLength(), "minimumLength");
+        }
+        if (!func && hasLeftJustified()) {
+            getLeftJustified().markAsStructuralParameter(checkType);
+           if (!getLeftJustified().variability().parameterOrLess())
+               UNSUPPORTED_NON_FIXED_STRING_ARGUMENT.invoke(getLeftJustified(), "leftJustified");
+        }
+        if (!func && hasSignificantDigits()) {
+            getSignificantDigits().markAsStructuralParameter(checkType);
+            if (!getSignificantDigits().variability().parameterOrLess())
+                UNSUPPORTED_NON_FIXED_STRING_ARGUMENT.invoke(getSignificantDigits(), "significantDigits");
+       }
+    }
+
+    public static final SimpleProblemProducer ASTNode.ONLY_FMU_INTEGER_VARIABLES =
+            new ComplianceFMUOnlyProducer("ONLY_FMU_INTEGER_VARIABLES", "Integer variables of discrete variability is");
+    public static final SimpleProblemProducer ASTNode.ONLY_FMU_BOOLEAN_VARIABLES =
+            new ComplianceFMUOnlyProducer("ONLY_FMU_BOOLEAN_VARIABLES", "Boolean variables of discrete variability is");
+
+    public void InstPrimitive.complianceCheck(ErrorCheckType checkType) {
+        super.complianceCheck(checkType);
+        if (!myOptions().getBooleanOption("generate_ode")) {
+            if (isInteger() && !variability().parameterOrLess() && !inFunction())
+                ONLY_FMU_INTEGER_VARIABLES.invoke(this);
+            if (isBoolean() && !variability().parameterOrLess())
+                ONLY_FMU_BOOLEAN_VARIABLES.invoke(this);
+        }
+    }
+
+    public static final SimpleProblemProducer ASTNode.ONLY_FMU_ENUMERATION_VARIABLES =
+            new ComplianceFMUOnlyProducer("ONLY_FMU_ENUMERATION_VARIABLES", "Enumeration variables of discrete variability is");
+
+    public void InstEnum.complianceCheck(ErrorCheckType checkType) {
+        super.complianceCheck(checkType);
+        if (!variability().parameterOrLess())
+            ONLY_FMU_ENUMERATION_VARIABLES.invoke(this);
+    }
+
+    public static final SimpleProblemProducer ASTNode.ONLY_FMU_FUNCTIONAL_INPUT =
+            new ComplianceFMUOnlyProducer("ONLY_FMU_FUNCTIONAL_INPUT", "Using functional input arguments is");
+    public static final SimpleProblemProducer ASTNode.UNSUPPORTED_FUNCTIONAL_INPUT_FROM_FUNCTION_DEFAULT =
+            new SimpleErrorProducer("UNSUPPORTED_FUNCTIONAL_INPUT_FROM_FUNCTION_DEFAULT", ProblemKind.COMPLIANCE, "Creating functional input arguments from functions with default input arguments is currently not supported");
+    public static final SimpleProblemProducer ASTNode.UNSUPPORTED_FUNCTIONAL_INPUT_COMPOSITE =
+            new SimpleErrorProducer("UNSUPPORTED_FUNCTIONAL_INPUT_COMPOSITE", ProblemKind.COMPLIANCE, "Functional input arguments with record/array inputs/outputs is currently not supported");
+    public static final SimpleProblemProducer ASTNode.UNSUPPORTED_FUNCTIONAL_INPUT_DEFAULT =
+            new SimpleErrorProducer("UNSUPPORTED_FUNCTIONAL_INPUT_DEFAULT", ProblemKind.COMPLIANCE, "Default values of functional input arguments is currently not supported");
+    public static final SimpleProblemProducer ASTNode.UNSUPPORTED_FUNCTIONAL_ARRAY_INPUT =
+            new SimpleErrorProducer("UNSUPPORTED_FUNCTIONAL_ARRAY_INPUT", ProblemKind.COMPLIANCE, "Arrays of functional input arguments is currently not supported");
+
+    public void InstPartialFunction.complianceCheck(ErrorCheckType checkType) {
+        ONLY_FMU_FUNCTIONAL_INPUT.invoke(this);
+        for (InstComponentDecl icd : myInputs()) {
+            if (icd.hasBindingExp()) {
+                UNSUPPORTED_FUNCTIONAL_INPUT_FROM_FUNCTION_DEFAULT.invoke(this);
+                break;
+            }
+        }
+        for (InstComponentDecl icd : myInputs()) {
+            if (icd.isComposite()) {
+                UNSUPPORTED_FUNCTIONAL_INPUT_COMPOSITE.invoke(this);
+                break;
+            }
+        }
+        for (InstComponentDecl icd : myOutputs()) {
+            if (icd.isComposite()) {
+                UNSUPPORTED_FUNCTIONAL_INPUT_COMPOSITE.invoke(this);
+                break;
+            }
+        }
+        if (hasBindingExp()) {
+            UNSUPPORTED_FUNCTIONAL_INPUT_DEFAULT.invoke(this);
+        }
+        if (isArray())
+            UNSUPPORTED_FUNCTIONAL_ARRAY_INPUT.invoke(this);
+    }
+
+    public static final SimpleProblemProducer ASTNode.UNSUPPORTED_EXTERNAL_OBJECT_CONSTRUCTORS =
+            new SimpleErrorProducer("UNSUPPORTED_EXTERNAL_OBJECT_CONSTRUCTORS", ProblemKind.COMPLIANCE, "Constructors for external objects is not supported in functions");
+
+    public void InstFunctionCall.complianceCheck(ErrorCheckType checkType) {
+        if (isConstructorCall() && isBound() && inFunction()) {
+            UNSUPPORTED_EXTERNAL_OBJECT_CONSTRUCTORS.invoke(this);
+        }
+    }
+    
+    public static final SimpleProblemProducer ASTNode.UNSUPPORTED_EXTERNAL_FUNCTION_RECORD_RETURN_VALUE =
+            new SimpleErrorProducer("UNSUPPORTED_EXTERNAL_FUNCTION_RECORD_RETURN_VALUE", ProblemKind.COMPLIANCE, "Using records as return value from external functions is not supported");
+
+    public void FExternalStmt.complianceCheck(ErrorCheckType checkType) {
+        getFExternalLanguage().complianceCheck(checkType, this);
+    }
+    
+    public void FExternalLanguage.complianceCheck(ErrorCheckType checkType, FExternalStmt stmt) {}
+    public void FCExternalLanguage.complianceCheck(ErrorCheckType checkType, FExternalStmt stmt) {
+        if (stmt.hasReturnVar() && stmt.getReturnVar().type().isRecord()) {
+            UNSUPPORTED_EXTERNAL_FUNCTION_RECORD_RETURN_VALUE.invoke(stmt);
+        }
+    }
+    
+
+    
+}

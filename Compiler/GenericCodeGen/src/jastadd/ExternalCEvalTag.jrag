@@ -1,0 +1,81 @@
+/*
+    Copyright (C) 2009-2017 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+/**
+ * Base class for tags used in constant evaluation of external functions
+ */
+public abstract class ExternalCEvalTag extends AbstractTag {
+
+    protected FClass fClass;
+    protected FExternalStmt ext;
+    protected CodeGenContext cgc;
+    protected Map<String,String> tempMap;
+
+    /**
+     * Default constructor.
+     * 
+     * @param name Tag name.
+     * @param myGenerator The tag's generator.
+     * @param fClass An FClass object used as a basis in the code generation.
+     */
+    public ExternalCEvalTag(String name, AbstractGenerator myGenerator, FClass fc) {
+        super(name, myGenerator);
+        this.fClass = fc;
+        this.ext = null;
+        this.cgc = null;
+        this.tempMap = null;
+    }
+    
+    public void setExt(FExternalStmt ext, CodeGenContext cgc, Map<String,String> tempMap) {
+        this.ext = ext;
+        this.cgc = cgc;
+        this.tempMap = tempMap;
+    }
+    
+    protected  void instantiateTags(Map<String,AbstractTag> map) {
+        instantiateTags(getClass(), map, this, myGenerator, fClass);
+    }
+    
+    /* Used when unit testing. Temp names will accumulate over all tests */
+    private static final Map<String,String> unitTempMap = new HashMap<String,String>();
+    
+    public  void generate(CodeStream str) {
+        if (ext == null) {
+            CodeGenContext unitCgc = new CodeGenContext().createProxy();
+            for (FExternalStmt ext : fClass.myExternals()) {
+                if (!ext.isConstructorStmt() && !ext.isDestructorStmt()) {
+                    generate_wrap(str, ext, unitCgc, unitTempMap);
+                }
+            }
+        } else {
+            generate_wrap(str, ext, cgc, tempMap);
+        }
+    }
+    
+    public void generate_wrap(CodeStream str, FExternalStmt ext, CodeGenContext cgc,
+            Map<String,String> tempMap) {
+
+        CodePrinter p = ASTNode.printer_C;
+        String indent = p.indent("");
+        ext.setCodeGenContext(cgc);
+        generate(p, str, indent, ext, cgc, tempMap);
+        ext.setCodeGenContext(null);
+    }
+    
+    public abstract void generate(CodePrinter p, CodeStream str, String indent, FExternalStmt ext,
+            CodeGenContext cgc, Map<String,String> tempMap);
+}
+

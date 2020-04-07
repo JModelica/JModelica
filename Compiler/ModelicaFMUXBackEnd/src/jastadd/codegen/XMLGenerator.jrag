@@ -1,0 +1,823 @@
+
+/*
+Copyright (C) 2009 Modelon AB
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, version 3 of the License.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+/** \file XMLGenerator.java
+*  XMLGenerator class.
+*/
+
+
+import java.io.PrintStream;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
+import java.util.Stack;
+
+
+/**
+ * A generator class for XML code generation which takes a model described by
+ * <FClass> and provides an XML document for the meta-data in the model. Uses a
+ * template for the static general structure of tags and an internal class
+ * <TagGenerator> for the parts of the XML that are dynamic, that is, may vary
+ * depending on the contents of the underlying model.
+ * 
+ * @see AbstractGenerator
+ * 
+ */
+public class XMLGenerator extends GenericXMLGenerator {
+	
+    public static final Creator CREATOR = new Creator()
+    {
+        public XMLGenerator create(Printer expPrinter, char escapeCharacter, FClass fclass) {
+            return new XMLGenerator(expPrinter, escapeCharacter, fclass);
+        }
+    };
+
+	/**
+	 * Constructor.
+	 * 
+	 * @param expPrinter Printer object used to generate code for expressions.
+	 * @param escapeCharacter Escape characters used to decode tags.
+	 * @param fclass An FClass object used as a basis for the code generation.
+	 */
+	public XMLGenerator(Printer expPrinter, char escapeCharacter,
+			FClass fclass) {
+		super(expPrinter,escapeCharacter, fclass);
+	}
+	
+	
+    /**
+     * Internal class used to generate the model root attributes.
+     * 
+     * @see DAETag
+     */
+    public class DAETag_XML_rootAttributes extends DAETag {
+
+        public DAETag_XML_rootAttributes(AbstractGenerator myGenerator, FClass fclass) {
+            super("XML_rootAttributes", myGenerator, fclass);
+        }
+
+        @Override
+        public void generate(CodeStream genPrinter) {
+            generateAttribute("fmiVersion", "1.0", genPrinter);
+            generateAttribute("modelName", fclass.name(), genPrinter);
+            generateAttribute("modelIdentifier", fclass.nameUnderscore(), genPrinter);
+            generateAttribute("guid", fclass.guidManager().getGuidToken(), genPrinter);
+            generateAttribute("generationTool", fclass.guidManager().getGenerationToolToken(), genPrinter);
+            // Todays date for now
+            generateAttribute("generationDateAndTime", fclass.guidManager().getDateToken(), genPrinter);
+            generateAttribute("variableNamingConvention", "structured", genPrinter);
+            generateAttribute("numberOfContinuousStates", fclass.numDifferentiatedRealVariables(), genPrinter);
+            if (fclass.getDAEStructuredBLT() == null)
+                // Only generating init DAE
+                generateAttribute("numberOfEventIndicators", fclass.numEventIndicators() + fclass.numInitialEventIndicators(), genPrinter);
+            else
+                generateAttribute("numberOfEventIndicators", fclass.numEventIndicators(), genPrinter);
+        }
+    }
+
+    /**
+     * Internal class used to generate roots attributes of the XML document.
+     * 
+     * @see DAETag
+     */
+    public class DAETag_XML_namespaces extends DAETag {
+
+        public DAETag_XML_namespaces(AbstractGenerator myGenerator, FClass fclass) {
+            super("XML_namespaces", myGenerator, fclass);
+        }
+
+        @Override
+        public void generate(CodeStream genPrinter) {
+            //XML standard namespace
+            generateAttribute("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance", genPrinter);
+            //extensions' namespaces definitions
+            generateAttribute("xmlns:exp", "https://svn.jmodelica.org/trunk/XML/daeExpressions.xsd", genPrinter);
+            generateAttribute("xmlns:equ", "https://svn.jmodelica.org/trunk/XML/daeEquations.xsd", genPrinter);
+            generateAttribute("xmlns:fun", "https://svn.jmodelica.org/trunk/XML/daeFunctions.xsd", genPrinter);
+            generateAttribute("xmlns:opt", "https://svn.jmodelica.org/trunk/XML/daeOptimization.xsd", genPrinter);
+        }
+    }
+
+    /**
+     * Internal class used to generate the unit definitions tag.
+     * 
+     * @see DAETag
+     */
+    public class DAETag_XML_unitDefinitions extends DAETag {
+
+        public DAETag_XML_unitDefinitions(AbstractGenerator myGenerator, FClass fclass) {
+            super("XML_unitDefinitions", myGenerator, fclass);
+        }
+
+        @Override
+        public void generate(CodeStream genPrinter) {
+            // extract all units and beloning unit definitions
+            Map<String, Set<String>> map = new LinkedHashMap<String, Set<String>>();
+            for (FVariable var : fclass.allVariables()) {
+                if (!var.isFRealVariable()) {
+                    continue;
+                }
+                FRealVariable realVar = var.asFRealVariable();
+                if(realVar.unitAttributeSet() && realVar.displayUnitAttributeSet()) {
+                    String attribute = realVar.unitAttribute();
+                    Set<String> defs = map.get(attribute);
+                    if (defs == null) {
+                        defs = new LinkedHashSet<String>();
+                        map.put(attribute, defs);
+                    }
+                    defs.add(realVar.displayUnitAttribute());
+                }
+            }
+            
+            //generate code if any units defined
+            if (!map.isEmpty()) {
+                generateOpenTag("UnitDefinitions", genPrinter);
+                for (Map.Entry<String, Set<String>> entry : map.entrySet()) {
+                    String unit = entry.getKey();
+                    Set<String> defs = entry.getValue();
+                    generateTagStart("BaseUnit", genPrinter);
+                    generateAttribute("unit", unit, genPrinter);
+                    generateOpenEnd(genPrinter);
+                    for (String def : defs) {
+                        generateTagStart("DisplayUnitDefinition", genPrinter);
+                        generateAttribute("displayUnit", def, genPrinter);
+                        generateAttribute("gain", "1", genPrinter);
+                        generateAttribute("offset", "0", genPrinter);
+                        generateClosedEnd(genPrinter);
+                    }
+                    generateClosing("BaseUnit", genPrinter);
+                }
+                generateClosing("UnitDefinitions", genPrinter);
+            }
+        }
+    }
+
+    /**
+     * Internal class used to generate the type definitions tag.
+     * 
+     * @see DAETag
+     */
+    public class DAETag_XML_typeDefinitions extends DAETag {
+
+        public DAETag_XML_typeDefinitions(AbstractGenerator myGenerator, FClass fclass) {
+            super("XML_typeDefinitions", myGenerator, fclass);
+        }
+
+        @Override
+        public void generate(CodeStream genPrinter) {
+            if (fclass.getNumFEnumDecl() > 0) {
+                generateOpenTag("TypeDefinitions", genPrinter);
+                for (FEnumDecl enumdecl: fclass.getFEnumDecls()) {
+                    //name
+                    generateTagStart("Type", genPrinter);
+                    generateAttribute("name", enumdecl.name(), genPrinter);
+                    //description
+                    if (enumdecl.hasFStringComment()) {
+                        generateAttribute("description", enumdecl.getFStringComment().getComment(), genPrinter);
+                    }
+                    // close Type-element
+                    generateOpenEnd(genPrinter);
+                    
+                    // Enumeration type
+                    generateTagStart("EnumerationType", genPrinter);
+                    // TODO: add support for quantity attribute on type
+                    //min
+                    generateAttribute("min", "1", genPrinter);
+                    //max
+                    generateAttribute("max", enumdecl.numEnumLiterals(), genPrinter);
+                    generateOpenEnd(genPrinter);
+                    
+                    //Items
+                    for (FEnumLiteral literal : enumdecl.enumLiterals()) {
+                        generateTagStart("Item", genPrinter);
+                        generateAttribute("name", literal.name(), genPrinter);
+                        if (literal.hasFStringComment()) {
+                            generateAttribute("description", literal.getFStringComment().getComment(), genPrinter);
+                        }
+                        generateClosedEnd(genPrinter);
+                    }
+                    generateClosing("EnumerationType", genPrinter);
+                    generateClosing("Type", genPrinter);
+                }
+                generateClosing("TypeDefinitions", genPrinter);
+            }
+        }
+    }
+
+    /**
+     * Internal class used to generate the default experiment tag.
+     * 
+     * @see DAETag
+     */
+    public class DAETag_XML_defaultExperiment extends DAETag {
+
+        public DAETag_XML_defaultExperiment(AbstractGenerator myGenerator, FClass fclass) {
+            super("XML_defaultExperiment", myGenerator, fclass);
+        }
+
+        @Override
+        public void generate(CodeStream genPrinter) {
+            FClass.Experiment e = fclass.experiment;
+            if (e != null) {
+                generateTagStart("DefaultExperiment", genPrinter);
+                if (e.hasStart) {
+                    generateAttribute("startTime", e.start, genPrinter);
+                }
+                if (e.hasStop) {
+                    generateAttribute("stopTime", e.stop, genPrinter);
+                }
+                if (e.hasTolerance) {
+                    generateAttribute("tolerance", e.tolerance, genPrinter);
+                }
+                generateClosedEnd(genPrinter);
+            }
+        }
+    }
+
+
+    /**
+     * Internal class used to generate the model variables tags.
+     * 
+     * The model variables tags may vary in number and content. Therefore 
+     * the template file can not be used for this part of the XML. Instead, 
+     * all model variable tags are generated dynamically using this tag class.
+     * 
+     * @see DAETag
+     */
+    public class DAETag_XML_modelVariables extends DAETag {
+
+        public DAETag_XML_modelVariables(AbstractGenerator myGenerator, FClass fclass) {
+            super("XML_variables", myGenerator, fclass);
+        }
+
+        @Override
+        public void generate(CodeStream genPrinter) {
+            // get and sort all FVariables
+            ArrayList<FVariable> variables = new ArrayList<FVariable>(fclass.allVariables());
+            Collections.sort(variables, new VariableNameComparator());
+            
+            for (FVariable variable : variables) {	
+                if (variable.shouldGenerateXMLVariable()) {
+                    generateTagStart("ScalarVariable", genPrinter);
+                    generateAttribute("name", variable.name(), genPrinter);
+                    generateAttribute("valueReference", variable.valueReference(), genPrinter);
+                    if (variable.hasFStringComment()) {
+                        generateAttribute("description", variable.getFStringComment().getComment(), genPrinter);
+                    }
+                    generateAttribute("variability", variable.variability_XML(), genPrinter);
+                    generateAttribute("causality", variable.causality_XML(), genPrinter);
+                    generateAttribute("alias", variable.alias_XML(), genPrinter);
+                    generateOpenEnd(genPrinter);
+                    
+                    variable.genDecl_XML(XMLGenerator.this, genPrinter);
+                    
+                    //direct dependency - not supported
+                    if (variable.isOutput()) {
+                        generateOpenTag("DirectDependency", genPrinter);
+                        for (FVariable dv : variable.dependsOn()) {
+                            if (dv.isInput()) {
+                                generateOneLineTag("Name", dv.name(), genPrinter);
+                            }
+                        }
+                        generateClosing("DirectDependency", genPrinter);
+                    }
+                    
+                    if (fclass.myOptions().getBooleanOption("generate_xml_equations")){
+                        //qualified name
+                        generateOpenTag("QualifiedName", genPrinter);
+                        variable.getFAccess().prettyPrint_XML(genPrinter,"\t\t\t");
+                        generateClosing("QualifiedName", genPrinter);
+                    }
+                    
+                    if (!fclass.myOptions().getBooleanOption("generate_fmi_me_xml")) {
+                        //is linear?
+                        addLinearInfo(genPrinter, variable);
+                        
+                        //variable category
+                        generateOneLineTag("VariableCategory", variable.category_XML(), genPrinter);
+                    }
+                    generateClosing("ScalarVariable", genPrinter);
+                }
+            }
+        }
+    }
+
+    /**
+     * Helper that prints start and final attributes to the xml stream. This
+     * is used by several subclasses when doing genDecl_XML().
+     */
+    protected void genStartAndFixedAttribute_XML(FVariable var, CodeStream str) {
+        FExp e_start = null;
+        Boolean isFixed;
+        
+        if (var.fixedAttributeSet()) {
+            isFixed = var.fixedAttributeExp().ceval().booleanValue();
+        } else {
+            isFixed = false; //The default value.
+        }
+        
+        if (!isFixed) {
+            boolean startGenerated = false;
+            if (var.useBindingExpAsStart()) 
+                e_start = var.getBindingExp();
+            else if (var.startAttributeSet() && !var.isDependentParameter())
+                e_start = var.startAttributeExp();
+            else if (var.isInput())
+                e_start = var.createStartAttributeExp();
+            
+            if (!var.myOptions().getBooleanOption("generate_xml_equations") && e_start != null && !e_start.isConstantExp())
+                e_start = null;
+            if (e_start != null) {
+                generateAttribute("start", var.type().convert(e_start.ceval()).xmlValue(), str);
+                startGenerated = true;
+            }
+            
+            if (startGenerated && !var.fixedAttribute()) {
+                //Start is generated and fixed equals false => generate this.
+                generateAttribute("fixed", "false", str);
+            }
+        }
+    }
+
+    /**
+     * Helper method generating linear variable tag such that it can be overridden in 
+     * OptimicaXMLVariableGenerator.
+     */
+    protected void addLinearInfo(CodeStream genPrinter, FVariable variable){
+        //isLinear
+        generateOneLineTag("isLinear", variable.isLinear(), genPrinter);
+    }
+
+    /**
+    * Helper method generating all real attributes.
+    */
+    public void addRealAttributes(CodeStream str, FRealVariable var) {
+        // quantity
+        if(var.quantityAttributeSet()) {
+            generateAttribute("quantity", var.quantity_XML(), str);
+        }
+        // unit
+        if(var.unitAttributeSet()) {
+            generateAttribute("unit", var.unit_XML(), str);
+        }
+        // default display unit
+        if(var.displayUnitAttributeSet()) {
+            generateAttribute("displayUnit", var.displayUnit_XML(), str);
+        }
+        // relativeQuantity
+        generateAttribute("relativeQuantity", "false", str);
+        
+        // min
+        if(var.minAttributeSet()) {
+            generateAttribute("min", var.minAttribute(), str);
+        }
+        // max
+        if(var.maxAttributeSet()) {
+            generateAttribute("max", var.maxAttribute(), str);
+        }
+        // nominal
+        if(var.nominalAttributeSet()) {
+            generateAttribute("nominal", var.nominalAttribute(), str);
+        }
+        // start and fixed
+        genStartAndFixedAttribute_XML(var, str);
+    }
+
+    /**
+     * Helper method generating all integer attributes.
+     */
+    protected void addIntegerAttributes(CodeStream str, FIntegerVariable var) {
+        // quantity
+        if(var.quantityAttributeSet()) {
+            generateAttribute("quantity", var.quantity_XML(), str);
+        }
+        // min
+        if(var.minAttributeSet()) {
+            generateAttribute("min", var.minAttribute(), str);
+        }
+        // max
+        if(var.maxAttributeSet()) {
+            generateAttribute("max", var.maxAttribute(), str);
+        }
+        // start and fixed
+        genStartAndFixedAttribute_XML(var, str);
+    }
+
+    /*
+     * Helper method generating all integer attributes.
+     */
+    protected void addEnumAttributes(CodeStream str, FEnumVariable var) {
+        // declaredType
+        generateAttribute("declaredType", var.myFEnumDecl().name(), str);
+        
+        //quantity
+        if(var.quantityAttributeSet()) {
+            generateAttribute("quantity", var.quantity_XML(), str);
+        }
+        // min
+        if(var.minAttributeSet()) {
+            generateAttribute("min", var.minAttribute(), str);
+        }
+        // max
+        if(var.maxAttributeSet()) {
+            generateAttribute("max", var.maxAttribute(), str);
+        }
+        // start and fixed
+        genStartAndFixedAttribute_XML(var, str);
+	}
+
+    /**
+     * Helper method generating all boolean attributes.
+     */
+    protected void addBooleanAttributes(CodeStream str, FBooleanVariable var) {
+        //start and fixed attribute
+        genStartAndFixedAttribute_XML(var, str);
+    }
+
+    /**
+     * Helper class generating all string attributes.
+     */
+    protected void addStringAttributes(CodeStream str, FStringVariable var) {
+        //start and fixed attribute
+        genStartAndFixedAttribute_XML(var, str);
+    }
+
+	/**
+	 * Internal class used to generate the tags for parameters binding equations.
+	 * 
+	 * @see DAETag
+	 */
+	public class DAETag_XML_bindingEquations extends DAETag {
+		
+		public DAETag_XML_bindingEquations(AbstractGenerator myGenerator, FClass fclass) {
+			super("XML_bindingEquations", myGenerator, fclass);
+		}
+		
+		/*
+		 * (non-Javadoc)
+		 * @see org.jmodelica.codegen.AbstractTag#generate(java.io.PrintStream)
+		 */
+		public void generate(CodeStream genPrinter) {
+			Boolean generateEqu = fclass.myOptions().getBooleanOption("generate_xml_equations");
+			if(generateEqu) {
+				genPrinter.println("<equ:BindingEquations>");			
+			
+				for(FVariable variable:fclass.independentParameters()){
+					if(variable.hasBindingExp()){
+						FExp expression = variable.getBindingExp();
+						genPrinter.println("\t\t<equ:BindingEquation>");
+						genPrinter.print("\t\t\t<equ:Parameter>");
+						variable.getFAccess().prettyPrint_XML(genPrinter,"\t\t\t");
+						genPrinter.println("</equ:Parameter>");
+						genPrinter.println("\t\t\t<equ:BindingExp>");
+						expression.prettyPrint_XML(genPrinter,"\t\t\t\t");
+						genPrinter.println("\t\t\t</equ:BindingExp>");
+						genPrinter.println("\t\t</equ:BindingEquation>");
+					}
+				}
+		
+				for(FVariable variable:fclass.dependentParameters()){
+					if(variable.hasBindingExp() || variable.hasParameterEquation()){
+						FExp expression = null;
+						if (variable.hasBindingExp()) {
+							expression = variable.getBindingExp();
+						} else {
+							expression = ((FEquation)variable.parameterEquation()).getRight();
+						}
+				
+						genPrinter.println("\t\t<equ:BindingEquation>");
+						genPrinter.print("\t\t\t<equ:Parameter>");
+						variable.getFAccess().prettyPrint_XML(genPrinter,"\t\t\t");
+						genPrinter.println("</equ:Parameter>");
+						genPrinter.println("\t\t\t<equ:BindingExp>");
+						expression.prettyPrint_XML(genPrinter,"\t\t\t\t");
+						genPrinter.println("\t\t\t</equ:BindingExp>");
+						genPrinter.println("\t\t</equ:BindingEquation>");
+					}
+				}
+			
+				genPrinter.println("\t</equ:BindingEquations>");
+			}
+		}
+	}
+	
+	
+	
+	/**
+	 * Internal class used to generate the tags for dynamic equations.
+	 * 
+	 * @see DAETag
+	 */
+	public class DAETag_XML_equations extends DAETag {
+		
+		public DAETag_XML_equations(AbstractGenerator myGenerator, FClass fclass) {
+			super("XML_Equations", myGenerator, fclass);
+		}
+		
+		/*
+		 * (non-Javadoc)
+		 * @see org.jmodelica.codegen.AbstractTag#generate(java.io.PrintStream)
+		 */
+		public void generate(CodeStream genPrinter) {
+			Boolean generateEqu = fclass.myOptions().getBooleanOption("generate_xml_equations");
+			if(generateEqu){
+				genPrinter.println("<equ:DynamicEquations>");			
+				for(FAbstractEquation e : fclass.equations())
+					e.prettyPrint_XML(genPrinter,"\t\t");								
+				genPrinter.println("\t</equ:DynamicEquations>");
+			}
+		}
+	}
+	
+
+	/**
+	 * Internal class used to generate the tags for initial equations.
+	 * 
+	 * @see DAETag
+	 */
+	public class DAETag_XML_initialEquations extends DAETag {
+		
+		public DAETag_XML_initialEquations(AbstractGenerator myGenerator, FClass fclass) {
+			super("XML_initialEquations", myGenerator, fclass);
+		}
+		
+		/*
+		 * (non-Javadoc)
+		 * @see org.jmodelica.codegen.AbstractTag#generate(java.io.PrintStream)
+		 */
+		public void generate(CodeStream genPrinter) {
+			Boolean generateEqu = fclass.myOptions().getBooleanOption("generate_xml_equations");
+			if(generateEqu) {
+				genPrinter.println("<equ:InitialEquations>");			
+				for(FAbstractEquation e : fclass.initialEquations())
+					e.prettyPrint_XML(genPrinter,"\t\t");								
+				genPrinter.println("\t</equ:InitialEquations>");
+			}
+		}
+	}
+	
+	/**
+	 * Internal class used to generate the tags for optimization problems
+	 * 
+	 * @see DAETag
+	 */
+	public class DAETag_XML_Optimization extends DAETag {
+		
+		public DAETag_XML_Optimization(AbstractGenerator myGenerator, FClass fclass) {
+			super("XML_Optimization", myGenerator, fclass);
+		}
+		
+		/*
+		 * (non-Javadoc)
+		 * @see org.jmodelica.codegen.AbstractTag#generate(java.io.PrintStream)
+		 */
+		public void generate(CodeStream genPrinter) {
+			//do nothing
+		}
+		
+		
+	}
+	
+	
+	/**
+	 * Internal class used to generate the tags for user-defined functions declaration.
+	 * 
+	 * @see DAETag
+	 */
+	public class DAETag_XML_functions extends DAETag {
+		
+		public DAETag_XML_functions(AbstractGenerator myGenerator, FClass fclass) {
+			super("XML_Functions", myGenerator, fclass);
+		}
+		
+		/*
+		 * (non-Javadoc)
+		 * @see org.jmodelica.codegen.AbstractTag#generate(java.io.PrintStream)
+		 */
+		public void generate(CodeStream genPrinter) {
+			Boolean generateEqu = fclass.myOptions().getBooleanOption("generate_xml_equations");
+			if(generateEqu) {
+				genPrinter.println("<fun:FunctionsList>");			
+				for(FFunctionDecl f : fclass.getFFunctionDeclList())
+					f.prettyPrint_XML(genPrinter,"\t\t");								
+				genPrinter.println("\t</fun:FunctionsList>");
+			}
+		}
+	}
+	
+    /**
+     * The name of the root tag to use if no template file is given, not 
+     * supported for this generator.
+     */
+    protected String root() {
+    	return null;
+    }
+}
+
+/**
+ * {@link Comparator} for comparison of two {@link FVariable}s.
+ */
+public class VariableNameComparator implements Comparator<FVariable> {
+
+    @Override
+    public int compare(FVariable variable1, FVariable variable2) {
+        char[] name1 = variable1.getFAccessNoTransform().name().toCharArray();
+        char[] name2 = variable2.getFAccessNoTransform().name().toCharArray();
+
+        int length1 = name1.length;
+        int length2 = name2.length;
+        int minLength = Math.min(length1, length2);
+
+        for (int i = 0; i < minLength; ++i) {
+            int cmp = 0;
+            char char1 = name1[i];
+
+            cmp = char1 - name2[i];
+            if (cmp != 0) {
+                return cmp;
+            }
+
+            if (!Character.isAlphabetic(char1)) {
+                if(char1 == '[') {
+                    ++i;
+                }
+
+                cmp = compareNumbers(name1, name2, i);
+                if (cmp != 0) {
+                    return cmp;
+                }
+            }
+        }
+
+        return length1 - length2;
+    }
+
+    /**
+     * Compares the numeric values of two numbers represented as character arrays.
+     *
+     * @param string1
+     *          A string with a number to compare.
+     * @param string2
+     *          The string with a number to compare {@code string1} to.
+     * @param pos
+     *          The starting position of the numbers. Assumed to be the same for both
+     *          {@code string1} and {@code string2}.
+     */
+    private int compareNumbers(char[] string1, char[] string2, int pos) {
+        int cmp = 0;
+
+        java.util.List<Character> number1 = getNumber(string1, pos);
+        java.util.List<Character> number2 = getNumber(string2, pos);
+
+        cmp = number1.size() - number2.size();
+        if (cmp != 0) {
+            return cmp;
+        }
+
+        for (int i = 0; i < number1.size(); ++i) {
+            cmp = number1.get(i) - number2.get(i);
+            if (cmp != 0) {
+                return cmp;
+            }
+        }
+        return cmp;
+    }
+
+    /**
+     * Retrieves a number from a character array as a list of characters.
+     *
+     * @param string
+     *          The character array from which to retrieve a number.
+     * @param pos
+     *          The starting position of the number to retrieve.
+     */
+    private java.util.List<Character> getNumber(char[] string, int pos) {
+        java.util.List<Character> number = new ArrayList<Character>();
+        char c = '0';
+
+        for (int i = pos; Character.isDigit(c) && i < string.length; ++i) {
+            c = string[i];
+            number.add(c);
+        }
+        return number;
+    }
+
+}
+
+/**
+ * A helper class to XMLGenerator classes providing start and end tags with the
+ * correct amount of tabs. This class will be used in the XML code generation
+ * for the parts which are dynamical and therefore can not use a template.
+ * 
+ */
+public class TagGenerator {
+	private String tabs="";
+	private Stack<String> stack;
+	private String previous;
+	
+	/**
+	 * Constructor.
+	 * 
+	 * @param tabstart Number of tabs indent at start.
+	 */
+	public TagGenerator(int tabstart) {
+		stack = new Stack<String>();
+		for(int i =0; i<tabstart; i++) {
+			tabs=tabs+"\t";
+		}
+	}
+	
+	/**
+	 * Generates a tag with a certain tagname.
+	 * 
+	 * The first time the tagname is encountered a start tag is created. The
+	 * second time the same tagname is used a matching end tag is created. For
+	 * each unique tagname a new start tag is created with one more tab indent.
+	 * If start and end tags are encountered immediately after each other they
+	 * will be on the same line.
+	 * 
+	 * @param tagname
+	 *            The name of the tag to create.
+	 * @return Start or end tag with name set to <tagname>.
+	 */
+	public String generateTag(String tagname) {
+		return generateTag(tagname, false);
+	}
+	
+	public String generateTag(String tagname, boolean isAttributeTag) {
+		if(stack.isEmpty() || !stack.peek().equals(tagname.trim())) {
+			stack.push(tagname.trim());
+			return generateStartTag(tagname, isAttributeTag);
+		}else {
+			return generateEndTag(stack.pop(), isAttributeTag);
+		} 
+
+	}
+	
+	/**
+	 * Generates a start tag with the specified tagname.
+	 * 
+	 * @param tagname
+	 *            The name of the tag for which a start tag should be created.
+	 * @return The start tag with name set to <tagname>.
+	 */
+	private String generateStartTag(String tagname, boolean isAttributeTag) {
+		String tag;
+		if(isAttributeTag) {
+			tag = "\n"+tabs+"<"+tagname+" "; 
+		}else {
+			tag = "\n"+tabs+"<"+tagname+">";			
+		}
+		tabs=tabs+"\t";
+		previous = tagname;
+		return tag;
+		
+	}
+	
+	/**
+	 * Generates an end tag with the specified tagname.
+	 * 
+	 * @param tagname
+	 *            The name of the tag for which an end tag should be created.
+	 * @return The end tag with name set to <tagname>.
+	 */
+	private String generateEndTag(String tagname, boolean isAttributeTag) {
+		String tag;
+		tabs=tabs.substring(1);
+		if(!previous.equals(tagname)) {
+			tag=("\n"+tabs);
+		} else {
+			tag=("");
+		}
+		if(isAttributeTag) {
+			tag = tag +"/>";
+		} else {
+			tag=tag+("</"+tagname+">");
+		}
+		return tag;
+	}
+		
+	
+}
+

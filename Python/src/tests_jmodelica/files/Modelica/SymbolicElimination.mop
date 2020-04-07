@@ -1,0 +1,74 @@
+model IllustExample
+    Real x1(start=1, fixed=true);
+    Real x2(start=1, fixed=true);
+    Real y1(start=1);
+    Real y2(start=1);
+    Real y3(start=1);
+    Real y4(start=1);
+    Real y5(start=1);
+    parameter Real p1 = 2;
+    parameter Real p2 = 2;
+    parameter Real p3 = 1;
+    input Real u;
+equation
+    der(x1) = x2;
+    der(x2) + y1 + y2 - y3 = u;
+    x1*y3 + y2 - sqrt(x1) - 2 = 0;
+    p1*y1*y2*y4 - sqrt(x1) = 0;
+    y1*y4 + sqrt(y3) - x1 - y4 = u;
+    y4 - p3*sqrt(y5) = 0;
+    y5^p2 - x1 = 0;
+end IllustExample;
+
+optimization IllustExampleLagrange(finalTime=4, objectiveIntegrand=(x1-0.647)^2+x2^2+(u-0.0595)^2)
+    extends IllustExample;
+end IllustExampleLagrange;
+
+optimization IllustExampleLagrangeBound(finalTime=4, objectiveIntegrand=(x1-0.647)^2+x2^2+(u-0.0595)^2+(y1-0.289)^2)
+    extends IllustExample(y1(max=0.41));
+end IllustExampleLagrangeBound;
+
+optimization IllustExampleLagrangeConstraintAndObjective(
+        finalTime=4, objectiveIntegrand=(x1-0.647)^2+x2^2+(u-0.0595)^2+(y1-0.289)^2)
+extends IllustExample;
+constraint
+    y1 <= 0.41;
+end IllustExampleLagrangeConstraintAndObjective;
+
+optimization IllustExampleEst(finalTime=4)
+extends IllustExample(p1(free=true,min=0.5), p3(free=true,min=0.5));
+end IllustExampleEst;
+
+model LinearLoop
+    Real x(start=1, fixed=true);
+    Real y1;
+    Real y2;
+    input Real u;
+equation
+    der(x) = y1 + y2;
+    y1 + y2 = x + u;
+    y1 + 2*y2 = sqrt(x+1) + x + u;
+end LinearLoop;
+
+optimization LinearLoopLagrange(finalTime=5, objectiveIntegrand=x^2 + u^2)
+    extends LinearLoop;
+end LinearLoopLagrange;
+
+optimization LinearLoopLagrangeConstraint(finalTime=5, objectiveIntegrand=x^2 + u^2)
+    extends LinearLoop;
+constraint
+    y1 >= -2;
+end LinearLoopLagrangeConstraint;
+
+optimization DerivativeLoop(finalTime=5, objectiveIntegrand=x^2 + u^2)
+    Real x(start=1, fixed=true, min=0.1);
+    Real y1;
+    Real y2;
+    input Real u;
+equation
+    der(x) = y1 + y2 + 2;
+    3*y1 + y2 = x + u;
+    y1 + 2*y2 = sqrt(x+1) + x + u + 2*der(x);
+constraint
+    y1 >= -2;
+end DerivativeLoop;

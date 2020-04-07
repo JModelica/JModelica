@@ -1,0 +1,235 @@
+
+/*
+Copyright (C) 2013-2017 Modelon AB
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, version 3 of the License.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect CodeSplitter {
+    public abstract class CodeSplitter<T extends CodeSplitter.Item> {
+        
+        public interface Item {
+            public int numScalars_C();
+        }
+        
+        protected final int itemLimit;
+        protected final int chunkLimit;
+        protected final String funcName;
+        protected final CodeStream str;
+        protected final CodePrinter p;
+        protected final String indent;
+        protected final boolean allowDirect;
+        
+        private ArrayList<ArrayList<T>> elements = new ArrayList<ArrayList<T>>();
+        private int itemSplitCount = 0;
+        private int chunkSplitCount = 0;
+        
+        public CodeSplitter(CodePrinter p, CodeStream str, String indent,
+                boolean allowDirect, String funcName, OptionRegistry or) {
+            this(p, str, indent, allowDirect, funcName, or, new ArrayList<T>());
+        }
+        
+        public CodeSplitter(CodePrinter p, CodeStream str, String indent,
+                boolean allowDirect, String funcName, OptionRegistry or, ArrayList<T> elements) {
+            this(p, str, indent, allowDirect, funcName, or, or.getIntegerOption("cc_split_function_limit"), elements);
+        }
+
+        public CodeSplitter(CodePrinter p, CodeStream str, String indent,
+                boolean allowDirect, String funcName, OptionRegistry or, int chunkLimit, ArrayList<T> elements) {
+            this.funcName = funcName;
+            this.str = str;
+            this.p = p;
+            this.indent = indent;
+            this.allowDirect = allowDirect;
+            this.itemLimit  = cap(or.getIntegerOption("cc_split_element_limit"));
+            this.chunkLimit = cap(chunkLimit);
+            add(elements);
+        }
+        
+        public void generate() {
+            genFuncImpls();
+            genFuncHeads();
+            str.print("int ", funcName,"(jmi_t* jmi) {\n");
+            printStatusDecl();
+            genFuncCalls();
+            printStatusReturn();
+            str.print("}\n");
+        }
+        
+        private int cap(int x) {
+            return x < 1 ? Integer.MAX_VALUE : x;
+        }
+        
+        public void add(Collection<? extends T> coll) {
+            for (T element : coll) {
+                add(element);
+            }
+        }
+        
+        public void add(T element) {
+            int n = element.numScalars_C();
+            if (elements.size() == 0 || itemSplitCount + n > itemLimit) {
+                elements.add(new ArrayList<T>());
+                itemSplitCount = 0;
+            }
+            itemSplitCount += n;
+            elements.get(elements.size() - 1).add(element);
+        }
+        
+        public void setInitialSplit(CodeSplitter other) {
+            if (other != null) {
+                chunkSplitCount = other.chunkSplitCount;
+            }
+        }
+        
+        private int numSplits() {
+            int s = elements.size();
+            if (allowDirect && s == 1) {
+                s = 0;
+            }
+            return s;
+        }
+        
+        public void printStatusDecl() {
+            ASTNode.genFunctionStart(str, indent);
+        }
+        
+        public void printStatusReturn() {
+            ASTNode.genFunctionEnd(str, indent);
+        }
+        
+        protected void printFunctionHeader(int split) {
+            str.print("int ", funcName, "_", split, "(jmi_t* jmi)");
+        }
+        
+        public void genFuncHeads() {
+            for (int split = 0; split < numSplits(); split++) {
+                printFunctionHeader(split);
+                str.print(";\n");
+            }
+            str.print("\n");
+        }
+        
+        public void genFuncImpls() {
+            for (int split = 0; split < numSplits(); split++, chunkSplitCount++) {
+                if (chunkSplitCount > 0 && chunkSplitCount % chunkLimit == 0) {
+                    str.splitFile();
+                    genAtNewFile();
+                }
+                genFuncImpl(elements.get(split), split);
+            }
+
+            if (chunkSplitCount > 0 && chunkSplitCount % chunkLimit == 0) {
+                str.splitFile();
+                genAtNewFile();
+            }
+            chunkSplitCount++;
+        }
+        
+        protected void genFuncImpl(ArrayList<T> element, int split) {
+            printFunctionHeader(split);
+            str.print(" {\n");
+            printStatusDecl();
+            gen(element);
+            printStatusReturn();
+            str.print("}\n\n");
+        }
+        
+        public void genFuncCalls() {
+            int n = numSplits();
+            if (n == 0) {
+                if (elements.size() > 0) {
+                    gen(elements.get(0));
+                }
+            }
+            for (int split = 0; split < n; split++) {
+                genFuncCall(split);
+            }
+        }
+        
+        protected void genFuncCall(int split) {
+            str.print(indent, "ef |= ", funcName, "_", split, "(jmi);\n");
+        }
+        
+        protected void gen(ArrayList<T> splitElements) {
+            for (T element : splitElements) {
+                genDecl(element);
+            }
+            genPre();
+            for (T element : splitElements) {
+                genPre(element);
+            }
+            for (T element : splitElements) {
+                gen(element);
+            }
+            for (T element : splitElements) {
+                genPost(element);
+            }
+            genPost();
+        }
+        
+        public void genAtNewFile() {}
+        public abstract void genDecl(T element);
+        public void genPre(T element) {}
+        public abstract void gen(T element);
+        public void genPost(T element) {}
+        public void genPre() {}
+        public void genPost() {}
+    }
+
+    AbstractEquationBlock implements CodeSplitter.Item;
+    ASTNode               implements CodeSplitter.Item;
+
+    public int AbstractEquationBlock.numScalars_C() {
+        int n = 0;
+        for (FAbstractEquation eqn : allEquations()) {
+            n += eqn.numScalars_C();
+        }
+        return n;
+    }
+
+    syn int ASTNode.numScalars_C() {
+        int n = 0;
+        for (ASTNode node : this) {
+            n += node.numScalars_C();
+        }
+        return n;
+    }
+
+    eq FVariable.numScalars_C() = shouldGenStartValue() ? 1 : 0;
+
+    eq FAbstractEquation.numScalars_C() {
+        int n = numScalarEquations();
+        ASTNode attributeList = getFAttributeList();
+        for (ASTNode node : this) {
+            if (node != attributeList) {
+                n += node.numScalars_C();
+            }
+        }
+        return n;
+    }
+
+    eq FFunctionCallLeft.numScalars_C() = needsTemp_C() ? type().numScalarElements() : 0;
+
+    eq FFunctionCall.numScalars_C() {
+        int n = super.numScalars_C();
+        for (FExp exp : getArgs()) { 
+            if (exp.needsTemp_C()) {
+                n += exp.type().numScalarElements();
+            }
+        }
+        return n;
+    }
+
+    eq FSubscriptedExp.numScalars_C() = super.numScalars_C() + getFExp().type().numScalarElements();
+}

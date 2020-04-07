@@ -1,0 +1,78 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import java.util.Collection;
+import java.lang.reflect.Method;
+
+public class EvalTestCase extends TestCase {
+    private String[] values = new String[0];
+    private String[] variables = new String[0];
+
+	/**
+	 * Perform tests on flat class after transform canonical step.
+	 * 
+	 * @return  <code>true</code> if test case shoule stop after this method
+	 */
+	protected boolean testTransformed(FClass fc) {
+		String[] names = getVariables();
+		String[] vals = getValues();
+		if (names.length != vals.length)
+			fail("List of variables and list of values are of different length. (" + 
+					names.length + " and " + vals.length + ")");
+
+		for (int i = 0; i < vals.length; i++) {
+			String name = names[i];
+			FAbstractVariable fv = fc.lookupFV(name);
+			if (fv.isUnknown()) {
+				fail("Could not find variable " + name + "."); 
+			} else {
+				String test = fv.ceval().toString();
+				String correct = vals[i].trim();
+				assertEquals("Evaluation result for variable " + name + ": ", correct, test);
+			}
+		}		
+
+    	return true;
+	}
+	
+	/**
+	 * @return the values
+	 */
+	public String[] getValues() {
+		return values;
+	}
+	
+	/**
+	 * @param values the values to set
+	 */
+	public void setValues(String values) {
+		this.values = values.trim().split("[\\r\\n]+");
+	}
+	
+	/**
+	 * @return the variables
+	 */
+	public String[] getVariables() {
+		return variables;
+	}
+	/**
+	 * @param variables the variables to set
+	 */
+	public void setVariables(String variables) {
+		this.variables = variables.trim().split("[\\r\\n]+");
+	}
+	
+}

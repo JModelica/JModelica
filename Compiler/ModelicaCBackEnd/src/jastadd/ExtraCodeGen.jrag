@@ -1,0 +1,145 @@
+/*
+Copyright (C) 2009-2017 Modelon AB
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, version 3 of the License.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect ExtraCodeGen {
+
+    /*
+     * Hooks to facilitate extensions
+     */
+    
+    public class CGenerator {
+        
+        public class DAETag_CAD_function_headers extends DAETag {
+            
+            public DAETag_CAD_function_headers(AbstractGenerator myGenerator, FClass fclass) {
+                super("CAD_function_headers", myGenerator, fclass);
+            }
+            
+            public void generate(CodeStream str) {
+                fclass.generateDDFunctionHeaders(str);
+            }
+        }
+        
+        public class DAETag_CAD_functions extends DAETag {
+            
+            public DAETag_CAD_functions(AbstractGenerator myGenerator, FClass fclass) {
+                super("CAD_functions", myGenerator, fclass);
+            }
+            
+            public void generate(CodeStream str) {
+                fclass.generateDDFunctions(str);
+            }
+        }
+        
+        public class DAETag_CAD_dae_blocks_residual_functions extends DAETag {
+            
+            public DAETag_CAD_dae_blocks_residual_functions(AbstractGenerator myGenerator, FClass fclass) {
+                super("CAD_dae_blocks_residual_functions", myGenerator, fclass);
+            }
+            
+            @Override
+            public boolean isActive() {
+                return !fclass.onlyInitBLT() && super.isActive();
+            }
+            
+            public void generate(CodeStream str) {
+                fclass.generateDDBlocks(str);
+            }
+        }
+        
+        public class DAETag_CAD_dae_init_blocks_residual_functions extends DAETag {
+            
+            public DAETag_CAD_dae_init_blocks_residual_functions(AbstractGenerator myGenerator, FClass fclass) {
+                super("CAD_dae_init_blocks_residual_functions", myGenerator, fclass);
+            }
+            
+            public void generate(CodeStream str) {
+                fclass.generateDDBlocksInit(str);
+            }
+        }
+        
+        public class DAETag_CAD_dae_add_blocks_residual_functions extends DAETag {
+            
+            public DAETag_CAD_dae_add_blocks_residual_functions(AbstractGenerator myGenerator, FClass fclass) {
+                super("CAD_dae_add_blocks_residual_functions", myGenerator, fclass);
+            }
+            
+            @Override
+            public boolean isActive() {
+                return !fclass.onlyInitBLT() && super.isActive();
+            }
+            
+            public void generate(CodeStream str) {
+                fclass.generateDDAddBlocks(str);
+            }
+        }
+        
+        public class DAETag_CAD_dae_init_add_blocks_residual_functions extends DAETag {
+            
+            public DAETag_CAD_dae_init_add_blocks_residual_functions(AbstractGenerator myGenerator, FClass fclass) {
+                super("CAD_dae_init_add_blocks_residual_functions", myGenerator, fclass);
+            }
+            
+            public void generate(CodeStream str) {
+                fclass.generateDDAddBlocksInit(str);
+            }
+        }
+        
+        public class DAETag_CAD_ode_derivatives extends DAETag {
+            
+            public DAETag_CAD_ode_derivatives(AbstractGenerator myGenerator, FClass fclass) {
+                super("CAD_ode_derivatives", myGenerator, fclass);
+            }
+            
+            @Override
+            public boolean isActive() {
+                return !fclass.onlyInitBLT() && super.isActive();
+            }
+            
+            public void generate(CodeStream str) {
+                fclass.generateDDODEDerivatives(str);
+            }
+        }
+    }
+
+    public void FClass.generateDDFunctionHeaders(CodeStream str) {
+        
+    }
+
+    public void FClass.generateDDFunctions(CodeStream str) {
+        
+    }
+
+    public void FClass.generateDDBlocks(CodeStream str) {
+        
+    }
+
+    public void FClass.generateDDBlocksInit(CodeStream str) {
+        
+    }
+
+    public void FClass.generateDDAddBlocks(CodeStream str) {
+        
+    }
+
+    public void FClass.generateDDAddBlocksInit(CodeStream str) {
+        
+    }
+
+    public void FClass.generateDDODEDerivatives(CodeStream str) {
+        
+    }
+}

@@ -1,0 +1,266 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<book version="5.0" xmlns="http://docbook.org/ns/docbook"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns:xs="http://www.w3.org/2001/XMLSchema"
+      xmlns:xlink="http://www.w3.org/1999/xlink"
+      xmlns:xi="http://www.w3.org/2001/XInclude"
+      xmlns:svg="http://www.w3.org/2000/svg"
+      xmlns:m="http://www.w3.org/1998/Math/MathML"
+      xmlns:html="http://www.w3.org/1999/xhtml"
+      xmlns:db="http://docbook.org/ns/docbook">
+  <info>
+    <title><productname>JModelica.org</productname> User Guide</title>
+
+    <subtitle>Version <productnumber>2.14</productnumber></subtitle>
+
+    <pubdate><?dbtimestamp format="Y-m-d"?></pubdate>
+
+    <copyright>
+      <year>2017</year>
+
+      <holder>Modelon AB</holder>
+    </copyright>
+  </info>
+
+  <acknowledgements>
+    <para>This document is produced with DocBook 5 using XMLMind XML Editor
+    for authoring, Norman Walsh's XSL stylesheets and a GNOME xsltproc +
+    Apache fop toolchain. Math contents is converted from LaTeX using the
+    TeX/LaTeX to MathML Online Translator by the Ontario Research Centre for
+    Computer Algebra and processed by JEuclid.</para>
+  </acknowledgements>
+
+  <!-- ===INCLUDE=== -->
+
+  <bibliography>
+    <title>Bibliography</title>
+
+    <biblioentry role="phd thesis">
+      <abbrev>And2016</abbrev>
+
+      <author>
+        <personname><firstname>Christian Andersson</firstname></personname>
+      </author>
+
+      <title>Methods and Tools for Co-Simulation of Dynamic Systems with the
+      Functional Mock-up Interface</title>
+
+      <biblioid class="isrn">LUTFNA-1010-2016 </biblioid>
+
+      <publisher>
+        <publishername>Lund University</publishername>
+
+        <address>Sweden</address>
+      </publisher>
+
+      <pubdate>2016</pubdate>
+    </biblioentry>
+
+    <biblioentry role="phd thesis">
+      <abbrev>Jak2007</abbrev>
+
+      <author>
+        <personname><firstname>Johan</firstname><surname>Åkesson</surname></personname>
+      </author>
+
+      <title>Tools and Languages for Optimization of Large-Scale
+      Systems</title>
+
+      <biblioid class="isrn">LUTFD2/TFRT--1081--SE</biblioid>
+
+      <publisher>
+        <publishername>Lund University</publishername>
+
+        <address>Sweden</address>
+      </publisher>
+
+      <pubdate>2007</pubdate>
+    </biblioentry>
+
+    <biblioentry role="article">
+      <abbrev>Jak2008b</abbrev>
+
+      <biblioset role="article">
+        <authorgroup>
+          <author>
+            <personname><firstname>Johan</firstname><surname>Åkesson</surname></personname>
+          </author>
+
+          <author>
+            <personname><firstname>Görel</firstname><surname>Hedin</surname></personname>
+          </author>
+
+          <author>
+            <personname><firstname>Torbjörn</firstname><surname>Ekman</surname></personname>
+          </author>
+        </authorgroup>
+
+        <title>Tools and Languages for Optimization of Large-Scale
+        Systems</title>
+
+        <pagenums>117-131</pagenums>
+      </biblioset>
+
+      <biblioset relation="journal">
+        <title>Electronic Notes in Theoretical Computer Science</title>
+
+        <volumenum>203:2</volumenum>
+
+        <pubdate>April 2008</pubdate>
+      </biblioset>
+    </biblioentry>
+
+    <biblioentry role="article">
+      <abbrev>Jak2008a</abbrev>
+
+      <biblioset role="article">
+        <authorgroup>
+          <author>
+            <personname><firstname>Johan</firstname><surname>Åkesson</surname></personname>
+          </author>
+        </authorgroup>
+
+        <title>Optimica - An Extension of Modelica Supporting Dynamic
+        Optimization</title>
+      </biblioset>
+
+      <biblioset relation="proceedings">
+        <title>Proc. 6th International Modelica Conference 2008</title>
+
+        <publisher>
+          <publishername>Modelica Association</publishername>
+        </publisher>
+
+        <pubdate>March 2008</pubdate>
+      </biblioset>
+    </biblioentry>
+
+    <biblioentry role="article">
+      <abbrev>Jak2010</abbrev>
+
+      <biblioset role="article">
+        <authorgroup>
+          <author>
+            <personname><firstname>Johan</firstname><surname>Åkesson</surname></personname>
+          </author>
+
+          <author>
+            <personname><firstname>Karl-Erik</firstname><surname>Årzén</surname></personname>
+          </author>
+
+          <author>
+            <personname><firstname>Magnus</firstname><surname>Gäfvert</surname></personname>
+          </author>
+
+          <author>
+            <personname><firstname>Tove</firstname><surname>Bergdahl</surname></personname>
+          </author>
+
+          <author>
+            <personname><firstname>Hubertus</firstname><surname>Tummescheit</surname></personname>
+          </author>
+        </authorgroup>
+
+        <title>Modeling and Optimization with Optimica and JModelica.org -
+        Languages and Tools for Solving Large-Scale Dynamic Optimization
+        Problem</title>
+      </biblioset>
+
+      <biblioset relation="journal">
+        <title>Computers and Chemical Engineering</title>
+
+        <volumenum>203:2</volumenum>
+
+        <pubdate>2010</pubdate>
+      </biblioset>
+    </biblioentry>
+
+    <biblioentry role="article">
+      <abbrev>Eng2001</abbrev>
+
+      <biblioset role="article">
+        <authorgroup>
+          <author>
+            <personname><firstname>Peter</firstname><surname>Englezos</surname></personname>
+          </author>
+
+          <author>
+            <personname><firstname>Nicolas</firstname><surname>Kalogerakis</surname></personname>
+          </author>
+        </authorgroup>
+
+        <title>Applied Parameter Estimation for Chemical Engineers</title>
+
+        <publisher>
+          <publishername>Marcel Dekker Inc</publishername>
+        </publisher>
+      </biblioset>
+
+      <biblioset relation="journal">
+        <pubdate>2001</pubdate>
+      </biblioset>
+    </biblioentry>
+
+    <biblioentry role="article">
+      <abbrev>Mag2015</abbrev>
+
+      <biblioset role="article">
+        <authorgroup>
+          <author>
+            <personname>Fredrik Magnusson</personname>
+          </author>
+
+          <author>
+            <personname>Johan Åkesson</personname>
+          </author>
+        </authorgroup>
+
+        <title>Dynamic Optimization in JModelica.org</title>
+
+        <pagenums>471-496</pagenums>
+      </biblioset>
+
+      <biblioset relation="journal">
+        <title>Processes</title>
+
+        <volumenum>3:2</volumenum>
+
+        <pubdate>2015</pubdate>
+      </biblioset>
+    </biblioentry>
+
+    <biblioentry role="article">
+      <abbrev>Mag2016</abbrev>
+
+      <biblioset role="article">
+        <authorgroup>
+          <author>
+            <personname>Fredrik Magnusson</personname>
+          </author>
+        </authorgroup>
+
+        <title>Numerical and Symbolic Methods for Dynamic Optimization</title>
+
+        <publisher>
+          <publishername>Lund University</publishername>
+
+          <address>Sweden</address>
+        </publisher>
+      </biblioset>
+
+      <biblioset relation="journal">
+        <pubdate>2016</pubdate>
+      </biblioset>
+    </biblioentry>
+
+    <biblioentry>
+      <abbrev>FMI2017</abbrev>
+
+      <title>Functional Mock-up Interface standard</title>
+
+      <publisher>
+        http://www.fmi-standard.org
+      </publisher>
+    </biblioentry>
+  </bibliography>
+</book>

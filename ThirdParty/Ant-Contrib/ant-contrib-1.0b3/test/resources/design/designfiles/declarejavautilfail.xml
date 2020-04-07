@@ -1,0 +1,8 @@
+<design>
+<!-- needdeclarations is by default true, so we don't need that here -->
+<package name="javautil" package="java.util"/>
+
+<package name="dummy" package="mod.dummy"/>
+<package name="client" package="mod.declarejavautil"/>
+
+</design>

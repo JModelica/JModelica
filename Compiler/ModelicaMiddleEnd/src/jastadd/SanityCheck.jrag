@@ -1,0 +1,150 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import org.jmodelica.util.problemHandling.SanityProblemProducer;
+
+aspect Sanity {
+
+    /**
+     * Perform a basic sanity check of the current flat tree.
+     */
+    public void FClass.sanityCheck() {
+        if (myOptions().getBooleanOption("debug_sanity_check")) {
+            sanityCheckCommonAccessConsistency(this);
+            for (FAbstractEquation eqn : getParameterEquations()) {
+                eqn.sanityCheckParameterEquations(this);
+            }
+            sanityCheckType(this);
+            // Break execution and print any errors 
+            breakOnErrors();
+        }
+    }
+
+    /**
+     * Report a sanity problem.
+     */
+    public void FClass.sanityProblem(ASTNode node, String message, Object... args) {
+        DEBUG_SANITY_CHECK.invoke(node, lastCompletedTransformationStep, completedTransformationSteps, message, args);
+    }
+
+    public static final SanityProblemProducer ASTNode.DEBUG_SANITY_CHECK = new SanityProblemProducer();
+
+    /**
+     * Check that all relevant names can be looked up in the flat tree.
+     */
+    public void ASTNode.sanityCheckCommonAccessConsistency(FClass fc) {
+        sanityCheckCommonAccessConsistencyInChildren(fc);
+    }
+
+    public void ASTNode.sanityCheckCommonAccessConsistencyInChildren(FClass fc) {
+        for (ASTNode n : this) {
+            n.sanityCheckCommonAccessConsistency(fc);
+        }
+    }
+
+    public void FAccessExp.sanityCheckCommonAccessConsistency(FClass fc) {
+        sanityCheckCommonAccessConsistencyInChildren(fc);
+        
+        if (!getAccess().hasNonLiteralSubscripts() && myFV().isUnknown()) {
+            fc.sanityProblem(this, "Variable not found: '%s'", name());
+        }
+    }
+
+    public void FFunctionCall.sanityCheckCommonAccessConsistency(FClass fc) {
+        sanityCheckCommonAccessConsistencyInChildren(fc);
+        
+        if (myFCallable() == null) {
+            fc.sanityProblem(this, "Function not found in function call:\n    %s", this);
+        }
+    }
+
+    public void FRecordConstructor.sanityCheckCommonAccessConsistency(FClass fc) {
+        sanityCheckCommonAccessConsistencyInChildren(fc);
+        
+        if (getRecord().myFRecordDecl() == null) {
+            fc.sanityProblem(this, "Record declaration not found in record constructor:\n    %s", this);
+        }
+    }
+
+    // === Limit check for some attributes ===
+
+    public void FAbstractDerExp.sanityCheckCommonAccessConsistency(FClass fc) {
+        sanityCheckCommonAccessConsistencyInChildren(fc);
+        // TODO: Check if past step that created der variables?
+    }
+
+    public void FPreExp.sanityCheckCommonAccessConsistency(FClass fc) {
+        sanityCheckCommonAccessConsistencyInChildren(fc);
+        // TODO: Check if past step that created pre variables?
+    }
+
+    public void FAnnotationAttribute.sanityCheckCommonAccessConsistency(FClass fc) {
+    }
+
+    public void FCardinality.sanityCheckCommonAccessConsistency(FClass fc) {
+    }
+
+
+
+    public void FAbstractEquation.sanityCheckParameterEquations(FClass fc) {}
+
+    public void FEquation.sanityCheckParameterEquations(FClass fc) {
+        getLeft().sanityCheckParameterEquationLeft(fc, this);
+    }
+    
+    public void FFunctionCallEquation.sanityCheckParameterEquations(FClass fc) {
+        for (FFunctionCallLeft left : getLefts())
+            if (left.hasFExp())
+                left.getFExp().sanityCheckParameterEquationLeft(fc, this);
+    }
+    
+    public void FExp.sanityCheckParameterEquationLeft(FClass fc, FAbstractEquation eqn) {
+        for (FExp e : childFExps())
+            e.sanityCheckParameterEquationLeft(fc, eqn);
+    }
+    
+    public void FAccessExp.sanityCheckParameterEquationLeft(FClass fc, FAbstractEquation eqn) {
+        FAbstractVariable fv = getFAccess().myFV();
+        if (!variability().fixedParameterVariability()) {
+            String s = variability() + " set in parameter equation: " + this;
+            fc.sanityProblem(this, s);
+        }
+    }
+    
+    public void FLitExp.sanityCheckParameterEquationLeft(FClass fc, FAbstractEquation eqn) {
+        fc.sanityProblem(this, "Literal in left-hand side of parameter equation: %s", eqn);
+    }
+
+    /**
+     * Check that all types are known
+     */
+    public void ASTNode.sanityCheckType(FClass fc) {
+        sanityCheckTypeInChildren(fc);
+    }
+
+    public void ASTNode.sanityCheckTypeInChildren(FClass fc) {
+        for (ASTNode n : this) {
+            n.sanityCheckType(fc);
+        }
+    }
+
+    public void FExp.sanityCheckType(FClass fc) {
+        sanityCheckTypeInChildren(fc);
+        if (type().isUnknown()) {
+            fc.sanityProblem(this, "Unknown type in expression: %s", this);
+        }
+    }
+}

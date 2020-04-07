@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- edited with XMLSpy v2010 (http://www.altova.com) by Magnus Gäfvert (Modelon AB) -->
+<!--
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License version 3 as published
+    by the Free Software Foundation, or optionally, under the terms of the
+    Common Public License version 1.0 as published by IBM.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License, or the Common Public License, for more details.
+
+    You should have received copies of the GNU General Public License
+    and the Common Public License along with this program.  If not,
+    see <http://www.gnu.org/licenses/> or
+    <http://www.ibm.com/developerworks/library/os-cpl.html/> respectively.
+-->
+<xs:schema xmlns:fun="https://svn.jmodelica.org/trunk/XML/daeFunctions.xsd" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:alg="https://svn.jmodelica.org/trunk/XML/daeAlgorithms.xsd" xmlns:exp="https://svn.jmodelica.org/trunk/XML/daeExpressions.xsd" targetNamespace="https://svn.jmodelica.org/trunk/XML/daeFunctions.xsd" elementFormDefault="qualified" attributeFormDefault="unqualified">
+	<xs:import namespace="https://svn.jmodelica.org/trunk/XML/daeExpressions.xsd" schemaLocation="daeExpressions.xsd"/>
+	<xs:redefine schemaLocation="daeAlgorithms.xsd"/>
+	<xs:complexType name="FunctionVariable">
+		<xs:annotation>
+			<xs:documentation>Variable used by the function</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="Name" type="exp:QualifiedName"/>
+			<xs:element name="Record" type="exp:QualifiedName" minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Qualified Name of the record type (in case the variable is a Record)</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="Size" type="exp:Exp" minOccurs="0" maxOccurs="unbounded">
+				<xs:annotation>
+					<xs:documentation>Array size index expressions</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="BindingExpression" type="exp:Exp" minOccurs="0"/>
+		</xs:sequence>
+		<xs:attribute name="type" use="required">
+			<xs:simpleType>
+				<xs:restriction base="xs:normalizedString">
+					<xs:enumeration value="Real"/>
+					<xs:enumeration value="Integer"/>
+					<xs:enumeration value="Boolean"/>
+					<xs:enumeration value="String"/>
+					<xs:enumeration value="Record"/>
+				</xs:restriction>
+			</xs:simpleType>
+		</xs:attribute>
+		<xs:attribute name="variability" default="continuous">
+			<xs:annotation>
+				<xs:documentation>To be filled if the variable is a constant or a parameter</xs:documentation>
+			</xs:annotation>
+			<xs:simpleType>
+				<xs:restriction base="xs:normalizedString">
+					<xs:enumeration value="parameter"/>
+					<xs:enumeration value="constant"/>
+					<xs:enumeration value="continuous"/>
+				</xs:restriction>
+			</xs:simpleType>
+		</xs:attribute>
+	</xs:complexType>
+	<xs:complexType name="RecordVariable">
+		<xs:annotation>
+			<xs:documentation>Declaration of a record variable</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="Name" type="exp:QualifiedName"/>
+			<xs:element name="Field" type="fun:FunctionVariable" minOccurs="0" maxOccurs="unbounded"/>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="DerivativeInputVariable">
+		<xs:annotation>
+			<xs:documentation>Input variable used by derivative functions</xs:documentation>
+		</xs:annotation>
+		<xs:complexContent>
+			<xs:extension base="fun:FunctionVariable">
+				<xs:attribute name="derived" type="xs:boolean" default="false">
+					<xs:annotation>
+						<xs:documentation>true if the function is differentiated with respect of the variable. If derived=true, then type must be Real</xs:documentation>
+					</xs:annotation>
+				</xs:attribute>
+				<xs:attribute name="zeroDerivative" type="xs:boolean" default="false">
+					<xs:annotation>
+						<xs:documentation>The derivative function is only valid if variables with zeroDerivative=true are independent of the variables the function is differentiated with respect to (i.e. the derivative of the input variable is "zero")</xs:documentation>
+					</xs:annotation>
+				</xs:attribute>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="Function">
+		<xs:annotation>
+			<xs:documentation>Function definition with embedded XML algorithm code</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element name="Name" type="exp:QualifiedName"/>
+				<xs:element name="OutputVariable" type="fun:FunctionVariable" nillable="true" minOccurs="0" maxOccurs="unbounded"/>
+				<xs:element name="InputVariable" type="fun:FunctionVariable" nillable="true" minOccurs="0" maxOccurs="unbounded"/>
+				<xs:element name="ProtectedVariable" type="fun:FunctionVariable" nillable="true" minOccurs="0" maxOccurs="unbounded"/>
+				<xs:element name="Algorithm" type="fun:Algorithm" minOccurs="0"/>
+				<xs:element name="InverseFunction" minOccurs="0" maxOccurs="unbounded">
+					<xs:annotation>
+						<xs:documentation>Declaration of the inverse of a function (that must have one output only)</xs:documentation>
+					</xs:annotation>
+					<xs:complexType>
+						<xs:sequence>
+							<xs:element name="Name" type="exp:QualifiedName"/>
+							<xs:element name="OutputVariable" type="fun:FunctionVariable" nillable="true">
+								<xs:annotation>
+									<xs:documentation>Output of the inverse function. The variable must be an input of the source function</xs:documentation>
+								</xs:annotation>
+							</xs:element>
+							<xs:element name="InputVariable" type="fun:FunctionVariable" nillable="true" maxOccurs="unbounded">
+								<xs:annotation>
+									<xs:documentation>The output variable of the function must be one of the input of the inverse function</xs:documentation>
+								</xs:annotation>
+							</xs:element>
+							<xs:element name="ProtectedVariable" type="fun:FunctionVariable" nillable="true" minOccurs="0" maxOccurs="unbounded"/>
+							<xs:element name="Algorithm" type="fun:Algorithm" minOccurs="0"/>
+						</xs:sequence>
+					</xs:complexType>
+				</xs:element>
+				<xs:element name="DerivativeFunction" minOccurs="0" maxOccurs="unbounded">
+					<xs:annotation>
+						<xs:documentation>Declariation of the derivative of a function.</xs:documentation>
+					</xs:annotation>
+					<xs:complexType>
+						<xs:sequence>
+							<xs:element name="Name" type="exp:QualifiedName"/>
+							<xs:element name="OutputVariable" type="fun:FunctionVariable" nillable="true" maxOccurs="unbounded"/>
+							<xs:element name="InputVariable" type="fun:DerivativeInputVariable" nillable="true" maxOccurs="unbounded">
+								<xs:annotation>
+									<xs:documentation>Notice: the function is differentiated with respect the variables in order (from the first to the last). At least one input must be Real and have derivated=true</xs:documentation>
+								</xs:annotation>
+							</xs:element>
+							<xs:element name="ProtectedVariable" type="fun:FunctionVariable" nillable="true" minOccurs="0" maxOccurs="unbounded"/>
+							<xs:element name="Algorithm" type="fun:Algorithm" minOccurs="0"/>
+						</xs:sequence>
+						<xs:attribute name="order"/>
+					</xs:complexType>
+				</xs:element>
+			</xs:sequence>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="FunctionsList">
+		<xs:annotation>
+			<xs:documentation>List of user-defined functions</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence minOccurs="0" maxOccurs="unbounded">
+				<xs:element ref="fun:Function"/>
+			</xs:sequence>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="RecordsList">
+		<xs:annotation>
+			<xs:documentation>List of record declarations</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence minOccurs="0" maxOccurs="unbounded">
+				<xs:element name="Record" type="fun:RecordVariable"/>
+			</xs:sequence>
+		</xs:complexType>
+	</xs:element>
+</xs:schema>

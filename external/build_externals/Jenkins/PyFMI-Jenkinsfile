@@ -1,0 +1,29 @@
+// This loads the Jenkins pipeline library found in the ci folder.
+def url = scm.getLocations()[0].remote
+def base_url = url - "external/build_externals/Jenkins"
+echo base_url
+library identifier: 'build_externals@ci', retriever: modernSCM([$class: 'SubversionSCMSource', remoteBase: url, credentialsId: ''])
+library identifier: 'JModelica@ci', retriever: modernSCM([$class: 'SubversionSCMSource', remoteBase: base_url, credentialsId: ''])
+
+// Extract branch info from url variable (this assumes that this Jenkinsfile
+// has been checked out directly by Jenkins as part of pipeline build).
+(JM_SVN_PATH, JM_SVN_TYPE, JM_SVN_NAME) = extractBranchInfo("https://svn.jmodelica.org", base_url)
+
+// Set build name:
+currentBuild.displayName += " (" + (env.TRIGGER_CAUSE == null ? "MANUAL" : env.TRIGGER_CAUSE) + ")"
+
+// Set discard policy
+properties([buildDiscarder(logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '5', daysToKeepStr: '', numToKeepStr: ''))])
+node ('docker') {
+    checkoutJM("${JM_SVN_PATH}")
+    buildPyFMIDocker("centos", "wheel",  "jenkins_centos_config")
+    buildPyFMIDocker("centos", "folder", "jenkins_centos_config")
+    buildPyFMIDocker("ubuntu", "wheel",  "jenkins_ubuntu_config")
+    buildPyFMIDocker("ubuntu", "folder", "jenkins_ubuntu_config")
+}
+node("JMODELICA-SDK-1.13.2") {
+    checkoutJM("${JM_SVN_PATH}")
+    buildFMILibrary(null, null, "${pwd()}/install")
+    buildPyFMI(null, null, "${pwd()}/install", "folder")
+    buildPyFMI(null, null, "${pwd()}/install", "wheel")
+}

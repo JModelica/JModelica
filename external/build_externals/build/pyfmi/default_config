@@ -1,0 +1,10 @@
+
+TARGET=PyFMI
+BUILD_EXTERNALS_DIR=${JM_HOME}/external/build_externals
+BUILD_DIR=${JM_HOME}/${PLATFORM}_${DIST_VERSION}/build
+WHEEL_VERSION_NUMBER=2.7.0.stable
+PLATFORM_SITE_PACKAGES=Lib/site-packages
+
+# Path to PyFMI source code
+PYFMI_SRC=${JM_HOME}/external/PyFMI
+PYFMI_BUILD_DIR=${JM_HOME}/${DISTRO}

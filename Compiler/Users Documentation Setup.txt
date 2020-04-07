@@ -1,0 +1,79 @@
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#                                                                                                                     #
+#   Building Docbook documentation for the JModelica.org compiler                                                     #
+#                                                                                                                     #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+This document contains information about how to use the Docbook building system set up for the JModelica.org compiler.
+    This system supports "weaving" of chapter sections from different contributor directories (modules); if two or more
+modules have documentation (sections) for a chapter of the same name, the two contributions are joined together in the
+resulting chapter file. This system also allows for configuring whether or not to include such contribution on a module-
+by-module basis.
+
+# Documentation build process #
+
+The org.jmodelica.util.documentation.DocumentationBuilder is responsible for weaving chapters. See its javadoc for a
+listing of all arguments the program requires. It is important here to note the program's notion of "module sources,"
+i.e. root folders containing the potentially contributing modules.
+    The DocumentationBuilder will look in all the specified module sources for directories with names that appear in the
+module listing of the build-set.properties file, and will consider each sub-directory a module. If the module name
+(the directory base name) matches a name as listed in the properties file its documentation will be used
+(unless listed under exclusions in the properties file).
+    If the module contains a folder called "doc", all XML files are parsed. If there are <chapter> entries within,
+the chapter's <title> is registered by the program as the name of the chapter. If a chapter with such a name has already
+been found, the sections within the parsed chapter are added to that of the existing one. When the chapter is finally
+printed, the order in which the different chapter contributions were parsed determines the section ordering.
+    The DocumentationBuilder also expects an entry point document, a "root" document, which includes all chapters.
+The chapter ordering is determined by the doc/chapter.order file, if such a file exists. If no such file could be found,
+chapters are ordered in the order they were parsed.
+    The program will output the root file and all chapter XML files to the same directory.
+
+# JModelica.org setup #
+
+# Important files in the source.
+
+    *   Module directories.
+        *   The doc folder.
+        *   The images folder.
+        *   The gen.sh script.
+    *   build-set.properties
+    *   chapter.order
+
+# # Module directories. # #
+
+All directories within the Compiler folder are considered modules. Currently all documentation can be found within the
+Compiler/ModelicaCompiler module.
+
+# # # The doc folder. # # #
+
+Any JModelica.org documentation should be put here.
+
+# # # The images folder. # # #
+
+All images referenced from the documentation are put here. The DocumentationBuilder does not consider image links
+whatsoever, meaning that this folder should be copied to the output destination of the program.
+
+# # # The gen.sh script. # # #
+
+The gen.sh script should be called before the DocumentationBuilder, since it produces an up-to-date chapter containing
+information about the current compiler options.
+
+# # build-set.properties # #
+
+This file is required by the DocumentationBuilder. It contains the following listings: "modules", "order",
+"include", and "exclude", albeit only "modules" is required and the other are optional.
+
+    *   modules
+        Specifies which modules to include documentation from.
+    *   order
+        Specifies in which order to order module documentation contributions, if they are listed under "modules".
+    *   include
+        Specifies modules which documentation to include regardless of whether or not they are listed under "modules".
+    *   exclude
+        Specifies which modules not to include, regardless of whether or not they are listed under "modules".
+
+# # chapter.order # #
+
+This file contains a listing of module names specifying the ordering of the chapters in the final documentation.
+Note that this listing is regarded as a requirements specification as well; if a chapter in the chapter.order is not
+found in any module contributing to the documentation, the DocumentationBuilder will raise an error.

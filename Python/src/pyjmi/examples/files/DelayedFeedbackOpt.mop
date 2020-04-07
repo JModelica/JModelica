@@ -1,0 +1,9 @@
+optimization DelayTest(startTime = 0, finalTime = 1,
+                       objectiveIntegrand = 4*x^2 + u1^2 + u2^2)
+    input Real u1, u2;
+    Real x(start = 1, fixed=true);
+equation
+    der(x) = u1 - 2*u2;
+constraint
+    x(finalTime) = 0;
+end DelayTest;

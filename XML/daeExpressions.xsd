@@ -1,0 +1,379 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- edited with XMLSpy v2009 (http://www.altova.com) by Magnus Gäfvert (Modelon AB) -->
+<!--
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License version 3 as published
+    by the Free Software Foundation, or optionally, under the terms of the
+    Common Public License version 1.0 as published by IBM.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License, or the Common Public License, for more details.
+
+    You should have received copies of the GNU General Public License
+    and the Common Public License along with this program.  If not,
+    see <http://www.gnu.org/licenses/> or
+    <http://www.ibm.com/developerworks/library/os-cpl.html/> respectively.
+-->
+<xs:schema xmlns:exp="https://svn.jmodelica.org/trunk/XML/daeExpressions.xsd" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="https://svn.jmodelica.org/trunk/XML/daeExpressions.xsd" elementFormDefault="qualified" attributeFormDefault="unqualified">
+	<xs:complexType name="Exp">
+		<xs:annotation>
+			<xs:documentation>base expression</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:any namespace="##targetNamespace"/>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="BinaryOperation">
+		<xs:annotation>
+			<xs:documentation>Binary operation complex type</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:any namespace="##targetNamespace"/>
+			<xs:any namespace="##targetNamespace"/>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="UnaryOperation">
+		<xs:annotation>
+			<xs:documentation>Unary operation complex type</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:any namespace="##targetNamespace"/>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="BuiltInFunct">
+		<xs:annotation>
+			<xs:documentation>Built-in mathematical function type with one argument</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:any namespace="##targetNamespace"/>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="BuiltIn2Funct">
+		<xs:annotation>
+			<xs:documentation>Built-in mathematical function type with two arguments</xs:documentation>
+		</xs:annotation>
+		<xs:complexContent>
+			<xs:extension base="exp:BuiltInFunct">
+				<xs:sequence>
+					<xs:any namespace="##targetNamespace"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:complexType name="BuiltIn1or2Funct">
+		<xs:annotation>
+			<xs:documentation>Built-in function type with one argument and another optional one</xs:documentation>
+		</xs:annotation>
+		<xs:complexContent>
+			<xs:extension base="exp:BuiltInFunct">
+				<xs:sequence>
+					<xs:any namespace="##targetNamespace" minOccurs="0"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:complexType name="FunctionCall">
+		<xs:annotation>
+			<xs:documentation>User-defined function call type</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="Name" type="exp:QualifiedName"/>
+			<xs:element name="Arguments">
+				<xs:annotation>
+					<xs:documentation>Arguments of the function call</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:sequence minOccurs="0" maxOccurs="unbounded">
+						<xs:any namespace="##targetNamespace"/>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="Array">
+		<xs:annotation>
+			<xs:documentation>Array complex type</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:any namespace="##targetNamespace" minOccurs="0" maxOccurs="unbounded"/>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="RecordConstructor">
+		<xs:annotation>
+			<xs:documentation>Constructor function of a record</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="Name" type="exp:QualifiedName"/>
+			<xs:element name="Argument" type="exp:Exp" minOccurs="0" maxOccurs="unbounded">
+				<xs:annotation>
+					<xs:documentation>Each argument must correspond (in order and type) to a field of the record definition</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="QualifiedName">
+		<xs:annotation>
+			<xs:documentation>Qualified name</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="QualifiedNamePart" minOccurs="0" maxOccurs="unbounded">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:element name="ArraySubscripts" minOccurs="0">
+							<xs:complexType>
+								<xs:choice minOccurs="0" maxOccurs="unbounded">
+									<xs:element name="IndexExpression" type="exp:Exp">
+										<xs:annotation>
+											<xs:documentation>Array index</xs:documentation>
+										</xs:annotation>
+									</xs:element>
+									<xs:element ref="exp:UndefinedDimension"/>
+								</xs:choice>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+					<xs:attribute name="name" type="xs:normalizedString" use="required"/>
+				</xs:complexType>
+			</xs:element>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:element name="Add" type="exp:BinaryOperation">
+		<xs:annotation>
+			<xs:documentation>Binary addition</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Sub" type="exp:BinaryOperation">
+		<xs:annotation>
+			<xs:documentation>Binary subtraction</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Mul" type="exp:BinaryOperation">
+		<xs:annotation>
+			<xs:documentation>Binary multiplication</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Div" type="exp:BinaryOperation">
+		<xs:annotation>
+			<xs:documentation>Binary division</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Pow" type="exp:BinaryOperation">
+		<xs:annotation>
+			<xs:documentation>Power operation</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Neg" type="exp:UnaryOperation">
+		<xs:annotation>
+			<xs:documentation>Unary negation expression</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="LogLt" type="exp:BinaryOperation">
+		<xs:annotation>
+			<xs:documentation>Logical expression: less than</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="LogLeq" type="exp:BinaryOperation">
+		<xs:annotation>
+			<xs:documentation>Logical expression: less than or equal</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="LogGt" type="exp:BinaryOperation">
+		<xs:annotation>
+			<xs:documentation>Logical expression: greater than</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="LogGeq" type="exp:BinaryOperation">
+		<xs:annotation>
+			<xs:documentation>Logical expression: greater than or equal</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="LogEq" type="exp:BinaryOperation">
+		<xs:annotation>
+			<xs:documentation>Logical expression: equal</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="LogNeq" type="exp:BinaryOperation">
+		<xs:annotation>
+			<xs:documentation>Logical expression: not equal</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Not" type="exp:UnaryOperation">
+		<xs:annotation>
+			<xs:documentation>Not expression</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Or" type="exp:BinaryOperation">
+		<xs:annotation>
+			<xs:documentation>Or expression</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="And" type="exp:BinaryOperation">
+		<xs:annotation>
+			<xs:documentation>And expression</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="RealLiteral" type="xs:float">
+		<xs:annotation>
+			<xs:documentation>Real literal</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="IntegerLiteral" type="xs:integer">
+		<xs:annotation>
+			<xs:documentation>Integer literal</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="BooleanLiteral" type="xs:boolean">
+		<xs:annotation>
+			<xs:documentation>Boolean literal</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="StringLiteral" type="xs:normalizedString">
+		<xs:annotation>
+			<xs:documentation>String literal</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Der" type="exp:BuiltInFunct">
+		<xs:annotation>
+			<xs:documentation>Built-in function: der</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Sin" type="exp:BuiltInFunct">
+		<xs:annotation>
+			<xs:documentation>Built-in function: sin</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Cos" type="exp:BuiltInFunct">
+		<xs:annotation>
+			<xs:documentation>Built-in function: cos</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Tan" type="exp:BuiltInFunct">
+		<xs:annotation>
+			<xs:documentation>Built-in function: tan</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Asin" type="exp:BuiltInFunct">
+		<xs:annotation>
+			<xs:documentation>Built-in function: asin</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Acos" type="exp:BuiltInFunct">
+		<xs:annotation>
+			<xs:documentation>Built-in function: acos</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Atan" type="exp:BuiltInFunct">
+		<xs:annotation>
+			<xs:documentation>Built-in function: atan</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Sinh" type="exp:BuiltInFunct">
+		<xs:annotation>
+			<xs:documentation>Built-in function: sinh</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Cosh" type="exp:BuiltInFunct">
+		<xs:annotation>
+			<xs:documentation>Built-in function: cosh</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Tanh" type="exp:BuiltInFunct">
+		<xs:annotation>
+			<xs:documentation>Built-in function: tanh</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Exp" type="exp:BuiltInFunct">
+		<xs:annotation>
+			<xs:documentation>Built-in function: exp</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Log" type="exp:BuiltInFunct">
+		<xs:annotation>
+			<xs:documentation>Built-in function: log</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Log10" type="exp:BuiltInFunct">
+		<xs:annotation>
+			<xs:documentation>Built-in function: log10</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Sqrt" type="exp:BuiltInFunct">
+		<xs:annotation>
+			<xs:documentation>Built-in function: sqrt</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Atan2" type="exp:BuiltIn2Funct">
+		<xs:annotation>
+			<xs:documentation>Built-in function: atan2</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Abs" type="exp:BuiltInFunct">
+		<xs:annotation>
+			<xs:documentation>Built-in function: abs</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Sign" type="exp:BuiltInFunct">
+		<xs:annotation>
+			<xs:documentation>Built-in function: sign</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Min" type="exp:BuiltIn1or2Funct">
+		<xs:annotation>
+			<xs:documentation>Built-in function: min(x,y) , (where x and y must be scalar)</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Max" type="exp:BuiltIn1or2Funct">
+		<xs:annotation>
+			<xs:documentation>Built-in function: max(x,y) , (where x and y must be scalar)</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="NoEvent" type="exp:BuiltInFunct">
+		<xs:annotation>
+			<xs:documentation>Built-in function: noEvent</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Identifier" type="exp:QualifiedName">
+		<xs:annotation>
+			<xs:documentation>Identifier</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="FunctionCall" type="exp:FunctionCall">
+		<xs:annotation>
+			<xs:documentation>User-defined function call expression</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Time" type="xs:normalizedString">
+		<xs:annotation>
+			<xs:documentation>Time variable </xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Array" type="exp:Array">
+		<xs:annotation>
+			<xs:documentation>Constructor function of an array</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Range">
+		<xs:annotation>
+			<xs:documentation>Expression representing values in a range</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence minOccurs="2" maxOccurs="3">
+				<xs:any namespace="##targetNamespace"/>
+			</xs:sequence>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="RecordConstructor" type="exp:RecordConstructor">
+		<xs:annotation>
+			<xs:documentation>Constructor function of a record</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="UndefinedDimension" fixed="">
+		<xs:annotation>
+			<xs:documentation>Expression to be used in array definition, for undefined sizes</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+</xs:schema>

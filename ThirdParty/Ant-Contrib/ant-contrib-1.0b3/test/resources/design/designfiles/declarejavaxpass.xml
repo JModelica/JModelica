@@ -1,0 +1,7 @@
+<design>
+<package name="swing" package="javax.swing" needdeclarations="false"/>
+
+<package name="dummy" package="mod.dummy"/>
+<package name="client" package="mod.declarejavax"/>
+
+</design>

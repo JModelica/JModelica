@@ -1,0 +1,142 @@
+
+import java.util.Map;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map.Entry;
+
+aspect UnitDefinitions {
+    
+    abstract class UnitDefinitions {
+        
+        public static final Map<String, Unit> unitSymbols;
+        public static final Map<String, Double> prefixScales;
+        
+        static {
+            // The parser tests for each prefix in the order below.
+            // for example if d was before da it would always find d and never check da.
+            // Thankfully that is the only such overlap.
+            // I use a LinkedHashMap to preserve the order.
+            LinkedHashMap<String, Double> ps = new LinkedHashMap<String, Double>();
+            
+            // Add all the prefixes
+            ps.put("Y", 1e24);
+            ps.put("Z", 1e21);
+            ps.put("E", 1e18);
+            ps.put("P", 1e15);
+            ps.put("T", 1e12);
+            ps.put("G", 1e9);
+            ps.put("M", 1e6);
+            ps.put("k", 1e3);
+            ps.put("h", 1e2);
+            ps.put("da", 1e1);
+            ps.put("d", 1e-1);
+            ps.put("c", 1e-2);
+            ps.put("m", 1e-3);
+            ps.put("u", 1e-6);
+            ps.put("n", 1e-9);
+            ps.put("p", 1e-12);
+            ps.put("f", 1e-15);
+            ps.put("a", 1e-18);
+            ps.put("z", 1e-21);
+            ps.put("y", 1e-24);
+            
+            // Make constant
+            prefixScales = Collections.unmodifiableMap(ps);
+            
+            // Create map of units symbols.
+            Map<String, Unit> sym = new HashMap<String, Unit>();
+            
+            // SI 'base'-units
+            Unit meter      = Unit.fromDimension(Dimension.Length, "m");
+            Unit second     = Unit.fromDimension(Dimension.Time, "s");
+            Unit kilogram   = Unit.fromDimension(Dimension.Mass, "kg");
+            Unit gram       = Unit.fromDimension(Dimension.Mass, 0.001, "g");
+            Unit ampere     = Unit.fromDimension(Dimension.Current, "A");
+            Unit kelvin     = Unit.fromDimension(Dimension.Temperature, "K");
+            Unit mole       = Unit.fromDimension(Dimension.SubstanceAmount, "mol");
+            Unit candela    = Unit.fromDimension(Dimension.LuminousIntensity, "cd");
+            
+            sym.put("m", meter);
+            sym.put("s", second);
+            sym.put("g", gram);
+            sym.put("A", ampere);
+            sym.put("K", kelvin);
+            sym.put("mol", mole);
+            sym.put("cd", candela);
+            
+            // add derived SI units, such as Newton, Joule, Watt, Volt, etc.
+            Unit meter2     = meter.power(2);
+            Unit radian     = Unit.UNIT;
+            Unit steradian  = Unit.UNIT;
+            Unit hertz      = second.power(-1);
+            Unit newton     = kilogram.multiply(meter).divideBy(second.power(2));
+            Unit pascal     = newton.divideBy(meter2);
+            Unit joule      = newton.multiply(meter);
+            Unit watt       = joule.divideBy(second);
+            Unit coloumb    = ampere.multiply(second);
+            Unit volt       = watt.divideBy(ampere);
+            Unit weber      = volt.multiply(second);
+            Unit lumen      = candela.multiply(steradian);
+            Unit becquerel  = hertz;
+            Unit gray       = joule.divideBy(kilogram);
+            Unit sievert    = gray;
+            
+            sym.put("rad",  Unit.UNIT);
+            sym.put("sr",   Unit.UNIT);
+            sym.put("Hz",   second.power(-1));
+            sym.put("N",    newton);
+            sym.put("Pa",   pascal);
+            sym.put("J",    joule);
+            sym.put("W",    watt);
+            sym.put("C",    coloumb);
+            sym.put("V",    volt);
+            sym.put("F",    coloumb.divideBy(volt));
+            sym.put("Ohm",  volt.divideBy(ampere));
+            sym.put("S",    ampere.divideBy(volt));
+            sym.put("Wb",   weber);
+            sym.put("T",    weber.divideBy(meter2));
+            sym.put("H",    weber.divideBy(ampere));
+            sym.put("degC", kelvin.offset(273.15));
+            sym.put("lm",   lumen);
+            sym.put("lx",   lumen.divideBy(meter2));
+            sym.put("Bq",   becquerel);
+            sym.put("Gy",   gray);
+            sym.put("Sv",   sievert);
+            sym.put("kat",  mole.divideBy(second));
+            
+            //TODO add common non-SI units
+            Unit minute = second.multiply(60);
+            Unit hour   = minute.multiply(60);
+            Unit day    = hour.multiply(24);
+            
+            sym.put("min",  minute);
+            sym.put("h",    hour);
+            sym.put("d",    day);
+            
+            sym.put("deg",  radian.multiply(Math.PI/180));
+            sym.put("r",    radian.multiply(2*Math.PI));   // "revolution" as in "revolutions per minute" [r/min]
+            sym.put("l",    meter.multiply(0.1).power(3)); // dm3, decimeter cubed. 
+            sym.put("dB",   Unit.UNIT);
+            sym.put("eV",   joule.multiply(0.160218e-18)); // 0.160218 aJ
+            sym.put("bar",  pascal.multiply(1e5));         // 0.1 MPa
+            sym.put("phon", Unit.UNIT);
+            sym.put("sone", Unit.UNIT);
+            
+            sym.put("degF", kelvin.multiply(5.0/9.0).offset(459.67));
+            
+            // Rename units to their defined name
+            for (Entry<String, Unit> e: sym.entrySet()) {
+                e.setValue(e.getValue().rename(e.getKey()));
+            }
+            
+            // Make constant
+            unitSymbols = Collections.unmodifiableMap(sym);
+        }
+        
+    } 
+    
+    
+    
+    
+}
+

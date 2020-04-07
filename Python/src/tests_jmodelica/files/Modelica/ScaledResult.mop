@@ -1,0 +1,21 @@
+package ScaledResult
+
+  model Scaled1
+   Real x(start=3, nominal=3);
+   Real y(start=0, nominal=4);
+   input Real u(start=3, nominal=5);
+  equation 
+   der(x) = -5*x+y;
+   sin(y) = 0.1*time;
+  end Scaled1; 
+
+  optimization Scaled2(startTime=0,finalTime=1,objectiveIntegrand=x^2+u^2)
+   Real x(fixed=true,start = 1 + 2, nominal=3);
+   Real y(start=0, nominal=4);
+   input Real u(start=3, nominal=5);
+  equation 
+   der(x) = -5*x+y+u;
+   sin(y) = 0.1*time;
+  end Scaled2; 
+
+end ScaledResult;

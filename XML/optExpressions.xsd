@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- edited with XMLSpy v2008 rel. 2 (http://www.altova.com) by Magnus Gäfvert (Modelon AB) -->
+<!--
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License version 3 as published
+    by the Free Software Foundation, or optionally, under the terms of the
+    Common Public License version 1.0 as published by IBM.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License, or the Common Public License, for more details.
+
+    You should have received copies of the GNU General Public License
+    and the Common Public License along with this program.  If not,
+    see <http://www.gnu.org/licenses/> or
+    <http://www.ibm.com/developerworks/library/os-cpl.html/> respectively.
+-->
+<xs:schema xmlns:opt="https://svn.jmodelica.org/trunk/XML/daeExpressions.xsd" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="https://svn.jmodelica.org/trunk/XML/daeExpressions.xsd" elementFormDefault="qualified" attributeFormDefault="unqualified">
+	<xs:redefine schemaLocation="daeExpressions.xsd"/>
+	<xs:complexType name="OptExp">
+		<xs:annotation>
+			<xs:documentation>Expression definition extended for optimization purpose</xs:documentation>
+		</xs:annotation>
+		<xs:complexContent>
+			<xs:extension base="opt:Exp"/>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:complexType name="TimedVariable">
+		<xs:annotation>
+			<xs:documentation>Timed variable type definition</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="Identifier" type="opt:QualifiedName"/>
+		</xs:sequence>
+		<xs:attribute name="timePointIndex" type="xs:integer" use="required"/>
+	</xs:complexType>
+	<xs:element name="TimedVariable" type="opt:TimedVariable">
+		<xs:annotation>
+			<xs:documentation>Timed variable</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+</xs:schema>

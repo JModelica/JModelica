@@ -1,0 +1,145 @@
+package CombinedCycleStartup
+
+optimization FixedInput (objectiveIntegrand=((plant.p-7.57e6)/1e6)^2, startTime=0,finalTime=4000)
+
+CombinedCycle.Optimization.Plants.CC0D_WarmStartUp plant;
+
+CombinedCycle.Blocks.Continuous.FirstOrder firstOrder;
+
+Real u;
+
+//  Modelica.Blocks.Sources.TimeTable timeTable(table=[0,0.1; 200,0.35; 300,
+//        0.36; 600,0.40; 900,0.46; 1200,0.55; 1600,1; 1700,1; 2100,1]);
+equation 
+  connect(firstOrder.y, plant.load);
+  firstOrder.u = u;
+  u = noEvent(if time<1000 then 0.1 else 
+              if time<1300 then 0.35 else
+              if time<1600 then 0.36 else
+              if time<1900 then 0.46 else
+              if time<2200 then 0.55 else 1);
+end FixedInput;
+
+optimization Startup1 (objectiveIntegrand=((plant.p-7.57e6)/1e6)^2 + u^2, startTime=0,finalTime=4000)
+
+CombinedCycle.Optimization.Plants.CC0D_WarmStartUp plant;
+
+Modelica.Blocks.Interfaces.RealInput u(free=true,min=0,max=1);
+
+equation 
+  connect(u, plant.load);
+end Startup1;
+
+optimization Startup2 (objectiveIntegrand=((plant.p-7.57e6)/1e6)^2 + u^2, startTime=0,finalTime=2000)
+
+CombinedCycle.Optimization.Plants.CC0D_WarmStartUp plant;
+
+Modelica.Blocks.Interfaces.RealInput u(free=true,min=0,max=1);
+
+equation 
+  connect(u, plant.load);
+constraint
+end Startup2;
+
+optimization Startup3 (objectiveIntegrand=0.1*((plant.p-7.57e6)/1e6)^2 +/* 0.5*(plant.sigma/1e7)^2+*/ (u-1)^2, startTime=0,finalTime=2000)
+
+CombinedCycle.Optimization.Plants.CC0D_WarmStartUp plant(sigma(max=1.6e7));
+
+Modelica.Blocks.Interfaces.RealInput u(free=true,min=0,max=1);
+
+equation 
+  connect(u, plant.load);
+end Startup3;
+
+optimization Startup4 (objectiveIntegrand=0.1*((plant.p-7.57e6)/1e6)^2 +/* 0.5*(plant.sigma/1e7)^2+*/ (u-1)^2, startTime=0,finalTime=2000)
+
+CombinedCycle.Optimization.Plants.CC0D_WarmStartUp plant(sigma(max=1.6e7));
+
+Modelica.Blocks.Interfaces.RealInput du(free=true,min=-0.1/60,max=0.1/60);
+RealConnector u(start=0.1,fixed=true,min=0,max=1);
+
+equation 
+  der(u) = du;
+  connect(u, plant.load);
+end Startup4;
+
+optimization Startup5 (objectiveIntegrand=1*((plant.p-8.35e6)/1e6)^2 +/* 0.5*(plant.sigma/1e7)^2+*/ (u-1)^2, startTime=0,finalTime=10000)
+
+CombinedCycle.Optimization.Plants.CC0D_WarmStartUp plant(sigma(max=1.6e8));
+
+Modelica.Blocks.Interfaces.RealInput du(free=true,min=0,max=0.1/60);
+RealConnector u(start=0.15,fixed=true,min=0,max=1);
+
+equation 
+  der(u) = du;
+  connect(u, plant.load);
+end Startup5;
+
+connector RealConnector = Real;
+
+model Startup6Reference
+  parameter Real u0 = 0.15 "Initial value of control variable";
+  parameter Real Tstart = 8000 "Start-up time";
+  parameter Real N = 6;
+  CombinedCycle.Optimization.Plants.CC0D_WarmStartUp plant;
+  RealConnector u;
+equation 
+  u = u0+(1-u0)*(time/Tstart)/(1+(time/Tstart)^N)^(1/N);
+  connect(u, plant.load);
+end Startup6Reference;
+
+optimization Startup6 (objectiveIntegrand=1*((plant.p-8.35e6)/1e6)^2 + 0.5*(u-1)^2, startTime=0,finalTime=4000)
+  parameter Real sigma_max = 2.6e8;
+  //parameter Real sigma_max = 4e8;
+  CombinedCycle.Optimization.Plants.CC0D_WarmStartUp plant(sigma(max=sigma_max));
+  Modelica.Blocks.Interfaces.RealInput du(free=true,min=0, max=0.1/60);
+  RealConnector u(start=0.15,fixed=true,min=0,max=1);
+equation 
+  der(u) = du;
+  connect(u, plant.load);
+end Startup6;
+
+model MPCReference
+  parameter Real u0 = 0.15 "Initial value of control variable";
+  parameter Real Tstart = 8000 "Start-up time";
+  parameter Real N = 6;
+  CombinedCycle.Optimization.Plants.CC0D_WarmStartUp plant;
+  RealConnector u(start=0.15,fixed=true);
+  Modelica.Blocks.Interfaces.RealInput du(free=true);
+equation
+  der(u) = du;
+  connect(u, plant.load);
+end MPCReference;
+
+model Startup6Verification
+	CombinedCycle.Optimization.Plants.CC0D_WarmStartUp plant;
+	Modelica.Blocks.Interfaces.RealInput du;
+	RealConnector u(start=0.15, fixed=true);
+equation
+	der(plant.load) = du;
+	connect(u, plant.load);
+end Startup6Verification;
+
+model Startup7Reference
+  parameter Real u0 = 0.15 "Initial value of control variable";
+  parameter Real Tstart = 10000 "Start-up time";
+  parameter Real N = 6;
+  CombinedCycle.Optimization.Plants.CC1D_WarmStartUp plant;
+  RealConnector u;
+equation 
+  u = u0+(1-u0)*(time/Tstart)/(1+(time/Tstart)^N)^(1/N);
+  connect(u, plant.load);
+end Startup7Reference;
+
+optimization Startup7 (objectiveIntegrand=1*((plant.p-8.35e6)/1e6)^2 + 0.5*(u-1)^2, startTime=0,finalTime=5000)
+  parameter Real sigma_max = 2.8e8;
+  CombinedCycle.Optimization.Plants.CC1D_WarmStartUp plant(sigma(max=sigma_max));
+  Modelica.Blocks.Interfaces.RealInput du(free=true,min=0,max=0.1/60);
+  RealConnector u(start=0.15,fixed=true,min=0,max=1);
+equation 
+  der(u) = du;
+  connect(u, plant.load);
+end Startup7;
+
+end CombinedCycleStartup;
+

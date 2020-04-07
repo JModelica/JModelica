@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- edited with XMLSpy v2010 (http://www.altova.com) by Magnus Gäfvert (Modelon AB) -->
+<!--
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License version 3 as published
+    by the Free Software Foundation, or optionally, under the terms of the
+    Common Public License version 1.0 as published by IBM.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License, or the Common Public License, for more details.
+
+    You should have received copies of the GNU General Public License
+    and the Common Public License along with this program.  If not,
+    see <http://www.gnu.org/licenses/> or
+    <http://www.ibm.com/developerworks/library/os-cpl.html/> respectively.
+-->
+<xs:schema xmlns:equ="https://svn.jmodelica.org/trunk/XML/daeEquations.xsd" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:exp="https://svn.jmodelica.org/trunk/XML/daeExpressions.xsd" targetNamespace="https://svn.jmodelica.org/trunk/XML/daeEquations.xsd" elementFormDefault="qualified" attributeFormDefault="unqualified">
+	<xs:import namespace="https://svn.jmodelica.org/trunk/XML/daeExpressions.xsd" schemaLocation="daeExpressions.xsd"/>
+	<xs:complexType name="AbstractEquation">
+		<xs:annotation>
+			<xs:documentation>Definition of the equation type in residual form exp=0</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element ref="exp:Sub"/>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="BindingEquation">
+		<xs:annotation>
+			<xs:documentation>Definition of the equation type for binding expressions in form parameter=expression</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="Parameter" type="exp:QualifiedName"/>
+			<xs:element name="BindingExp" type="exp:Exp"/>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="FunctionCallLeft">
+		<xs:annotation>
+			<xs:documentation>Element of the left hand side of a function call equation</xs:documentation>
+		</xs:annotation>
+		<xs:choice>
+			<xs:element ref="exp:Identifier"/>
+			<xs:element ref="exp:Array"/>
+			<xs:element ref="exp:RecordConstructor"/>
+			<xs:element name="EmptyOutputArgument" fixed=""/>
+		</xs:choice>
+	</xs:complexType>
+	<xs:complexType name="FunctionCallEquation">
+		<xs:annotation>
+			<xs:documentation>Set of scalar equations produced by a function call</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="OutputArgument" type="equ:FunctionCallLeft" maxOccurs="unbounded"/>
+			<xs:element ref="exp:FunctionCall"/>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:element name="DynamicEquations">
+		<xs:annotation>
+			<xs:documentation>List of flat dynamic equations of the model</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:choice minOccurs="0" maxOccurs="unbounded">
+				<xs:element name="Equation" type="equ:AbstractEquation"/>
+				<xs:element name="FunctionCallEquation" type="equ:FunctionCallEquation"/>
+			</xs:choice>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="BindingEquations">
+		<xs:annotation>
+			<xs:documentation>List of binding equations for parameters</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence minOccurs="0" maxOccurs="unbounded">
+				<xs:element name="BindingEquation" type="equ:BindingEquation"/>
+			</xs:sequence>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="InitialEquations">
+		<xs:annotation>
+			<xs:documentation>List of initial equations for the model</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence minOccurs="0" maxOccurs="unbounded">
+				<xs:element name="Equation" type="equ:AbstractEquation"/>
+			</xs:sequence>
+		</xs:complexType>
+	</xs:element>
+</xs:schema>

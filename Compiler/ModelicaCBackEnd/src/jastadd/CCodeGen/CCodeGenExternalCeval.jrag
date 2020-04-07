@@ -1,0 +1,462 @@
+/*
+Copyright (C) 2009 Modelon AB
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, version 3 of the License.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.Set;
+
+aspect CCodeGenExternalCeval {
+
+    public void FExternalStmt.setExternalArgumentAliases(CodeGenContext cgc) {
+        setExternalArgumentAliases(cgc, getName(), false);
+    }
+
+    public void FExternalStmt.setExternalArgumentAliases(CodeGenContext cgc, String name, boolean all) {
+        int i = 0;
+        for (ExternalArgument arg : varsToSerialize()) {
+            if (all || arg instanceof FExp) {
+                cgc.setAlias(arg, name + "_arg" + i);
+            }
+            i++;
+        }
+    }
+
+    public void FExternalStmt.setExternalArgumentAliases(CodeGenContext cgc, String outName, String name) {
+        setExternalArgumentAliases(cgc, name, true);
+        cgc.setAlias(myConstructorOutput(), outName);
+    }
+
+    public class DeclPrinter_ECE extends DeclPrinter_C {
+        private CodeGenContext cgc;
+        private Map<String,String> tempMap;
+        public DeclPrinter_ECE(CodePrinter p, CodeStream str, Map<String,String> tempMap, CodeGenContext cgc) {
+            super(p, str);
+            this.tempMap = tempMap;
+            this.cgc = cgc;
+        }
+        protected String acquireTemp(String key) {
+            String s = cgc.nextTempName_C();
+            tempMap.put(key, s);
+            return s;
+        }
+        protected void printComps(FType type) {
+            if (type.isExternalObject()) {
+                printComps((FExternalObjectType) type);
+                printExt((FExternalObjectType) type);
+            } else {
+                super.printComps(type);
+            }
+        }
+        protected void printComps(FExternalObjectType type) {
+            FExternalStmt stmt = type.myConstructorStmt();
+            stmt.setExternalArgumentAliases(cgc, name(), acquireTemp(name()));
+            stmt.setCodeGenContext(cgc);
+            stmt.genVarDecls_C(p, str, indent());
+            stmt.setCodeGenContext(null);
+            super.printComps(type);
+        }
+    }
+    
+    public class InitPrinter_ECE extends InitPrinter_C {
+        protected CodeGenContext cgc;
+        private Map<String,String> tempMap;
+        public InitPrinter_ECE(CodePrinter p, CodeStream str, Map<String,String> tempMap, CodeGenContext cgc) {
+            super(p, str);
+            this.tempMap = tempMap;
+            this.cgc = cgc;
+        }
+        protected String acquireTemp(String key) {
+            return tempMap.get(key);
+        }
+        protected void printArray(FType type) {
+            str.print(indent(), "JMCEVAL_parseArrayDims(", type.ndims(), ");\n");
+            super.printArray(type);
+            if (type.isExternalObject()) {
+                
+            } else {
+                type.genSerialize_C(str, indent(), name(), true);
+            }
+        }
+        protected void printNumElements(FType type) {
+            str.print("d[0]");
+            for (int i = 1; i < type.ndims(); i++)
+                str.print("*d["+i+"]");
+        }
+        protected void printDimensions(FType type) {
+            for (int i = 0; i < type.ndims(); i++)
+                str.print(", d["+i+"]");
+        }
+        protected void printScalar(FType type) {
+            if (!type.isExternalObject()) {
+                type.genSerialize_C(str, indent(), name(), true);
+            }
+        }
+        protected void printComps(FType type) {
+            if (type.isExternalObject()) {
+                printComps((FExternalObjectType) type);
+                printExt((FExternalObjectType) type);
+            } else {
+                super.printComps(type);
+            }
+        }
+        protected void printExt(FExternalObjectType type) {
+            FExternalStmt stmt = type.myConstructorStmt();
+            stmt.setExternalArgumentAliases(cgc, name(), acquireTemp(name()));
+            stmt.setCodeGenContext(cgc);
+            stmt.prettyPrint_C(p, str, indent());
+            stmt.setCodeGenContext(null);
+        }
+    }
+    
+    public class FreePrinter_ECE extends InitPrinter_C {
+        private CodeGenContext cgc;
+        private Map<String,String> tempMap;
+
+        public FreePrinter_ECE(CodePrinter p, CodeStream str, Map<String,String> tempMap, CodeGenContext cgc) {
+            super(p, str);
+            this.tempMap = tempMap;
+            this.cgc = cgc;
+        }
+
+        @Override
+        protected String acquireTemp(String key) {
+            return tempMap.get(key);
+        }
+
+        @Override
+        public void print(FType type) {
+            
+        }
+
+        @Override
+        protected void printScalar(FType type) {
+            
+        }
+
+        @Override
+        protected void printComps(FType type) {
+            if (type.isExternalObject()) {
+                printComps((FExternalObjectType) type);
+                printExt((FExternalObjectType) type);
+            }
+        }
+
+        @Override
+        protected void printExt(FExternalObjectType type) {
+            FExternalStmt stmt = type.myDestructorStmt();
+            cgc.setAlias(stmt.varsToSerialize().iterator().next(), name());
+            stmt.setCodeGenContext(cgc);
+            stmt.prettyPrint_C(p, str, indent());
+            stmt.setCodeGenContext(null);
+        }
+
+        @Override
+        public boolean initMaxInd() { return false; }
+    }
+   
+    /**
+     * Generate all C-declarations necessary for an external evaluation
+     * 
+     * @param p       ASTNode code generation visitor
+     * @param str     output code stream
+     * @param indent  indentation string
+     * @param cgc     context for generating temporaries
+     * @param tempMap maps expressions that should be replaced with temporaries
+     */
+    public void FExternalStmt.genSerialize_C(TypePrinter_C tp, String indent,
+            CodeGenContext cgc, Map<String,String> tempMap, Iterable<ExternalArgument> cvds) {
+        for (ExternalArgument cvd : cvds) {
+            String name = cgc.alias(cvd);
+            if (name == null) {
+                name = cvd.name_C();
+            }
+            tp.resetUnknown(name, cvd.type(), indent);
+            cvd.type().print(tp);
+        }
+    }
+    
+    public void FExternalStmt.genSerializeComps_C(TypePrinter_C tp, String indent,
+            CodeGenContext cgc, Map<String,String> tempMap, Iterable<ExternalArgument> cvds) {
+        for (ExternalArgument cvd : cvds) {
+            tp.resetUnknown(cvd.name_C(), cvd.type(), indent);
+            tp.printComps((FExternalObjectType)cvd.type());
+        }
+    }
+    
+    /**
+     * Generate statements for type conversions, calling the external function,
+     * and printing return values on stdout.
+     * 
+     * For parameters {@link FExternalStmt.genSerializeDecl_C}
+     */
+    public void FExternalStmt.genSerializeCalc_C(CodePrinter p, CodeStream str, String indent,
+            CodeGenContext cgc, Map<String,String> tempMap) {
+        prettyPrint_C(p, str, indent);
+        genCheckPoint(str, indent, "DONE");
+        for (ExternalArgument cvd : varsToDeserialize())
+            cvd.type().genSerialize_C(str, indent, cvd.name_C(), false);
+        str.println();
+    }
+    
+    public void FExternalStmt.genCheckPoint(CodeStream str, String indent, String token) {
+        str.print(indent);
+        str.print("JMCEVAL_check(\"");
+        str.print(token);
+        str.print("\");\n");
+    }
+    
+    /**
+     * Generate code that parses the variable <code>name</code> of type 
+     * <code>this</code> from stdin.
+     */
+    public void FType.genSerialize_C(CodeStream str, String indent, String name, boolean parse) {
+        str.print(indent, "JMCEVAL_", 
+                parse ? "parse" : "print", 
+                isArray() ? "Array(" : "(", 
+                isEnum() ? "Enum" : name(), ", ",
+                name, ");\n");
+    }
+    
+    public void FRecordType.genSerialize_C(CodeStream str, String indent, String name, boolean parse) {
+        name = name + "->";
+        for (FRecordComponentType frct : getComponents()) {
+            if (!frct.getFType().isRecord() || !parse) {
+                frct.getFType().genSerialize_C(str, indent, name + frct.getName(), parse);
+            }
+        }
+    }
+    
+    /**
+     * List of ExternalArgument which has to be sent to the process
+     * when evaluating an external function.
+     */
+    syn Collection<ExternalArgument> FExternalStmt.varsToSerialize() {
+        Collection<ExternalArgument> res = new LinkedHashSet<>();
+        if (hasReturnVar()) {
+            res.add(getReturnVar().externalArgument());
+        }
+        for (FExp e : getArgs()) {
+            res.add(e.externalArgument());
+        }
+        return res;
+    }
+    
+    syn ExternalArgument FExp.externalArgument();
+    eq FExp           .externalArgument() = this;
+    eq CommonAccessExp.externalArgument() = myCommonVarDecl().externalArgument(this);
+
+    public interface CommonVariableDecl {
+        ExternalArgument externalArgument(FExp exp);
+    }
+
+    syn ExternalArgument InstComponentDecl.externalArgument(FExp exp) = variability().constantVariability() ? exp : this;
+
+    syn ExternalArgument FAbstractVariable.externalArgument(FExp exp);
+    eq FAbstractVariable.externalArgument(FExp exp) = exp;
+    eq FFunctionVariable.externalArgument(FExp exp) = this;
+
+    syn ArrayList<ExternalArgument> FExternalStmt.externalObjectsToSerialize() {
+        ArrayList<ExternalArgument> externalObjects = new ArrayList<ExternalArgument>();
+        for (ExternalArgument var : varsToSerialize()) {
+            if (var.type().isExternalObject()) {
+                externalObjects.add(var);
+            }
+        }
+        return externalObjects;
+    }
+
+    syn ArrayList<ExternalArgument> FExternalStmt.functionArgsToSerialize() {
+        ArrayList<ExternalArgument> functionArgs = new ArrayList<ExternalArgument>();
+        for (ExternalArgument var : varsToSerialize()) {
+            if (!var.type().isExternalObject()) {
+                functionArgs.add(var);
+            }
+        }
+        return functionArgs;
+    }
+    
+    /**
+     * List of CommonVariableDecl which has to be read from the process
+     * when evaluating an external function.
+     */
+    syn ArrayList<ExternalArgument> FExternalStmt.varsToDeserialize() {
+        ArrayList<ExternalArgument> res = new ArrayList<>();
+        for (ExternalArgument cvd : varsToSerialize()) {
+            if (cvd.isOutput()) {
+                res.add(cvd);
+            }
+        }
+        return res;
+    }
+
+    /**
+     * Declarations of records used in this function
+     */
+    public Map<String,FType> FExternalStmt.usedTypes() {
+        Map<String,FType> res = new LinkedHashMap<String,FType>();
+        for (ExternalArgument cvd : varsToSerialize()) {
+            cvd.type().usedTypes(res);
+        }
+        return res;
+    }
+    
+    public void FType.usedTypes(Map<String,FType> res) {
+        if (res.containsKey(name())) {
+            return;
+        }
+        res.put(name(), this);
+    }
+    public void FRecordType.usedTypes(Map<String,FType> res) {
+        if (res.containsKey(name())) {
+            return;
+        }
+        for (FRecordComponentType frct : getComponents()) {
+            frct.getFType().usedTypes(res);
+        }
+        res.put(name(), this);
+    }
+    public void FExternalObjectType.usedTypes(Map<String,FType> res) {
+        if (res.containsKey(name())) {
+            return;
+        }
+        res.put(name(), this);
+        FExternalStmt stmt = myConstructorStmt();
+        for (ExternalArgument arg : stmt.varsToSerialize()) {
+            FType t = arg.type();
+            boolean par = t.getParent() == null;
+            if (par) {
+                t.setParent(stmt);
+            }
+            t.usedTypes(res);
+            if (par) {
+                t.setParent(null);
+            }
+        }
+    }
+
+    public String FClass.externalDependencies() {
+        StringBuilder sb = new StringBuilder();
+        for (FExternalStmt stmt : myExternals()) {
+            Set<String> incs    = new LinkedHashSet();
+            Set<String> incDirs = new LinkedHashSet();
+            Set<String> libs    = new LinkedHashSet();
+            Set<String> libDirs = new LinkedHashSet();
+            stmt.externalDependencies(incs, incDirs, libs, libDirs);
+            
+            sb.append(stmt.getName());
+            sb.append("\n");
+            for (String s : incs) {
+                sb.append(s);
+                sb.append("\n");
+            }
+            for (String s : incDirs) {
+                sb.append(new File(s).getName());
+                sb.append("\n");
+            }
+            for (String s : libs) {
+                sb.append(s);
+                sb.append("\n");
+            }
+            for (String s : libDirs) {
+                sb.append(new File(s).getName());
+                sb.append("\n");
+            }
+            sb.append("\n");
+        }
+        return sb.toString();
+    }
+
+    public void FExternalStmt.externalDependencies(
+            Set<String> incs, Set<String> incDirs,
+            Set<String> libs, Set<String> libDirs) {
+        for (FExternalStmt dep : externalDependencies()) {
+            if (incs != null && dep.include() != null) {
+                incs.add(dep.include());
+            }
+            if (incDirs != null && dep.includeDirectory() != null) {
+                incDirs.add(dep.includeDirectory());
+            }
+            if (libs != null && dep.library() != null) {
+                for (String lib : dep.library()) {
+                    libs.add(lib);
+                }
+            }
+            if (libDirs != null && dep.libraryDirectory() != null) {
+                libDirs.add(dep.libraryDirectory());
+            }
+        }
+    }
+
+    public Set<FExternalStmt> FExternalStmt.externalDependencies() {
+        Set<FExternalStmt> res = new LinkedHashSet<FExternalStmt>();
+        externalDependencies(res);
+        return res;
+    }
+
+    public void FExternalStmt.externalDependencies(Set<FExternalStmt> res) {
+        if (res.contains(this)) {
+            return;
+        }
+        res.add(this);
+        
+        for (ExternalArgument arg : varsToSerialize()) {
+            FType t = arg.type();
+            boolean par = t.getParent() == null;
+            if (par) {
+                t.setParent(this);
+            }
+            t.externalDependencies(res);
+            if (par) {
+                t.setParent(null);
+            }
+        }
+        
+        res.remove(this);
+        res.add(this);
+    }
+
+    public void FType.externalDependencies(Set<FExternalStmt> res) {
+        
+    }
+
+    public void FRecordType.externalDependencies(Set<FExternalStmt> res) {
+        for (FRecordComponentType frct : getComponents()) {
+            frct.getFType().externalDependencies(res);
+        }
+    }
+    
+    public void FExternalObjectType.externalDependencies(Set<FExternalStmt> res) {
+        myConstructorStmt().externalDependencies(res);
+        myDestructorStmt().externalDependencies(res);
+    }
+
+    /*
+     * Some code generation for the instance tree.
+     */
+    syn String InstAccess.name_C() = toString_C(printer_C);
+
+    syn String InstAccess.toString_C(CodePrinter p) =
+        myInstLookupComponent().target().name_C();
+
+    public String InstComponentDecl.name_C() {
+        StringBuilder buf = new StringBuilder();
+        buf.append(getFAccess().nameUnderscore());
+        buf.append('_');
+        buf.append(type().isArray() ? C_SUFFIX_ARRAY : C_SUFFIX_VARIABLE);
+        return buf.toString();
+    }
+}

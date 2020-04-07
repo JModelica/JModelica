@@ -1,0 +1,42 @@
+package ContState
+
+   model ContState
+     //State start values
+     parameter Real x1_0 = 0;
+     parameter Real x2_0 =-1;
+     
+     //States
+     Real x1(start = x1_0, fixed=true);
+	 Real x2(start = x2_0, fixed=true); 
+     Real p;
+	 
+	 //Control Signal
+	 input Real u;
+	 
+	 equation
+	  der(x1) = x2;
+	  der(x2) = -x2+u;
+   end ContState;	  
+	
+   optimization ContState_opt (objective = J(finalTime),
+                            startTime = 0,
+                            finalTime = 1)
+                            
+      extends ContState(x1(fixed=true),x2(fixed=true),p);														
+	  Real J(fixed=true);     
+														  
+   equation
+	  der(J) = x1^2+x2^2+0.005*u^2;	
+      p = 8*(time-0.5)^2-0.5-x2;
+   constraint
+      -10<=x1;
+	  x1<=10;
+	  -10<=x2;
+	  x2<=10;
+	  -20<=u;
+	  u<=20;
+	  8*(time-0.5).^2-0.5-x2 >= 0;
+
+   end ContState_opt;
+
+end ContState;

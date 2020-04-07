@@ -1,0 +1,776 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect PredefinedTypes {
+
+    inh boolean SrcClassDecl.isBuiltInClass();
+    eq SourceRoot.getChild().isBuiltInClass()        = false;
+    eq Program.getPredefinedType().isBuiltInClass()  = true;
+    eq Program.getBuiltInType().isBuiltInClass()     = true;
+    eq Program.getBuiltInFunction().isBuiltInClass() = true;
+
+    public List SourceRoot.computePredefinedType() {
+        return getProgram().getPredefinedTypeList();
+    }
+    
+    inh List SrcFullClassDecl.getPredefinedType();
+    eq SourceRoot.getProgram().getPredefinedType() = computePredefinedType();
+    eq Root.getChild().getPredefinedType() = null;
+
+    
+    /* The predefined types Real, Integer etc of Modelica are
+     * much like user-defined classes, in that they have components 
+     * (called attributes). However, the types of attributes are restricted
+     * to RealType, IntegerType, StringType and BooleanType, which corresponds
+     * to machine representations (in the following referred to as built-in types). 
+     * It is therefore convenient to implement the predefined types
+     * as regular classes, in order to reuse the name and type lookup mechanisms.
+     * Some differences apply however. The types of predefined types must
+     * be looked up only amongst the built-in types. Also, there are no 
+     * component accesses that needs to be looked up predefined types.
+     * The predefined types are defined in the (list) non terminal attribute
+     * PredefinedType.
+     */
+
+    syn String Program.builtInTypeDefs() = builtInBaseTypeDefs() + 
+                                           builtInTypeClassDefs();
+
+    syn String Program.builtInBaseTypeDefs() = realTypeDef()    + 
+                                               integerTypeDef() + 
+                                               booleanTypeDef() + 
+                                               stringTypeDef()  + 
+                                               externalTypeDef();
+    syn String Program.realTypeDef()     = makeBaseTypeDef("Real",    realAttributeDefs());
+    syn String Program.integerTypeDef()  = makeBaseTypeDef("Integer", integerAttributeDefs());
+    syn String Program.booleanTypeDef()  = makeBaseTypeDef("Boolean", booleanAttributeDefs());
+    syn String Program.stringTypeDef()   = makeBaseTypeDef("String",  stringAttributeDefs());
+    syn String Program.externalTypeDef() = "partial model ExternalObject\n" + 
+                                           "end ExternalObject;\n";
+
+    syn String[] Program.realAttributeDefs() = 
+        new String[] { 
+            makeAttributeDef("value",       "Real",    null), 
+            makeAttributeDef("quantity",    "String",  "\"\""), 
+            makeAttributeDef("unit",        "String",  "\"\""), 
+            makeAttributeDef("displayUnit", "String",  "\"\""), 
+            makeAttributeDef("min",         "Real",    "-1e20"), 
+            makeAttributeDef("max",         "Real",    "1e20"), 
+            makeAttributeDef("start",       "Real",    "0.0"), 
+            makeAttributeDef("fixed",       "Boolean", "false"), 
+            makeAttributeDef("nominal",     "Real",    "0.0"), 
+            makeAttributeDef("stateSelect", "Enum",    "StateSelect.default"), 
+        };
+
+    syn String[] Program.integerAttributeDefs() = 
+        new String[] { 
+            makeAttributeDef("value",    "Integer", null), 
+            makeAttributeDef("quantity", "String",  "\"\""), 
+            makeAttributeDef("min",      "Integer", Integer.toString(Integer.MIN_VALUE)), 
+            makeAttributeDef("max",      "Integer", Integer.toString(Integer.MAX_VALUE)), 
+            makeAttributeDef("start",    "Integer", "0"), 
+            makeAttributeDef("fixed",    "Boolean", "false"), 
+        };
+
+    syn String[] Program.booleanAttributeDefs() = 
+        new String[] { 
+            makeAttributeDef("value",    "Boolean", null), 
+            makeAttributeDef("quantity", "String",  "\"\""), 
+            makeAttributeDef("start",    "Boolean", "false"), 
+            makeAttributeDef("fixed",    "Boolean", "true"), 
+        };
+
+    syn String[] Program.stringAttributeDefs() = 
+        new String[] { 
+            makeAttributeDef("value",    "String", null), 
+            makeAttributeDef("quantity", "String", "\"\""), 
+            makeAttributeDef("start",    "String", "\"\""), 
+        };
+
+    syn String Program.builtInTypeClassDefs() = stateSelectTypeDef()    + 
+                                                assertionLevelTypeDef() + 
+                                                colorTypeDef()          + 
+                                                linePatternTypeDef()    + 
+                                                fillPatternTypeDef()    + 
+                                                borderPatternTypeDef()  + 
+                                                smoothTypeDef()         + 
+                                                arrowTypeDef()          + 
+                                                textStyleTypeDef()      + 
+                                                textAlignmentTypeDef();
+    syn String Program.stateSelectTypeDef()      = 
+        makeEnumDef("StateSelect", 
+                "never   \"Do not use as state at all.\"",
+                "avoid   \"Use as state, if it cannot be avoided (but only if variable appears differentiated and no other potential state with attribute default, prefer, or always can be selected).\"",
+                "default \"Use as state if appropriate, but only if variable appears differentiated.\"",
+                "prefer  \"Prefer it as state over those having the default value (also variables can be selected, which do not appear differentiated).\"",
+                "always  \"Do use it as a state.\"");
+    syn String Program.assertionLevelTypeDef() = 
+        makeEnumDef("AssertionLevel", "error", "warning");
+    syn String Program.colorTypeDef()            = 
+        "type Color = Integer[3](min=0, max=255) \"RGB representation\";\n";
+    syn String Program.linePatternTypeDef()      = 
+        makeEnumDef("LinePattern", "None", "Solid", "Dash", "Dot", "DashDot", "DashDotDot");
+    syn String Program.fillPatternTypeDef()      = 
+        makeEnumDef("FillPattern", 
+                "None", "Solid", "Horizontal", "Vertical", "Cross", "Forward", "Backward", 
+                "CrossDiag", "HorizontalCylinder", "VerticalCylinder", "Sphere");
+    syn String Program.borderPatternTypeDef()    = 
+        makeEnumDef("BorderPattern", "None", "Raised", "Sunken", "Engraved");
+    syn String Program.smoothTypeDef()           = 
+        makeEnumDef("Smooth", "None", "Bezier");
+    syn String Program.arrowTypeDef()            = 
+        makeEnumDef("Arrow", "None", "Open", "Filled", "Half");
+    syn String Program.textStyleTypeDef()        = 
+        makeEnumDef("TextStyle", "Bold", "Italic", "UnderLine");
+    syn String Program.textAlignmentTypeDef()    = 
+        makeEnumDef("TextAlignment", "Left", "Center", "Right");
+
+    public static String Program.makeBaseTypeDef(String name, String... lines) {
+        StringBuilder buf = new StringBuilder();
+        buf.append("type ");
+        buf.append(name);
+        buf.append("\n");
+        for (String line : lines) {
+            buf.append("    ");
+            buf.append(line);
+        }
+        buf.append("end ");
+        buf.append(name);
+        buf.append(";\n");
+        return buf.toString();
+    }
+
+    public static String Program.makeAttributeDef(String name, String type, String value) {
+        StringBuilder buf = new StringBuilder();
+        if (value != null) {
+            buf.append("parameter ");
+        }
+        buf.append(type);
+        buf.append("Type ");
+        buf.append(name);
+        if (value != null) {
+            buf.append(" = ");
+            buf.append(value);
+        }
+        buf.append(";\n");
+        return buf.toString();
+    }
+
+    public static String Program.makeEnumDef(String name, String... items) {
+        StringBuilder buf = new StringBuilder();
+        buf.append("type ");
+        buf.append(name);
+        buf.append(" = enumeration(");
+        boolean comma = false;
+        for (String item : items) {
+            if (comma) {
+                buf.append(", ");
+            } else {
+                comma = true;
+            }
+            buf.append(item);
+        }
+        buf.append(");\n");
+        return buf.toString();
+    }
+
+    /**
+     * This attribute defines the NTA for predefined types
+     * which contains a list of predefined PrimitiveClassDef:s.
+     */
+    syn lazy List Program.getPredefinedTypeList() {
+        List l = new List();
+
+        SrcPrimitiveClassDecl pcd = null;
+
+        Program p;
+        try {
+            UtilInterface util = root().getUtilInterface();
+            p = util.getParserHandler().parseString(util, builtInTypeDefs(), LoadInfo.empty()).getProgram();
+        } catch (Exception e) {
+            return l;
+        }
+        
+        Set<String> primitives = new HashSet<String>();
+        primitives.add("Real");
+        primitives.add("Integer");
+        primitives.add("Boolean");
+        primitives.add("String");
+        
+        for (SrcClassDecl cd : p.getUnstructuredEntity(0).getSrcClassDecls()) {
+            if (primitives.contains(cd.name())) {
+                l.add(SrcPrimitiveClassDecl.create(cd.asFullClassDecl())); 
+            } else {
+                l.add(cd);
+            }
+        }
+        
+        return l;
+    }
+    
+    /**
+     * This attribute defines the NTA for obtaining a base enumeration
+     * declaration, which is used to construct user defined enumeration
+     * types.
+     */
+    syn lazy SrcEnumClassDecl Program.getEnumBaseDecl() {
+
+        // Build a string with a Modelica class corresponding to a basic
+    	// enumeration
+        String builtInDef = 
+                "type BaseEnum\n"
+              + "EnumType value;\n"
+              + "parameter StringType quantity=\"\";\n"
+              + "parameter EnumType min, max;\n"
+              + "parameter EnumType start;\n"
+              + "parameter BooleanType fixed=false;\n"
+              + "end BaseEnum;\n";
+        
+        SrcEnumClassDecl ecd = null;
+  
+        try {
+        
+            UtilInterface util = root().getUtilInterface();
+            SourceRoot sr = util.getParserHandler().parseString(util, builtInDef, LoadInfo.empty());
+            Program p = sr.getProgram();
+
+            SrcFullClassDecl cd = p.getUnstructuredEntity(0).getSrcClassDecl(0).asFullClassDecl();
+            
+            ecd = new SrcEnumClassDecl(cd);
+        
+        } catch(Exception e){e.printStackTrace();}
+            
+        //log.debug("Program.getPredefinedTypeList(): "+l.getNumChild());
+        
+        return ecd;
+    }
+
+    /**
+     * Create from a SrcFullClassDecl - will destroy that node!
+     */
+    public SrcFullClassDecl.SrcFullClassDecl(SrcFullClassDecl fcd) {
+        this(fcd.getName(),
+             fcd.getEncapsulated(),
+             fcd.getPartial(),
+             fcd.getSrcRestriction(),
+             fcd.getRedeclare(),
+             fcd.getFinal(),
+             fcd.getInner(),
+             fcd.getOuter(),
+             fcd.getReplaceable(),
+             fcd.getSrcConstrainingClauseOpt(),
+             fcd.getConstrainingClauseCommentOpt(),
+             fcd.getSrcStringCommentOpt(),
+             fcd.getSrcClauseList(),
+             fcd.getSrcExternalClauseOpt(),
+             fcd.getSrcAnnotationOpt(),
+             fcd.getSrcEndDecl());
+        setLocation(fcd);
+    }
+
+    /**
+     * Create from a SrcFullClassDecl - will destroy that node!
+     */
+    public SrcEnumClassDecl.SrcEnumClassDecl(SrcFullClassDecl fcd) {
+        super(fcd);
+    }
+
+    /**
+     * Create from a SrcFullClassDecl - will destroy that node!
+     */
+    public SrcPrimitiveClassDecl.SrcPrimitiveClassDecl(SrcFullClassDecl fcd) {
+        super(fcd);
+    }
+
+    /**
+     * Create from a SrcFullClassDecl - will destroy that node!
+     */
+    public SrcRealClassDecl.SrcRealClassDecl(SrcFullClassDecl fcd) {
+        super(fcd);
+    }
+
+    /**
+     * Create from a SrcFullClassDecl - will destroy that node!
+     */
+    public SrcIntegerClassDecl.SrcIntegerClassDecl(SrcFullClassDecl fcd) {
+        super(fcd);
+    }
+
+    /**
+     * Create from a SrcFullClassDecl - will destroy that node!
+     */
+    public SrcBooleanClassDecl.SrcBooleanClassDecl(SrcFullClassDecl fcd) {
+        super(fcd);
+    }
+
+    /**
+     * Create from a SrcFullClassDecl - will destroy that node!
+     */
+    public SrcStringClassDecl.SrcStringClassDecl(SrcFullClassDecl fcd) {
+        super(fcd);
+    }
+
+    /**
+     * Create instance of correct subclass from a SrcFullClassDecl - 
+     * will destroy that node!
+     */
+    static public SrcPrimitiveClassDecl SrcPrimitiveClassDecl.create(SrcFullClassDecl fcd) {
+        String name = fcd.name();
+        if (name.equals("Real")) {
+            return new SrcRealClassDecl(fcd);
+        } else if (name.equals("Integer")) {
+            return new SrcIntegerClassDecl(fcd);
+        } else if (name.equals("Boolean")) {
+            return new SrcBooleanClassDecl(fcd);
+        } else if (name.equals("String")) {
+            return new SrcStringClassDecl(fcd);
+        } else {
+            return new SrcPrimitiveClassDecl(fcd);
+        }
+    }
+
+
+    private static final String Program.BUILTIN_FUNCS = 
+              "function initial end initial;\n"
+            + "function terminal end terminal;\n"
+            + "function smooth\n"
+            + "  input Integer p;\n"
+            + "  input Real expr;\n"   // Type not used
+            + "  output Real y;\n"     // Type not used
+            + "end smooth;\n"
+            + "function noEvent\n"
+            + "  input Real expr;\n"   // Type not used
+            + "  output Real y;\n"     // Type not used
+            + "end noEvent;\n"
+            + "function sample\n"
+            + "  input Real start;\n"
+            + "  input Real interval;\n"
+            + "  output Real y;\n"     // Type not used
+            + "end sample;\n"
+            + "function pre\n"
+            + "  input Real x;\n"      // Type not used
+            + "  output Real y;\n"     // Type not used
+            + "end pre;\n"
+            + "function edge\n"
+            + "  input Real x;\n"      // Type not used
+            + "  output Real y;\n"     // Type not used
+            + "end edge;\n"
+            + "function change\n"
+            + "  input Real x;\n"      // Type not used
+            + "  output Real y;\n"     // Type not used
+            + "end change;\n"
+            + "function reinit\n"
+            + "  input Real x;\n"      // Type not used
+            + "  input Real expr;\n"     // Type not used
+            + "end reinit;\n"
+            + "function assert\n"
+            + "  input Boolean condition;\n"
+            + "  input String message;\n"
+            + "  input AssertionLevel level = AssertionLevel.error;\n"
+            + "end assert;\n"
+            + "function terminate\n"
+            + "  input String reason;\n"
+            + "end terminate;\n"
+            + "function abs\n"
+            + "  input Real v;\n"
+            + "  output Real y;\n"
+            + "end abs;\n"
+            + "function sign\n"
+            + "  input Real v;\n"
+            + "  output Real y;\n"
+            + "end sign;\n"
+            + "function sqrt\n"
+            + "  input Real x;\n"
+            + "  output Real y;\n"
+            + "end sqrt;\n"
+            + "function universeLifeAndEverything\n"
+            + "  output Integer y = 42;\n"
+            + "algorithm\n"
+            + "end universeLifeAndEverything;\n"
+            + "function div"
+            + "  input Real x1;\n"      // Type not used
+            + "  input Real x2;\n"      // Type not used
+            + "  output Real y;\n"     // Type not used
+            + "end div;\n"
+            + "function mod"
+            + "  input Real x1;\n"      // Type not used
+            + "  input Real x2;\n"      // Type not used
+            + "  output Real y;\n"     // Type not used
+            + "end mod;\n"
+            + "function rem"
+            + "  input Real x1;\n"      // Type not used
+            + "  input Real x2;\n"      // Type not used
+            + "  output Real y;\n"     // Type not used
+            + "end rem;\n"
+            + "function floor"
+            + "  input Real x;\n"      // Type not used
+            + "  output Real y;\n"     // Type not used
+            + "end floor;\n"
+            + "function ceil"
+            + "  input Real x;\n"      // Type not used
+            + "  output Real y;\n"     // Type not used
+            + "end ceil;\n"
+            + "function integer"
+            + "  input Real x;\n"      // Type not used
+            + "  output Integer y;\n"  // Type not used
+            + "end integer;\n"
+            + "function Integer"
+            + "  input Real x;\n"      // Type not used
+            + "  output Integer y;\n"  // Type not used
+            + "end Integer;\n"
+            + "function String"
+            + "  input Real x;\n"      // Type not used
+            + "  input Integer minimumLength = 0;\n"
+            + "  input Boolean leftJustified = true;\n"
+            + "  input Integer significantDigits = 6;\n"
+            + "  input String format = \"\";\n"
+            + "  output String y;\n"
+            + "end String;\n"
+            + "function delay"
+            + "  input Real exp;\n"      // Type not used
+            + "  input Real delayTime;\n"
+            + "  input Real delayMax = delayTime;\n"
+            + "  output Real y;\n"       // Type not used
+            + "end delay;\n"
+            + "function spatialDistribution"
+            + "  input Real in0;\n"
+            + "  input Real in1;\n"
+            + "  input Real x;\n"
+            + "  input Boolean positiveVelocity;\n"
+            + "  input Real[:] initialPoints = {0.0, 1.0};\n"
+            + "  input Real[:] initialValues = {0.0, 0.0};\n"
+            + "  output Real out0;\n"
+            + "  output Real out1;\n"
+            + "end spatialDistribution;\n"
+            + "function cardinality"
+            + "  input Real x;\n"      // Type not used
+            + "  output Integer y;\n"  // Type not used
+            + "end cardinality;\n"
+            + "package Subtask"
+            + "  function decouple"
+            + "    input Real x;\n"      // Type not used
+            + "    output Integer y;\n"  // Type not used
+            + "  end decouple;\n"
+            + "end Subtask;\n"
+            + "function ndims\n"
+            + "  input Real A;\n"      // Type not used
+            + "  output Integer n;\n"
+            + "end ndims;\n"
+            + "function size\n"
+            + "  input Real A;\n"         // Type not used
+            + "  input Integer d = 0;\n"  // Default value not used
+            + "  output Integer s;\n"
+            + "end size;\n"
+            + "function scalar"
+            + "  input Real A;\n"      // Type not used
+            + "  output Real y;\n"     // Type not used
+            + "end scalar;\n"
+            + "function vector"
+            + "  input Real A;\n"      // Type not used
+            + "  output Real B;\n"     // Type not used
+            + "end vector;\n"
+            + "function matrix"
+            + "  input Real A;\n"      // Type not used
+            + "  output Real B;\n"     // Type not used
+            + "end matrix;\n"
+            + "function transpose\n"
+            + "  input Real A;\n"    // Type not used
+            + "  output Real B;\n"   // Type not used
+            + "end transpose;\n"
+            + "function symmetric\n"
+            + "  input Real A;\n"    // Type not used
+            + "  output Real B;\n"   // Type not used
+            + "end symmetric;\n"
+            + "function cross\n"
+            + "  input Real x[3];\n"
+            + "  input Real y[3];\n"
+            + "  output Real z[3];\n"   // Type not used
+            + "end cross;\n"
+            + "function outerProduct\n"
+            + "  input Real x[:];\n"
+            + "  input Real y[:];\n"
+            + "  output Real z[:,:];\n"   // Type not used
+            + "end outerProduct;\n"
+            + "function diagonal\n"
+            + "  input Real v[:];\n"
+            + "  output Real z[:,:];\n"   // Type not used
+            + "end diagonal;\n"
+            + "function identity\n"
+            + "  input Integer n;\n"
+            + "  output Integer a[n, n];\n"
+            + "end identity;\n"
+            + "function array end array;\n"
+            + "function zeros end zeros;\n"
+            + "function ones end ones;\n"
+            + "function fill\n"
+            + "  input Real s;\n"      // Type not used
+            + "  output Real o;\n"     // Type not used
+            + "end fill;\n"
+            + "function cat\n"
+            + "  input Real k;\n"      // Type not used
+            + "  output Real o;\n"     // Type not used
+            + "end cat;\n"
+            + "function linspace\n" 
+            + "  input Real x1;\n"
+            + "  input Real x2;\n"
+            + "  input Integer n;\n"
+            + "  output Real z[1];\n"   // Size not used
+            + "end linspace;\n"
+            + "function min\n"
+            + "  input Real x;\n"      // Type not used
+            + "  input Real y = 0;\n"  // Type and default value not used
+            + "  output Real z;\n"     // Type not used
+            + "end min;\n"
+            + "function max\n"
+            + "  input Real x;\n"      // Type not used
+            + "  input Real y = 0;\n"  // Type and default value not used
+            + "  output Real z;\n"     // Type not used
+            + "end max;\n"
+            + "function sum\n"
+            + "  input Real A;\n"      // Type not used
+            + "  output Real o;\n"     // Type not used
+            + "end sum;\n"
+            + "function product\n"
+            + "  input Real A;\n"      // Type not used
+            + "  output Real o;\n"     // Type not used
+            + "end product;\n"
+            + "function skew\n"
+            + "  input Real x[3];\n"
+            + "  output Real y[3,3];\n"   // Type not used
+            + "end skew;\n"
+            + "function homotopy\n"
+            + "  input Real actual;\n"
+            + "  input Real simplified;\n"
+            + "  output Real o;\n"
+            + "end homotopy;\n"
+            + "function semiLinear\n"
+            + "  input Real v1;\n"     // Type not used
+            + "  input Real v2;\n"     // Type not used
+            + "  input Real v3;\n"     // Type not used
+            + "  output Real o;\n"     // Type not used
+            + "end semiLinear;\n"
+            + "function inStream\n"
+            + "  input Real v;\n"      // Type not used
+            + "  output Real o;\n"     // Type not used
+            + "end inStream;\n"
+            + "function actualStream\n"
+            + "  input Real n;\n"      // Type not used
+            + "  output Real o;\n"     // Type not used
+            + "end actualStream;\n"
+            + "function getInstanceName\n"
+            + "  output String o;\n"
+            + "end getInstanceName;\n"
+            + "function sin \"sine\"\n"
+            + "  input Modelica.SIunits.Angle u;\n"
+            + "  output Real y;\n"
+            + "end sin;\n"
+            + "function cos \"cosine\"" 
+            + "  input Modelica.SIunits.Angle u;\n"
+            + "  output Real y;\n"
+            + "end cos;\n"
+            + "function tan \"tangent (u shall not be -pi/2, pi/2, 3*pi/2, ...)\"\n"
+            + "  input Modelica.SIunits.Angle u;\n"
+            + "  output Real y;\n"
+            + "end tan;\n"
+            + "function asin \"inverse sine (-1 <= u <= 1)\"\n"
+            + "  input Real u;\n"
+            + "  output Modelica.SIunits.Angle y;\n"
+            + "end asin;\n"
+            + "function acos \"inverse cosine (-1 <= u <= 1)\"\n"
+            + "  input Real u;\n"
+            + "  output Modelica.SIunits.Angle y;\n"
+            + "end acos;\n"
+            + "function atan \"inverse tangent\"\n"
+            + "  input Real u;\n"
+            + "  output Modelica.SIunits.Angle y;\n"
+            + "end atan;\n"
+            + "function atan2 \"four quadrant inverse tangent\"\n"
+            + "  input Real u1;\n"
+            + "  input Real u2;\n"
+            + "  output Modelica.SIunits.Angle y;\n"
+            + "end atan2;\n"
+            + "function sinh \"hyperbolic sine\"\n"
+            + "  input Real u;\n"
+            + "  output Real y;\n"
+            + "end sinh;\n"
+            + "function cosh \"hyperbolic cosine\"\n"
+            + "  input Real u;\n"
+            + "  output Real y;\n"
+            + "end cosh;\n"
+            + "function tanh \"hyperbolic tangent\"\n"
+            + "  input Real u;\n"
+            + "  output Real y;\n"
+            + "end tanh;\n"
+            + "function exp \"exponential, base e\"\n"
+            + "  input Real u;\n"
+            + "  output Real y;\n"
+            + "end exp;\n"
+            + "function log \"natural (base e) logarithm (u shall be > 0)\"\n"
+            + "  input Real u;\n"
+            + "  output Real y;\n"
+            + "end log;\n"
+            + "function log10 \"base 10 logarithm (u shall be > 0)\"\n"
+            + "  input Real u;\n"
+            + "  output Real y;\n"
+            + "end log10;\n"
+            + "package Connections"
+            + "  function branch"
+            + "    input Real a;\n"      // Type not used
+            + "    input Real b;\n"      // Type not used
+            + "  end branch;"
+            + "  function root"
+            + "    input Real a;\n"      // Type not used
+            + "  end root;"
+            + "  function potentialRoot"
+            + "    input Real A;\n"      // Type not used
+            + "    input Integer priority = 0;\n"
+            + "  end potentialRoot;"
+            + "  function isRoot"
+            + "    input Real a;\n"      // Type not used
+            + "  end isRoot;"
+            + "  function rooted"
+            + "    input Real a;\n"      // Type not used
+            + "    output Boolean y;\n"
+            + "  end rooted;"
+            + "end Connections;"
+            + "function rooted"
+            + "  input Real a;\n"      // Type not used
+            + "  output Boolean y;\n"
+            + "end rooted;"
+            ;
+
+    /**
+     * This attribute defines the NTA for predefined types
+     * which contains a list of predefined SrcPrimitiveClassDecl:s.
+     */
+    syn lazy List<SrcBaseClassDecl> Program.getBuiltInFunctionList() {
+        List<SrcBaseClassDecl> l = new List<SrcBaseClassDecl>();
+  
+        try {
+            UtilInterface util = root().getUtilInterface();
+            SourceRoot sr = util.getParserHandler().parseString(util, BUILTIN_FUNCS, LoadInfo.empty());
+            Program p = sr.getProgram();
+            
+            SrcExternalClause builtin = new SrcExternalClause(new Opt(new SrcExternalLanguage("builtin")), new Opt(), new Opt());
+            for (SrcClassDecl cd : p.getUnstructuredEntity(0).getSrcClassDecls()) 
+                cd.addBuiltinFunctions(l, builtin);
+        } catch (Exception e) {}
+        
+        return l;
+    }
+
+    public void SrcElement.addBuiltinFunctions(List<? super SrcBaseClassDecl> list, SrcExternalClause builtin) {
+        throw new UnsupportedOperationException("While processing list of built-in function headers, found " +
+                getClass().getSimpleName() + ": \n" + this);
+    }
+
+    public void SrcClause.addBuiltinFunctions(List<? super SrcBaseClassDecl> list, SrcExternalClause builtin) {
+        throw new UnsupportedOperationException("While processing list of built-in function headers, found " +
+                getClass().getSimpleName() + ": \n" + this);
+    }
+
+    public void SrcElementList.addBuiltinFunctions(List<? super SrcBaseClassDecl> list, SrcExternalClause builtin) {
+        for (SrcElement e : getSrcElements()) {
+            e.addBuiltinFunctions(list, builtin);
+        }
+    }
+
+    public void SrcFullClassDecl.addBuiltinFunctions(List<? super SrcBaseClassDecl> list, SrcExternalClause builtin) {
+        if (isPackage()) {
+            List<SrcElement> subList = new List<SrcElement>();
+            for (SrcClause cd : getSrcClauses()) {
+                cd.addBuiltinFunctions(subList, builtin);
+            }
+            setSrcClauseList(new List<SrcClause>().add(new SrcDefaultElementList(subList)));
+        } else {
+            String name = getName().getID();
+            if (name.equals("Integer") || name.equals("String")) {
+                // Add character that isn't allowed in identifiers to prevent collision with user class or the primitive class
+                name = "!" + name;
+                getName().setID(name);
+                getSrcEndDecl().setEndID(name);
+            }
+            if (!algorithms().iterator().hasNext()) {
+                setSrcExternalClause(builtin.fullCopy());
+            }
+        }
+        list.add(this);
+    }
+
+    /**
+     * This attribute defines the NTA for predefined types
+     * which contains a list of predefined BuiltInType:s.
+     */
+    syn lazy List Program.getBuiltInTypeList() {
+        List l = new List();
+        l.add(new SrcBuiltInClassDecl(new SrcIdDecl("RealType")));
+        l.add(new SrcBuiltInClassDecl(new SrcIdDecl("IntegerType")));
+        l.add(new SrcBuiltInClassDecl(new SrcIdDecl("BooleanType")));
+        l.add(new SrcBuiltInClassDecl(new SrcIdDecl("StringType")));
+        l.add(new SrcBuiltInClassDecl(new SrcIdDecl("EnumType")));
+        return l;
+    }
+
+    /**
+     * Check if this class has a restriction.
+     */
+    syn boolean SrcClassDecl.hasSrcRestriction() = false;
+    eq SrcBaseClassDecl.hasSrcRestriction()      = true;
+    eq SrcBuiltInClassDecl.hasSrcRestriction()   = true;
+
+    /**
+     * Get the restriction of this class.
+     */
+    public SrcRestriction SrcClassDecl.getSrcRestriction() {
+        throw new UnsupportedOperationException();
+    }
+
+    public SrcRestriction SrcBuiltInClassDecl.getSrcRestriction() {
+        return root().getBuiltInClassRestriction();
+    }
+    
+    syn nta SrcRestriction Root.getBuiltInClassRestriction() = new SrcType();
+}
+
+aspect InstPredefinedTypes {
+
+    syn lazy List InstProgramRoot.getInstPredefinedTypeList() {
+        List l = new List();
+        for (SrcBaseClassDecl pcd : getProgram().getPredefinedTypes()) {
+            l.add(pcd.newInstClassDecl());
+        }
+        return l;
+    }
+
+    syn lazy List InstProgramRoot.getInstBuiltInTypeList() {
+        List l = new List();
+        for (SrcClassDecl pcd : getProgram().getBuiltInTypes()) {
+            l.add(pcd.newInstClassDecl());
+        }
+        return l;
+    }
+
+    syn lazy List InstProgramRoot.getInstBuiltInFunctionList() {
+        List l = new List();
+        for (SrcBaseClassDecl bcd : getProgram().getBuiltInFunctions()) {
+            l.add(bcd.newInstClassDecl());
+        }
+        return l;
+    }
+}
+
+aspect AnnotationTypes {
+    
+}

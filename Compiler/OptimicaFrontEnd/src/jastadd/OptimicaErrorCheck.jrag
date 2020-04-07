@@ -1,0 +1,131 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect OptimicaErrorCheck {
+
+  	public void InstOptClassDecl.collectErrors(ErrorCheckType type) {
+    	super.collectErrors(type);
+    	getFConstraintList().collectErrors(type);
+    	getInstClassModificationOpt().collectErrors(type);
+    	
+    	if (hasInstClassModification()) 
+    		for (InstModification im : getInstClassModification().getInstArgumentList()) 
+    			im.checkOptimicaAttribute(this);
+  	}
+  	
+  	public void InstModification.checkOptimicaAttribute(InstOptClassDecl iocd) {
+     	// TODO: Need to examine if typeCheckAttribute really fits here
+  		// TODO: Might want to handle this in InstClassAttribute.collectErrors(type) instead
+ 		typeCheckAttribute(iocd);
+  	}
+  	
+  	public void InstClassAttribute.collectErrors(ErrorCheckType type) {}
+  	
+  	syn lazy boolean InstOptClassDecl.isStatic() {
+    	boolean stat = false;
+    	// This digging around is necessary since the check of the objective
+    	// class attribute is dependent on the static class attribute
+    	// Also, modifications for class attributes are not merged, and therefore
+    	// lookup of the static class attribute declaration node and then evaluation
+    	// of the binding expression does not work. TODO: implement proper
+    	// merging of class modifications.
+    	if (hasInstClassModification()) { 
+    		for (InstModification im : getInstClassModification().getInstArgumentList()) { 
+    			try {
+    				if (im instanceof InstComponentModification && ((InstComponentModification)im).getName().name().equals("static")) {
+    					if (((InstComponentModification)im).getInstModification().instValueMod().ceval().booleanValue()) {
+    						stat = true;
+    					}
+    				}
+    			} catch(Exception e) {}
+    		}
+    	}
+  		return stat;
+  	}
+  	
+  	public void InstComponentModification.checkOptimicaAttribute(InstOptClassDecl iocd) {
+     	super.checkOptimicaAttribute(iocd);
+
+     	if (!iocd.isStatic() && getName().name().equals("objective") && 
+     			!(getInstModification().instValueMod().variability().lessOrEqual(Variability.TIMED))) {
+     				error("The class attribute 'objective' must have parameter or timed variability.");
+ 		}
+ 
+     	if (!iocd.isStatic() && getName().name().equals("objectiveIntegrand") && 
+     			(getInstModification().instValueMod().variability().equals(Variability.TIMED))) {
+     				error("The class attribute 'objectiveIntegrand' must not have timed variability.");
+ 		}
+
+  	}
+    
+    public void InstForClauseC.collectErrors(ErrorCheckType checkType) {
+        collectErrorsInFor(getFConstraintList(), getInstForIndexList(), checkType);
+    }
+	
+	eq FOptClass.numDAEEquations() = numScalarEquations() + numPathEqConstraints();
+	eq FOptClass.numDAEVariables() = numAlgebraicContinousRealVariables() + numDifferentiatedRealVariables();
+
+	public void FOptClass.checkStructure() {
+		/* This check needs to be updated to take constraints into account */
+	}
+
+  	public void FOptClass.checkFClassDimensions() {
+  		if (!staticAttribute()) {
+  			super.checkFClassDimensions();
+
+  			// Expand check of dimensions of DAE initialization system 
+  			// We make this check stricter than in the Modelica case,
+  			// since here we really need initialization system to be balanced.
+  			// The F1 equations can in the simulation case be used to derive
+  			// initial conditions for the states, but for the simultaneous
+  			// optimization algorithm, this is not the case.
+  			int n_eq_F0 = numDAEInitEquations();
+  			int n_vars_F0 = numDAEInitVariables();
+  			if (n_eq_F0 < n_vars_F0) 
+  				warning("The DAE initialization system has " + n_eq_F0 + " equations and " + n_vars_F0 + " free variables.");
+  		}
+  	}
+
+    public void InstTimedVariable.contentCheck(ErrorCheckType checkType) {
+        super.contentCheck(checkType);
+        if (inEquation()) 
+            error("Timed variables are not allowed in equations");
+    }
+
+    public void InstTimedVariable.typeError(ErrorCheckType checkType) {
+        boolean badVar  = !getArg().variability().parameterOrLess();
+        boolean badType = !getArg().type().isRealScalar();
+        if (badVar || badType) {
+            String msg = "The argument of a timed variable must be a scalar parameter Real expression";
+            if (badVar)
+                error("%s\n    '%s' is of %s variability", msg, getArg(), getArg().variability().toStringLiteral());
+            else
+                error("%s\n    type of '%s' is %s", msg, getArg(), getArg().type());
+        } else {
+            super.typeError(checkType);
+        }
+    }
+
+	  public void FRelationConstraint.typeCheck(ErrorCheckType checkType) {
+		  //log.debug("FEquation.typeCheck(" + checkType + "): " + getLeft().type() + " " + getRight().type());
+		  if (!getLeft().type().isUnknown() && !getRight().type().isUnknown()) {
+			  if (!getLeft().type().equivalentTo(getRight().type())) {
+				  error("The right and left expression types of constraint are" +
+			  			" not compatible");		  
+			  }
+		  }
+	  }
+}

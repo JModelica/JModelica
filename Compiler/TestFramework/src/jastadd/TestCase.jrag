@@ -1,0 +1,847 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import java.io.File;
+import java.util.Iterator;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.ArrayList;
+import java.util.Arrays;
+
+import org.jmodelica.util.ErrorCheckType;
+import org.jmodelica.util.test.GenericTestCase;
+
+import java.lang.reflect.Field;
+
+import org.jmodelica.util.test.Assert;
+
+/**
+ * Main aspect for test cases used by the test framework.
+ */
+aspect TestCases {
+
+/**
+ * Base class for test cases.
+ * 
+ * Note that for each attribute (e.g. "attributeName") in the test case annotation, there must be a
+ * corresponding method (e.g. "setAttributeName()") in that subclass of TestCase. Any attribute in the test case
+ * annotation with a name containing an underscore ("_"), is instead interpreted as a compiler option, and is set
+ * with setXXXOption().
+ * <p>
+ * In order to create a new test case, override either {@code testXXX(subject)},
+ * e.g. {@code testSource(SourceRoot sr)} in the sub class created for the new test case. That overriding method must
+ * finally return {@code true}. In order to fail a test, call {@link #fail(String)} before this return.
+ */
+abstract public class TestCase implements GenericTestCase {
+
+    /**
+     * A simple ParserHandler instance which is used for tests.
+     */
+    public static final ParserHandler PARSER_HANDLER = new ParserHandler();
+
+    private String name = null;
+    private String description = null;
+    private String platform = null;
+    private String sourceFileName = null;
+    private String className = null;
+    private int beginLine = -1;
+
+    private boolean filter = false;
+    private boolean checkAll = false;
+    private ErrorCheckType checkType = ErrorCheckType.COMPILE;
+    
+    private String[] modelicaLibraries = new String[0];
+
+    protected OptionRegistry options = createOptionRegistry();
+    private Exception exception = null;
+    private ArrayList<String> regexp = new ArrayList<String>();
+    
+    /**
+     * If cls represents a Java "wrapper" class, return the equivalent primitive 
+     * type. If not, return cls.
+     */
+    public static Class unwrapClass(Class cls) {
+        try {
+            for (Field f : cls.getDeclaredFields()) {
+                if (f.getType().equals(Class.class) && f.getName().equals("TYPE")) {
+                    return (Class) f.get(null);
+                }
+            }
+        } catch (Exception e) {}
+        return cls;
+    }
+
+    /**
+     * Create the OptionRegistry to be used during compilation.
+     * 
+     * Options may be further changed by test annotation.
+     */
+    protected OptionRegistry createOptionRegistry() {
+        OptionRegistry or = OptionRegistry.buildTestOptions();
+        File modelicapath = EnvironmentUtils.getThirdPartyMSL();
+        or.MODELICAPATH.setValue(modelicapath.getPath());
+        return or;
+    }
+
+    public String filterTestResult(String str, Map<Pattern, String> resultFilters) {
+        for (Pattern p : resultFilters.keySet()) {
+            str = p.matcher(str).replaceAll(resultFilters.get(p));
+        }
+        return str;
+    }
+    
+    /**
+     * Set a string option to be used during compilation.
+     */
+    public void setStringOption(String key, String value) {
+        try {
+            options.setStringOption(key, value);
+        } catch (UnknownOptionException e) {
+            exception = e;
+        }
+    }
+    
+    /**
+     * Set a boolean option to be used during compilation.
+     */
+    public void setBooleanOption(String key, boolean value) {
+        try {
+            options.setBooleanOption(key, value);
+        } catch (UnknownOptionException e) {
+            exception = e;
+        }
+    }
+    
+    /**
+     * Set an integer option to be used during compilation.
+     */
+    public void setIntegerOption(String key, int value) {
+        try {
+            options.setIntegerOption(key, value);
+        } catch (UnknownOptionException e) {
+            exception = e;
+        }
+    }
+    
+    /**
+     * Set a real option to be used during compilation.
+     */
+    public void setRealOption(String key, double value) {
+        try {
+            options.setRealOption(key, value);
+        } catch (UnknownOptionException e) {
+            exception = e;
+        }
+    }
+    
+    /**
+     * Set a string option to be used during compilation.
+     */
+    public void setOption(String key, String value) {
+        setStringOption(key, value);
+    }
+    
+    /**
+     * Set a boolean option to be used during compilation.
+     */
+    public void setOption(String key, boolean value) {
+        setBooleanOption(key, value);
+    }
+    
+    /**
+     * Set an integer option to be used during compilation.
+     */
+    public void setOption(String key, int value) {
+        setIntegerOption(key, value);
+    }
+    
+    /**
+     * Set a real option to be used during compilation.
+     */
+    public void setOption(String key, double value) {
+        setRealOption(key, value);
+    }
+
+    /**
+     * Gets an option's default value.
+     * 
+     * @param options   the {@link AbstractOptionRegistry} from which to get the option.
+     * @param key       the name of the option.
+     */
+    public Object getOptionDefault(AbstractOptionRegistry options, String key) {
+        if (!options.hasOption(key)) {
+            return null;
+        }
+
+        if (options.isBooleanOption(key)) {
+            return options.getBooleanOptionDefault(key);
+        } else if (options.isRealOption(key)) {
+            return options.getRealOptionDefault(key);
+        } else if (options.isIntegerOption(key)) {
+            return options.getIntegerOptionDefault(key);
+        } else if (options.isStringOption(key)) {
+            return options.getStringOptionDefault(key);
+        }
+
+        throw new IllegalArgumentException("Unexpected option value type for " + key + ".");
+    }
+
+    /**
+     * @return the name
+     */
+    public String getName() {
+        return name;
+    }
+
+    /**
+     * @param name the name to set
+     */
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    /**
+     * @return the description
+     */
+    public String getDescription() {
+        return description;
+    }
+
+    /**
+     * @param description the description to set
+     */
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    /**
+     * platform is an optional annotation that allows to specify for which platforms the test should be run or skipped.
+     * see {@code org.jmodelica.util.Arguments#tooltip()} for possible platforms.
+     * 
+     * Assume that the system platform is win64.
+     * Example 1 (only excluded platforms):
+     *   annotation(
+     *     platform="!linux64")
+     * Here, win64 is included, because it is not listed as an excluded platform.
+     * 
+     * Example 2 (both included and excluded platforms):
+     *   annotation(
+     *     platform="win32 !linux64")
+     * Here, win64 is excluded, because the list of platforms includes included platforms, 
+     * and win64 is not listed as an included platform.
+     * 
+     * Example 3 (no platform annotation):
+     *   annotation(
+     *     )
+     * When the platform annotation is omitted, win64 is included, because it is not listed as an excluded platform. 
+     * @return the platform
+     */
+    public String getPlatform() {
+        return platform;
+    }
+
+    /**
+     * @param platform the platform to set
+     */
+    public void setPlatform(String platform) {
+        this.platform = platform;
+    }
+
+    /**
+     * @return the sourceFileName
+     */
+    public String getSourceFileName() {
+        return sourceFileName;
+    }
+
+    /**
+     * @param sourceFileName the sourceFileName to set
+     */
+    public void setSourceFileName(String sourceFileName) {
+        
+        this.sourceFileName = sourceFileName;
+    }
+
+    /**
+     * @return the className
+     */
+    public String getClassName() {
+        return className;
+    }
+
+    /**
+     * @param className the className to set
+     */
+    public void setClassName(String className) {
+        this.className = className;
+    }
+
+    /**
+     * @return the beginLine
+     */
+    public int getBeginLine() {
+        return beginLine;
+    }
+
+    /**
+     * @param beginLine the beginLine to set
+     */
+    public void setBeginLine(int beginLine) {
+        this.beginLine = beginLine;
+    }
+
+    /**
+     * Add a regular expression to be performed on the result (if result is compared as text).
+     * 
+     * Must follow the syntax "xREGEXPxREPLACEMENTx", where x is any character that does not 
+     * appear in REGEXP or REPLACEMENT.
+     */
+    public void setRegexp(String re) {
+        regexp.add(re);
+    }
+
+    /**
+     * Get the list of regular expressions to be performed on the result 
+     * (if result is compared as text).
+     */
+    public java.util.List<String> getRegexp() {
+        return regexp;
+    }
+
+    /**
+     * Activate or deactivate filtering (see {@link #filter(String)}).
+     */
+    public void setFilter(boolean val) {
+        filter = val;
+    }
+    
+    /**
+     * Activate or deactivate incusion of warnings and compliance errors 
+     *        in error check (see {@link #filterProblems(Collection)}).
+     */
+    public void setCheckAll(boolean val) {
+        checkAll = val;
+    }
+    
+    /**
+     * Set type of error checking to be performed.
+     * 
+     * Available for all test types, but only logical to change for error/warning/compliance tests.
+     */
+    public void setCheckType(String val) {
+        checkType = ErrorCheckType.valueOf(ErrorCheckType.class, val.toUpperCase());
+    }
+    
+    /**
+     * Get type of error checking being performed.
+     */
+    public ErrorCheckType getCheckType() {
+        return checkType;
+    }
+    
+    public void setModelicaLibraries(String s) {
+        modelicaLibraries = s.split(",");
+    }
+    
+    public String[] getModelicaLibraries() {
+        return modelicaLibraries;
+    }
+    
+    public boolean hasModelicaLibraries() {
+        return modelicaLibraries.length > 0;
+    }
+    
+    /**
+     * Perform filtering on string, if activated.
+     */
+    protected String filter(String str) {
+        if (filter) {
+            // TODO: Add more filters
+            str = str.replace("%dir%", testFileDirectory());
+            str = str.replace("%msl%", mslDirectory());
+        }
+        return str;
+    }
+
+    /**
+     * Get the path to the directory containing the test file.
+     */
+    protected String testFileDirectory() {
+        File file = new File(getSourceFileName());
+        return URIResolver.DEFAULT.canonicalPath(file.getParentFile());
+    }
+
+    /**
+     * Get the path to the directory containing the MSL.
+     */
+    protected String mslDirectory() {
+        for (String path : options.getStringOption("MODELICAPATH").split(File.pathSeparator)) {
+            File f = new File(path, "Modelica");
+            if (f.isDirectory())
+                return f.getAbsolutePath();
+        }
+        return null;
+    }
+    
+    /**
+     * Remove all whitespace.
+     */
+    public String removeWhitespace(String str) {
+        // TODO: this can mask errors, we need a better filtering
+        return str.replaceAll("\\s+", "");
+    }
+    
+    private Assert asserter;
+
+    /**
+     * Perform an assertion that two strings are equal. Whitespaces and line
+     * endings are removed before comparing!
+     * 
+     * @param msg       a message describing what went wrong
+     * @param expected  the expected value
+     * @param actual    the actual value
+     */
+    protected void assertEquals(String msg, String expected, String actual) {
+        expected = filterForAssert(expected);
+        actual = applyRegexps(actual);
+        actual = filterForAssert(actual);
+        assertExactlyEquals(msg, expected, actual);
+    }
+
+    /**
+     * Tests if two strings are exactly equal.
+     */
+    protected void assertExactlyEquals(String msg, String expected, String actual) {
+        msg = getDescription() + "\n" + getClass().getSimpleName() + ": " + msg;
+        asserter.assertEquals(msg, expected, actual);
+    }
+
+    private String filterForAssert(String str) {
+        str = str.replaceAll("\\r\\n|\\r", "\n");
+        str = str.replaceFirst("^([ \\t]*[\\n])+", "");
+        str = str.replaceAll("[ \\t]*$", "");
+        return str;
+    }
+
+    /**
+     * Check if two strings are equal, minus any whitespace.
+     * 
+     * Will apply any regexps specified for the test on actual before comparison.
+     */
+    protected boolean checkEquals(String expected, String actual) {
+        expected = removeWhitespace(expected);
+        actual = applyRegexps(actual);
+        actual = removeWhitespace(actual);
+        return expected.equals(actual);
+    }
+
+    /**
+     * Apply any regular expressions added with {@link #setRegexp(String)} to str.
+     */
+    protected String applyRegexps(String str) {
+        for (String re : regexp) {
+            str = applyRegexp(re, str);
+        }
+        return str;
+    }
+
+    /**
+     * Apply the regular expression re to str.
+     * 
+     * It must follow the syntax "xREGEXPxREPLACEMENTx", where x is any character that does not 
+     * appear in REGEXP or REPLACEMENT.
+     */
+    protected String applyRegexp(String re, String str) {
+        String[] parts = re.split("\\" + re.substring(0, 1));
+        if (parts.length != 3 || parts[1].length() == 0) {
+            throw new IllegalArgumentException(
+                    "Regexp on test case must follow syntax \"xREGEXPxREPLACEMENTx\", " + 
+                    "where is a character that x does not appear in REGEXP or REPLACEMENT. " + 
+                    "Offending regexp: " + re);
+        }
+        return str.replaceAll(parts[1], parts[2]);
+    }
+
+    /**
+     * Signal that the test failed.
+     * 
+     * @param msg  a message describing what went wrong
+     */
+    protected void fail(String msg) {
+        asserter.fail(getDescription() + "\n" + getClass().getSimpleName() + ": " + msg);
+    }
+    
+    /**
+     * Signal that the test failed.
+     * 
+     * @param e  the exception that caused the failure
+     */
+    protected void fail(Throwable e) {
+        if (e instanceof ModelicaException) 
+            fail(e.getMessage());
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        e.printStackTrace(new PrintStream(out));
+        fail("Exception caught in test case: " + out.toString());
+    }
+    
+    public boolean shouldBeIgnored() {
+        String platforms = getPlatform();
+        PlatformSet platformSet = PlatformSet.parse(platforms);
+        String systemPlatform = EnvironmentUtils.getSystemPlatform();
+        return platformSet.isPlatformExcluded(systemPlatform);
+    }
+
+    public static class PlatformSet {
+        private static PlatformSet EMPTY_PLATFORMSET = new PlatformSet(Collections.<String>emptySet(), Collections.<String>emptySet());
+        private Set<String> includedPlatforms;
+        private Set<String> excludedPlatforms;
+        private PlatformSet(Set<String> includedPlatforms, Set<String> excludedPlatforms) {
+            this.includedPlatforms = includedPlatforms;
+            this.excludedPlatforms = excludedPlatforms;
+        }
+        /**
+         * parses a string of the form "win32 !linux64" and returns a PlatformSet.
+         * See {@code TestCase.getPlatform()} for usage.
+         */
+        public static PlatformSet parse(String string) {
+            if(string == null || string.equals("")) {
+                return EMPTY_PLATFORMSET;
+            }
+            Set<String> includedPlatforms = new HashSet<>();
+            Set<String> excludedPlatforms = new HashSet<>();
+            String[] words = string.split(" ");
+            for(String word : words) {
+                if(word.startsWith("!")) {
+                    excludedPlatforms.add(word.substring(1));
+                } else {
+                    includedPlatforms.add(word);
+                }
+            }
+            return new PlatformSet(includedPlatforms, excludedPlatforms);
+        }
+        
+       boolean isPlatformExcluded(String platform) {
+           return excludedPlatforms.contains(platform) || !includedPlatforms.isEmpty() && !includedPlatforms.contains(platform);
+       }
+    }
+
+    public void testMe(Assert a) {
+        try {
+            asserter = a;
+            performTest();
+        } catch (ParserException e) {
+            fail(e);
+        } catch (ModelicaClassNotFoundException e) {
+            fail(e);
+        } catch (beaver.Parser.Exception e) {
+            fail(e);
+        } catch (IOException e) {
+            fail(e);
+        }
+    }
+
+    public void performTest() throws ParserException, beaver.Parser.Exception, 
+                IOException, ModelicaClassNotFoundException {
+        UtilInterface uif = UtilInterface.create(options);
+        try {
+            performTest(uif);
+        } finally {
+            uif.tearDown();
+        }
+    }
+    
+    private void performTest(UtilInterface uif) throws ParserException, beaver.Parser.Exception, 
+                IOException, ModelicaClassNotFoundException {
+        if (exception != null)
+            fail(exception);
+
+        // Create a mock compiler to notify compilation listeners.
+        ModelicaCompiler.notifyCompilationStart(new ModelicaCompiler(uif.getOptionRegistry()));
+
+        // Parse
+        SourceRoot sr;
+        if (modelicaLibraries.length > 0) {
+            Collection<LoadInfo> loadInfos = new ArrayList<>();
+            File parent = new File(getSourceFileName()).getParentFile();
+            for (int i = 0; i < modelicaLibraries.length; i++) {
+                String path = new File(parent, modelicaLibraries[i]).getAbsolutePath();
+                loadInfos.add(LoadInfo.create(path));
+            }
+            loadInfos.add(LoadInfo.create(getSourceFileName()));
+            sr = getParserHandler().parseModel(uif, loadInfos);
+        } else {
+            sr = getParserHandler().parseFile(uif, LoadInfo.create(getSourceFileName()));
+        }
+
+        if (testOptions(options)) {
+            return;
+        }
+
+        if (testSource(sr)) {
+            return;
+        }
+
+        // Instantiate and check for errors.
+        InstProgramRoot ipr = sr.getProgram().getInstProgramRoot();
+        Collection<Problem> problems = null;
+        try {
+            ipr.checkErrorsInInstClass(className, checkType);
+            problems = sr.collectWarnings();
+        } catch (CompilerException e) {
+            problems = e.getProblems();
+        }
+        if (testSemanticProblems(problems) || checkType == ErrorCheckType.CHECK) return;
+        
+        // Test instantiated class
+        InstClassDecl icd = ipr.instantiateModel(getClassName());
+        if (testInstantiated(icd)) return;
+        
+        // Flatten class and check errors reported during flattening
+        FClass fc = FClass.create(icd, null);
+        try {
+            icd.flattenInstClassDecl(fc);
+            problems = sr.collectWarnings();
+        } catch (CompilerException e) {
+            problems = e.getProblems();
+        }
+        if (testSemanticProblems(problems)) return;
+        
+        
+        // Test flattened class
+        if (testFlattened(fc)) return;
+        
+        
+        // Transform canonical and check for errors again
+        try {
+            fc.transformCanonical();
+            fc.errorCheck(checkType);
+            problems = fc.collectWarnings();
+        } catch (CompilerException e) {
+            problems = e.getProblems();
+        }
+        if (testTransformedProblems(problems)) return;
+        
+        
+        // Test transformed class
+        testTransformed(fc);
+    }
+
+    /**
+     * Compares two objects by class and value.
+     * <p>
+     * The classes in question need to implement {@link Comparable}.
+     * 
+     * @param expected  an object.
+     * @param actual    an object to compare to {@code expected}.
+     * @return          {@code true} if both operands are of the same class, and their
+     *                  {@link Comparable#compareTo(Object)} returns 0 (value equality).
+     */
+    protected boolean classValueCompare(Object expected, Object actual) {
+        Class<?> expectedClass = expected.getClass();
+        if (expectedClass != actual.getClass()) {
+            return false;
+        }
+
+        return expected.toString().equals(actual.toString());
+    }
+    
+    /**
+     * Compares the actual result of a test to the expected, failing if the actual result differs from the expected.
+     * 
+     * @param message   the message to report if the comparison fails.
+     * @param expected  the expected result.
+     * @param actual    the actual result.
+     */
+    protected void compareResult(String message, String expected, String actual) {
+        if (!checkEquals(expected, actual)) {
+            assertEquals(message, expected, actual);
+        }
+    }
+
+    /**
+     * Gets the classes of an array of objects.
+     * 
+     * @param objects   an array of objects.
+     * @return          an array of the classes of {@code objects}.
+     */
+    protected static Class<?>[] unwrapClasses(Object[] objects) {
+        Class<?>[] types = new Class[objects.length];
+
+        for (int i = 0; i < objects.length; i++) {
+            types[i] = unwrapClass(objects[i].getClass());
+        }
+        return types;
+    }
+    
+    /* ============= *
+     *  Test types.  *
+     * ============= */
+
+    /**
+     * Performs tests on the options' registry.
+     * 
+     * @return  {@code true} if the test case should top after this method.
+     */
+    public boolean testOptions(AbstractOptionRegistry options) {
+        return false;
+    }
+
+    /**
+     * Perform tests on the set of semantic problems found in the instance tree.
+     * 
+     * Default implementation fails if any errors other than COMPLIANCE were found, and returns false otherwise.
+     * 
+     * @return  <code>true</code> if test case shoule stop after this method
+     */
+    protected boolean testSemanticProblems(Collection<Problem> problems) {
+        return testProblems(problems);
+    }
+
+    /**
+     * Perform tests on instantiated class.
+     * 
+     * @return  <code>true</code> if test case should stop after this method
+     */
+    protected boolean testInstantiated(InstClassDecl icd) {
+        return false;
+    }
+
+    /**
+     * Perform tests on flattened class.
+     * 
+     * @return  <code>true</code> if test case should stop after this method
+     */
+    protected boolean testFlattened(FClass fc) {
+        return false;
+    }
+
+    /**
+     * Perform tests on flat class after transform canonical step.
+     * 
+     * @return  <code>true</code> if test case should stop after this method
+     */
+    protected boolean testTransformed(FClass fc) {
+        return false;
+    }
+
+    /**
+    * Perform tests on source tree.
+    *
+    * @return  <code>true</code> if test case should stop after this method
+    */
+    protected boolean testSource(SourceRoot sr) {
+        return false;
+    }
+
+    /**
+     * Perform tests on the set of semantic problems found after transform canonical step.
+     * 
+     * Default implementation fails if any errors other than COMPLIANCE were found, and returns false otherwise.
+     * 
+     * @return  <code>true</code> if test case shoule stop after this method
+     */
+    protected boolean testTransformedProblems(Collection<Problem> problems) {
+        return testProblems(problems);
+    }
+    
+    /**
+     * Perform tests on a set of semantic problems.
+     * 
+     * Default implementation fails if any errors other than COMPLIANCE were found, and returns false otherwise.
+     * 
+     * @return  <code>true</code> if test case should stop after this method
+     */
+    protected boolean testProblems(Collection<Problem> problems) {
+        filterProblems(problems);
+        if (problems.size() > 0)
+            fail(new CompilerException(problems));
+        return false;
+    }
+    
+    /**
+     * Filters out any uninteresting problems from a set of semantic problems.
+     * 
+     * Default implementation removes any warnings and any COMPLIANCE errors.
+     */
+    protected void filterProblems(Collection<Problem> problems) {
+        for (Iterator<Problem> it = problems.iterator(); it.hasNext(); )
+            if (!it.next().isTestError(checkAll))
+                it.remove();
+    }
+
+    private static final Pattern PAT_ERROR_LINE = 
+            Pattern.compile("at line ([0-9]+)(, column [0-9]+, in file '([^']+)')");
+
+    /**
+     * Adjust line number in error messages to be relative to the beginning of 
+     * the class rather than beginning of the file.
+     */
+    public static String adjustErrorLines(String str, String file, int beginLine) {
+        StringBuffer buf = new StringBuffer();
+        Matcher m = PAT_ERROR_LINE.matcher(str);
+        while (m.find()) {
+            // If error is in the same file adjust line, else no change
+            if (file.equals(m.group(3))) {
+                int line = Integer.parseInt(m.group(1)) - beginLine + 1;
+                m.appendReplacement(buf, "at line " + line + "$2");
+            } else {
+                m.appendReplacement(buf, "$0");
+            }
+        }
+        m.appendTail(buf);
+        return buf.toString();
+    }
+
+    /**
+     * Compare a flat class to a pretty-printed correct model and fail if different.
+     */
+    protected void testPrettyPrint(FClass fc, String correct) {
+        TokenTester tt = new TokenTester();
+        String test = fc.prettyPrint("");
+        if (!tt.test(test, correct)) {
+            String diff = tt.firstDiff();
+            String err = "Flat class does not match expected.";
+            assertEquals(err, correct, test);
+        }
+    }
+    
+    /**
+     * Sort lines in string alphabetically.
+     */
+    protected String sortLines(String str) {
+        String[] lines = str.split("\n|\r|\r\n");
+        Arrays.sort(lines);
+        StringBuilder buf = new StringBuilder();
+        for (String line : lines) {
+            buf.append(line);
+            buf.append('\n');
+        }
+        return buf.toString();
+    }
+
+    /**
+     * Allows us to switch parser.
+     */
+    protected ParserHandler getParserHandler() {
+        return PARSER_HANDLER;
+    }
+
+}
+
+}

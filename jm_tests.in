@@ -1,0 +1,674 @@
+#!/bin/bash
+# Script for running JModelica.org test suites.
+# Copy this file to somewhere in your PATH.
+# You may need to change variables below (in the copy) to match your system.
+# Type "tests -h" for usage.
+# Requires Unix-like system with bash, grep, dc, mktemp, uname and sed.
+
+merge_path() {
+  if [ "$1" = "" ]; then
+    if [ "$3" = "" ]; then
+      echo $2
+    else
+      echo $3@SEP@$2
+    fi
+  else
+    echo $1@SEP@$2
+  fi
+}
+
+# ====== Variables to set ======
+
+# Memory allocation for the ant process
+ANT_OPTS="-Xmx2g"
+
+# Default tests - run if no tests are chosen
+# Possible values: modelica, optimica, python or combination (e.g. "modelica optimica")
+DEFAULT_TESTS="optimica python"
+
+# Default arguments - always parse these arguments before command line
+DEFAULT_ARGS=""
+
+# Variables set by configure script
+JMODELICA_HOME="@prefix@"
+JMODELICA_SRC="@abs_top_srcdir@"
+IPOPT_HOME="@IPOPT_HOME@"
+IPOPT32_HOME="@IPOPT_HOME@"
+IPOPT64_HOME="@IPOPT64_HOME@"
+PYTHON64_HOME="@PYTHON64_HOME@"
+PYTHON32_HOME="@PYTHON_HOME@"
+SUNDIALS_HOME="@prefix@/ThirdParty/Sundials"
+CASADI_HOME="@prefix@/ThirdParty/CasADi"
+CASADI64_HOME="@prefix@/ThirdParty/CasADi64"
+CASADI_INTERFACE_HOME="@prefix@/lib/casadi_interface"
+CASADI_INTERFACE_HOME64="@prefix@/lib/casadi_interface64"
+CASADI_INTERFACE_HOME32=${CASADI_INTERFACE_HOME}
+ECLIPSE_HOME="@ECLIPSE_HOME@"
+JPYPE32_JVM="@JVMDLL_HOME@/jvm.dll"
+JPYPE64_JVM="@JVMDLL64_HOME@/jvm.dll"
+ORIG_PATH="@ORIG_PATH@"
+BUILD="@abs_builddir@"
+if [[ "${JAVA_HOME}" == "" ]]; then
+  JAVA_HOME="@_JAVA_HOME_@"
+fi
+
+if [[ "${PYTHON64_HOME}" != "" ]]; then
+DEFAULT_TESTS="${DEFAULT_TESTS} python64"
+fi
+
+# ====== End variables to set ======
+
+# Configure Bash
+set -o pipefail
+
+PYTHONPATH64="${JMODELICA_HOME}/Python_64/"
+PYTHONPATH32="$(merge_path "${PYTHONPATH}" "${JMODELICA_HOME}/Python/")"
+PYTHONPATH="$PYTHONPATH32"
+
+# To know if we are running python 64 tests
+PYTHON64=0
+
+# Default paths to ant files used for unit tests
+if [[ -z "${MC_ANT_ARGS}" ]]; then
+    MC_ANT_ARGS=${JMODELICA_SRC}/Compiler/ModelicaCompiler/build.xml
+fi
+if [[ -z "${OC_ANT_ARGS}" ]]; then
+    OC_ANT_ARGS=${JMODELICA_SRC}/Compiler/OptimicaCompiler/build.xml
+fi
+
+# Find operating system
+SYS="$(uname -s)"
+if [[ "${SYS}" == "Darwin" ]]; then
+  SYS=Mac
+elif [[ "${SYS:0:5}" == "MINGW" ]]; then
+  SYS=Win
+fi
+
+# Update library path
+if [[ "${SUNDIALS_HOME}" != "" ]]; then
+  LIB_PATH="${SUNDIALS_HOME}/lib"
+fi
+if [[ "${IPOPT_HOME}" != "" ]]; then
+  LIB_PATH="$(merge_path "${LIB_PATH}" "${IPOPT_HOME}/lib")"
+fi
+if [[ "${CASADI_HOME}" != "" ]]; then
+  LIB_PATH="$(merge_path "${LIB_PATH}" "${CASADI_HOME}/lib")"
+fi
+if [[ "${LIB_PATH}" != "" ]]; then
+  LD_LIBRARY_PATH="$(merge_path "${LD_LIBRARY_PATH}" "${LIB_PATH}" /lib)"
+fi
+
+# Test sets
+if [[ "${PYTHON64_HOME}" != "" ]]; then
+    test_set_a="modelica optimica python python64"
+    tests="modelica optimica python python64"
+else
+    test_set_a="modelica optimica python"
+    tests="modelica optimica python"
+fi
+test_set_j="modelica optimica"
+test_set_m="modelica"
+test_set_o="optimica"
+test_set_p="python"
+test_set_z="python64"
+
+# Standard set of tags
+TAGS="-a stddist_base -a noncompliantfmi"
+if [[ "${IPOPT_HOME}" != "" ]]; then
+  TAGS="${TAGS} -a ipopt"
+  if [[ "${SYS}" == Win ]]; then
+    TAGS="${TAGS} -a windows_base"
+  fi
+  if [[ -e "${JMODELICA_HOME}/Python/casadi" ]]; then
+    TAGS="${TAGS} -a casadi_base"
+  else
+    echo Skipping casadi tests, since CasADi does not seem to be installed.
+  fi
+fi
+
+# Standard set of tags
+TAGS64="-a stddist_base -a noncompliantfmi"
+if [[ "${IPOPT64_HOME}" != "" ]]; then
+  TAGS64="${TAGS64} -a ipopt"
+  if [[ "${SYS}" == Win ]]; then
+    TAGS64="${TAGS64} -a windows_base"
+  fi
+  if [[ -e "${JMODELICA_HOME}/Python_64/casadi" ]]; then
+    TAGS64="${TAGS64} -a casadi_base"
+  else
+    echo Skipping casadi tests, since CasADi does not seem to be installed.
+  fi
+fi
+
+# Extend with all tests for default version of Python/bitness
+if [[ "${PYTHON64_HOME}" != "" ]]; then
+    TAGS64="${TAGS64} -a stddist_full"
+    if [[ "${IPOPT64_HOME}" != "" ]]; then
+        if [[ "${SYS}" == Win ]]; then
+            TAGS64="${TAGS64} -a windows_full"
+        fi
+        if [[ -e "${JMODELICA_HOME}/Python_64/casadi" ]]; then
+            TAGS64="${TAGS64} -a casadi_full"
+        fi
+    fi  
+else
+    TAGS="${TAGS} -a stddist_full"
+    if [[ "${IPOPT_HOME}" != "" ]]; then
+        if [[ "${SYS}" == Win ]]; then
+            TAGS="${TAGS} -a windows_full"
+        fi
+        if [[ -e "${JMODELICA_HOME}/Python/casadi" ]]; then
+            TAGS="${TAGS} -a casadi_full"
+        else
+            echo Skipping casadi tests, since CasADi does not seem to be installed.
+        fi
+    fi
+fi
+
+# Functions for running specific tests
+function modelica_tests() {
+  junit_test Modelica
+}
+
+function optimica_tests() {
+  junit_test Optimica
+}
+
+TESTS_DIR="${JMODELICA_HOME}/Python/tests_jmodelica"
+function find_python_tests() {
+  if [[ "${TESTS}" == "" ]]; then
+    TESTS="$(find ${TESTS_DIR} -name \*.py | grep test_)"
+  fi
+}
+
+function python_tests() {
+  if [ "${KEEP_PYTHON}" == 1 ]; then
+    TEST_DIR="$(pwd)/tests_$(date "+%F_%H-%M-%S")"
+    mkdir ${TEST_DIR}
+  else
+    TEST_DIR=$(mktemp -dq /tmp/jm_tests.XXXXXX)
+  fi 
+  print_name Python
+  res=0
+  case ${OUTPUT} in
+    v)
+      if build_jmodelica 2>&1 | log; then
+        find_python_tests
+        cd ${TEST_DIR}
+        python_tests_v || res=1
+      fi
+      ;;
+    q)
+      if build_jmodelica 2>&1 | log > /dev/null; then
+        find_python_tests
+        cd ${TEST_DIR}
+        python_tests_q | filter_python_separate || res=1
+      else
+        echo BUILD FAILED
+      fi
+      ;;
+    n)
+      if [[ "${NO_BUILD_JMODELICA}" != "1" ]]; then
+        echo Building...
+      fi
+      if build_jmodelica | log > /dev/null; then
+        find_python_tests
+        cd ${TEST_DIR}
+        python_tests_n | filter_python_separate || res=1
+      fi
+      ;;
+  esac
+  if [ ! "${KEEP_PYTHON}" == 1 ]; then
+    cd ..
+    rm -rf ${TEST_DIR}
+  fi
+  return $res
+}
+
+TESTS64_DIR="${JMODELICA_HOME}/Python_64/tests_jmodelica"
+function python64_tests() {
+    # Set necessary paths etc to run 64 bit tests
+    PYTHONPATH=${PYTHONPATH64}
+    PYTHONHOME=${PYTHON64_HOME}
+    JPYPE_JVM=${JPYPE64_JVM}
+    CASADI_LIB_HOME=${CASADI64_HOME}/lib
+    CASADI_INTERFACE_HOME=${CASADI_INTERFACE_HOME64}
+    PATH=${PYTHON64_HOME}:${PYTHON64_HOME}/Scripts:${PYTHON64_HOME}/Lib:${IPOPT64_HOME}/bin:${CASADI_LIB_HOME}:"${PATH}"
+    TESTS32=$TESTS
+    TESTS=$TESTS64
+    TAGS32=$TAGS
+    TAGS=$TAGS64
+    TESTS_DIR=${TESTS64_DIR}
+    PYTHON64=1
+    # Call python_tests 
+    res=0 
+    python_tests || res=1
+    # Reset to original paths etc that was for original Python
+    TESTS=$TESTS32
+    TAGS=$TAGS32
+    PYTHON64=0
+    PYTHONPATH=${PYTHONPATH32}
+    PYTHONHOME=${PYTHON32_HOME}
+    JPYPE_JVM=${JPYPE32_JVM}
+    CASADI_LIB_HOME=${CASADI_HOME}/lib
+    CASADI_INTERFACE_HOME=${CASADI_INTERFACE_HOME32}
+    PATH="${ORIG_PATH}"
+    TESTS_DIR="${JMODELICA_HOME}/Python/tests_jmodelica"
+    return $res
+}
+
+function python_tests_v() {
+    res=0
+    for TEST in ${TESTS}; do
+      echo ""
+      echo ${TEST} | sed -e 's!^.*jmodelica.!Running !'
+      nose_test ${TEST} \
+      | log \
+      || res=1
+    done
+    return $res
+}
+
+function python_tests_q() {
+    res=0
+    for TEST in ${TESTS}; do
+      echo "" | log > /dev/null
+      echo ${TEST} | sed -e 's!^.*jmodelica.!Running !' | log > /dev/null
+      nose_test ${TEST} 2>&1 \
+      | log \
+      | sed -n -e 's!^OK$!PASSED!ip' -e 's!^FAILED !TEST FAILED!p' \
+      || (res=1 && echo NOSETESTS_NOT_OK)
+    done
+    return $res
+}
+
+function python_tests_n() {
+    PATTERN="[-=]{40,}"
+    res=0
+    for TEST in ${TESTS}; do
+      echo "" | log
+      echo ${TEST} | sed -e 's!^.*jmodelica.!Running !' | log
+      nose_test ${TEST} 2>&1 \
+      | log \
+      | egrep -v '^Exception .* ignored$' \
+      | egrep -A500 "${PATTERN}" \
+      | sed -e 's!^OK$!PASSED!' -e 's!^FAILED !TEST FAILED!' \
+      || (res=1 && echo NOSETESTS_NOT_OK)
+    done
+    return $res
+}
+
+# Helper functions
+function print_name() {
+  if [[ "${OUTPUT}" == q ]]; then
+    echo -n "$1... "
+  else
+    echo ======= $1 =======
+  fi
+}
+
+function log() {
+  if [ "${LOG}" == 1 ]; then
+      tee -a "${LOGFILE}"
+  else
+      cat
+  fi
+}
+
+function filter_python_separate() {
+  TMP=$(mktemp -q /tmp/jm_tests.XXXXXX 2>/dev/null) 
+  tee ${TMP} | egrep -v "(PASSED|TEST FAILED|NOSETESTS_NOT_OK)"
+  cat ${TMP} \
+  | sed -n \
+        -e '1 i\
+            0 0 0' \
+        -e 's!^TEST FAILED(errors=\([0-9]*\))!\1+!p' \
+        -e 's!^TEST FAILED(failures=\([0-9]*\))!r\1+r!p' \
+        -e 's!^TEST FAILED(errors=\([0-9]*\), failures=\([0-9]*\))!\1+r\2+r!p' \
+        -e 's!^NOSETESTS_NOT_OK!sar1+rla!p' \
+        -e '$ a\
+            n[ ]nn[ ]np' \
+  | dc \
+  | sed \
+    -e 's!0 0 [1-9].*!CRASHED!' \
+    -e 's!0 0 0!PASSED!' \
+    -e 's!\([0-9]\+\) \([0-9]\+\) .*!TEST FAILED (errors=\1, failures=\2)!'
+  rm -f ${TMP}
+}
+  
+function junit_test() {
+  print_name $1
+  cd ${BUILD}/java
+  res=0
+  case ${OUTPUT} in
+    v) junit_test_v $1 || res=1 ;;
+    q) junit_test_q $1 || res=1 ;;
+    n) junit_test_n $1 || res=1 ;;
+  esac
+  if [ -n "${XML_RES_PATH:-}" ]; then
+    cp "${BUILD}/doc/junit-reports/TESTS-TestSuites.xml" "${XML_RES_PATH}"
+  fi
+  return $res
+}
+
+function junit_test_v() {
+    res=0
+    ant_test $1 2>&1 \
+        | log \
+        || res=1
+    return $res
+}
+
+function junit_test_q() {
+    res=0
+    ant_test $1 2>&1 \
+        | log \
+        | egrep "(\[(jastadd|junit)\]|BUILD FAILED|\[java\] Error when parsing file:)" \
+        | sed -n \
+            -e '1 i\
+                0 0' \
+            -e 's!^.*\[jastadd\] \(Semantic errors\|Syntax error\).*$!BUILD FAILED!' \
+            -e 's!^.*\[java\] Error when parsing file:.*$!BUILD FAILED!' \
+            -e 's!^.*Failures: \([0-9]*\), Errors: \([0-9]*\),.*$!r\1+r\2+!p' \
+            -e 's!^.*\(BUILD FAILED\).*$![\1]pq!p' \
+            -e '$ a\
+                [errors=]nn[, failures=]np' \
+        | dc \
+        | sed \
+            -e 's!errors=0, failures=0!PASSED!' \
+            -e 's!\(errors=.*, failures=.*\)!TEST FAILED (\1)!' \
+        || res=1
+    return $res
+}
+
+function junit_test_n() {
+    res=0
+    ant_test $1 \
+        | log \
+        | egrep "(\[junit\]|\[(java|jastadd)\].*([Ee]rror|[A-Za-z.]*:[1-9][0-9]*))" \
+        || res=1
+    return $res
+}
+
+function nose_test() {
+  nosetests `compute_nose_extra_args "${TEST}"` ${TAGS} -v $1
+}
+
+function ant_test() {
+  if [[ "$1" == "Modelica" ]]; then
+    ant -f ${MC_ANT_ARGS} -Dtarget=${BUILD} ${CLEAN_JUNIT} test
+  else
+    ant -f ${OC_ANT_ARGS} -Dtarget=${BUILD} ${CLEAN_JUNIT} test
+  fi
+}
+
+function build_jmodelica() {
+  if [[ "${NO_BUILD_JMODELICA}" != "1" ]]; then
+    if [[ -d ${BUILD} ]]; then
+      cd ${BUILD}
+      ${CLEAN_BUILD}
+      make && make install
+    else
+      echo Cannot build, build dir does not exist!
+      exit 1
+    fi
+  fi
+}
+
+function switch_test_flags() {
+  STATE=0
+  for a in $*; do
+    if [[ "${test[${!a}]}" != 1 ]]; then 
+      STATE=1
+    fi
+  done
+  for a in $*; do
+    test[${!a}]=${STATE}
+  done
+}
+
+function compute_nose_extra_args() { # Argument is test name
+    if [ -n "${XML_RES_PATH:-}" ]; then
+        RES_FILE_NAME=`echo $1 | sed -e 's!^.*jmodelica.!!g' -e 's!/!_!g'`
+        if [[ "$PYTHON64" = 1 ]]; then
+            RES_FILE_NAME="python64_${RES_FILE_NAME}"
+        fi
+        echo --with-xunit --xunit-file=${XML_RES_PATH}/${RES_FILE_NAME}.xml
+    fi
+}
+
+function read_args() {
+  TESTS=
+  TESTS64=
+  ARG_TYPE=flag
+  for a in ${DEFAULT_ARGS} "$@"; do
+    if [[ "$(echo $a | head -c1)" == "-" ]]; then
+      ARG_TYPE=flag
+    fi
+    FLAG=0
+    case ${ARG_TYPE} in
+      flag)
+        FLAG=1
+        ;;
+      tag)
+        TAGS="${TAGS} -a ${a}"
+        ;;
+      tag64)
+        TAGS64="${TAGS64} -a ${a}"
+        ;;
+      file)
+        if [[ -f "${a}" ]]; then
+          FILE="$(readlink -f ${a})"
+        else
+          FILE="${TESTS_DIR}/${a}"
+          FILE64="${TESTS64_DIR}/${a}"
+        fi
+        if [[ -f ${FILE} ]]; then
+          TESTS="${TESTS} ${FILE}"
+        else
+          echo "Cannot find test file ${a}"
+          exit
+        fi
+        if [[ "${PYTHON64_HOME}" != "" ]]; then
+         if [[ -f ${FILE64} ]]; then
+          TESTS64="${TESTS64} ${FILE64}"
+         else
+           echo "Cannot find test file ${a}"
+           exit
+         fi
+        fi
+        ;;
+      xmlResPath)
+        XML_RES_PATH=${a}
+        ARG_TYPE=flag
+        ;;
+    esac
+    if [[ ${FLAG} == 1 ]]; then
+      for b in $(echo "" ${a}|sed 's!\(.\)!\1 !g'); do
+        case ${b} in
+          -)
+            ;;
+          v|q|n)
+            OUTPUT=${b}
+            ;;
+          a|j|m|o|p)
+            test_set="test_set_${b}"
+            switch_test_flags ${!test_set}
+            ;;
+          z)
+            if ! [[ "${PYTHON64_HOME}" != "" ]]; then
+                echo "Python 64 bit tests not supported!"
+                exit
+            fi
+            test_set="test_set_${b}"
+            switch_test_flags ${!test_set}
+            ;;
+          c|C)
+            CLEAN_JUNIT=clean
+            if [[ "${b}" == C ]]; then
+              CLEAN_BUILD="make clean"
+            fi
+            ;;
+          i)
+            NO_BUILD_JMODELICA=1
+            ;;
+          k)
+            KEEP_PYTHON=1
+            ;;
+          l)
+            LOG=$((1-LOG))
+            ;;
+          f)
+            ARG_TYPE=file
+            ;;
+          t)
+            TAGS=""
+            ARG_TYPE=tag
+            ;;
+          u)
+            if ! [[ "${PYTHON64_HOME}" != "" ]]; then
+                echo "Python 64 bit tests not supported!"
+                exit
+            fi
+            TAGS64=""
+            ARG_TYPE=tag64
+            ;;
+          g)
+            if ! [[ "${PYTHON64_HOME}" != "" ]]; then
+                echo "Python 64 bit tests not supported!"
+                exit
+            fi
+            ARG_TYPE=tag
+            ;;
+          r)
+            ARG_TYPE=tag64
+            ;;
+          x)
+            ARG_TYPE=xmlResPath
+            ;;
+          e)
+            ERROR_ON_TEST_FAIL=1
+            ;;
+          h)
+            echo "usage: tests [-ajmopzvnqcCh] { [-(t|u|g|r) [tag1 ...]] } [-f file1 ...] [-x path]"
+            echo "The -ajmopz options each control a set of tests, and select all tests in set "
+            echo "for running, or, if all in set are already selected, deselects them. "
+            echo "Thus, \"tests -am\" runs all tests except modelica. If no tests are chosen, "
+            echo "a default set is run (${DEFAULT_TESTS})." 
+            echo "  -a   Select/deselect all tests"
+            echo "  -j   Select/deselect junit tests"
+            echo "  -m   Select/deselect modelica tests"
+            echo "  -o   Select/deselect optimca tests"
+            echo "  -p   Select/deselect python tests"
+            echo "  -z   Select/deselect python 64 bit tests (not always a valid option)"
+            echo "  -v   Verbose output, show everything"
+            echo "  -n   Normal output, only show results and compilation errors"
+            echo "  -q   Quiet output, only show brief results"
+            echo "  -c   Do a clean before junit tests"
+            echo "  -C   Do a clean before each test suite"
+            echo "  -i   Do not re-build before python tests"
+            echo "  -k   Keep generated files from python tests"
+            echo "  -l   Toggle creating log file with the equivalent of the output with -v" 
+            echo "       (on by default)"
+            echo "  -t   When running python tests, only run tests marked with one of the "
+            echo "       listed tags. If given without tags, all tests are run. If -t is "
+            echo "       given several times, only the last one will be used (not always a valid option)"
+            echo "  -u   When running python64 tests, only run tests marked with one of the "
+            echo "       listed tags. If given without tags, all tests are run. If -u is "
+            echo "       given several times, only the last one will be used"
+            echo "  -g   When running python tests, add the listed tags to the tags to use"
+            echo "  -r   When running python 64tests, add the listed tags to the tags to use"
+            echo "  -f   When running python tests, only run tests from the listed files. "
+            echo "       Paths relative to the tests directory are accepted, as well as "
+            echo "       absolute or relative to current directory"
+            echo "  -x   Path to folder where jUnit like xml files are written. The xml files"
+            echo "       contains the results of the tests. Currently doesn't handle spaces"
+            echo "       in the supplied path!"
+            echo "  -e   When enabled, exit with error code (after running all "
+            echo "       tests) if any test suite return with an error code or a test fails"
+            echo "       regular failures or errors). Default behaviour is exit 0.".
+            echo "       Requires -x".
+            echo "  -h   Print this help and exit"
+            exit
+            ;;
+          *)
+            echo "Unknown flag -${b}"
+            exit
+            ;;
+        esac
+      done
+    fi
+  done
+}
+
+# === Main ===
+OUTPUT=n
+LOGFILE="$(pwd)/tests.log"
+LOG=1
+i=0
+for a in ${tests}; do
+    test[${i}]=0
+    (( ${a}=i++ ))
+done
+export JAVA_HOME JMODELICA_HOME IPOPT_HOME PYTHONPATH LD_LIBRARY_PATH ANT_OPTS SUNDIALS_HOME
+TIME=$(date +%s)
+
+read_args "$@"
+
+if [[ $ERROR_ON_TEST_FAIL == 1 ]]; then
+    if [[ -z $XML_RES_PATH ]]; then
+        echo "-e needs -x"
+        exit 1
+    fi
+fi
+
+if [ "${LOG}" == 1 ]; then
+  echo "Log of jm_tests $(date):" > "${LOGFILE}"
+fi
+
+ANY_ON=0
+for a in ${tests}; do
+  if [[ "${test[${!a}]}" == 1 ]]; then
+    ANY_ON=1
+  fi
+done
+if [[ "${ANY_ON}" == 0 ]]; then
+  switch_test_flags ${DEFAULT_TESTS}
+fi
+
+# If on Windows, inform user about bug in ticket #766
+if [[ ${SYS} == Win ]]; then
+  echo Note: If modelica or optimica tests seem to hang, press enter a couple of times.
+fi
+
+res=0
+for a in ${tests}; do
+  if [[ "${test[${!a}]}" == 1 ]]; then
+    ${a}_tests || res=1
+  fi
+done
+
+if [[ "${OUTPUT}" != q ]]; then
+  echo ========================
+fi
+echo $(date +%s) ${TIME}"-[Total time: ]nd60/n[:]n60%[0n]sxd10>xp" | dc
+
+# Rename test names in xml when run with 64 bit python
+if [ -n "${XML_RES_PATH:-}" ]; then
+    for f in ${XML_RES_PATH}/*; do
+        if [[ "${f}" == *"python64_"* ]]; then
+            sed -e 's#classname=\"#classname=\"python64.#g' $f > temp.xml
+            mv -f temp.xml $f
+        fi
+    done
+fi
+
+if [[ "${ERROR_ON_TEST_FAIL}" == 1 ]]; then
+    if [[ $res == 0 ]]; then
+        grep -R testsuite $XML_RES_PATH | sed -n -e "/.*errors=\"[0]*[1-9][0-9]*\".*/ q1" -e "/.*failures=\"[0]*[1-9][0-9]*\".*/ q1"
+        exit $?
+    fi
+    exit $res
+else
+    exit 0
+fi

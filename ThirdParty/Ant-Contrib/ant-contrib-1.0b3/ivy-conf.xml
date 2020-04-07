@@ -1,0 +1,20 @@
+<ivy-conf>
+  <properties file="build.properties" />
+  
+  <conf defaultResolver="default-resolver" checkUpToDate="true" />
+  
+  <resolvers>
+      <filesystem name="local">
+          <ivy pattern="${ivy.conf.dir}/lib/[module]/ivy-[revision].xml" />
+          <artifact pattern="${ivy.conf.dir}/lib/[module]/[ext]s/[artifact]-[revision].[ext]" />
+      </filesystem>
+          
+      <ivyrep name="ivyrep" />
+
+      <chain name="default-resolver">
+          <resolver ref="local" />
+          <resolver ref="ivyrep" />
+      </chain>
+  </resolvers>
+  
+</ivy-conf>

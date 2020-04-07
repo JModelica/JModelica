@@ -1,0 +1,119 @@
+/*
+    Copyright (C) 2009-2019 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect OptionExporter {
+    
+    /**
+     * Exports default options to XML.
+     */
+    public class OptionExporter {
+        
+        private static final String OPTION_EXPORT_TEMPLATE = "==OPTIONS-LIST==";
+        
+        /**
+         * Exports list of options.
+         * 
+         * Allowed arguments:
+         *   -x <file>    export as XML to <file>
+         *   -d <file>    export as DocBook table to <file>
+         *   -p <file>    export as plain text table to <file>
+         *   -t <file>    next export argument will use <file> as a template, replacing any line containing 
+         *                the value of <code>OPTION_EXPORT_TEMPLATE</code> with generated output
+         * 
+         * For the last export type argument given, the file argument may be ommited, 
+         * in that case it is printed on stdout.
+         */
+        public static void main(String[] args) {
+            OptionRegistry or = ModelicaCompiler.createOptions();
+            Type t = null;
+            BufferedReader tmpl = null;
+            for (String arg : args) {
+                if (t == null) {
+                    t = type(arg);
+                } else {
+                    if (t == Type.Template) {
+                        try {
+                            tmpl = new BufferedReader(new FileReader(arg));
+                        } catch (FileNotFoundException e) {
+                            System.err.println("Could not open template file for reading: " + e.getMessage());
+                        }
+                    } else {
+                        try {
+                            PrintStream out = new PrintStream(new BufferedOutputStream(new FileOutputStream(arg)));
+                            if (tmpl != null) {
+                                String line = tmpl.readLine();
+                                while (line != null) {
+                                    if (line.contains(OPTION_EXPORT_TEMPLATE)) {
+                                        emit(t, or, out);
+                                    } else {
+                                        out.println(line);
+                                    }
+                                    line = tmpl.readLine();
+                                }
+                            } else {
+                                emit(t, or, out);
+                            }
+                            out.close();
+                        } catch (FileNotFoundException e) {
+                            System.err.println("Could not open file for writing: " + e.getMessage());
+                        } catch (IOException e) {
+                        }
+                        tmpl = null;
+                    }
+                    t = null;
+                }
+            }
+            if (t != null) {
+                emit(t, or, System.out);
+            }
+        }
+        
+        private static void emit(Type t, OptionRegistry or, PrintStream out) {
+            switch (t) {
+            case XML:
+                or.exportXML(out, OptionRegistry.Category.experimental);
+                break;
+            case DocBook:
+                or.exportDocBook(out, OptionRegistry.Category.experimental);
+                break;
+            case PlainText:
+                or.exportPlainText(out, OptionRegistry.Category.experimental);
+                break;
+            case Template:
+                throw new IllegalArgumentException();
+            }
+        }
+        
+        private static Type type(String arg) {
+            if (arg.equals("-x")) {
+                return Type.XML;
+            } else if (arg.equals("-d")) {
+                return Type.DocBook;
+            } else if (arg.equals("-p")) {
+                return Type.PlainText;
+            } else if (arg.equals("-t")) {
+                return Type.Template;
+            } else {
+                System.err.println("Unknown output type argument: " + arg);
+                return null;
+            }
+        }
+        
+        private enum Type {
+            XML, DocBook, PlainText, Template;
+        }
+    }
+}

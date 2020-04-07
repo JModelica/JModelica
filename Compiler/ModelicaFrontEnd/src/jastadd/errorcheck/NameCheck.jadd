@@ -1,0 +1,203 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import org.jmodelica.util.ErrorCheckType;
+
+aspect SourceNameCheck {
+
+    public void ASTNode.nameCheck(ErrorCheckType checkType) {}
+
+    public abstract class ErrorChecker {
+        public static class NameChecker extends ErrorChecker {
+            public NameChecker() {
+                super("NameCheck");
+            }
+
+            @Override
+            public void check(ASTNode node, ErrorCheckType checkType) {
+                node.nameCheck(checkType);
+            }
+        }
+    }
+
+    private static ErrorChecker ASTNode.NAME_CHECKERS = addErrorChecker(new ErrorChecker.NameChecker());
+
+}
+
+
+aspect InstanceNameCheck {
+
+    public void InstAmbiguousAccess.nameCheck(ErrorCheckType checkType) {
+        nameCheckAmbigous(checkType);
+    }
+
+    public void InstAmbiguousArrayAccess.nameCheck(ErrorCheckType checkType) {
+        nameCheckAmbigous(checkType);
+    }
+
+    public void InstAccess.nameCheckAmbigous(ErrorCheckType checkType) {
+        if (!isExpandableConnectorMemberInConnect()) {
+            InstLookupResult<InstComponentDecl> comp = myInstLookupComponent();
+            InstLookupResult<InstClassDecl> cls      = myInstLookupClass();
+            if (!comp.isNotFound())
+                comp.problem(this, "component", qualifiedName());
+            else if (!cls.isNotFound())
+                cls.problem(this, "class", qualifiedName());
+            else 
+                comp.problem(this, "class or component", qualifiedName());
+        }
+    }
+
+    public void InstComponentAccess.nameCheck(ErrorCheckType checkType) {
+        nameCheckComponentAccess(checkType);
+    }
+
+    public void InstComponentArrayAccess.nameCheck(ErrorCheckType checkType) {
+        nameCheckComponentAccess(checkType);
+    }
+
+    public void InstAccess.nameCheckComponentAccess(ErrorCheckType checkType) {
+        //log.debug("InstComponentAccess.nameCheck(" + checkType + "): " + name() + " " + myInstComponentDecl().name());
+        if (hasLookupProblem()) {
+            myInstLookup().problem(this, "component", qualifiedName());
+        }
+        if (!inConnectClause() && !isModificationName() && isConditional()) {
+            error("The component "+qualifiedName()+" is conditional: Access of conditional components is only valid in connect statements");
+        }
+    }
+    
+    syn boolean InstAccess.isConditional()      = myInstComponentDecl().hasConditionalAttribute();
+    eq InstComponentAccess.isConditional()      = myInstLookup().unresolved().target().hasConditionalAttribute();
+    eq InstComponentArrayAccess.isConditional() = myInstLookup().unresolved().target().hasConditionalAttribute();
+
+    public void InstClassAccess.nameCheck(ErrorCheckType checkType) {
+        generateClassLookupProblems(myInstLookup(), this);
+    }
+    
+    public void InstAccess.generateClassLookupProblems(InstLookupResult lookup, ASTNode n) {
+        if (lookup.isProblem()) {
+            lookup.problem(this, n.classErrorType(), n.classErrorName());
+        }
+    }
+
+    public void InstDot.generateClassLookupProblems(InstLookupResult lookup, ASTNode n) {
+         getInstAccess(getNumInstAccess() - 1).generateClassLookupProblems(lookup, n);
+    }
+    
+    syn String ASTNode.classErrorType()  = null;
+    eq InstClassAccess.classErrorType()  = "class";
+    eq InstFunctionCall.classErrorType() = "function";
+    
+    syn String ASTNode.classErrorName()  = null;
+    eq InstClassAccess.classErrorName()  = qualifiedName();
+    eq InstFunctionCall.classErrorName() = name() + "()";
+    
+    public static final SimpleProblemProducer ASTNode.NOT_IN_CONSTRAINING_TYPE =
+            new SimpleWarningProducer("NOT_IN_CONSTRAINING_TYPE", ProblemKind.SEMANTIC, 
+                    "Access to %s %s not recommended, it is not present in "
+                    + "constraining type of declaration '%s'");
+    
+
+    inh boolean InstAccess.isExpandableConnectorMemberInConnect();
+    eq InstDot.getInstAccess(int i).isExpandableConnectorMemberInConnect() = 
+        isExpandableConnectorPart() && inConnectWithExistingComponent();
+    eq BaseNode.getChild().isExpandableConnectorMemberInConnect()          = false;
+
+    inh boolean InstAccess.inConnectWithExistingComponent();
+    eq FConnectClause.getConnector1().inConnectWithExistingComponent()   = !getConnector2().isExpandableConnectorPart();
+    eq FConnectClause.getConnector2().inConnectWithExistingComponent()   = !getConnector1().isExpandableConnectorPart();
+    eq BaseNode.getChild().inConnectWithExistingComponent()              = false;
+
+}
+
+
+aspect DuplicateComponents {
+
+    /**
+     * Is this component a duplicate of another component?
+     */
+    syn boolean InstComponentDecl.isDuplicate() = duplicateOf() != null;
+
+    /**
+     * If this component is a duplicate of one or more other components, 
+     * return the component chosen to be considered the original.
+     */
+    syn InstComponentDecl InstComponentDecl.duplicateOriginal() = isDuplicate() ? duplicateOf() : this;
+
+    /**
+     * Get the component that this component is a duplicate of, if any.
+     */
+    syn InstComponentDecl InstComponentDecl.duplicateOf() {
+        if (!duplicateOfCalculated) 
+            containingEntity().calculateDuplicates();
+        return duplicateOfValue;
+    }
+    eq InstArrayComponentDecl.duplicateOf()   = null;
+    eq UnknownInstComponentDecl.duplicateOf() = null;
+
+    private boolean InstComponentDecl.duplicateOfCalculated = false;
+    private InstComponentDecl InstComponentDecl.duplicateOfValue = null;
+
+    /**
+     * Find all duplicates among child components.
+     */
+    public void InstNode.calculateDuplicates() {
+        Map<String,InstComponentDecl> map = new HashMap<String,InstComponentDecl>();
+        for (InstComponentDecl comp : allInstComponentDeclsWithDuplicates()) 
+            comp.calculateDuplicate(map);
+    }
+
+    /**
+     * Update duplicate information for this component.
+     */
+    public void InstComponentDecl.calculateDuplicate(Map<String,InstComponentDecl> map) {
+        if (map.containsKey(name()))
+            duplicateOfValue = map.get(name());
+        else
+            map.put(name(), this);
+        duplicateOfCalculated = true;
+    }
+
+    /**
+     * The node containing the scope in which two components with identical names 
+     * constitute a collision, even if the components are also identical.
+     */
+    inh ASTNode InstComponentDecl.nameCollisionScope();
+    eq InstNode.getChild().nameCollisionScope()       = this;
+    eq InstForClauseE.getChild().nameCollisionScope() = this;
+    eq InstForStmt.getChild().nameCollisionScope()    = this;
+    eq Root.getChild().nameCollisionScope()           = this;
+
+    public static final SimpleProblemProducer ASTNode.UNABLE_TO_INFER_EQUALITY_FOR_DUPLICATES =
+            new SimpleWarningProducer("UNABLE_TO_INFER_EQUALITY_FOR_DUPLICATES", ProblemKind.SEMANTIC,
+                    "The component %s is declared multiple times and can not be verified to be identical to other declaration(s) with the same name.");
+
+    public void InstComponentDecl.nameCheck(ErrorCheckType checkType) {
+        // TODO: check for duplicate classes and for class and component with same name
+        if (isDuplicate()) {
+            InstComponentDecl other = duplicateOf();
+            if (other.nameCollisionScope() == nameCollisionScope()) {
+                error("Duplicate component in same class: " + this);
+            } else {
+                // TODO: check if they are identical
+                UNABLE_TO_INFER_EQUALITY_FOR_DUPLICATES.invoke(this, name());
+            }
+        }
+    }
+
+    public void InstArrayComponentDecl.nameCheck(ErrorCheckType checkType) {}
+
+}

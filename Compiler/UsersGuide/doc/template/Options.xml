@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<appendix version="5.0" xml:id="app_compiler_options"
+          xmlns="http://docbook.org/ns/docbook"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xmlns:xs="http://www.w3.org/2001/XMLSchema"
+          xmlns:xlink="http://www.w3.org/1999/xlink"
+          xmlns:xi="http://www.w3.org/2001/XInclude"
+          xmlns:svg="http://www.w3.org/2000/svg"
+          xmlns:m="http://www.w3.org/1998/Math/MathML"
+          xmlns:html="http://www.w3.org/1999/xhtml"
+          xmlns:db="http://docbook.org/ns/docbook">
+  <title>Compiler options</title>
+
+  <section>
+    <title>List of options that can be set in compiler</title>
+
+    <para><!-- ==OPTIONS-LIST== --></para>
+  </section>
+</appendix>

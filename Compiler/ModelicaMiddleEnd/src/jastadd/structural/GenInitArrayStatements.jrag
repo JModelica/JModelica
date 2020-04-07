@@ -1,0 +1,228 @@
+/*
+    Copyright (C) 2016 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect GenInitArrayStatements {
+
+    public class FClass {
+        /**
+         * Generate array initialization statements for unknown function arrays.
+         */
+        public class genInitArrayStatements extends Transformation {
+            public void perform() {
+                for (FFunctionDecl ffd : getFFunctionDecls()) {
+                    ffd.sortBindingAssignments();
+                }
+            }
+        }
+    }
+    
+    /**
+     * Flag that controls if this statement should be a part of the set of statements at 
+     * the beginning of a function that are generated from variable declarations, and 
+     * should be sorted to ensure assignment before use among them.
+     * 
+     * Set during flattening
+     */
+    public boolean FStatement.shouldBeSorted = false;
+    
+    public void FFunctionDecl.sortBindingAssignments() {
+        Map<String,FStatement> map = new LinkedHashMap<String,FStatement>();
+        for (FStatement stmt : getFAlgorithm().getFStatements())
+            stmt.addToSortingMap(map);
+        
+        List<FStatement> stmts = new List<FStatement>();
+        while (!map.isEmpty()) 
+            map.values().iterator().next().addSortedByAssignmentOrder(stmts, map);
+        
+        for (FStatement stmt : getFAlgorithm().getFStatements())
+            if (!stmt.shouldBeSorted)
+                stmts.add(stmt);
+        getFAlgorithm().setFStatementList(stmts);
+    }
+    
+    public void FStatement.addToSortingMap(Map<String,FStatement> map) {
+        if (shouldBeSorted) {
+            for (String name : sortingAssignedNames()) {
+                FStatement old = map.get(name);
+                if (old != null && old != this)
+                    extraSortingDependencies().add(old);
+                map.put(name, this);
+            }
+        }
+    }
+    
+    
+    private boolean FStatement.isBeingSorted = false;
+    private boolean FStatement.addedDuringSorting = false;
+    
+    public void FStatement.addSortedByAssignmentOrder(
+            List<FStatement> stmts, Map<String,FStatement> map) {
+        if (isBeingSorted) 
+            throw new CircularBindingExpressionException();
+        isBeingSorted = true;
+        
+        for (String depName : sortingDependencies()) {
+            FStatement dep = map.get(depName);
+            if (dep != null && dep != this)
+                dep.addSortedByAssignmentOrder(stmts, map);
+        }
+        for (FStatement dep : extraSortingDependencies()) {
+            if (!dep.addedDuringSorting)
+                dep.addSortedByAssignmentOrder(stmts, map);
+        }
+        
+        stmts.add(this);
+        addedDuringSorting = true;
+        for (String name : sortingAssignedNames())
+            map.remove(name);
+        
+        isBeingSorted = false;
+    }
+    
+    public class CircularBindingExpressionException extends RuntimeException {}
+    
+    private Set<FStatement> FStatement.extraSortingDependencies = null;
+    private Set<FStatement> FStatement.extraSortingDependencies() {
+        if (extraSortingDependencies == null)
+            extraSortingDependencies = new LinkedHashSet<FStatement>();
+        return extraSortingDependencies;
+    }
+    private boolean FStatement.hasExtraSortingDependencies() {
+        return extraSortingDependencies != null;
+    }
+    
+    
+    syn lazy Set<String> FStatement.sortingAssignedNames() = Collections.<String>emptySet();
+    eq FAssignStmt.sortingAssignedNames()      = getLeft().sortingAssignedNames();
+    eq FInitArrayStmt.sortingAssignedNames()   = 
+        Collections.singleton("size(" + getFAccessExp().name() + ")");
+    eq FForStmt.sortingAssignedNames()         = sortingAssignedNames(getForStmts());
+    eq FWhileStmt.sortingAssignedNames()       = sortingAssignedNames(getWhileStmts());
+    eq FFunctionCallStmt.sortingAssignedNames() {
+        Set<String> res = new LinkedHashSet<String>(getNumLeft());
+        for (FFunctionCallLeft left : getLefts())
+            left.sortingAddNamesUsed(res);
+        return res;
+    }
+    eq FIfStmt.sortingAssignedNames() {
+        Set<String> res = new LinkedHashSet<String>();
+        for (FIfWhenClause iwc : getFIfWhenClauses())
+            res.addAll(iwc.sortingAssignedNames());
+        for (FStatement stmt : getElseStmts())
+            res.addAll(stmt.sortingAssignedNames());
+        return res;
+    }
+    
+    syn Set<String> FIfWhenClause.sortingAssignedNames() = 
+        FStatement.sortingAssignedNames(getFStatements());
+    
+    public static Set<String> FStatement.sortingAssignedNames(List<FStatement> stmts) {
+        Set<String> res = new LinkedHashSet<String>();
+        for (FStatement stmt : stmts)
+            res.addAll(stmt.sortingAssignedNames());
+        return res;
+    }
+    
+    syn Set<String> FAssignableExp.sortingAssignedNames();
+    eq CommonAccessExp.sortingAssignedNames() = Collections.singleton(name());
+    eq FSubscriptedExp.sortingAssignedNames() {
+        Set<String> res = new LinkedHashSet<String>();
+        for (FAccessExp use : findFAccessExpsInTree()) {
+            res.add(use.name());
+        }
+        return res;
+    }
+    
+    
+    syn lazy Set<String> FStatement.sortingDependencies() = Collections.<String>emptySet();
+    eq FAssignStmt.sortingDependencies()       = 
+        getRight().sortingAddNamesUsed(baseSortingDependencies());
+    eq FInitArrayStmt.sortingDependencies()    = 
+        type().sortingAddNamesUsed(new LinkedHashSet<String>());
+    eq FFunctionCallStmt.sortingDependencies() = 
+        getCall().sortingAddNamesUsed(baseSortingDependencies());
+    eq FForStmt.sortingDependencies()          = 
+        addCompoundStmtSortingDependencies(baseSortingDependencies(), getIndex(), getForStmts());
+    eq FWhileStmt.sortingDependencies()        = 
+        addCompoundStmtSortingDependencies(baseSortingDependencies(), getTest(), getWhileStmts());
+    eq FIfStmt.sortingDependencies() {
+        Set<String> res = new LinkedHashSet<String>();
+        for (FIfWhenClause iwc : getFIfWhenClauses())
+            res.addAll(iwc.sortingDependencies());
+        for (FStatement stmt : getElseStmts())
+            res.addAll(stmt.sortingDependencies());
+        return res;
+    }
+    
+    syn Set<String> FIfWhenClause.sortingDependencies() = 
+        FStatement.addCompoundStmtSortingDependencies(
+                new LinkedHashSet<String>(), getTest(), getFStatements());
+    
+    protected Set<String> FStatement.baseSortingDependencies() {
+        Set<String> res = new LinkedHashSet<String>();
+        for (String name : sortingAssignedNames()) 
+            res.add("size(" + name + ")");
+        return res;
+    }
+    
+    public static Set<String> FStatement.addCompoundStmtSortingDependencies(
+            Set<String> set, ASTNode head, List<FStatement> body) {
+        head.sortingAddNamesUsed(set);
+        for (FStatement stmt : body)
+            set.addAll(stmt.sortingDependencies());
+        return set;
+    }
+    
+    public Set<String> ASTNode.sortingAddNamesUsed(Set<String> set) {
+        for (ASTNode n : this)
+            n.sortingAddNamesUsed(set);
+        return set;
+    }
+    
+    public Set<String> FAccess.sortingAddNamesUsed(Set<String> set) {
+        if (!myFV().isUnknown())
+            set.add(name());
+        return super.sortingAddNamesUsed(set);
+    }
+    
+    public Set<String> FSizeExp.sortingAddNamesUsed(Set<String> set) {
+        Set<String> temp = new LinkedHashSet<String>();
+        super.sortingAddNamesUsed(temp);
+        for (String name : temp) {
+            if (!name.startsWith("size("))
+                name = "size(" + name + ")";
+            set.add(name);
+        }
+        return set;
+    }
+    
+    public Set<String> FType.sortingAddNamesUsed(Set<String> set) {
+        super.sortingAddNamesUsed(set);
+        getSize().sortingAddNamesUsed(set);
+        return set;
+    }
+    
+    public Set<String> Size.sortingAddNamesUsed(Set<String> set) {
+        return set;
+    }
+    
+    public Set<String> MutableSize.sortingAddNamesUsed(Set<String> set) {
+        for (FExp exp : exps)
+            if (exp != null)
+                exp.sortingAddNamesUsed(set);
+        return set;
+    }
+}

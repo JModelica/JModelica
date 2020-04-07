@@ -1,0 +1,50 @@
+def buildFullImage() {
+    def dockerfile = 'Dockerfile_full_image'
+    
+    if ("${JOB_NAME}".toLowerCase().contains("ubuntu")) {
+        echo "BUILDING UBUNTU FULL IMAGE"
+        return docker.build("jmodelica-image", "-f ${dockerfile} . --pull --no-cache --build-arg DOCKER_LINUX_DIST=jmodelica/ubuntu_base --build-arg DOCKER_DIST_TAG=18.04 --build-arg DOCKER_JM_TESTS_WS=/home/baseuser/")
+    } else if ("${JOB_NAME}".toLowerCase().contains("centos") && "${JOB_NAME}".toLowerCase().contains("7.2")) {
+        echo "BUILDING CENTOS 7.2 FULL IMAGE"
+        return docker.build("jmodelica-image", "-f ${dockerfile} . --pull --no-cache --build-arg DOCKER_LINUX_DIST=jmodelica/centos_base --build-arg DOCKER_DIST_TAG=7.2 --build-arg DOCKER_JM_TESTS_WS=/home/baseuser/")
+    } else if ("${JOB_NAME}".toLowerCase().contains("centos")) {
+        echo "BUILDING CENTOS 7.4 FULL IMAGE"
+        return docker.build("jmodelica-image", "-f ${dockerfile} . --pull --no-cache --build-arg DOCKER_LINUX_DIST=jmodelica/centos_base --build-arg DOCKER_DIST_TAG=7.4 --build-arg DOCKER_JM_TESTS_WS=/home/baseuser/")
+    } else {
+        echo "NO OS AVAILABLE FOR CURRENT JOB"
+    }
+}
+node('docker') {
+    def jm_image
+    stage("Checkout JModelica.org") {
+        checkout([
+            $class: 'SubversionSCM',
+            locations: [
+            [local: 'JModelica', remote: scm.getLocations()[0].remote],
+        ],
+            workspaceUpdater: [$class: 'UpdateWithCleanUpdater'],
+            quietOperation: true,
+        ])
+    }
+    try {
+        stage ('Build') {
+            dir ("JModelica") {
+                jm_image = buildFullImage()
+            }
+        }
+    } finally {
+        stage ('Testing') {
+            dir ("JModelica") {
+            //We copy test results from docker to host
+                jm_image.inside {
+                    sh 'mkdir test_results'
+                    sh 'cp /home/baseuser/test_results/* test_results/'
+                    archiveArtifacts artifacts: '**/*.xml', fingerprint: false
+                    junit testResults: 'test_results/*.xml', allowEmptyResults: false
+                    sh 'mkdir jm_install && cp -r /home/baseuser/jm_install/* jm_install/'
+                    archiveArtifacts artifacts: 'jm_install/**', fingerprint: false
+                }
+            }
+        }
+    }
+}

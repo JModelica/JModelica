@@ -1,0 +1,887 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<book version="5.0" xmlns="http://docbook.org/ns/docbook"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns:xs="http://www.w3.org/2001/XMLSchema"
+      xmlns:xlink="http://www.w3.org/1999/xlink"
+      xmlns:xi="http://www.w3.org/2001/XInclude"
+      xmlns:svg="http://www.w3.org/2000/svg"
+      xmlns:m="http://www.w3.org/1998/Math/MathML"
+      xmlns:html="http://www.w3.org/1999/xhtml"
+      xmlns:db="http://docbook.org/ns/docbook">
+  <info>
+    <title><productname>JModelica.org</productname> User Guide</title>
+
+    <subtitle>1.2.0<productnumber></productnumber></subtitle>
+
+    <pubdate></pubdate>
+
+    <copyright>
+      <year>2010</year>
+
+      <holder>Modelon AB</holder>
+    </copyright>
+  </info>
+
+  <acknowledgements>
+    <para>This document is produced with DocBook 5 using XMLMind XML Editor
+    for authoring, Norman Walsh's XSL stylesheets and a GNOME xsltproc +
+    Apache fop toolchain. Math contents is converted from LaTeX using the
+    TeX/LaTeX to MathML Online Translator by the Ontario Research Centre for
+    Computer Algebra and processed by JEuclid.</para>
+  </acknowledgements>
+
+  <appendix>
+    <title>Sandbox</title>
+
+    <para>hej test index</para>
+
+    <para><informalequation>
+        <m:math display="block" overflow="scroll">
+          <m:munder>
+            <m:mi>min</m:mi>
+
+            <m:mtable columnalign="center">
+              <m:mtr>
+                <m:mtd>
+                  <m:mi mathvariant="normal">s.t.</m:mi>
+                </m:mtd>
+              </m:mtr>
+
+              <m:mtr>
+                <m:mtd>
+                  <m:mi>g</m:mi>
+
+                  <m:mo>⁡</m:mo>
+
+                  <m:mfenced>
+                    <m:mi>x</m:mi>
+                  </m:mfenced>
+
+                  <m:mo>≤</m:mo>
+
+                  <m:mn>0</m:mn>
+                </m:mtd>
+              </m:mtr>
+
+              <m:mtr>
+                <m:mtd>
+                  <m:mi>h</m:mi>
+
+                  <m:mo>⁡</m:mo>
+
+                  <m:mfenced>
+                    <m:mi>x</m:mi>
+                  </m:mfenced>
+
+                  <m:mo>=</m:mo>
+
+                  <m:mn>0</m:mn>
+                </m:mtd>
+              </m:mtr>
+            </m:mtable>
+          </m:munder>
+
+          <m:mi>f</m:mi>
+
+          <m:mo>⁡</m:mo>
+
+          <m:mfenced>
+            <m:mi>x</m:mi>
+          </m:mfenced>
+
+          <m:mspace linebreak="newline" />
+        </m:math>
+      </informalequation><figure>
+        <title>Console output from VDP example</title>
+
+        <screenshot>
+          <mediaobject>
+            <imageobject>
+              <imagedata fileref="images/vdp-console.preview.png" scalefit="1"
+                         width="70%"></imagedata>
+            </imageobject>
+          </mediaobject>
+        </screenshot>
+      </figure><equation>
+        <title>MathML example from <link
+        xlink:href="http://www.orcca.on.ca/MathML/texmml/textomml.html">LaTeX
+        to MathML online translator</link></title>
+
+        <m:math display="block" overflow="scroll">
+          <m:mtable>
+            <m:mtr>
+              <m:mtd columnalign="right">
+                <m:msup>
+                  <m:mfenced close="∥ " open="∥ ">
+                    <m:mi>f</m:mi>
+                  </m:mfenced>
+
+                  <m:mn>2</m:mn>
+                </m:msup>
+
+                <m:mo>=</m:mo>
+
+                <m:msup>
+                  <m:mfenced close="∥ " open="∥ " separators="">
+                    <m:mi>f</m:mi>
+
+                    <m:mo>⁡</m:mo>
+
+                    <m:mfenced>
+                      <m:mi>z</m:mi>
+                    </m:mfenced>
+                  </m:mfenced>
+
+                  <m:mn>2</m:mn>
+                </m:msup>
+
+                <m:mo>=</m:mo>
+              </m:mtd>
+
+              <m:mtd columnalign="left">
+                <m:mo> </m:mo>
+
+                <m:msup>
+                  <m:mfenced close="∣ " open="∣ ">
+                    <m:msub>
+                      <m:mi>f</m:mi>
+
+                      <m:mn>0</m:mn>
+                    </m:msub>
+                  </m:mfenced>
+
+                  <m:mn>2</m:mn>
+                </m:msup>
+
+                <m:mo>+</m:mo>
+
+                <m:msup>
+                  <m:mfenced close="∣ " open="∣ ">
+                    <m:msub>
+                      <m:mi>f</m:mi>
+
+                      <m:mn>1</m:mn>
+                    </m:msub>
+                  </m:mfenced>
+
+                  <m:mn>2</m:mn>
+                </m:msup>
+
+                <m:mo>+</m:mo>
+
+                <m:mo>⋯</m:mo>
+
+                <m:mo>+</m:mo>
+
+                <m:msup>
+                  <m:mfenced close="∣ " open="∣ ">
+                    <m:msub>
+                      <m:mi>f</m:mi>
+
+                      <m:mi>n</m:mi>
+                    </m:msub>
+                  </m:mfenced>
+
+                  <m:mn>2</m:mn>
+                </m:msup>
+              </m:mtd>
+            </m:mtr>
+
+            <m:mtr>
+              <m:mtd columnalign="right">
+                <m:mo>=</m:mo>
+              </m:mtd>
+
+              <m:mtd columnalign="left">
+                <m:mo> </m:mo>
+
+                <m:mfrac>
+                  <m:mn>1</m:mn>
+
+                  <m:mrow>
+                    <m:mn>2</m:mn>
+
+                    <m:mi>π</m:mi>
+                  </m:mrow>
+                </m:mfrac>
+
+                <m:munderover>
+                  <m:mo>∫</m:mo>
+
+                  <m:mn>0</m:mn>
+
+                  <m:mrow>
+                    <m:mn>2</m:mn>
+
+                    <m:mi>π</m:mi>
+                  </m:mrow>
+                </m:munderover>
+
+                <m:mi>f</m:mi>
+
+                <m:mo>⁡</m:mo>
+
+                <m:mfenced>
+                  <m:msup>
+                    <m:mi>e</m:mi>
+
+                    <m:mi>it</m:mi>
+                  </m:msup>
+                </m:mfenced>
+
+                <m:mover>
+                  <m:mi>f</m:mi>
+
+                  <m:mo stretchy="true">¯</m:mo>
+                </m:mover>
+
+                <m:mfenced>
+                  <m:msup>
+                    <m:mi>e</m:mi>
+
+                    <m:mrow>
+                      <m:mo>-</m:mo>
+
+                      <m:mi>it</m:mi>
+                    </m:mrow>
+                  </m:msup>
+                </m:mfenced>
+
+                <m:mspace width="0.22222em" />
+
+                <m:mrow>
+                  <m:mi>d</m:mi>
+
+                  <m:mi>t</m:mi>
+                </m:mrow>
+              </m:mtd>
+            </m:mtr>
+
+            <m:mtr>
+              <m:mtd columnalign="right">
+                <m:mo>=</m:mo>
+              </m:mtd>
+
+              <m:mtd columnalign="left">
+                <m:mo> </m:mo>
+
+                <m:mfrac>
+                  <m:mn>1</m:mn>
+
+                  <m:mrow>
+                    <m:mn>2</m:mn>
+
+                    <m:mi>π</m:mi>
+
+                    <m:mi>i</m:mi>
+                  </m:mrow>
+                </m:mfrac>
+
+                <m:munder>
+                  <m:mo>∫</m:mo>
+
+                  <m:mi>C</m:mi>
+                </m:munder>
+
+                <m:mi>f</m:mi>
+
+                <m:mo>⁡</m:mo>
+
+                <m:mfenced>
+                  <m:mi>z</m:mi>
+                </m:mfenced>
+
+                <m:mover>
+                  <m:mi>f</m:mi>
+
+                  <m:mo stretchy="true">¯</m:mo>
+                </m:mover>
+
+                <m:mfenced separators="">
+                  <m:mn>1</m:mn>
+
+                  <m:mo>/</m:mo>
+
+                  <m:mi>z</m:mi>
+                </m:mfenced>
+
+                <m:mfrac>
+                  <m:mrow>
+                    <m:mi>d</m:mi>
+
+                    <m:mi>z</m:mi>
+                  </m:mrow>
+
+                  <m:mi>z</m:mi>
+                </m:mfrac>
+              </m:mtd>
+            </m:mtr>
+
+            <m:mtr>
+              <m:mtd columnalign="right">
+                <m:mo>=</m:mo>
+              </m:mtd>
+
+              <m:mtd columnalign="left">
+                <m:mo> </m:mo>
+
+                <m:mfenced close="]" open="[" separators="">
+                  <m:mo> </m:mo>
+
+                  <m:msup>
+                    <m:mi>z</m:mi>
+
+                    <m:mn>0</m:mn>
+                  </m:msup>
+
+                  <m:mo> </m:mo>
+                </m:mfenced>
+
+                <m:mo> </m:mo>
+
+                <m:mo> </m:mo>
+
+                <m:mi>f</m:mi>
+
+                <m:mo>⁡</m:mo>
+
+                <m:mfenced>
+                  <m:mi>z</m:mi>
+                </m:mfenced>
+
+                <m:mover>
+                  <m:mi>f</m:mi>
+
+                  <m:mo stretchy="true">¯</m:mo>
+                </m:mover>
+
+                <m:mfenced separators="">
+                  <m:mn>1</m:mn>
+
+                  <m:mo>/</m:mo>
+
+                  <m:mi>z</m:mi>
+                </m:mfenced>
+              </m:mtd>
+            </m:mtr>
+          </m:mtable>
+        </m:math>
+      </equation><informalequation>
+        <m:math display="block" overflow="scroll">
+          <m:mfenced close="]" open="[">
+            <m:mtable columnalign="center center center center center">
+              <m:mtr>
+                <m:mtd>
+                  <m:mi>B</m:mi>
+                </m:mtd>
+
+                <m:mtd></m:mtd>
+
+                <m:mtd></m:mtd>
+
+                <m:mtd></m:mtd>
+
+                <m:mtd>
+                  <m:msub>
+                    <m:mi>Y</m:mi>
+
+                    <m:mn>1</m:mn>
+                  </m:msub>
+
+                  <m:mi>B</m:mi>
+                </m:mtd>
+              </m:mtr>
+
+              <m:mtr>
+                <m:mtd></m:mtd>
+
+                <m:mtd>
+                  <m:mi>B</m:mi>
+                </m:mtd>
+
+                <m:mtd></m:mtd>
+
+                <m:mtd></m:mtd>
+
+                <m:mtd>
+                  <m:msub>
+                    <m:mi>Y</m:mi>
+
+                    <m:mn>2</m:mn>
+                  </m:msub>
+
+                  <m:mi>B</m:mi>
+                </m:mtd>
+              </m:mtr>
+
+              <m:mtr>
+                <m:mtd></m:mtd>
+
+                <m:mtd></m:mtd>
+
+                <m:mtd>
+                  <m:mo>⋱</m:mo>
+                </m:mtd>
+
+                <m:mtd></m:mtd>
+
+                <m:mtd>
+                  <m:mo>⋮</m:mo>
+                </m:mtd>
+              </m:mtr>
+
+              <m:mtr>
+                <m:mtd></m:mtd>
+
+                <m:mtd></m:mtd>
+
+                <m:mtd></m:mtd>
+
+                <m:mtd>
+                  <m:mi>B</m:mi>
+                </m:mtd>
+
+                <m:mtd>
+                  <m:msub>
+                    <m:mi>Y</m:mi>
+
+                    <m:mi>p</m:mi>
+                  </m:msub>
+
+                  <m:mi>B</m:mi>
+                </m:mtd>
+              </m:mtr>
+            </m:mtable>
+          </m:mfenced>
+        </m:math>
+      </informalequation><informalequation>
+        <m:math display="block" overflow="scroll">
+          <m:mi>Re</m:mi>
+
+          <m:mfenced close="}" open="{" separators="">
+            <m:mfrac>
+              <m:mn>1</m:mn>
+
+              <m:mrow>
+                <m:mn>2</m:mn>
+
+                <m:mi>π</m:mi>
+              </m:mrow>
+            </m:mfrac>
+
+            <m:munderover>
+              <m:mo>∫</m:mo>
+
+              <m:mn>0</m:mn>
+
+              <m:mrow>
+                <m:mn>2</m:mn>
+
+                <m:mi>π</m:mi>
+              </m:mrow>
+            </m:munderover>
+
+            <m:mfenced separators="">
+              <m:mi>f</m:mi>
+
+              <m:mo>⁡</m:mo>
+
+              <m:mfenced>
+                <m:mi>z</m:mi>
+              </m:mfenced>
+
+              <m:mo>-</m:mo>
+
+              <m:munderover>
+                <m:mo>∑</m:mo>
+
+                <m:mrow>
+                  <m:mo>ℓ</m:mo>
+
+                  <m:mo>=</m:mo>
+
+                  <m:mn>0</m:mn>
+                </m:mrow>
+
+                <m:mi>m</m:mi>
+              </m:munderover>
+
+              <m:msub>
+                <m:mi>g</m:mi>
+
+                <m:mo>ℓ</m:mo>
+              </m:msub>
+
+              <m:msup>
+                <m:mi>h</m:mi>
+
+                <m:mo>ℓ</m:mo>
+              </m:msup>
+
+              <m:mfenced>
+                <m:mi>z</m:mi>
+              </m:mfenced>
+            </m:mfenced>
+
+            <m:mover>
+              <m:mrow>
+                <m:msup>
+                  <m:mi>h</m:mi>
+
+                  <m:mi>k</m:mi>
+                </m:msup>
+
+                <m:mfenced>
+                  <m:mi>z</m:mi>
+                </m:mfenced>
+              </m:mrow>
+
+              <m:mo stretchy="true">¯</m:mo>
+            </m:mover>
+
+            <m:mspace width="0.22222em" />
+
+            <m:mrow>
+              <m:mi>d</m:mi>
+
+              <m:mi>t</m:mi>
+            </m:mrow>
+          </m:mfenced>
+
+          <m:mo>=</m:mo>
+
+          <m:mn>0</m:mn>
+        </m:math>
+      </informalequation><informalequation>
+        <m:math display="block" overflow="scroll">
+          <m:mn>2</m:mn>
+
+          <m:mfrac>
+            <m:mrow>
+              <m:mfrac>
+                <m:mn>1</m:mn>
+
+                <m:msqrt>
+                  <m:mn>2</m:mn>
+
+                  <m:mo>+</m:mo>
+
+                  <m:mn>2</m:mn>
+
+                  <m:mo> </m:mo>
+
+                  <m:mi>z</m:mi>
+                </m:msqrt>
+              </m:mfrac>
+
+              <m:mo>-</m:mo>
+
+              <m:mfrac>
+                <m:mi>i</m:mi>
+
+                <m:msqrt>
+                  <m:mn>2</m:mn>
+
+                  <m:mo>-</m:mo>
+
+                  <m:mn>2</m:mn>
+
+                  <m:mo> </m:mo>
+
+                  <m:mi>z</m:mi>
+                </m:msqrt>
+              </m:mfrac>
+            </m:mrow>
+
+            <m:mrow>
+              <m:msqrt>
+                <m:mn>2</m:mn>
+
+                <m:mo>+</m:mo>
+
+                <m:mn>2</m:mn>
+
+                <m:mo> </m:mo>
+
+                <m:mi>z</m:mi>
+              </m:msqrt>
+
+              <m:mo>+</m:mo>
+
+              <m:mi>i</m:mi>
+
+              <m:msqrt>
+                <m:mn>2</m:mn>
+
+                <m:mo>-</m:mo>
+
+                <m:mn>2</m:mn>
+
+                <m:mo> </m:mo>
+
+                <m:mi>z</m:mi>
+              </m:msqrt>
+            </m:mrow>
+          </m:mfrac>
+
+          <m:mo>-</m:mo>
+
+          <m:mfrac>
+            <m:mrow>
+              <m:mn>1</m:mn>
+
+              <m:mo>-</m:mo>
+
+              <m:mfrac>
+                <m:mrow>
+                  <m:mi>i</m:mi>
+
+                  <m:mi>z</m:mi>
+                </m:mrow>
+
+                <m:msqrt>
+                  <m:mn>1</m:mn>
+
+                  <m:mo>-</m:mo>
+
+                  <m:msup>
+                    <m:mi>z</m:mi>
+
+                    <m:mn>2</m:mn>
+                  </m:msup>
+                </m:msqrt>
+              </m:mfrac>
+            </m:mrow>
+
+            <m:mrow>
+              <m:mi>z</m:mi>
+
+              <m:mo>+</m:mo>
+
+              <m:mi>i</m:mi>
+
+              <m:msqrt>
+                <m:mn>1</m:mn>
+
+                <m:mo>-</m:mo>
+
+                <m:msup>
+                  <m:mi>z</m:mi>
+
+                  <m:mn>2</m:mn>
+                </m:msup>
+              </m:msqrt>
+            </m:mrow>
+          </m:mfrac>
+
+          <m:mi>.</m:mi>
+
+          <m:mspace linebreak="newline" />
+        </m:math>
+      </informalequation><informalequation>
+        <m:math display="block" overflow="scroll">
+          <m:msub>
+            <m:mi>N</m:mi>
+
+            <m:mi>f</m:mi>
+          </m:msub>
+
+          <m:mfenced separators="">
+            <m:mi>g</m:mi>
+
+            <m:mo>+</m:mo>
+
+            <m:mi>Δ</m:mi>
+
+            <m:mi>g</m:mi>
+
+            <m:mi>,</m:mi>
+
+            <m:mi>h</m:mi>
+
+            <m:mo>+</m:mo>
+
+            <m:mi>Δ</m:mi>
+
+            <m:mi>h</m:mi>
+          </m:mfenced>
+
+          <m:mo>=</m:mo>
+
+          <m:msub>
+            <m:mi>N</m:mi>
+
+            <m:mi>f</m:mi>
+          </m:msub>
+
+          <m:mfenced>
+            <m:mi>g</m:mi>
+
+            <m:mi>h</m:mi>
+          </m:mfenced>
+
+          <m:mo>+</m:mo>
+
+          <m:msup>
+            <m:mi mathvariant="bold">b</m:mi>
+
+            <m:mi>t</m:mi>
+          </m:msup>
+
+          <m:mi mathvariant="bold">x</m:mi>
+
+          <m:mo>+</m:mo>
+
+          <m:msup>
+            <m:mi mathvariant="bold">x</m:mi>
+
+            <m:mi>t</m:mi>
+          </m:msup>
+
+          <m:mi mathvariant="bold">A</m:mi>
+
+          <m:mi mathvariant="bold">x</m:mi>
+
+          <m:mo>+</m:mo>
+
+          <m:mo>⋯</m:mo>
+
+          <m:mspace linebreak="newline" />
+        </m:math>
+      </informalequation><informalequation>
+        <m:math display="block" overflow="scroll">
+          <m:mfenced close="∣ " open="∣ ">
+            <m:mi>x</m:mi>
+          </m:mfenced>
+
+          <m:mo>=</m:mo>
+
+          <m:mrow>
+            <m:mo stretchy="true">{</m:mo>
+
+            <m:mtable columnalign="left" columnspacing="2em">
+              <m:mtr>
+                <m:mtd>
+                  <m:mi>x</m:mi>
+
+                  <m:mi>,</m:mi>
+                </m:mtd>
+
+                <m:mtd>
+                  <m:mi>x</m:mi>
+
+                  <m:mo>≥</m:mo>
+
+                  <m:mn>0</m:mn>
+
+                  <m:mi>;</m:mi>
+                </m:mtd>
+              </m:mtr>
+
+              <m:mtr>
+                <m:mtd>
+                  <m:mo>-</m:mo>
+
+                  <m:mi>x</m:mi>
+
+                  <m:mi>,</m:mi>
+                </m:mtd>
+
+                <m:mtd>
+                  <m:mi>otherwise.</m:mi>
+                </m:mtd>
+              </m:mtr>
+            </m:mtable>
+          </m:mrow>
+        </m:math>
+      </informalequation></para>
+
+    <para>test index <citation>Jak2007</citation> foo <programlisting>10 print "magnus"
+20 goto 10</programlisting></para>
+  </appendix>
+
+  <bibliography>
+    <title>Bibliography</title>
+
+    <biblioentry role="phd thesis">
+      <abbrev>Jak2007</abbrev>
+
+      <author>
+        <personname><firstname>Johan</firstname><surname>Åkesson</surname></personname>
+      </author>
+
+      <title>Tools and Languages for Optimization of Large-Scale
+      Systems</title>
+
+      <biblioid class="isrn">LUTFD2/TFRT--1081--SE</biblioid>
+
+      <publisher>
+        <publishername>Lund University</publishername>
+
+        <address>Sweden</address>
+      </publisher>
+
+      <pubdate>2007</pubdate>
+    </biblioentry>
+
+    <biblioentry role="article">
+      <abbrev>Jak2008b</abbrev>
+
+      <biblioset role="article">
+        <authorgroup>
+          <author>
+            <personname><firstname>Johan</firstname><surname>Åkesson</surname></personname>
+          </author>
+
+          <author>
+            <personname><firstname>Görel</firstname><surname>Hedin</surname></personname>
+          </author>
+
+          <author>
+            <personname><firstname>Torbjörn</firstname><surname>Ekman</surname></personname>
+          </author>
+        </authorgroup>
+
+        <title>Tools and Languages for Optimization of Large-Scale
+        Systems</title>
+
+        <pagenums>117-131</pagenums>
+      </biblioset>
+
+      <biblioset relation="journal">
+        <title>Electronic Notes in Theoretical Computer Science</title>
+
+        <volumenum>203:2</volumenum>
+
+        <pubdate>April 2008</pubdate>
+      </biblioset>
+    </biblioentry>
+
+    <biblioentry role="article">
+      <abbrev>Jak2008a</abbrev>
+
+      <biblioset role="article">
+        <authorgroup>
+          <author>
+            <personname><firstname>Johan</firstname><surname>Åkesson</surname></personname>
+          </author>
+        </authorgroup>
+
+        <title>Optimica—An Extension of Modelica Supporting Dynamic
+        Optimization</title>
+      </biblioset>
+
+      <biblioset relation="proceedings">
+        <title>Proc. 6th International Modelica Conference 2008</title>
+
+        <publisher>
+          <publishername>Modelica Association</publishername>
+        </publisher>
+
+        <pubdate>March 2008</pubdate>
+      </biblioset>
+    </biblioentry>
+  </bibliography>
+
+  <index></index>
+</book>

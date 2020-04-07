@@ -1,0 +1,913 @@
+
+import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.HashMap;
+import java.util.Map;
+
+
+aspect Units {
+    
+    public class Dimension {
+        public static final int Length = 0;
+        public static final int Time = 1;
+        public static final int Mass = 2;
+        public static final int Temperature = 3;
+        public static final int Current = 4;
+        public static final int SubstanceAmount = 5;
+        public static final int LuminousIntensity = 6;
+        
+        // Number of dimensions defined here
+        public static final int NumberOfDimensions = 7;
+        
+        public static boolean isValidDimension(int dim) {
+            return 0 <= dim && dim < NumberOfDimensions;
+        }
+    }
+    
+    public abstract class Unit {
+        
+        public static final Unit UNIT = new CompositeUnit("1");
+        public static final Unit ANY = new AnyUnit();
+        
+        // // Getters // //
+        
+        public abstract boolean isAnyUnit();
+        public abstract double getScale();
+        public abstract double getOffset();
+        public abstract int[] getDimensions();
+        public abstract String getName();
+        
+        // // Operators // // 
+        
+        public abstract Unit multiply(Unit u);
+        public abstract Unit multiply(double scale);
+        public abstract Unit multiply(double scale, String prefix);
+        public abstract Unit divideBy(Unit u);
+        public abstract Unit power(int k);
+        public abstract Unit rename(String name);
+        public abstract Unit offset(double offset);
+        
+        // Converts from this unit to u. Conversions is on the form: u_value = result_scale * this_value + result_offset
+        // <Any>.convertTo(u) == u.convertTo(<Any>) == <Any>
+        public abstract Unit convertTo(Unit u);
+        
+        // Returns true if the unit u is in the same dimension as this.
+        // If this or u is <Any> then this returns true.
+        public abstract boolean sameDimension(Unit u);
+        
+        /*
+         * This function is like equals for units but is **not** transitive because of AnyUnit.
+         * v.isCompatibleWith(u) == v.isCompatibleWithNoOffset(u) && v.isCompatibleOnlyOffset(Unit u);
+         */
+        public abstract boolean isCompatibleWith(Unit u);
+                
+        /*
+         * Same as isCompatibleWith but ignoring differences in offset
+         */
+        public abstract boolean isCompatibleWithoutOffset(Unit u);
+        
+        /*
+         * Compares only the offset of two units.  
+         */
+        public abstract boolean isCompatibleOnlyOffset(Unit u);
+
+        
+        // // Factory Functions // //
+        public static Unit fromDimension(int dim, String name) {
+            return fromDimension(dim, 1, name);
+        }
+        
+        public static Unit fromDimension(int dim, double scale, String name) {
+            return fromDimension(dim, scale, 0, name);
+        }
+        
+        public static Unit fromDimension(int dim, double scale, double offset, String name) {
+            if(!Dimension.isValidDimension(dim)) {
+                throw new IllegalArgumentException("Dimension id is not valid.");
+            }
+            int[] powers = new int[Dimension.NumberOfDimensions];
+            powers[dim] = 1;
+            return new CompositeUnit(powers, scale, offset, name);
+        }
+        
+    }
+    
+    
+    
+    /*
+     * Wildcard unit, used when the unit is not known.
+     */
+    class AnyUnit extends Unit {
+        
+        AnyUnit() {
+            
+        }
+        
+        @Override
+        public String getName() {
+            return "(Any)";
+        }
+        
+        @Override
+        public Unit multiply(Unit u) {
+            return this;
+        }
+        
+        @Override
+        public Unit multiply(double scale) {
+            return this;
+        }
+        
+        @Override
+        public Unit multiply(double scale, String name) {
+            return this;
+        }
+    
+        @Override
+        public Unit power(int k) {
+            return this;
+        }
+        
+        @Override
+        public Unit convertTo(Unit u) {
+            return this;
+        }
+        
+        @Override
+        public boolean sameDimension(Unit u) {
+            return true;
+        }
+        
+        @Override
+        public boolean isAnyUnit() {
+            return true;
+        }
+    
+        @Override
+        public double getScale() {
+            return Double.NaN;
+        }
+        
+        @Override
+        public double getOffset() {
+            return Double.NaN;
+        }
+    
+        @Override
+        public int[] getDimensions() {
+            return null;
+        }
+    
+        @Override
+        public Unit divideBy(Unit u) {
+            return this;
+        }
+    
+        @Override
+        public boolean isCompatibleWith(Unit u) {
+            return true;
+        }
+        
+        @Override
+        public boolean isCompatibleOnlyOffset(Unit u) {
+            return true;
+        }
+        
+        @Override
+        public boolean isCompatibleWithoutOffset(Unit u) {
+            return true;
+        }
+        
+        @Override
+        public Unit rename(String name) {
+            return this;
+        }
+        
+        @Override
+        public Unit offset(double offset) {
+            return this;
+        }
+        
+        @Override
+        public String toString() {
+            return getName();
+        }
+        
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) return true;
+            if (other == null) return false;
+            if (getClass() != other.getClass()) return false;
+            return true;
+        }
+        
+        @Override
+        public int hashCode() {
+            // all objects of this type are equal, so they must all have the same hash.
+            return 0; 
+        }
+        
+    }
+    
+    class CompositeUnit extends Unit {
+        
+        private final double scale;
+        private final double offset;
+        private final int[] powers;
+        private final String name;
+        
+        CompositeUnit(String name) {
+            this(new int[Dimension.NumberOfDimensions], 1, 0, name);
+        }
+        
+        /*
+         * Note:
+         * Caller is responsible to make copies of arrays (but only if necessary)
+         * before calling in order to preserve immutability.
+         * Hence this constructor should be "private" to the Unit system,
+         * use Unit.fromDimension() instead.
+         */
+        CompositeUnit(int[] powers, double scale, double offset, String name) {
+            this.powers = powers;
+            this.scale = scale;
+            this.offset = offset;
+            this.name = name;
+            
+            if(scale <= 0) {
+                String msg = "Invalid Unit: scale must be non-zero and positive: " + scale;
+                throw new IllegalArgumentException(msg);
+            }
+        }
+        
+        @Override
+        public String getName() {
+            return name;
+        }
+        
+        @Override
+        public double getScale() {
+            return scale;
+        }
+        
+        @Override
+        public double getOffset() {
+            return offset;
+        }
+        
+        @Override
+        public int[] getDimensions() {
+            return Arrays.copyOf(powers, powers.length);
+        }
+        
+        @Override
+        public Unit rename(String name) {
+            if(this.name.equals(name)) {
+                return this;
+            }
+            return new CompositeUnit(powers, scale, offset, name);
+        }
+        
+        public Unit offset(double delta) {
+            return new CompositeUnit(powers, scale, offset + delta, name);
+        }
+        
+        @Override
+        public Unit multiply(Unit p) {
+            if (p instanceof CompositeUnit) {
+                CompositeUnit u = (CompositeUnit) p;
+                String newName = joinNames(name, u.name, ".");
+                double newScale = scale * u.scale;
+                double newOffset = 0;
+                int[] newPowers = addArray(powers, u.powers);
+                return new CompositeUnit(newPowers, newScale, newOffset, newName); 
+            }
+            // Using commutativity: 
+            return p.multiply(this);
+        }
+        
+        @Override
+        public Unit multiply(double scaleFactor) {
+            return new CompositeUnit(powers, scale * scaleFactor, 0, name);
+        }
+        
+        @Override
+        public Unit multiply(double scaleFactor, String prefix) {
+            String newName = name;
+            if (!isSimpleName(name)) {
+                newName = "(" + name + ")";
+            }
+            newName = prefix + newName;
+            return new CompositeUnit(powers, scale * scaleFactor, 0, newName);
+        }
+        
+        @Override
+        public Unit divideBy(Unit p) {
+            if (p instanceof CompositeUnit) {
+                CompositeUnit u = (CompositeUnit) p;
+                String newName = joinNames(name, u.name, "/");
+                double newScale = scale / u.scale;
+                double newOffset = 0;
+                int[] newPowers = subArray(powers, u.powers);
+                return new CompositeUnit(newPowers, newScale, newOffset, newName);
+            }
+            return multiply(p.power(-1));
+        }
+        
+        @Override
+        public Unit power(int k) {
+            if (equals(Unit.UNIT) && name.equals("1")) {
+                return Unit.UNIT;
+            }
+            if (k == 1) {
+                return this;
+            }
+            String newName = name + k;
+            if (!isSimpleName(name) || lastIsDigit(name)) {
+                newName = "(" + name + ")" + k;
+            }
+            int[] newPowers = multiplyArray(powers, k);
+            double newScale = Math.pow(scale, k);
+            double newOffset = 0;
+            return new CompositeUnit(newPowers, newScale, newOffset, newName);
+        }
+        
+        private static boolean isSimpleName(String name) {
+            return name.indexOf('.') == -1 && name.indexOf('/') == -1;
+        }
+        
+        private static boolean lastIsDigit(String name) {
+            if (name.isEmpty()) return false;
+            return Character.isDigit(name.charAt(name.length()-1)); 
+        }
+        
+        private static String joinNames(String a, String b, String op) {
+            if (a.indexOf('/') != -1) {
+                a = "(" + a + ")";
+            }
+            if (!isSimpleName(b)) {
+                b = "(" + b + ")";
+            }
+            return a + op + b;
+        }
+        
+        private int[] addArray(int[] a, int[] b) {
+            assert(a.length == b.length);
+            int[] c = new int[a.length];
+            for (int i = 0; i < a.length; i++) {
+                c[i] = a[i] + b[i];
+            }
+            return c;
+        }
+        
+        private int[] subArray(int[] a, int[] b) {
+            assert(a.length == b.length);
+            int[] c = new int[a.length];
+            for (int i = 0; i < a.length; i++) {
+                c[i] = a[i] - b[i];
+            }
+            return c;
+        }
+        
+        private int[] multiplyArray(int[] a, int k) {
+            int[] c = new int[a.length];
+            for (int i = 0; i < a.length; i++) {
+                c[i] = a[i] * k;
+            }
+            return c;
+        }
+        
+        // Convert from this to p
+        public Unit convertTo(Unit p) {
+            if (p instanceof CompositeUnit) {
+                CompositeUnit u = (CompositeUnit) p;
+                
+                String newName = "conversion from " + name + " to "+ u.name;
+                double newScale = scale / u.scale;
+                double newOffset = offset * newScale - u.offset;
+                int[] newPowers = subArray(powers, u.powers);
+                
+                if(!isZeroArray(newPowers)) {
+                    return Unit.ANY;
+                }
+                
+                return new CompositeUnit(newPowers, newScale, newOffset, newName);
+            }
+            // Don't know how to convert to p or p == Unit.ANY
+            return Unit.ANY;
+        }
+        
+        @Override
+        public boolean sameDimension(Unit p) {
+            if (p instanceof CompositeUnit) {
+                CompositeUnit u = (CompositeUnit) p;
+                return isZeroArray(subArray(powers, u.powers));
+            }
+            // If p is any unit then return true else false.
+            return p.isAnyUnit();
+        }
+        
+        private boolean isZeroArray(int[] a) {
+            for (int i = 0; i < a.length; i++) {
+                if (a[i] != 0) return false;
+            }
+            return true;
+        }
+        
+        @Override
+        public boolean isAnyUnit() {
+            return false;
+        }
+        
+        @Override
+        public boolean isCompatibleWith(Unit u) {
+            return isCompatibleWithoutOffset(u) && isCompatibleOnlyOffset(u);
+        }
+        
+        @Override
+        public boolean isCompatibleOnlyOffset(Unit u) {
+            if (u == this)
+                return true;
+            if (u instanceof AnyUnit)
+                return true;
+            if (getClass() != u.getClass())
+                return false;
+            CompositeUnit w = (CompositeUnit) u;
+            if (Math.abs(offset - w.offset) > 1e-10)
+                return false;
+            return true;
+        } 
+        
+        @Override
+        public boolean isCompatibleWithoutOffset(Unit u) {
+            if (u == this)
+                return true;
+            if (u == null)
+                return false;
+            if (u instanceof AnyUnit)
+                return true;
+            if (getClass() != u.getClass())
+                return false;
+            CompositeUnit w = (CompositeUnit) u;
+            if (Math.abs(1 - scale / w.scale) > 1e-15)
+                return false;
+            if (!Arrays.equals(powers, w.powers))
+                return false;
+            return true;
+        }
+        
+        @Override
+        public int hashCode() {
+            final int prime = 31;
+            int result = 1;
+            result = prime * result + Arrays.hashCode(powers);
+            long temp;
+            temp = Double.doubleToLongBits(scale);
+            result = prime * result + (int) (temp ^ (temp >>> 32));
+            temp = Double.doubleToLongBits(offset);
+            result = prime * result + (int) (temp ^ (temp >>> 32));
+            return result;
+        }
+    
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj)
+                return true;
+            if (obj == null)
+                return false;
+            if (getClass() != obj.getClass())
+                return false;
+            CompositeUnit other = (CompositeUnit) obj;
+            if (!Arrays.equals(powers, other.powers))
+                return false;
+            if (Double.doubleToLongBits(scale) != Double.doubleToLongBits(other.scale))
+                return false;
+            if (Double.doubleToLongBits(offset) != Double.doubleToLongBits(other.offset))
+                return false;
+            return true;
+        }
+        
+        @Override
+        public String toString() {
+            return "(" + scale + ", " + offset + ", " + Arrays.toString(powers) + ", \"" + name +  "\")";
+        }
+    }
+}
+
+aspect UnitParser {
+
+    public class UnitParser {
+        
+        private static final Map<String, Unit> unitSymbols = UnitDefinitions.unitSymbols;
+        private static final Map<String, Double> prefixScales = UnitDefinitions.prefixScales;
+        
+        private static UnitParser PARSER = null;
+        
+        public static UnitParser getParser() {
+            if (PARSER == null) {
+                return PARSER = new UnitParser();
+            }
+            return PARSER; 
+        }
+        
+        public UnitParser() { this(true); }
+        public UnitParser(boolean renameUnits) {
+            this.renameUnits = renameUnits;
+        }
+        
+        // Rename units to the string used to parse it if parse was successful.
+        // Defaults to true.
+        final boolean renameUnits;
+        
+        public Unit parse(String input) {
+            Unit u = parse(new Scanner(input));
+            if (renameUnits) {
+                u = u.rename(input);
+            } 
+            return u;
+        }
+        
+        private Unit parse(Scanner s) {
+            Unit u = unit_expression(s);
+            if (u == null || !s.eof()) {
+                s.error();
+            }
+            return u;
+        }
+        
+        private Unit unit_expression(Scanner s) {
+            // unit_expression:
+            //     unit_numerator [ "/" unit_denominator ]
+            
+            Unit u = unit_numerator(s);
+            
+            // Check for optional
+            if (!s.skip("/")) {
+                return u;
+            }
+            // Optional
+            Unit v = unit_denominator(s);
+            return u.divideBy(v);
+        }
+        
+        private Unit unit_numerator(Scanner s) {
+            // unit_numerator:
+            //     "1" | unit_factors | "(" unit_expression ")"
+            
+            // First branch
+            if (s.skip("1")) {
+                return Unit.UNIT;
+            }
+            // Second branch
+            Unit u = unit_factors(s);
+            if (u != null) {
+                return u;
+            }
+            // Third branch
+            s.require("(");
+            u = unit_expression(s);
+            s.require(")");
+            return u;
+        }
+        
+        private Unit unit_denominator(Scanner s) {
+            // unit_denominator:
+            //      unit_factor | "(" unit_expression ")"
+            
+            // First branch
+            Unit u = unit_factor(s);
+            if (u != null) {
+                return u;
+            }
+            // Second branch
+            s.require("(");
+            u = unit_expression(s);
+            s.require(")");
+            return u;
+        }
+        
+        private Unit unit_factors(Scanner s) {
+            // unit_factors:
+            //      unit_factor [ unit_mulop unit_factors ]
+            
+            Unit u = unit_factor(s);
+            if (u == null) {
+                return null;
+            }
+            while(unit_mulop(s)) {
+                Unit v = unit_factor(s);
+                if (v == null) {
+                    s.error();
+                }
+                u = u.multiply(v);
+            }
+            return u;
+        }
+        
+        private boolean unit_mulop(Scanner s) {
+            // unit_mulop:
+            //      "."
+            return s.skip(".");
+        }
+        
+        private Unit unit_factor(Scanner s) {
+            // unit_factor:
+            //      unit_operand [ unit_exponent ]
+            
+            Unit u = unit_operand(s);
+            if (u == null) {
+                return null;
+            }
+            int e = unit_exponent(s);
+            return u.power(e);
+        }
+        
+        private int unit_exponent(Scanner s) {
+            // unit_exponent:
+            //      [ "+" | "-" ] integer
+            
+            if(s.hasNextUnitExponent()) {
+                return Integer.valueOf(s.nextUnitExponent());
+            }
+            return 1;
+        }
+        
+        private Unit unit_operand(Scanner s) {
+            // unit_operand:
+            //      unit_symbol | unit_prefix unit_symbol
+            
+            // First branch
+            Unit u = unit_symbol(s);
+            if (u != null) {
+                return u;
+            }
+            int mark = s.mark();
+            // Second branch
+            String prefix = unit_prefix(s);
+            if (prefix == null) {
+                s.reset(mark);
+                return null;
+            }
+            u = unit_symbol(s);
+            if (u == null) {
+                s.reset(mark);
+                return null;
+            }
+            return u.multiply(prefixScales.get(prefix), prefix);
+        }
+        
+        private Unit unit_symbol(Scanner s) {
+            // unit_symbol
+            //      /[^.+-\\0-9()]+/
+            
+            // Lookup symbol in set of known unit symbols
+            int mark = s.mark();
+            if (!s.hasNextUnitSymbol()) {
+                // If not found, reset and return null.
+                s.reset(mark);
+                return null;
+            }
+            
+            // Get unit symbol token and check against known definitions
+            String tok = s.nextUnitSymbol();
+            if (!unitSymbols.containsKey(tok)) {
+                // If not found, reset and return null.
+                s.reset(mark);
+                return null;
+            }
+            // Get the unit.
+            return unitSymbols.get(tok);
+        }
+        
+        private String unit_prefix(Scanner s) {
+            // unit_prefix:
+            //      Y | Z | E | P | T | G | M | k | h | da | d | c | m | u | p | f | a | z | y
+            if (s.hasNextSIPrefix()) {
+                return s.nextSIPrefix();
+            }
+            return null;
+        }
+        
+        // Internal state of parser
+        private static class Scanner {
+            
+            // Input is short so a string will work just fine.
+            private String input;
+            
+            // Current position within input
+            private int pos;
+            
+            public Scanner(String input) {
+                this.input = input;
+                pos = 0;
+            }
+            
+            /**
+             * Mark this position to be able to return to it if needed
+             * or to use it as a reference to this point in to input.
+             * @return the position in the input.
+             */
+            public int mark() {
+                return pos;
+            }
+            
+            /**
+             * Reset to a marked position.
+             * @param mark position to return to.
+             */
+            public void reset(int mark) {
+                pos = mark;
+            }
+            
+            /**
+             * Advance the input one step (for example after peekChar).
+             * Equivalent to advance(1).
+             * @return true if advanced one step. False if the end was reached.
+             */
+            public boolean advance() {
+                return advance(1);
+            }
+            
+            /**
+             * Attempt to advance n steps. If the end of input is reached it stops there.
+             * @param n number of steps
+             * @return true if it advanced n steps,
+             * false if it reached the end in <em>less</em> than n steps.
+             */
+            public boolean advance(int n) {
+                assert n > 0:"Cannot advance a negative about of bytes.";
+                int newPos = pos + n;
+                pos = Math.min(newPos, input.length());
+                return pos == newPos;
+            }
+            
+            /**
+             * Make token from mark to current position.
+             * @param mark marked position.
+             * @return a string token.
+             */
+            public String token(int mark) {
+                return input.substring(mark, pos);
+            }
+            
+            /**
+             * Skip expected string, but require that the string is present.
+             * @param string to skip
+             */
+            public void require(String string) {
+                if (!skip(string)) {
+                    error();
+                }
+            }
+            
+            /**
+             * Skip expected string. Only skips the entire string or nothing.
+             * @param string to skip.
+             * @returntrue if anything was skipped otherwise false
+             */
+            public boolean skip(String string) {
+                int mark = mark();
+                if (!advance(string.length())) {
+                    reset(mark);
+                    return false;
+                }
+                if(string.equals(token(mark))) {
+                    return true;
+                }
+                reset(mark);
+                return false;
+            }
+            
+            // check if at end of input
+            public boolean eof() {
+                return pos >= input.length();
+            }
+            
+            public boolean hasNextChar() {
+                return !eof();
+            }
+            
+    //        public char nextChar() {
+    //            if (eof()) { error(); }
+    //            char c = input.charAt(pos);
+    //            advance();
+    //            return c;
+    //        }
+            
+            public char peekChar() {
+                if (eof()) { error(); }
+                return input.charAt(pos);
+            }
+            
+            private boolean isUnitSymbol(char peekChar) {
+                // Good enough for now.
+                return Character.isLetter(peekChar);
+            }
+            
+            public boolean hasNextUnitSymbol() {
+                if (eof()) { return false; }
+                return isUnitSymbol(peekChar());
+            }
+            
+            public String nextUnitSymbol() {
+                if (!hasNextUnitSymbol()) { return null; }
+                int mark = mark();
+                while(hasNextChar() && isUnitSymbol(peekChar())) {
+                    advance();
+                }
+                return token(mark);
+            }
+            
+            public String nextSIPrefix() {
+                // Y | Z | E | P | T | G | M | k | h | da | d | c | m | u | p | f | a | z | y
+                // Note: Preference given by order
+                
+                int mark = mark();
+                
+                for(String prefix : prefixScales.keySet()){
+                    if (skip(prefix)) {
+                        return prefix;
+                    }
+                }
+                
+                // Matched nothing reset
+                reset(mark);
+                return null;
+            }
+    
+    
+            public boolean hasNextSIPrefix() {
+                int mark = mark();
+                try {
+                    return nextSIPrefix() != null;
+                } finally {
+                    reset(mark);
+                }
+            }
+    
+    
+            public String nextUnitExponent() {
+                int mark = mark(); 
+                
+                // Skip -, if there was none then skip +
+                if (!skip("-")) { skip("+"); }
+                
+                // If there is no digit following.
+                if (!hasNextChar() || !Character.isDigit(peekChar())) {
+                    reset(mark);
+                    return null;
+                }
+                
+                // Find digits.
+                while(hasNextChar() && Character.isDigit(peekChar())) {
+                    advance();
+                }
+                
+                return token(mark);
+            }
+    
+    
+            public boolean hasNextUnitExponent() {
+                int mark = mark();
+                try {
+                    if (!skip("-")) { skip("+"); }
+                    return hasNextChar() && Character.isDigit(peekChar());
+                } finally {
+                    reset(mark);
+                }
+            }
+            
+            private void error() {
+                throw new UnitParser.Exception("Could not parse unit expression.");
+            }
+            
+            public String toString() {
+                return "(" + pos + ", \"" + input + "\")";
+            }
+        }
+        
+        // Note that this class should be be refered to as UnitParser.Exception
+        // I felt UnitParser.UnitParserException was a bit verbose.
+        public static class Exception extends RuntimeException {
+            
+            public Exception() {
+                super();
+            }
+            
+            public Exception(String message, Throwable cause) {
+                super(message, cause);
+            }
+            
+            public Exception(String message) {
+                super(message);
+            }
+            
+            public Exception(Throwable cause) {
+                super(cause);
+            }
+            
+        }
+    }
+}
+

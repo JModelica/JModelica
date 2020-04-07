@@ -1,0 +1,1855 @@
+/*
+    Copyright (C) 2014-2017 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+aspect FunctionInlining {
+
+
+    public class FClass {
+        /**
+         * If function inlining is enabled, inline all function calls that we can.
+         * 
+         * Then remove functions that aren't needed anymore. Functions with <code>LateInline=true</code> 
+         * or <code>InlineAfterIndexReduction=true</code> are excepted.
+         */
+        public class FunctionInliningIfSet extends Transformation {
+            protected String opt;
+            protected boolean late;
+
+            /**
+             * Creates a transformation for function inlining.
+             */
+            public FunctionInliningIfSet() {
+                this.late = false;
+            }
+
+            public boolean active() {
+                opt = myOptions().getStringOption("inline_functions");
+                return opt != OptionRegistry.Inlining.NONE;
+            }
+
+            public void perform() {
+                new FunctionInliner(FClass.this, opt, late).inline();
+                root().flushAllRecursive();
+                removeUnusedTemporaries();
+                change();
+            }
+        }
+
+        
+        /**
+         * If function inlining is enabled, inline all function calls that we can.
+         * 
+         * Then remove functions that aren't needed anymore. Functions with <code>LateInline=true</code> 
+         * or <code>InlineAfterIndexReduction=true</code> are included.
+         */
+        public class LateFunctionInliningIfSet extends FunctionInliningIfSet {
+            /**
+             * Creates a transformation for late function inlining.
+             */
+            public LateFunctionInliningIfSet() {
+                this.late = true;
+            }
+        }
+    }
+
+
+    public class FFunctionDecl {
+
+        /**
+         * Describes the possible inputs from the user concerning if and how to inline the function.
+         */
+        public enum InlineAnnotation { 
+            DEFAULT     (true,  false, false), 
+            NONE        (false, false, false), 
+            INLINE      (true,  true,  false), 
+            LATE        (true,  true,  true), 
+            AFTER_INDEX (true,  true,  true);
+
+            private boolean may;
+            private boolean always;
+            private boolean late;
+
+            private InlineAnnotation(boolean may, boolean always, boolean late) {
+                this.may = may;
+                this.always = always;
+                this.late = late;
+            }
+
+            /**
+             * Check if the annotation says that we may try to inline the function.
+             */
+            public boolean may() {
+                return may;
+            }
+
+            /**
+             * Check if the annotation says that we should always try to inline the function.
+             */
+            public boolean always() {
+                return always;
+            }
+
+            /**
+             * Check if the annotation says that we should wait until after other symbolic transformations 
+             * (especially index reduction) to inline.
+             */
+            public boolean late() {
+                return late;
+            }
+
+        }
+
+    }
+    private InlineAnnotation FFunctionDecl.inlineAnnotationCache = null;
+    
+    public InlineAnnotation FFunctionDecl.inlineAnnotation() {
+        if (inlineAnnotationCache != null)
+            return inlineAnnotationCache;
+        AnnotationNode inline = annotation().forPath("Inline");
+        AnnotationNode late = annotation().forPath("LateInline");
+        AnnotationNode index = annotation().forPath("InlineAfterIndexReduction");
+        inlineAnnotationCache = InlineAnnotation.DEFAULT;
+        if (late.isBoolValue())
+            inlineAnnotationCache = late.bool() ? InlineAnnotation.LATE : InlineAnnotation.NONE;
+        if (inline.isBoolValue() && !(late.isBoolValue() && late.bool()))
+            inlineAnnotationCache =  inline.bool() ? InlineAnnotation.INLINE : InlineAnnotation.NONE;
+        if (index.isBoolValue())
+            inlineAnnotationCache = index.bool() ? InlineAnnotation.AFTER_INDEX : InlineAnnotation.NONE;
+        return inlineAnnotationCache;
+    }
+    
+    public void FFunctionDecl.copyInlineAnnotation(AnnotationNode src) {
+        copyInlineAnnotation(src, "Inline");
+        copyInlineAnnotation(src, "LateInline");
+        copyInlineAnnotation(src, "InlineAfterIndexReduction");
+    }
+    
+    private void FFunctionDecl.copyInlineAnnotation(AnnotationNode src, String type) {
+        src = src.forPath(type);
+        if (src.exists() && src.isBoolValue())
+            annotation().forPath(type).setValue(FBooleanLitExp.create(src.bool()));
+    }
+
+    /**
+     * Helper class for inlining.
+     * 
+     * Keeps track of all required data and the current state of the inlining process.
+     */
+    public abstract class AbstractFunctionInliner {
+
+        private FFunctionDecl func;
+        private Map<String,FExp> replMap;
+        private FlatVariableMap lookupMap;
+        private Map<String,FType> typeMap;
+        public TypePrefixVariability contextVariability = Variability.CONTINUOUS;
+        
+        private Scalarizer scalarizer = new Scalarizer.Algorithm(null, null, null, false, true, Variability.CONTINUOUS);
+        
+        /**
+         * Inline all function calls that we can from a specific list of equations.
+         */
+        public Collection<FAbstractEquation> inline(List<FAbstractEquation> oldEquationList) {
+            Collection<FAbstractEquation> newEquationList = new ArrayList<>();
+            inline(oldEquationList, newEquationList);
+            return newEquationList;
+        }
+
+        /**
+         * Inline all function calls that we can from a specific list of equations.
+         */
+        public abstract void inline(List<FAbstractEquation> oldEquationList, Collection<FAbstractEquation> newEquationList);
+        
+        public void setContextVariability(TypePrefixVariability v) {
+            contextVariability = v;
+        }
+        
+        public TypePrefixVariability contextVariability(FExp e) {
+            TypePrefixVariability res = e.variability();
+            if (!res.knownParameterOrLess()) {
+                res = contextVariability;
+                if (res.continuousVariability() && e.variability().discreteVariability()) {
+                    res = e.variability();
+                }
+            }
+            return res;
+        }
+
+        /**
+         * Check if a given function should be inlined under the current inlining level.
+         */
+        public abstract boolean isInlinable(FFunctionDecl func, FFunctionCall call);
+
+        /**
+         * Prepare for inlining a new function call.
+         * 
+         * @return  the map to use for lookups in the function during inlining.
+         */
+        public FlatVariableMap startFunction(FFunctionDecl f) {
+            replMap = new HashMap<String,FExp>();
+            lookupMap = new FlatVariableMap();
+            typeMap = new HashMap<String,FType>();
+            return lookupMap;
+        }
+
+        public void setTypeOf(String name, FType type) {
+            typeMap.put(name, type);
+        }
+
+        /**
+         * Get the expression to use for a specific variable of the function 
+         * currently being inlined.
+         * 
+         * @param name  the name of the variable
+         */
+        public FExp getReplacementExp(String name) {
+            return replMap.get(name);
+        }
+
+        /**
+         * Set the expression to use for a specific variable of the function 
+         * currently being inlined.
+         * 
+         * @param name  the name of the variable
+         * @param exp   the expression to use
+         */
+        public void setReplacementExp(String name, FExp exp) {
+            replMap.put(name, exp);
+        }
+
+        /**
+         * Check if this function inliner has created a temporary variable of the specified name.
+         * 
+         * @param name  the name of the temporary variable
+         */
+        public boolean isReplacementVar(String name) {
+            return lookupMap.lookup(name) != null;
+        }
+
+        /**
+         * Find the size of a specific variable of the function currently being inlined.
+         * 
+         * @param name  the name of the variable
+         */
+        public FType lookupType(String name) {
+            return typeMap.get(name);
+        }
+
+        /**
+         * Add a variable and (if not constant) an equation for an assignment.
+         * 
+         * @param oldName  the name of the variable that was assigned in the function
+         * @param value    the right-hand side of the equation
+         * @param noEvent  if true, make sure no events are generated for the equation
+         */
+        public void addVarAndEqn(String oldName, FExp value, boolean noEvent) {
+            addVarAndEqn(oldName, value, noEvent, value.type(), contextVariability(value));
+        }
+        
+        public void addVarAndEqn(String oldName, FExp value, boolean noEvent, FType type,
+                TypePrefixVariability variability) {
+            if (type.isNoType()) {
+                replMap.put(oldName, value);
+                return;
+            }
+            FVariable var = addVar(oldName, variability, type);
+            if (variability.knownParameterOrLess()) {
+                try {
+                    CValue cval = value.ceval();
+                    if (cval.hasBuildLiteral()) {
+                        value = cval.buildLiteral();
+                        var.setBindingExp(value);
+                        replMap.put(oldName, value);
+                        return;
+                    }
+                } catch (ConstantEvaluationException e) {}
+            }
+            if (noEvent)
+                value = value.preventEvents();
+            value.resetOriginalReferences();
+            FEquation eqn = new FEquation(var.createAccessExp(), value);
+            addEquation(eqn);
+        }
+
+        /**
+         * Add variables and (if not constant) an equation for a function call statement.
+         * 
+         * @param lefts  the lefts of the function call statement
+         * @param call   the new function call
+         */
+        public void addVarsAndFCEqn(List<FFunctionCallLeft> lefts, FAbstractFunctionCall call) {
+            int nLefts = lefts.getNumChild();
+            TypePrefixVariability variability = (nLefts == 0) ? Variability.CONTINUOUS : contextVariability(call);
+            FExp[] exps = null;
+            if (variability.constantVariability()) {
+                try {
+                    CValue[] values = call.evaluate(ASTNode.defaultVariableEvaluator());
+                    exps = new FExp[values.length];
+                    for (int i = 0; exps != null && i < values.length; i++) {
+                        if (values[i].hasBuildLiteral()) {
+                            exps[i] = values[i].buildLiteral();
+                        } else {
+                            exps = null;
+                        }
+                    }
+                } catch (ConstantEvaluationException e) {
+                    exps = null;
+                }
+            }
+
+            if (exps == null)
+                exps = new FExp[nLefts];
+            FExp[] lExps = new FExp[nLefts];
+            for (int i = 0; i < nLefts; i++) 
+                lExps[i] = lefts.getChild(i).createInlineVars(this, exps[i], variability);
+
+            if (!variability.constantVariability()) {
+                call = (FAbstractFunctionCall) call.preventEvents();
+                FFunctionCallEquation eqn = 
+                    new FFunctionCallEquation(EquationType.NORMAL, new List(), call);
+                for (FExp exp : lExps) {
+                    FFunctionCallLeft left = new FFunctionCallLeft();
+                    if (exp != null)
+                        left.setFExp(exp);
+                    eqn.addLeft(left);
+                }
+                addEquation(eqn);
+            }
+        }
+        
+        protected abstract void addEquation(FAbstractEquation eqn);
+        
+        protected abstract String nextTempVarName();
+        
+        protected abstract void addVar(FVariable var);
+        
+        protected FVariable addVar(String oldName, TypePrefixVariability variability, FType type) {
+            String n = nextTempVarName();
+            FAccess name = type.isArray() ? 
+                    new FAccessFull(n, type.size().createFArraySubscripts()) : 
+                    new FAccessString(n);
+            FVariable var = addVar(name, variability, type);
+            setTypeOf(oldName, type);
+            replMap.put(oldName, var.createAccessExp());
+            return var;
+        }
+        
+        protected FVariable addVar(FAccess name, TypePrefixVariability variability, FType type) {
+            FVariable var = type.createTempFVariable(name, variability);
+            lookupMap.addVariable(var);
+            addVar(var);
+            return var;
+        }
+        
+        protected Collection<FAbstractEquation> handleInlinedFunctionCallEquation(FFunctionCallEquation original, Collection<FAbstractEquation> result) {
+            return result;
+        }
+
+        public Scalarizer scalarizer() {
+            return scalarizer;
+        }
+    }
+
+    public class FunctionInliner extends AbstractFunctionInliner {
+        private String level;
+        private boolean late;
+        private FFunctionDecl func;
+        
+        private FClass fc;
+        private List<FVariable> vars;
+        
+        Deque<Collection<FAbstractEquation>> worklistStack = new ArrayDeque<>();
+        
+        private List<FAbstractEquation> currentOldList = null;
+        private Collection<FAbstractEquation> currentNewList = null;
+        
+        public FunctionInliner(FClass fc, String level, boolean late) {
+            this.fc = fc;
+            this.level = level;
+            this.late = late;
+            vars = fc.getFVariables();
+            // Make sure maps are calculated
+            fc.variablesMap();
+            fc.parameterEquationsMap();
+        }
+
+        @Override
+        public FlatVariableMap startFunction(FFunctionDecl f) {
+            func = f;
+            return super.startFunction(f);
+        }
+        
+        @Override
+        public boolean isInlinable(FFunctionDecl func, FFunctionCall call) {
+            if (level == OptionRegistry.Inlining.ALL)
+                return func.isInlinable(late, call);
+            if (level == OptionRegistry.Inlining.TRIVIAL)
+                return func.isTrivialInlinable(late, call);
+            return false;
+        }
+
+        public void pushWorklist() {
+            worklistStack.push(new ArrayDeque<FAbstractEquation>());
+        }
+
+        public void pushWorklist(List<FAbstractEquation> eqs) {
+            worklistStack.push(eqs.createArrayList());
+        }
+
+        public void addToWorklist(Collection<FAbstractEquation> eqs) {
+            worklistStack.peek().addAll(eqs);
+        }
+
+        public void addToWorklist(FAbstractEquation equation) {
+            worklistStack.peek().add(equation);
+        }
+
+        /**
+         * Inline all function calls that we can from a specific list of equations.
+         */
+        public void inline(List<FAbstractEquation> oldEquationList, Collection<FAbstractEquation> newEquationList) {
+            pushWorklist(oldEquationList);
+            popWorklist(newEquationList);
+        }
+
+        public void popWorklist(Collection<FAbstractEquation> newEquationList) {
+            Collection<FAbstractEquation> worklist = worklistStack.pop();
+            for (FAbstractEquation equation : worklist) {
+                inline(equation, newEquationList);
+            }
+        }
+
+        private void inline(FAbstractEquation eqn, Collection<FAbstractEquation> newEquationList) {
+            if (eqn.hasInlinableFunctions(this)) {
+                pushWorklist();
+                Collection<FAbstractEquation> res = eqn.inlineFunctions(this);
+                popWorklist(currentNewList);
+                pushWorklist();
+                addToWorklist(res);
+                popWorklist(newEquationList);
+            } else {
+                newEquationList.add(eqn);
+            }
+        }
+
+        @Override
+        protected void addEquation(FAbstractEquation eqn) {
+            currentOldList.add(eqn); /* Providing context for the equation */
+            addToWorklist(eqn);
+        }
+        
+        @Override
+        protected String nextTempVarName() {
+            return fc.nextTempVarName(func);
+        }
+        
+        @Override
+        protected void addVar(FVariable var) {
+            vars.add(var);
+            vars.getChild(vars.getNumChildNoTransform() - 1);
+            fc.variablesMap().addVariable(var);
+        }
+        
+        /**
+         * Inline all function calls that we can.
+         */
+        public void inline() {
+            ArrayList<FAbstractEquation> initialEqns = new ArrayList<>();
+            ArrayList<FAbstractEquation> normalEqns = new ArrayList<>();
+            ArrayList<FAbstractEquation> paramEqns = new ArrayList<>();
+            
+            setContextVariability(Variability.INITIALPARAMETER);
+            inlineFCList(fc.getFInitialEquations(), initialEqns);
+            
+            setContextVariability(Variability.CONTINUOUS);
+            inlineFCList(fc.getFAbstractEquations(), normalEqns);
+            
+            setContextVariability(Variability.FIXEDPARAMETER);
+            inlineFCList(fc.getParameterEquations(), paramEqns);
+            
+            fc.setFInitialEquationList(new List<>(initialEqns));
+            fc.setFAbstractEquationList(new List<>(normalEqns));
+            fc.setParameterEquationList(new List<>(paramEqns));
+        }
+        
+        public void inlineFCList(List<FAbstractEquation> oldEquationList, Collection<FAbstractEquation> newEquationList) {
+            currentOldList = oldEquationList;
+            currentNewList = newEquationList;
+            inline(oldEquationList, newEquationList);
+        }
+    }
+    
+    public void FExp.addInliningVarsAndEqns(AbstractFunctionInliner fi, String oldName, boolean noEvent) {
+        FType type = type();
+        if (isArray()) {
+            fi.setTypeOf(oldName, type);
+            Array arr = getArray();
+            for (Index i : indices()) {
+                arr.get(i).addInliningVarsAndEqns(fi, oldName + i, noEvent);
+            }
+        } else if (type.isRecord()) {
+            fi.setTypeOf(oldName, type);
+            oldName += ".";
+            for (FRecordComponentType part : ((FRecordType) type()).getComponents()) {
+                component(part.getName()).addInliningVarsAndEqns(fi, oldName + part.getName(), noEvent);
+            }
+        } else {
+            fi.addVarAndEqn(oldName, this, noEvent);
+        }
+    }
+    
+    public void FFunctionCall.addInliningVarsAndEqns(AbstractFunctionInliner fi, String oldName, boolean noEvent) {
+        if (isComposite()) {
+            TypePrefixVariability v = fi.contextVariability(this);
+            if (v.constantVariability()) {
+                try {
+                    CValue cval = ceval();
+                    if (cval.hasBuildLiteral()) {
+                        dynamicFExp(cval.buildLiteral()).addInliningVarsAndEqns(fi, oldName, noEvent);
+                        return;
+                    }
+                } catch (ConstantEvaluationException e) {}
+            }
+            String tempName = fi.nextTempVarName();
+            FExp exp = type().addInliningVarsAndEqns(fi, oldName, noEvent, this, tempName);
+            List<FFunctionCallLeft> l = new List<FFunctionCallLeft>();
+            l.add(new FFunctionCallLeft(new Opt<FExp>(exp)));
+            fi.addEquation(new FFunctionCallEquation(l, treeCopy()));
+        } else {
+            super.addInliningVarsAndEqns(fi, oldName, noEvent);
+        }
+    }
+    
+    public FExp FType.addInliningVarsAndEqns(final AbstractFunctionInliner fi, final String old, final boolean noEvent,
+            final FExp src, final String temp) {
+        ExpFromTypeBuilder b = new ExpFromTypeBuilder() {
+            public FExp build(String suffix, FType type) {
+                String tempName = temp + suffix;
+                String oldName = old + suffix;
+                FExp e = src.dynamicFExp(new FAccessExp(tempName));
+                TypePrefixVariability v = fi.contextVariability(src);
+                fi.addVarAndEqn(oldName, e, noEvent, type, v);
+                fi.addVar(new FAccessString(tempName), v, type);
+                return e.fullCopy();
+             }
+        };
+        return buildFExp(b, "");
+     }
+    
+    /**
+     * Create temporary variable(s) for this access when inlining a function call that 
+     * it is a left of, and return an access.
+     */
+    public FExp FFunctionCallLeft.createInlineVars(
+            AbstractFunctionInliner fi, FExp bExp, TypePrefixVariability variability) {
+        return hasFExp() ? getFExp().createInlineVars(fi, bExp, variability) : null;
+    }
+
+    /**
+     * Create temporary variable(s) for this access when inlining a function call that 
+     * it is a left of, and return an access. Non-access expressions returns null.
+     */
+    public FExp FExp.createInlineVars(
+            AbstractFunctionInliner fi, FExp bExp, TypePrefixVariability variability) {
+        return null;
+    }
+
+    public FExp FAccessExp.createInlineVars(
+            AbstractFunctionInliner fi, FExp bExp, TypePrefixVariability variability) {
+        FVariable var = fi.addVar(scalarName(), variability, type());
+        if (bExp != null) {
+            var.setBindingExp(bExp);
+            fi.setReplacementExp(scalarName(), bExp);
+        }
+        return var.createAccessExp();
+    }
+
+    public FExp FArray.createInlineVars(
+            AbstractFunctionInliner fi, FExp bExp, TypePrefixVariability variability) {
+        FArray bArr = (FArray) bExp;
+        FArray res = new FArray();
+        int n = getNumFExp();
+        for (int i = 0; i < n; i++) {
+            FExp cellBExp = (bArr != null) ? bArr.getFExp(i) : null;
+            res.addFExp(getFExp(i).createInlineVars(fi, cellBExp, variability));
+        }
+        return res;
+    }
+
+    public FExp FRecordConstructor.createInlineVars(
+            AbstractFunctionInliner fi, FExp bExp, TypePrefixVariability variability) {
+        FRecordConstructor bRec = (FRecordConstructor) bExp;
+        FRecordConstructor res = new FRecordConstructor(getRecord().fullCopy(), new List());
+        Iterator<FExp> bArgs = (bRec != null) ? bRec.getArgs().iterator() : null;
+        for (FExp arg : getArgs()) {
+            FExp partBExp = (bArgs != null) ? bArgs.next() : null;
+            res.addArg(arg.createInlineVars(fi, partBExp, variability));
+        }
+        return res;
+    }
+
+
+    /**
+     * Encapsulate any event-generating expressions in noEvent().
+     */
+    public FExp FExp.preventEvents() {
+        if (eventGenerating()) {
+            FNoEventExp res = new FNoEventExp();
+            replaceMe(res);
+            res.setFExp(this);
+            return res;
+        } else {
+            for (FExp e : childFExps())
+                e.preventEvents();
+            return this;
+        }
+    }
+
+    public FExp FNoEventExp.preventEvents() {
+        return this;
+    }
+
+    public FExp FFunctionCall.preventEvents() {
+        for (FExp e : getArgs())
+            e.preventEvents();
+        return this;
+    }
+
+    public FExp FAccessExp.preventEvents() {
+        getFAccess().preventEvents();
+        return this;
+    }
+
+    /**
+     * Encapsulate any event-generating expressions in noEvent().
+     */
+    public void FAccess.preventEvents() {}
+    public void FAccessFull.preventEvents() {
+        for (FAccessPart part : getFAccessParts()) {
+            if (part.hasFArraySubscripts()) {
+                part.getFArraySubscripts().preventEvents();
+            }
+        }
+    }
+
+    public void FArraySubscripts.preventEvents() {}
+    public void FArrayExpSubscripts.preventEvents() {
+        for (FSubscript s : getFSubscripts()) {
+            s.preventEvents();
+        }
+    }
+
+    /**
+     * Encapsulate any event-generating expressions in noEvent().
+     */
+    public void FSubscript.preventEvents() {}
+    public void FExpSubscript.preventEvents() {
+        getFExp().preventEvents();
+    }
+
+    /**
+     * Check if this expression generates events.
+     * 
+     * Does not consider subexpressions.
+     */
+    syn boolean FExp.eventGenerating() = false;
+    eq FIfExp.eventGenerating()        = true;
+    eq FRelExp.eventGenerating()       = getLeft().isContinuousExp() || getRight().isContinuousExp();
+    eq FEventGenExp.eventGenerating() = true;
+    // TODO: support more event-generating expressions
+
+    /**
+     * Check if this expression or any subexpressions can cause events. 
+     */
+    syn boolean FExp.generatesEvents() {
+        if (eventGenerating())
+            return true;
+        for (FExp e : childFExps())
+            if (e.generatesEvents())
+                return true;
+        return false;
+    }
+    eq FNoEventExp.generatesEvents() = false;
+    eq FAccessExp.generatesEvents()   = getFAccess().generatesEvents();
+    eq FSmoothExp.generatesEvents()  = super.generatesEvents() && !(order() == 0 && myOptions().getBooleanOption("disable_smooth_events"));
+
+    syn boolean FAccess.generatesEvents() = false;
+    eq FAccessFull.generatesEvents() {
+        for (FAccessPart part : getFAccessParts()) {
+            if (part.hasFArraySubscripts()) {
+                if (part.getFArraySubscripts().generatesEvents()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    syn boolean FArraySubscripts.generatesEvents() = false;
+    eq FArrayExpSubscripts.generatesEvents() {
+        for (FSubscript s : getFSubscripts()) {
+            if (s.generatesEvents()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    syn boolean FSubscript.generatesEvents() = false;
+    eq FExpSubscript.generatesEvents()       = getFExp().generatesEvents();
+
+    /**
+     * Check if this equation can cause events. 
+     */
+    syn boolean FAbstractEquation.generatesEvents() = false;
+    eq FEquation.generatesEvents()                  = getLeft().generatesEvents() || getRight().generatesEvents();
+    eq FFunctionCallEquation.generatesEvents()      = getCall().generatesEvents();
+    eq FAlgorithm.generatesEvents()                 = relExpInEquation().size() + delayExpInEquation().size() > 0;
+    
+    /**
+     * Check if an equation contains any calls to functions that we can inline.
+     */
+    syn boolean FAbstractEquation.hasInlinableFunctions(AbstractFunctionInliner fi) = false;
+    eq FFunctionCallEquation.hasInlinableFunctions(AbstractFunctionInliner fi)      = 
+        getCall().hasInlinableFunctions(fi);
+    eq FEquation.hasInlinableFunctions(AbstractFunctionInliner fi) {
+    	if (isWhen()) {
+    		return false;
+    	}
+    	return getLeft().hasInlinableFunctions(fi) || getRight().hasInlinableFunctions(fi);
+    }
+    eq FIfEquation.hasInlinableFunctions(AbstractFunctionInliner fi)                = 
+        super.hasInlinableFunctions(fi) || (hasElse() && getElse().hasInlinableFunctions(fi));
+    eq FIfWhenElseEquation.hasInlinableFunctions(AbstractFunctionInliner fi) {
+        if (isWhen())
+            return false;
+        for (FAbstractEquation eqn : getFAbstractEquations())
+            if (eqn.hasInlinableFunctions(fi))
+                return true;
+        return false;
+    }
+
+    /**
+     * Check if an expression contains any calls to functions that we can inline.
+     */
+    syn boolean FExp.hasInlinableFunctions(AbstractFunctionInliner fi) {
+        for (FExp exp : childFExps())
+            if (exp.hasInlinableFunctions(fi))
+                return true;
+        return false;
+    }
+    eq FFunctionCall.hasInlinableFunctions(AbstractFunctionInliner fi) =
+        isInlinableFunctionCall(fi) || super.hasInlinableFunctions(fi);
+    eq FAccessExp.hasInlinableFunctions(AbstractFunctionInliner fi)     = 
+        getFAccess().hasInlinableFunctions(fi);
+    eq FSubscriptedExp.hasInlinableFunctions(AbstractFunctionInliner fi) {
+        return getFArraySubscripts().hasInlinableFunctions(fi) || super.hasInlinableFunctions(fi);
+    }
+    
+    /**
+     * Check if any array subscripts contain any calls to functions that we can inline.
+     */
+    syn boolean FAccess.hasInlinableFunctions(AbstractFunctionInliner fi) {
+        return false;
+    }
+
+    syn boolean FAccessFull.hasInlinableFunctions(AbstractFunctionInliner fi) {
+        for (FAccessPart part : getFAccessParts())
+            if (part.hasFArraySubscripts())
+                if (part.getFArraySubscripts().hasInlinableFunctions(fi))
+                    return true;
+        return false;
+    }
+
+    syn boolean FArraySubscripts.hasInliableFunctions(AbstractFunctionInliner fi) = false;
+    eq FArrayExpSubscripts.hasInliableFunctions(AbstractFunctionInliner fi) {
+        for (FSubscript sub : getFSubscripts()) {
+            if (sub.hasInlinableFunctions(fi)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Check if an array subscript contains any calls to functions that we can inline.
+     */
+    syn boolean FArraySubscripts.hasInlinableFunctions(AbstractFunctionInliner fi) = false;
+    eq FArrayExpSubscripts.hasInlinableFunctions(AbstractFunctionInliner fi) {
+        for (FSubscript fs : getFSubscripts()) {
+            if (fs.hasInlinableFunctions(fi)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    syn boolean FSubscript.hasInlinableFunctions(AbstractFunctionInliner fi) = false;
+    eq FExpSubscript.hasInlinableFunctions(AbstractFunctionInliner fi)       = 
+        getFExp().hasInlinableFunctions(fi);
+
+    /**
+     * Check if an expression is a call to a function that we can inline.
+     */
+    syn boolean FExp.isInlinableFunctionCall(AbstractFunctionInliner fi) = false;
+    eq FFunctionCall.isInlinableFunctionCall(AbstractFunctionInliner fi) = myFCallable().isInlinable(fi, this);
+    eq FPartialFunctionCall.isInlinableFunctionCall(AbstractFunctionInliner fi) = false;
+
+
+    /**
+     * Inline all calls to functions that we can inline.
+     */
+    public Collection<FAbstractEquation> FAbstractEquation.inlineFunctions(AbstractFunctionInliner fi) {
+        return Collections.singletonList((FAbstractEquation)this);
+    }
+
+    @Override
+    public Collection<FAbstractEquation> FEquation.inlineFunctions(AbstractFunctionInliner fi) {
+        getLeft().inlineFunctions(fi);
+        getRight().inlineFunctions(fi);
+        return Collections.singletonList((FAbstractEquation)this);
+    }
+
+    @Override
+    public Collection<FAbstractEquation> FFunctionCallEquation.inlineFunctions(AbstractFunctionInliner fi) {
+        if (getCall().isInlinableFunctionCall(fi)) {
+            getCall().inline(fi);
+            ArrayList<FFunctionVariable> outs = ((FFunctionCall) getCall()).myCallOutputs();
+            int n = getNumLeft();
+            ArrayList<FAbstractEquation> list = new ArrayList<FAbstractEquation>();
+            for (int i = 0; i < n; i++) {
+                if (getLeft(i).hasFExp()) {
+                    FAccess name = outs.get(i).getFAccess().fullCopy();
+                    name.removeFArraySubscripts();
+                    name.scalarized = true;
+                    getLeft(i).getFExp().createInliningOutputEquations(list, fi, name);
+                }
+            }
+            return fi.handleInlinedFunctionCallEquation(this, list);
+        } else {
+            getCall().inlineFunctions(fi);
+            return Collections.singletonList((FAbstractEquation)this);
+        }
+    }
+
+    @Override
+    public Collection<FAbstractEquation> FIfEquation.inlineFunctions(AbstractFunctionInliner fi) {
+        super.inlineFunctions(fi);
+        if (hasElse())
+            getElse().inlineFunctions(fi);
+        return Collections.singletonList((FAbstractEquation)this);
+    }
+
+    @Override
+    public Collection<FAbstractEquation> FIfWhenElseEquation.inlineFunctions(AbstractFunctionInliner fi) {
+        setFAbstractEquationList(new List<>(fi.inline(getFAbstractEquations())));
+        return Collections.singletonList((FAbstractEquation)this);
+    }
+
+    public void FExp.createInliningOutputEquations(
+            ArrayList<FAbstractEquation> list, AbstractFunctionInliner fi, FAccess name) {
+        FExp right = fi.getReplacementExp(name.scalarName());
+        right = (right == null) ? type().zeroLiteral() : right.fullCopy();
+        if (!this.isNoExp())
+            list.add(new FEquation(this, right));
+    }
+
+    public void FArray.createInliningOutputEquations(
+            ArrayList<FAbstractEquation> list, AbstractFunctionInliner fi, FAccess name) {
+        int i = 1;
+        for (FExp exp : getFExps()) {
+            FAccess cellName = name.copyAndAddSubscript(i);
+            exp.createInliningOutputEquations(list, fi, cellName);
+            i++;
+        }
+    }
+
+    public void FRecordConstructor.createInliningOutputEquations(
+            ArrayList<FAbstractEquation> list, AbstractFunctionInliner fi, FAccess name) {
+        Iterator<FExp> args = getArgs().iterator();
+        for (FRecordComponentType part : ((FRecordType) type()).getComponents()) {
+            FAccess partName = name.copyAndAppend(part.getName());
+            args.next().createInliningOutputEquations(list, fi, partName);
+        }
+    }
+
+    /**
+     * Inline all calls to functions that we can inline.
+     */
+    public void FExp.inlineFunctions(AbstractFunctionInliner fi) {
+        for (FExp exp : childFExps())
+            exp.inlineFunctions(fi);
+    }
+
+    public void FFunctionCall.inlineFunctions(AbstractFunctionInliner fi) {
+        if (isInlinableFunctionCall(fi)) {
+            inline(fi);
+            replaceMe(type().replaceInlined(fi, myCallOutputs().get(0).name()));
+        } else {
+            super.inlineFunctions(fi);
+        }
+    }
+    
+    public FExp FType.replaceInlined(final AbstractFunctionInliner fi, final String name) {
+        ExpFromTypeBuilder b = new ExpFromTypeBuilder() {
+            public FExp build(String suffix, FType type) {
+                return fi.getReplacementExp(name + suffix).fullCopy();
+            }
+        };
+        return buildFExp(b, "");
+    }
+    
+    public interface ExpFromTypeBuilder {
+        public FExp build(String suffix, FType type);
+    }
+    
+    public FExp FType.buildFExp(ExpFromTypeBuilder b, String suffix) {
+         if (isArray()) {
+            return buildFExp(b, suffix, 0, indices().iterator());
+        } else {
+            return buildFExpCell(b, suffix);
+        }
+    }
+    
+    public FExp FType.buildFExp(ExpFromTypeBuilder b, String suffix, int dim, Iterator<Index> indices) {
+        if (dim < size().ndims()) {
+            FArray a = new FArray();
+            for (int i = 0; i < size().get(dim); i++) {
+               a.addFExp(buildFExp(b, suffix, dim + 1, indices));
+            }
+            return a;
+        } else {
+            return buildFExpCell(b, suffix + indices.next());
+        }
+    }
+     
+    public FExp FType.buildFExpCell(ExpFromTypeBuilder b, String suffix) {
+        return b.build(suffix, scalarType());
+     }
+     
+    public FExp FRecordType.buildFExpCell(ExpFromTypeBuilder b, String suffix) {
+         FRecordConstructor frc = new FRecordConstructor(getName());
+         for (FRecordComponentType frct : getComponents()) {
+             frc.addArg(frct.getFType().buildFExp(b, suffix + "." + frct.getName()));
+         }
+         return frc;
+     }
+    
+
+    public void FAccessExp.inlineFunctions(AbstractFunctionInliner fi) {
+        getFAccess().inlineFunctions(fi);
+    }
+    
+    public void FSubscriptedExp.inlineFunctions(AbstractFunctionInliner fi) {
+        super.inlineFunctions(fi);
+        getFArraySubscripts().inlineFunctions(fi);
+    }
+    
+    /**
+     * Inline all calls to functions that we can inline.
+     */
+    public void FAccess.inlineFunctions(AbstractFunctionInliner fi) {}
+
+    public void FAccessFull.inlineFunctions(AbstractFunctionInliner fi) {
+        for (FAccessPart part : getFAccessParts())
+            if (part.hasFArraySubscripts())
+                part.getFArraySubscripts().inlineFunctions(fi);
+    }
+
+    /**
+     * Inline all calls to functions that we can inline.
+     */
+    public void FArraySubscripts.inlineFunctions(AbstractFunctionInliner fi) {}
+    public void FArrayExpSubscripts.inlineFunctions(AbstractFunctionInliner fi) {
+        for (FSubscript fs : getFSubscripts()) {
+            fs.inlineFunctions(fi);
+        }
+    }
+    
+    public void FSubscript.inlineFunctions(AbstractFunctionInliner fi) {}
+
+    public void FExpSubscript.inlineFunctions(AbstractFunctionInliner fi) {
+        getFExp().inlineFunctions(fi);
+    }
+
+    /**
+     * Inline this function call.
+     * 
+     * Base implementation throws exception.
+     */
+    public void FAbstractFunctionCall.inline(AbstractFunctionInliner fi) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Inline this function call. 
+     */
+    public void FFunctionCall.inline(AbstractFunctionInliner fi) {
+        myFCallable().inline(fi, getArgs());
+    }
+
+    private static final String ASTNode.REPLACE_UNKNOWN_CHILD_MSG = 
+        "Trying to replace a child that is not found in the given position.";
+
+    /**
+     * Replace a child of this node.
+     * 
+     * @param child  the child to replace
+     * @param repl   the node to replace it with
+     * @throws IllegalArgumentException  if <code>child</code> is not a child of this node
+     */
+    private void ASTNode.replaceChild(ASTNode child, ASTNode repl) {
+        int i = getIndexOfChild(child);
+        if (i < 0)
+            throw new IllegalArgumentException(REPLACE_UNKNOWN_CHILD_MSG);
+        setChild(repl, i);
+    }
+
+    /**
+     * Replace this node in the tree.
+     * 
+     * @param repl  the node to replace it with
+     */
+    protected void ASTNode.replaceMe(ASTNode repl) {
+        ASTNode p = getParent();
+        if (p != null) { 
+            if (p instanceof DynamicOpt)
+                p.setChild(repl, 0);
+            else
+                p.replaceChild(this, repl);
+        }
+    }
+
+    public interface FCallable {
+        public boolean isInlinable(AbstractFunctionInliner fi, FFunctionCall call);
+        public boolean isTrivialInlinable(boolean last, FFunctionCall call);
+        public void inline(AbstractFunctionInliner fi, List<FExp> args);
+    }
+
+    // TODO: check for recursive functions
+    /**
+     * Check if we can inline this function, given the inlining level set in <code>fi</code>.
+     */
+    syn boolean FFunctionDecl.isInlinable(AbstractFunctionInliner fi, FFunctionCall call) =
+        fi.isInlinable(this, call);
+    
+    syn boolean FFunctionVariable.isInlinable(AbstractFunctionInliner fi, FFunctionCall call) = false;
+
+    private boolean FFunctionDecl.containsExtObjArrays(ArrayList<FFunctionVariable> variables) {
+        for (FFunctionVariable var : variables)
+            if (var.getType().isExternalObjectArray())
+                return true;
+        return false;
+    }
+    
+    private boolean FFunctionDecl.containsPartialFunction() {
+        for (FFunctionVariable var : getFFunctionVariables())
+            if (var.getType().isFunction())
+                return true;
+        return false;
+    }
+
+    private boolean FFunctionDecl.hasInlinableIO() {
+        return !containsExtObjArrays(myInputs()) && !containsExtObjArrays(myOutputs())
+                && !containsPartialFunction();
+    }
+
+    /**
+     * Check if we can inline this function.
+     */
+    syn lazy boolean FFunctionDecl.isInlinable(boolean late, FFunctionCall call) =
+        inlineAnnotation().may() && (late || !inlineAnnotation().late()) && 
+        isAllInlinable(getFAlgorithm().getFStatements()) && hasInlinableIO();
+    // TODO: Add warning if a function where user suggests inlining can't be inlined?
+
+    /**
+     * Check if this function falls under the "trivial" inlining category.
+     */
+    syn lazy boolean FFunctionDecl.isTrivialInlinable(boolean late, FFunctionCall call) {
+        if (!inlineAnnotation().may())
+            return false;
+        if (!late && inlineAnnotation().late())
+            return false;
+        if (inlineAnnotation().always())
+            return isInlinable(late, call);
+        if (!late && call.derivativeAnnotation().exists())
+            return false;
+        for (FFunctionVariable ffv : getFFunctionVariables()) {
+            if (!ffv.isInput() && !ffv.isOutput() && !ffv.getVisibilityType().isTemporary()) {
+                return false;
+            }
+        }
+        if (!hasInlinableIO())
+            return false;
+        for (FStatement stmt : getFAlgorithm().getFStatements())
+            if (!stmt.isOkTrivialInline())
+                return false;
+        for (FFunctionVariable out : myOutputs()) {
+            TrivialInlineCheck chk = out.createTrivialInlineCheck();
+            for (FAccessExp use : out.assigningUses()) 
+                chk.check(use.getFAccess());
+            if (!chk.isOk())
+                return false;
+        }
+        return true;
+    }
+
+    /**
+     * All uses of this variable that are the left-hand side of an assignment or 
+     * function call statement. 
+     */
+    coll HashSet<FAccessExp> FFunctionVariable.assigningUses() [new HashSet<>()] 
+        with add root FFunctionDecl;
+    FAccessExp contributes this when isAssignedTo() && myFuncFV() != null
+        to FFunctionVariable.assigningUses() for myFuncFV();
+
+    syn FFunctionVariable FAccessExp.myFuncFV() = getFAccess().myFuncFV();
+    syn FFunctionVariable FAccess.myFuncFV()    = (FFunctionVariable) myOutermostFV();
+
+    syn boolean FFunctionVariable.isTrivialInlinable(boolean late, FFunctionCall call) = false;
+
+    /**
+     * Helper method to find unsupported statements in isTrivialInlinable().
+     */
+    syn boolean FStatement.isOkTrivialInline() = false;
+    eq FInitArrayStmt.isOkTrivialInline()      = true;
+    eq FAssignStmt.isOkTrivialInline()         = true;
+    eq FFunctionCallStmt.isOkTrivialInline()   = getCall().isOkTrivialInline();
+    eq FReturnStmt.isOkTrivialInline()         = isLast();
+    eq FForStmt.isOkTrivialInline()            = isOkTrivialInlineInFor();
+
+    /**
+     * Helper method to find unsupported statements in isTrivialInlinable().
+     */
+    syn boolean FAbstractFunctionCall.isOkTrivialInline() = isIgnored();
+    eq FFunctionCall.isOkTrivialInline()                  = true;
+
+    /**
+     * Helper method to unsupported statements in isTrivialInlinable().
+     */
+    syn boolean FStatement.isOkTrivialInlineInFor() = false;
+    eq FAssignStmt.isOkTrivialInlineInFor()         = getLeft().isOkTrivialInlineInFor();
+    eq FFunctionCallStmt.isOkTrivialInlineInFor()   = getNumLeft() == 0;
+    eq FForStmt.isOkTrivialInlineInFor() {
+        for (FStatement stmt : getForStmts())
+            if (!stmt.isOkTrivialInlineInFor())
+                return false;
+        return true;
+    }
+    
+    syn boolean FAssignableExp.isOkTrivialInlineInFor();
+    eq FAccessExp.isOkTrivialInlineInFor() = myFV().isArray();
+    eq FSubscriptedExp.isOkTrivialInlineInFor() = false;
+    eq InstAccessExp.isOkTrivialInlineInFor() {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Create a TrivialInlineCheck object for this variable.
+     */
+    public TrivialInlineCheck FAbstractVariable.createTrivialInlineCheck() {
+        if (isArray()) {
+            if (isRecord())
+                return new TrivialInlineCheck.Unsupported();
+            if (size().isUnknown())
+                return new TrivialInlineCheck.UnknownArray();
+            else
+                return new TrivialInlineCheck.KnownArray(size().numElements());
+        } else {
+            if (isRecord())
+                return new TrivialInlineCheck.Record(myFRecordDecl());
+            else
+                return new TrivialInlineCheck.Scalar();
+        }
+    }
+
+    /**
+     * Record keeper object for checking that each output is assigned exactly once.
+     * 
+     * For arrays, a rough guess heuristic is used. Arrays of records and records 
+     * containing arrays of unknown size are not supported.
+     */
+    public abstract class TrivialInlineCheck {
+        protected abstract void check(FAccess use, int i);
+        protected abstract void checkAll(FAccess use);
+        public abstract boolean isOk();
+
+        public void check(FAccess use) { check(use, 1); }
+
+        public static class Scalar extends TrivialInlineCheck {
+            protected int n = 0;
+            protected void check(FAccess use, int i) { n++; }
+            protected void checkAll(FAccess use)     { n++; }
+            public boolean isOk()                   { return n == 1; }
+        }
+
+        public static class KnownArray extends Scalar {
+            // TODO: check that each cell is assigned?
+            protected int size;
+            public KnownArray(int nElems)           { size = nElems; };
+            protected void check(FAccess use, int i) { n += (use.isArray() || use.inForLoop()) ? size : 1; }
+            protected void checkAll(FAccess use)     { n += size; }
+            public boolean isOk()                   { return n == size; }
+        }
+
+        public static class UnknownArray extends Scalar {
+            // TODO: check sizes, and how loop indices are used?
+            protected void check(FAccess use, int i) { n += use.inForLoop() ? 1 : 2; }
+            protected void checkAll(FAccess use)     { n++; }
+        }
+
+        public static class Record extends TrivialInlineCheck {
+            protected Map<String,TrivialInlineCheck> parts;
+            protected boolean namesOk;
+
+            public Record(FRecordDecl rec) {
+                namesOk = true;
+                parts = new HashMap<String,TrivialInlineCheck>();
+                for (FVariable v : rec.getFVariables())
+                    parts.put(v.name(), v.createTrivialInlineCheck());
+            }
+
+            protected void check(FAccess use, int i) {
+                if (i < use.numParts()) {
+                    TrivialInlineCheck part = parts.get(use.partName(i));
+                    if (part != null)
+                        part.check(use, i + 1);
+                    else
+                        namesOk = false;
+                } else {
+                    checkAll(use);
+                }
+            }
+
+            protected void checkAll(FAccess use) {
+                for (TrivialInlineCheck part : parts.values())
+                    part.checkAll(use);
+            }
+
+            public boolean isOk() {
+                for (TrivialInlineCheck part : parts.values())
+                    if (!part.isOk())
+                        return false;
+                return namesOk;
+            }
+        }
+
+        public static class Unsupported extends TrivialInlineCheck {
+            protected void check(FAccess use, int i) { }
+            protected void checkAll(FAccess use)     { }
+            public boolean isOk()                   { return false; }
+        }
+
+        // TODO: records
+    }
+
+    inh boolean CommonAccess.inForLoop();
+    eq FForStmt.getForStmt().inForLoop() = true;
+    eq FAlgorithm.getChild().inForLoop() = false;
+    eq FlatRoot.getChild().inForLoop()   = false;
+    eq InstRoot.getChild().inForLoop()   = false;
+
+
+    /**
+     * Helper method to check if a list of statements are all inlinable.
+     */
+    public static boolean ASTNode.isAllInlinable(Iterable<? extends FStatement> list) {
+        for (FStatement stmt : list)
+            if (!stmt.isInlinable())
+                return false;
+        return true;
+    }
+
+    /**
+     * Check if we can inline this statement.
+     */
+    syn boolean FStatement.isInlinable() = false;
+    eq FInitArrayStmt.isInlinable()      = true;
+    eq FAssignStmt.isInlinable()         = true;
+    eq FFunctionCallStmt.isInlinable()   = getCall().isIgnored() || !insideBranchedStmt();
+    eq FReturnStmt.isInlinable()         = isLast();
+    eq FForStmt.isInlinable()            = isAllInlinable(getForStmts());
+    eq FIfStmt.isInlinable() {
+        for (FIfWhenClause branch : getFIfWhenClauses())
+            if (!isAllInlinable(branch.getFStatements()))
+                return false;
+        return isAllInlinable(getElseStmts());
+    }
+    // TODO: handle more types of stmts
+
+
+    /**
+     * Flags that this function is being inlined.
+     */
+    private boolean FFunctionDecl.duringInlining = false;
+
+    private AbstractFunctionInliner FFunctionVariable.functionInliner = null;
+
+    /**
+     * Keep reference to function inliner during inlining for type lookup.
+     */
+    public void FAbstractVariable.cacheFunctionInliner(AbstractFunctionInliner fi) {}
+    public void FFunctionVariable.cacheFunctionInliner(AbstractFunctionInliner fi) {
+        functionInliner = fi;
+    }
+
+    /**
+     * Clear reference to function inliner.
+     */
+    public void FAbstractVariable.clearFunctionInliner() {}
+    public void FFunctionVariable.clearFunctionInliner() {
+        functionInliner = null;
+    }
+
+    /**
+     * Inline a call to this function.
+     * 
+     * @param fi    the function inlining helper to use
+     * @param args  the argument list for the function call
+     */
+    public void FFunctionDecl.inline(AbstractFunctionInliner fi, List<FExp> args) {
+        duringInlining = true;
+        tempLookupMap = fi.startFunction(this);
+        flushAllRecursive();
+        
+        int i = 0;
+        ArrayList<FFunctionVariable> inp = myInputs();
+        for (FFunctionVariable var : myInputs()) {
+            FExp arg = args.getChild(i++);
+            fi.setTypeOf(var.name(), arg.type());
+            arg.addInliningVarsAndEqns(fi, var.name(), false);
+            var.cacheFunctionInliner(fi);
+        }
+        
+        for (FStatement stmt : getFAlgorithm().getFStatements()) 
+            stmt.inline(fi);
+        
+        for (FFunctionVariable var : getFFunctionVariables())
+            var.clearFunctionInliner();
+        
+        tempLookupMap = null;
+        duringInlining = false;
+        flushAllRecursive();
+    }
+    
+    public void FFunctionVariable.inline(AbstractFunctionInliner fi, List<FExp> args) {
+        throw new UnsupportedOperationException();
+    }
+    
+    /**
+     * Inline this statement.
+     * 
+     * @param fi      the function inlining helper to use
+     */
+    public void FStatement.inline(AbstractFunctionInliner fi) {}
+
+    public void FAssignStmt.inline(AbstractFunctionInliner fi) {
+        FExp right = getRight().treeCopy();
+        right = getRight().dynamicFExp(right);
+        right = right.replaceReferences(fi);
+        FAccessExp left = getLeft().dynamicFExp(getLeft().treeCopy()).asFAccessExp();
+        left.replaceReferencesInSubscripts(fi);
+        right.addInliningVarsAndEqns(fi, left.scalarName(), true);
+    }
+
+    public void FFunctionCallStmt.inline(AbstractFunctionInliner fi) {
+        // Temporarily replace lefts with scalarized versions
+        List<FFunctionCallLeft> oldLefts = getLefts();
+        List<FFunctionCallLeft> newLefts = new List<FFunctionCallLeft>();
+        for (FFunctionCallLeft left : oldLefts)
+            newLefts.add(left.scalarize(fi.scalarizer()));
+        setLeftList(newLefts);
+        newLefts.clearScalarized();
+        
+        // Scalarize and replace references
+        FExp call = getCall().scalarizeExp(fi.scalarizer());
+        call = getCall().dynamicFExp(call);
+        call.clearScalarized();
+        call = call.replaceReferences(fi);
+        
+        fi.addVarsAndFCEqn(getLefts(), (FAbstractFunctionCall) call);
+        
+        // Restore old left list
+        setLeftList(oldLefts);
+    }
+
+    public void FInitArrayStmt.inline(AbstractFunctionInliner fi) {
+        if (getShallow() && !isTopLevel()) {
+            FAccessExp access = (FAccessExp)getFAccessExp().dynamicFExp(getFAccessExp().treeCopy());
+            access.replaceReferencesInSubscripts(fi);
+            FType t = type().copyAndReplaceReferences(fi);
+            t.setParent(getFAccessExp());
+            fi.setTypeOf(access.name(), t);
+        } else {
+            FAbstractVariable fv = getFAccessExp().myFV();
+            FType t = type().copyAndReplaceReferences(fi);
+            t.setParent(getFAccessExp());
+            fi.setTypeOf(fv.name(), t);
+            fv.cacheFunctionInliner(fi);
+            fv.flushCache();
+        }
+    }
+
+    public void FIfStmt.inline(AbstractFunctionInliner fi) {
+        // Reduce to list of assignments
+        List<FStatement> stmts = new List<FStatement>();
+        inlinePrepare(fi, stmts);
+        
+        // Add assignments to tree temporarily
+        List<FStatement> oldElse = getElseStmts();
+        setElseStmtList((List) stmts);
+        getElseStmtList();
+        
+        // Inline them
+        for (FStatement stmt : stmts)
+            stmt.inline(fi);
+        
+        // Restore old else branch
+        setElseStmtList(oldElse);
+    }
+
+    public void FForStmt.inline(AbstractFunctionInliner fi) {
+        // Reduce to list of assignments
+        List<FStatement> stmts = new List<FStatement>();
+        inlinePrepare(fi, stmts);
+        
+        // Add assignments to tree temporarily
+        List<FStatement> oldStmt = getForStmts();
+        setForStmtList((List) stmts);
+        getForStmtList();
+        
+        // Inline them
+        for (FStatement stmt : stmts)
+            stmt.inline(fi);
+        
+        // Restore old else branch
+        setForStmtList(oldStmt);
+    }
+
+    // TODO: handle more types of stmts
+
+    /**
+     * Simplify a statement into a list of assignments, that can then easily be inlined.
+     */
+    public void FStatement.inlinePrepare(AbstractFunctionInliner fi, List<FStatement> stmts) {}
+
+    public void FInitArrayStmt.inlinePrepare(AbstractFunctionInliner fi, List<FStatement> stmts) {
+        inline(fi);
+    }
+
+    public void FAssignStmt.inlinePrepare(AbstractFunctionInliner fi, List<FStatement> stmts) {
+        stmts.add(fullCopy());
+    }
+
+    public void FFunctionCallStmt.inlinePrepare(AbstractFunctionInliner fi, List<FStatement> stmts) {
+        if (!getCall().isIgnored())
+            stmts.add(fullCopy());
+    }
+
+    public void FIfStmt.inlinePrepare(AbstractFunctionInliner fi, List<FStatement> stmts) {
+        List<FStatement> oldElse = getElseStmts();
+        
+        // Prepare contents
+        List<FStatement> newElse = new List<FStatement>();
+        for (FStatement stmt : oldElse)
+            stmt.inlinePrepare(fi, newElse);
+        setElseStmtList((List) newElse);
+        
+        // Combine branches to assignments with if-else expressions
+        for (int i = getNumFIfWhenClause() - 1; i >= 0; i--) {
+            newElse = getFIfWhenClause(i).inlineCombineBranches(fi, newElse);
+            setElseStmtList((List) newElse);
+        }
+        
+        // Write result to target list
+        for (FStatement stmt : newElse)
+            stmts.add(stmt);
+        setElseStmtList(oldElse);
+    }
+    
+    public void FIfStmtTemp.inlinePrepare(AbstractFunctionInliner fi, List<FStatement> stmts) {
+        /* We know that this if statement only assigns temporaries,
+           each is only assigned in one branch,
+           and the location they are used are already guarded by the same if condition. */
+           
+        for (FIfWhenClause clause : getFIfWhenClauses()) {
+            for (FStatement stmt : clause.getFStatements()) {
+                stmt.inlinePrepare(fi, stmts);
+            }
+        }
+        for (FStatement stmt : getElseStmts()) {
+            stmt.inlinePrepare(fi, stmts);
+        }
+    }
+    
+    public void FForStmt.inlinePrepare(AbstractFunctionInliner fi, List<FStatement> stmts) {
+        List<FStatement> oldStmts = getForStmts();
+        FForIndex oldIndex = getIndex();
+        
+        // Prepare contents
+        List<FStatement> newStmts = new List<FStatement>();
+        for (FStatement stmt : oldStmts)
+            stmt.inlinePrepare(fi, newStmts);
+        setForStmtList((List) newStmts);
+        
+        // Unroll loop
+        FExp loopExp = oldIndex.getFExp();
+        loopExp = loopExp.dynamicFExp(loopExp.treeCopy()).replaceReferences(fi);
+        FForIndex newIndex = new FForIndex(oldIndex.getFVariable(), loopExp);
+        setIndex(newIndex);
+        getUnrolledForStmtList_reset();
+        stmts.addAll(getUnrolledForStmts());
+        setForStmtList(oldStmts);
+        setIndex(oldIndex);
+    }
+
+    /**
+     * Create a list of assign statements with if-else expressions that is the 
+     * equivalent of two branches of an if-else statement.
+     * 
+     * @param fi         the function inliner to use
+     * @param elseStmts  the else branch to combine
+     */
+    protected List<FStatement> FIfWhenClause.inlineCombineBranches(
+            AbstractFunctionInliner fi, List<FStatement> elseStmts) {
+        // Prepare contents
+        List<FStatement> oldStmts = getFStatements();
+        List<FStatement> newStmts = new List<FStatement>();
+        for (FStatement stmt : oldStmts)
+            stmt.inlinePrepare(fi, newStmts);
+        setFStatementList((List) newStmts);
+        
+        // First inefficient implementation
+        List<FStatement> stmts = new List<FStatement>();
+        for (FStatement stmt : newStmts)
+            stmts.add(createIfElseAssignment(stmt, null));
+        for (FStatement stmt : elseStmts)
+            stmts.add(createIfElseAssignment(null, stmt));
+        // End first implementation
+        
+        // Clean up
+        setFStatementList(oldStmts);
+        return stmts;
+    }
+
+    /**
+     * Create an assign statement with an if-else exception as the right side, 
+     * that is equivalent to two assignments to the the same variable. One 
+     * assignment from this if branch, and one other from the next branch.
+     * If one of the assignments is null, then an access to the variable being 
+     * assigned is used there (i.e. a no-op). At least one must be non-null.
+     * 
+     * If any of the statements is not an assign statement, then 
+     * IllegalArgumentException is thrown.
+     * 
+     * @param leftStmt   the assignment from this branch
+     * @param rightStmt  the assignment from the next branch
+     */
+    protected FAssignStmt FIfWhenClause.createIfElseAssignment(FStatement leftStmt, FStatement rightStmt) {
+        try {
+            FAssignStmt left = (FAssignStmt) leftStmt;
+            FAssignStmt right = (FAssignStmt) rightStmt;
+            FAssignableExp lhs = ((left != null) ? left : right).getLeft().fullCopy();
+            FExp test = getTest().fullCopy(); // TODO: use temp var instead
+            FExp leftExp = createIfElseExpBranch(left, lhs);
+            FExp rightExp = createIfElseExpBranch(right, lhs);
+            return new FAssignStmt(lhs, new FIfExp(test, leftExp, rightExp));
+        } catch (ClassCastException e) {
+            throw new IllegalArgumentException();
+        }
+    }
+
+    private FExp FIfWhenClause.createIfElseExpBranch(FAssignStmt ass, FAssignableExp var) {
+        return (ass != null) ? ass.getRight().fullCopy() : var.fullCopy();
+    }
+
+    /**
+     * Replace all variable references according to the inlining helper.
+     */
+    public ASTNode ASTNode.replaceReferences(AbstractFunctionInliner fi) {
+        for (ASTNode n : this)
+            n.replaceReferences(fi);
+        return this;
+    }
+
+    public FExp FExp.replaceReferences(AbstractFunctionInliner fi) {
+        super.replaceReferences(fi);
+        return this;
+    }
+
+    public FExp FSizeExp.replaceReferences(AbstractFunctionInliner fi) {
+        FExp res = getFExp().size().createFExp(dimension());
+        replaceMe(res);
+        return res;
+    }
+    
+    // TODO: Should probably be removed after simplification step has been added
+    public FExp FIfExp.replaceReferences(AbstractFunctionInliner fi) {
+        super.replaceReferences(fi);
+        if (getIfExp().isConstantExp()) {
+            boolean useThen = getIfExp().ceval().booleanValue();
+            FExp exp = useThen ? getThenExp() : getElseExp();
+            replaceMe(exp);
+            return exp;
+        }
+        return this;
+    }
+
+    public FExp FAccessExp.replaceReferences(AbstractFunctionInliner fi) {
+        replaceReferencesInSubscripts(fi);
+        if (fi.isReplacementVar(name())) {
+            return this;
+        }
+        FExp exp = null;
+        if (getFAccess().hasNonLiteralSubscripts()) {
+            exp = dynamicFExp(copyWithNonLiteralSubscriptsAsColon());
+            exp = exp.getArray().buildWithReplacedReferences(fi, this);
+            exp = new FSubscriptedExp(exp, getFAccess().copyNonLiteralSubscripts());
+        } else {
+            exp = fi.getReplacementExp(scalarName());
+            if (exp != null) {
+                exp = dynamicFExp(exp.treeCopyNoTransform());
+            } else {
+                if (variability().knownParameterOrLess()) {
+                    exp = ceval().buildLiteral();
+                } else if (isArray() && !size().isUnknown()) { 
+                    exp = getArray().buildWithReplacedReferences(fi, this);
+                } else if (type().isRecord()) {
+                    exp = dynamicFExp(type().createRecordConstructor(fi.scalarizer(), this));
+                    exp = exp.replaceReferences(fi);
+                } else {
+                    exp = type().zeroLiteral();
+                }
+            }
+        }
+        replaceMe(exp);
+        return exp;
+    }
+
+    @Override
+    public FExp FGlobalAccessExp.replaceReferences(AbstractFunctionInliner fi) {
+        replaceReferencesInSubscripts(fi);
+        return this;
+    }
+
+    public FAccessExp FAccessExp.copyWithNonLiteralSubscriptsAsColon() {
+        return createNode(getFAccess().copyWithNonLiteralSubscriptsAsColon());
+    }
+
+    public CommonAccess CommonAccess.copyWithNonLiteralSubscriptsAsColon() {
+        throw new UnsupportedOperationException();
+    }
+
+    public FAccess FAccess.copyWithNonLiteralSubscriptsAsColon() {
+        return treeCopyNoTransform();
+    }
+
+    public FAccess FAccessFull.copyWithNonLiteralSubscriptsAsColon() {
+        FAccessFull res = new FAccessFull();
+        for (FAccessPart p : getFAccessParts()) {
+            res.addFAccessPartNoTransform(p.copyWithNonLiteralSubscriptsAsColon());
+        }
+        return res;
+    }
+
+    public FAccessPart FAccessPart.copyWithNonLiteralSubscriptsAsColon() {
+        return treeCopyNoTransform();
+    }
+
+    public FAccessPart FAccessPartArray.copyWithNonLiteralSubscriptsAsColon() {
+        return new FAccessPartArray(getName(), getFArraySubscripts().copyWithNonLiteralSubscriptsAsColon());
+    }
+
+    public FArraySubscripts FArraySubscripts.copyWithNonLiteralSubscriptsAsColon() {
+        return treeCopy();
+    }
+    public FArraySubscripts FArrayExpSubscripts.copyWithNonLiteralSubscriptsAsColon() {
+        FArrayExpSubscripts res = new FArrayExpSubscripts();
+        for (FSubscript s : getFSubscripts()) {
+            res.addFSubscriptNoTransform(s.copyWithNonLiteralSubscriptsAsColon());
+        }
+        return res;
+    }
+
+    public FSubscript FSubscript.copyWithNonLiteralSubscriptsAsColon() {
+        return treeCopyNoTransform();
+    }
+
+    public FSubscript FExpSubscript.copyWithNonLiteralSubscriptsAsColon() {
+        return new FColonSubscript();
+    }
+
+
+    public FArraySubscripts FAccessExp.copyNonLiteralSubscripts() {
+        return getFAccess().copyNonLiteralSubscripts();
+    }
+
+    public FArraySubscripts CommonAccess.copyNonLiteralSubscripts() {
+        throw new UnsupportedOperationException();
+    }
+
+    public FArraySubscripts FAccess.copyNonLiteralSubscripts() {
+        return new FArrayExpSubscripts();
+    }
+
+    public FArraySubscripts FAccessFull.copyNonLiteralSubscripts() {
+        FArrayExpSubscripts fas = new FArrayExpSubscripts();
+        for (FAccessPart p : getFAccessParts()) {
+            p.copyNonLiteralSubscriptsTo(fas);
+        }
+        return fas;
+    }
+
+    public void FAccessPart.copyNonLiteralSubscriptsTo(FArrayExpSubscripts fas) {
+    }
+    @Override
+    public void FAccessPartArray.copyNonLiteralSubscriptsTo(FArrayExpSubscripts fas) {
+        getFArraySubscripts().copyNonLiteralSubscriptsTo(fas);
+    }
+
+    public void FArraySubscripts.copyNonLiteralSubscriptsTo(FArrayExpSubscripts fas) {}
+    public void FArrayExpSubscripts.copyNonLiteralSubscriptsTo(FArrayExpSubscripts fas) {
+        for (FSubscript s : getFSubscripts()) {
+            s.copyNonLiteralSubscriptsTo(fas);
+        }
+    }
+
+    public void FSubscript.copyNonLiteralSubscriptsTo(FArrayExpSubscripts fas) {
+    }
+
+    public void FExpSubscript.copyNonLiteralSubscriptsTo(FArrayExpSubscripts fas) {
+        fas.addFSubscriptNoTransform(treeCopyNoTransform());
+    }
+
+    public interface Array {
+        public FExp buildWithReplacedReferences(AbstractFunctionInliner fi, FExp context);
+    }
+
+    public FExp FExp.buildWithReplacedReferences(AbstractFunctionInliner fi, FExp context) {
+        return context.dynamicFExp(this).replaceReferences(fi);
+    }
+
+    public class ArrayExp {
+
+        public FExp buildWithReplacedReferences(AbstractFunctionInliner fi, FExp context) {
+            return buildFArray(new ReplaceReferenceBuilder(fi, context));
+        }
+
+        protected class ReplaceReferenceBuilder implements ElementBuilder {
+            private AbstractFunctionInliner fi;
+            private FExp context;
+
+            public ReplaceReferenceBuilder(AbstractFunctionInliner fi, FExp context) {
+                this.fi = fi;
+                this.context = context;
+            }
+
+            public FExp build(FExp e) {
+                return context.dynamicFExp(e).replaceReferences(fi);
+            }
+        }
+
+    }
+
+    /**
+     * Replace all variable references in array subscripts according to the inlining helper.
+     */
+    public void ASTNode.replaceReferencesInSubscripts(AbstractFunctionInliner fi) {
+        for (ASTNode n : this)
+            n.replaceReferencesInSubscripts(fi);
+    }
+
+    public void FExpSubscript.replaceReferencesInSubscripts(AbstractFunctionInliner fi) {
+        getFExp().replaceReferences(fi);
+        if (isConstant()) {
+            try {
+                CValue cval = getFExp().ceval();
+                if (!cval.isUnknown()) {
+                    replaceMe(cval.createFSubscript());
+                }
+            } catch (ConstantEvaluationException e) {}
+        }
+    }
+
+    /**
+     * Make a copy of this type with all variable references replaced according to the 
+     * function inliner.
+     */
+    public FType FType.copyAndReplaceReferences(AbstractFunctionInliner fi) {
+        FType res = fullCopy();
+        res.setParent(parent);
+        return (FType) res.replaceReferences(fi);
+    }
+    
+    public FType FCellType.replaceReferences(AbstractFunctionInliner fi) {
+        setSize(getSize().replaceReferences(fi, this));
+        return this;
+    }
+    
+    public FType FRecordType.replaceReferences(AbstractFunctionInliner fi) {
+        super.replaceReferences(fi);
+        for (FRecordComponentType frct : getComponents()) {
+            frct.getFType().replaceReferences(fi);
+        }
+        return this;
+    }
+    
+    public FType FFunctionType.replaceReferences(AbstractFunctionInliner fi) {
+        super.replaceReferences(fi);
+        for (FRecordComponentType frct : getInputs()) {
+            frct.getFType().replaceReferences(fi);
+        }
+        for (FRecordComponentType frct : getOutputs()) {
+            frct.getFType().replaceReferences(fi);
+        }
+        return this;
+    }
+    
+    public Size Size.replaceReferences(AbstractFunctionInliner fi, ASTNode context) {
+        return this;
+    }
+    
+    public MutableSize MutableSize.replaceReferences(AbstractFunctionInliner fi, ASTNode context) {
+        MutableSize res = clone();
+        for (int i = 0; i < exps.length; i++)
+            if (res.exps[i] != null) {
+                res.exps[i] = exps[i].dynamicFExp(exps[i].fullCopy()).replaceReferences(fi);
+                res.exps[i].setParent(context);
+            }
+        return res;
+    }
+
+    /*
+     * We must be able to tell the difference between discrete and continous expressions 
+     * during function inlining. Normally all expressions in functions are considered discrete.
+     */
+    refine Variability eq FExp.inDiscreteLocation() = inWhen() || (inFunction() && !duringFunctionInlining());
+    
+    inh boolean FFunctionCallLeft.duringFunctionInlining();
+    inh boolean FExp.duringFunctionInlining();
+    eq FFunctionDecl.getChild().duringFunctionInlining() = duringInlining;
+    eq Root.getChild().duringFunctionInlining()          = false;
+
+    /*
+     * Use the information we have on unknown sizes during inlining.
+     */
+    refine FlatTypeAnalysis eq FFunctionVariable.type() {
+        FType res = null;
+        if (functionInliner != null) {
+            res = functionInliner.lookupType(name());
+        }
+        return res == null ? refined() : res;
+    }
+}

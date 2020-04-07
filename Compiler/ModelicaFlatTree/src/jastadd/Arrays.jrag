@@ -1,0 +1,4720 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
+
+import org.jmodelica.util.collections.ListUtil;
+import org.jmodelica.util.collections.IntIterator;
+
+aspect Arrays {
+
+	/**
+	 * Check if an expression is inside array subscripts.
+	 */
+	inh boolean FExp.inArraySubscripts();
+	eq FArraySubscripts.getChild().inArraySubscripts() = true;
+	eq FAbstractEquation.getChild().inArraySubscripts() = false;
+	eq Root.getChild().inArraySubscripts() = false;
+
+    /**
+     * Check if an access is an array access.
+     * 
+     * @return True if the access has array subscripts, otherwise false.
+     */
+    syn boolean SrcAccess.isArrayAccess() = false;
+    eq SrcArrayAccess.isArrayAccess()     = true;
+
+	/**
+	 * Return an Index with these array subscripts.
+	 * 
+	 * This version is not cached, to allow indices to be re-evaluated at each use 
+	 * during function evaluation.
+	 * 
+	 * @throws ConstantEvaluationException  if the subscripts can't be evaluated to 
+	 *                                      constant Integer values.
+	 */
+	public Index FArraySubscripts.createIndex() {
+		return createIndex(defaultVariableEvaluator());
+	}
+
+    /**
+     * Return an Index with these array subscripts.
+     * 
+     * This version is not cached, to allow indices to be re-evaluated at each use 
+     * during function evaluation.
+     * 
+     * @throws ConstantEvaluationException  if the subscripts can't be evaluated to 
+     *                                      constant Integer values.
+     */
+    public Index FArraySubscripts.createIndex(VariableEvaluator evaluator) {
+        if (numSubscript() == 0) {
+            return Index.NULL;
+        }
+        int[] i = new int[numSubscript()];
+        int j = 0;
+        for (Subscript s : subscripts()) 
+            i[j++] = s.value(evaluator);
+        return new Index(i);
+    }
+
+    public interface Subscript {
+        public int ndims();
+        public Size size();
+        public FType type();
+        public int value();
+        public TypePrefixVariability variability();
+        public int[] myIndices();
+        public boolean isCircular();
+        public boolean isColon();
+        public String prettyPrint(String indent);
+        public void prettyPrint(Printer p, CodeStream str, String indent);
+        public void prettyPrint_XML(CodeStream str, String indent);
+        public boolean calculateExpandableConnectorSize(MutableSize s, int i, int len);
+        public FSubscript deferredCopy();
+        public void addDeclarationSize(MutableSize s);
+    }
+    public class IntegerSubscript implements Subscript {
+        private int value;
+        public IntegerSubscript(int value) {
+            this.value = value;
+        }
+        public int value() {
+            return value;
+        }
+    }
+    FSubscript implements Subscript;
+
+    private int[] FArrayLitSubscripts.subscripts = new int[0];
+
+    syn Subscript FArraySubscripts.subscript(int i);
+    eq FArrayExpSubscripts.subscript(int i) = getFSubscript(i);
+    eq FArrayLitSubscripts.subscript(int i) = new IntegerSubscript(subscripts[i]);
+
+    public abstract int FArraySubscripts.numSubscript();
+    public int FArrayLitSubscripts.numSubscript() {
+        return subscripts.length;
+    }
+    public int FArrayExpSubscripts.numSubscript() {
+        return getNumFSubscript();
+    }
+
+    public abstract Iterable<? extends Subscript> FArraySubscripts.subscripts();
+    public Iterable<Subscript> FArrayLitSubscripts.subscripts() {
+        java.util.List<Subscript> list = new ArrayList<>(subscripts.length);
+        for (int i : subscripts) {
+            list.add(new IntegerSubscript(i));
+        }
+        return list;
+    }
+    public Iterable<? extends Subscript> FArrayExpSubscripts.subscripts() {
+        return getFSubscripts();
+    }
+
+    public abstract FArrayExpSubscripts FArraySubscripts.copyAsFArrayExpSubscripts();
+    public FArrayExpSubscripts FArrayExpSubscripts.copyAsFArrayExpSubscripts() {
+        return treeCopy();
+    }
+    public FArrayExpSubscripts FArrayLitSubscripts.copyAsFArrayExpSubscripts() {
+        FSubscript[] list = new FSubscript[subscripts.length];
+        for (int i = 0; i < list.length; i++) {
+            list[i] = new FIntegerSubscript(subscripts[i]);
+        }
+        return new FArrayExpSubscripts(new List(list));
+    }
+
+	/**
+	 * Get the dimensions to use in dimension conversion.
+	 */
+	syn lazy int[] FDimensionConvert.dimensionsToKeep();
+	eq FScalarExp.dimensionsToKeep() = new int[] {};
+	eq FVectorExp.dimensionsToKeep() {
+		Size s = getFExp().size();
+		int i = getFExp().ndims();
+		for (i = (i > 0) ? i - 1 : 0; i > 0 && s.get(i) == 1; i--);
+		return new int[] { i };
+	}
+	eq FMatrixExp.dimensionsToKeep() = new int[] { 0, 1 };
+
+	/**
+	 * Get array dimensions.
+	 * 
+	 * A value > 0 indicates an array, 0 indicates a scalar and -1 indicates
+	 * an error in computation of the array dimensions.
+	 * 
+	 * @return Array dimension.
+	 */	
+	syn int FAbstractEquation.ndims() = -1;
+	eq FEquation.ndims() {
+		if (getLeft().ndims() == getRight().ndims()) {
+			return getLeft().ndims();
+		}
+		return -1;
+	}
+
+	/**
+	 * Get array dimensions.
+	 * 
+	 * A value > 0 indicates an array, 0 indicates a scalar and -1 indicates
+	 * an error in computation of the array dimensions.
+	 * 
+	 * @return Array dimension.
+	 */	
+	syn int FArraySubscripts.ndims() { 
+		return numSubscript();
+	}
+
+	// Array dimensions
+	/**
+	 * Get array dimensions of array subscripts when used in an identifier.
+	 * 
+	 * Here it is not sufficient to check the number of subscripts; the 
+	 * identifier x[1] has the dimension 0, not 1.
+	 * 
+	 * A value > 0 indicates an array, 0 indicates a scalar and -1 indicates
+	 * an error in computation of the array dimensions.
+	 * 
+	 * @return Array dimension.
+	 */	
+	syn int FArraySubscripts.accessNdims();
+	eq FArrayLitSubscripts.accessNdims() = 0; 
+	syn lazy int FArrayExpSubscripts.accessNdims() {
+		int nd = 0;
+		for (FSubscript fs : getFSubscripts()) {
+			nd += fs.ndims();
+		}
+		return nd;
+	}
+	
+	/**
+	 * Get array dimensions.
+	 * 
+	 * A value > 0 indicates an array, 0 indicates a scalar and -1 indicates
+	 * an error in computation of the array dimensions.
+	 * 
+	 * @return Array dimension.
+	 */	
+	syn int FSubscript.ndims();
+	eq FExpSubscript.ndims()     = getFExp().ndims();
+	eq FColonSubscript.ndims()   = 1;
+	eq FIntegerSubscript.ndims() = 0;
+	public int IntegerSubscript.ndims() { return 0; }
+	
+	/**
+	 * Get array dimensions.
+	 * 
+	 * A value > 0 indicates an array, 0 indicates a scalar and -1 indicates
+	 * an error in computation of the array dimensions.
+	 * 
+	 * @return Array dimension.
+	 */	
+	syn int FExp.ndims() = 0;
+	syn lazy int FAbstractArrayExp.ndims() = super.ndims();
+	eq FRangeExp.ndims() = 1;
+	eq FLinspace.ndims() = 1;
+	eq FArray.ndims() {
+		if (isIterArray())
+			return getFExp(0).ndims();
+		if (getNumFExp()==0)  //Empty array
+			return 1;
+		// We assume that the FArray is set up correctly and that
+		// all branches are equal.
+		return getFExp(0).ndims() + 1;
+	}
+	eq FAbstractCat.ndims() {
+		int ndims = 2;
+		for (FExp e : getFExps())
+			if (e.ndims() > ndims)
+				ndims = e.ndims();
+		return ndims;
+	}
+	eq FCatExp.ndims()         = getFExp(0).ndims();
+	eq FReductionExp.ndims()   = getFExp().isIterExp() ? iterExp().ndims() : 0;
+    eq FSubscriptedExp.ndims() = getFExp().ndims() - getFArraySubscripts().ndims() + getFArraySubscripts().accessNdims();
+	eq FIterExp.ndims() {
+		int exp = getFExp().ndims();
+		return (exp >= 0) ? exp + localNdims() : -1;
+	}
+	
+	/**
+	 * The number of dimensions of the iteration indices of this iteration expression.
+	 */
+	syn int FIterExp.localNdims() = getNumForIndex();
+	
+	eq FSymmetric.ndims()    = 2;
+	eq FCross.ndims()        = 1;
+	eq FSkew.ndims()         = 2;
+	eq FOuterProduct.ndims() = 2;
+    eq FAbstractDiagonal.ndims() = 2;
+	
+	eq FScalarExp.ndims() = 0;
+	eq FVectorExp.ndims() = 1;
+	eq FMatrixExp.ndims() = 2;
+	
+	eq FUnaryBuiltIn.ndims()              = getFExp().ndims();
+	eq FEventGenExp.ndims()               = getX().ndims();
+	eq FMathematicalFunctionCall.ndims()  = getFExp().ndims();
+	
+	eq FHomotopyExp.ndims()   = vectorizedNdims();
+	eq FSemiLinearExp.ndims() = size().ndims();
+
+    eq FDelayExp.ndims()       = vectorizedNdims();
+    eq FSpatialDistExp.ndims() = vectorizedNdims();
+    
+    eq FReinit.ndims()         = vectorizedNdims();
+    eq FAssert.ndims()         = vectorizedNdims();
+
+	eq FSizeExp.ndims() = hasDim() ? 0 : 1;
+	eq FNdimsExp.ndims() = 0;
+	
+	eq FArrayDimAsArgsExp.ndims()     = getNumFExp();
+	eq FFillExp.ndims()               = getNumFExp() + getFillExp().ndims();
+	eq FFunctionCall.ndims()          = hasOutputs() ? expOutput().ndims() : -1;
+	eq FVectorFunctionCall.ndims()    = size().ndims();
+	eq InstFunctionCall.ndims()       = hasOutputs() ? expOutput().ndims() : -1;
+    eq InstPartialFunctionCall.ndims() = hasOutputs() ? 0 : -1;
+	eq InstVectorFunctionCall.ndims() = getDims();
+
+    /**
+     * Get array dimensions of function argument.
+     */
+    syn int InstFunctionArgument.ndims() = -1;
+    eq InstDefaultArgument.ndims()       = getFExp().ndims();
+    eq InstGivenArgument.ndims()         = getFExp().ndims();
+
+    eq FDeferExp.ndims() = getFExp().ndims();
+
+    eq FBinExp.ndims()   = overloadNdims();
+    eq FUnaryExp.ndims() = overloadNdims();
+
+    syn int FExp.overloadNdims() {
+        if (shouldUseOverloadedOperator()) {
+            InstClassDecl oper = overloadedOperator(true);
+            if (oper != null && !oper.myOutputs().isEmpty())
+                return oper.myOutputs().get(0).ndims();
+        }
+        return ndimsBase();
+    }
+
+    syn int FExp.ndimsBase()   = -1;
+    eq FBinExp.ndimsBase()     = getLeft().ndims();
+    eq FUnaryExp.ndimsBase()   = getFExp().ndims();
+    eq FArtmBinExp.ndimsBase() = Math.max(getLeft().ndims(), getRight().ndims());
+    eq FDivExp.ndimsBase()     = getLeft().ndims();
+    eq FPowExp.ndimsBase()     = getLeft().ndims();
+    eq FMulExp.ndims() {
+        int left = getLeft().ndims();
+        int right = getRight().ndims();
+        if (isElementWise())
+            return Math.max(left, right);
+        if (left > 2 || right > 2)
+            return -1;
+        return left + right - 2;
+    }
+
+	eq FIfExp.ndims() = getThenExp().ndims();
+	
+	eq FSmoothExp.ndims() = getFExp().ndims();
+	
+	eq FVectUnaryBuiltIn.ndims() = getFExp().ndims();
+	
+	/**
+	 * Check if multiplication is equivalent with an element-wise multiplication.
+	 * 
+	 * True if any operand is scalar.
+	 */
+	syn boolean FMulExp.isElementWise() = (getLeft().ndims() * getRight().ndims() == 0);
+
+    eq FExInStream.ndims() = expDefiningSize().ndims();
+
+    syn FExp FExInStream.expDefiningSize() = (numVars() > 0) ? streamExp(0) : getDefault();
+
+	/**
+	 * Get array dimensions.
+	 * 
+	 * A value > 0 indicates an array, 0 indicates a scalar and -1 indicates
+	 * an error in computation of the array dimensions.
+	 * 
+	 * @return Array dimension.
+	 */	
+	syn int CommonAccess.ndims();
+    eq CommonAccessExp.ndims() = getAccess().ndims();
+    
+	eq FAccess.ndims() {
+		// Notice here the use of accessNdims. Also, if the access has
+		// no subscripts, it may still have dimension > 0 if its declaration
+		// is an array declaration. 
+		// If the FAccess is marked as scalarized, then dimension must 
+		// be 0 and using myFV() might cause a NullPointerException.
+		// This is because if scalarization is in progress, 
+		// then this node will be hanging without a proper AST.
+		int n = 0;
+		if (!isScalarized())
+			for (FArraySubscripts fas : allFArraySubscripts())
+				n += fas.accessNdims();
+		return n;
+	}
+		
+	eq InstAccess.ndims()  = 0;
+	eq InstScalarAccess.ndims() = myInstComponentDecl().ndims();
+	eq InstArrayAccess.ndims()  = getFArraySubscripts().accessNdims();
+    eq InstDot.ndims() {
+        int n = 0;
+        for (InstAccess ia : getInstAccesss()) {
+            n = n + ia.ndims();
+        }
+        return n;
+    }
+    eq InstGlobalAccess.ndims() = getInstAccess().ndims();
+
+    /**
+     * Get array dimensions up to this part for a part of a dotted access. For 
+     * an access that is not part of a dotted access, this is equivalent to ndims().
+     * 
+     * A value > 0 indicates an array, 0 indicates a scalar and -1 indicates
+     * an error in computation of the array dimensions.
+     */
+    syn int InstAccess.combinedNdims() = collectCombinedNdims() + ndims();
+
+    inh int InstAccess.collectCombinedNdims();
+    eq BaseNode.getChild()          .collectCombinedNdims() = 0;
+    eq InstDot .getInstAccess(int i).collectCombinedNdims() {
+        int n = 0;
+        for (int j = 0; j < i; j++) {
+            n += getInstAccess(j).ndims();
+        }
+        return n;
+    }
+
+    /**
+     * Get the expanded FArraySubscripts of each part of this access.
+     */
+    eq InstAccess      .allFArraySubscripts() = Arrays.<FArraySubscripts>asList(new FArrayLitSubscripts());
+    eq InstArrayAccess .allFArraySubscripts() = Arrays.asList(getFArraySubscripts());
+    eq InstScalarAccess.allFArraySubscripts() = Arrays.asList(getExpandedSubscripts());
+    eq InstDot         .allFArraySubscripts() = allFArraySubscriptsTo(getNumInstAccess());
+    eq InstGlobalAccess.allFArraySubscripts() = getInstAccess().allFArraySubscripts();
+
+    /**
+     * Get the expanded FArraySubscripts of each part up to this for a part of a dotted access. 
+     * For an access that is not part of a dotted access, this is equivalent to 
+     * {@link InstAccess#qualifiedAllFArraySubscripts()}.
+     */
+    syn java.util.List<FArraySubscripts> InstAccess.combinedFArraySubscripts() = 
+        ListUtil.concatenate(collectCombinedFArraySubscripts(), 
+                             allFArraySubscripts());
+
+    inh java.util.List<FArraySubscripts> InstAccess.collectCombinedFArraySubscripts();
+    eq BaseNode.getChild()          .collectCombinedFArraySubscripts() = Collections.emptyList();
+    eq InstDot .getInstAccess(int i).collectCombinedFArraySubscripts() = allFArraySubscriptsTo(i);
+
+    private java.util.List<FArraySubscripts> InstDot.allFArraySubscriptsTo(int n) {
+        java.util.List<FArraySubscripts>[] lists = new java.util.List[n];
+        for (int i = 0; i < n; i++) {
+            lists[i] = getInstAccess(i).allFArraySubscripts();
+        }
+        return ListUtil.concatenate(lists);
+    }
+
+	/**
+	 * Get the expanded FArraySubscripts of each part of this access.
+	 */
+	syn java.util.List<FArraySubscripts> CommonAccess.allFArraySubscripts();
+	syn lazy java.util.List<FArraySubscripts> FAccess.allFArraySubscripts() {
+		ArrayList<FArraySubscripts> res = createFArraySubscriptsList();
+        if (!hasFArraySubscripts() && myFV().isArray()) {
+            res.add(getExpandedSubscripts());
+        }
+		return res;
+	}
+	
+	/**
+	 * Create a list with an FArraySubscripts for each part of this access, empty for parts that has none.
+	 */
+    public ArrayList<FArraySubscripts> FAccess.createFArraySubscriptsList() {
+        return new ArrayList<FArraySubscripts>();
+    }
+
+    public ArrayList<FArraySubscripts> FAccessFull.createFArraySubscriptsList() {
+        ArrayList<FArraySubscripts> res = new ArrayList<FArraySubscripts>();
+        for (FAccessPart accessPart : getFAccessParts()) {
+            if (accessPart.hasFArraySubscripts()) {
+                res.add(accessPart.getFArraySubscripts());
+            }
+        }
+        return res;
+    }
+
+	/**
+	 * Get the expanded array subscripts of this access.
+	 * 
+	 * An access without subscripts returns subscripts that span the entire component.
+	 * Any colon subscripts are expanded into constant vector expressions.
+	 */
+	syn lazy FArraySubscripts InstScalarAccess.getExpandedSubscripts() = myInstComponentDecl().expandedSubscripts();
+	
+	/**
+	 * Get the expanded array subscripts of this access.
+	 * 
+	 * @return  an FArraySubscripts that spans the entire FV this access points to.
+	 */
+    syn lazy FArraySubscripts FAccess.getExpandedSubscripts() {
+		Size s = myFV().size();
+		if (s.isUnknown() && myFV().inRecord()) {
+            s = calcMySize(numParts());
+		}
+		return s.createExpandedFArraySubscripts();
+	}
+	
+	/**
+	 * Create an FArraySubscripts that spans all array cells of this component.
+	 * 
+	 * If this is a scalar component, an empty FArraySubscripts is returned.
+	 */
+	public FArraySubscripts InstComponentDecl.expandedSubscripts() {
+		return size().createExpandedFArraySubscripts();
+	}
+	
+	/**
+	 * Get array dimensions.
+	 * 
+	 * A value > 0 indicates an array, 0 indicates a scalar and -1 indicates
+	 * an error in computation of the array dimensions.
+	 * 
+	 * @return Array dimension.
+	 */	
+	syn int InstAssignable.ndims() = hasFArraySubscripts() ? getFArraySubscripts().ndims() : 0;
+	
+	/**
+	 * Get array dimensions.
+	 * 
+	 * A value > 0 indicates an array, 0 indicates a scalar and -1 indicates
+	 * an error in computation of the array dimensions.
+	 * 
+	 * @return Array dimension.
+	 */	
+	syn int InstNode.ndims() = 0;
+	
+	eq InstComponentDecl.ndims()      = hasFArraySubscripts() ? getFArraySubscripts().ndims() : 0;
+	eq InstArrayComponentDecl.ndims() = retrieveArrayCompNdims();
+
+    /**
+     * The number of array dimensions declared locally on this component, i.e. not from the type.
+     */
+    syn int InstComponentDecl.localNdims() = 
+        hasLocalFArraySubscripts() ? getLocalFArraySubscripts().ndims() : 0;
+
+    inh int InstArrayComponentDecl.retrieveArrayCompNdims();
+    eq InstNode.getChild().retrieveArrayCompNdims()              = ndims() - 1;
+    eq InstRecordConstructor.getChild().retrieveArrayCompNdims() = 0;
+
+	syn int FAbstractVariable.ndims() = -1;
+	
+	eq FVariable.ndims()         = isScalarized()? 0 : getFAccess().declarationNDims();
+    eq FFunctionVariable.ndims() = getType().ndims();
+
+    syn int CommonForIndex.ndims() = 1;
+
+	/**
+	 * Get array dimensions.
+	 * 
+	 * A value > 0 indicates an array, 0 indicates a scalar and -1 indicates
+	 * an error in computation of the array dimensions.
+	 * 
+	 * @return Array dimension.
+	 */	
+	syn int FAccess.declarationNDims() = 0;
+	eq FAccessFull.declarationNDims() {
+		// Only look at the array subscripts for the last FAccessPart,
+		// all other array subscripts has been expanded in the instantiation.
+		FAccessPart last = getFAccessPart(getNumFAccessPart() - 1);
+		if (last.hasFArraySubscripts()) {
+			return last.getFArraySubscripts().ndims(); 
+		} else {
+			return 0;
+		}
+	}
+
+	/**
+	 * Get array dimensions of an identifier when used in an identifier.
+	 * 
+	 * Here it is not sufficient to check the number of subscripts; the 
+	 * identifier x[1] has the dimension 0, not 1.
+	 * 
+	 * A value > 0 indicates an array, 0 indicates a scalar and -1 indicates
+	 * an error in computation of the array dimensions.
+	 * 
+	 * @return Array dimension.
+	 */		
+	syn int FAccess.accessNdims() = 0;
+	eq FAccessFull.accessNdims() {
+        int res = 0;
+        for (FAccessPart accessPart : getFAccessParts()) {
+            res = res + accessPart.accessNdims();
+        }
+        return res;
+    }
+    
+    syn int FAccessPart.accessNdims() = 0;
+    eq FAccessPartArray.accessNdims() = getFArraySubscripts().accessNdims();
+
+	
+	// Array sizes
+	
+	/**
+	 * Get the array sizes. 
+	 */
+	syn lazy Size FAbstractEquation.size() = Size.SCALAR;
+	eq FEquation.size() {
+		Size left = getLeft().size();
+		Size right = getRight().size();
+		return left.equals(right) ? left : Size.SCALAR;
+	}
+
+	syn Size FAbstractEquation.totalSize() = size().expand(parentTotalSize());
+
+    inh Size FAbstractEquation.parentTotalSize();
+    eq InstForClauseE.getChild().parentTotalSize() {
+        Size s = parentTotalSize();
+        for (InstForIndex i : getInstForIndexs()) {
+            s = i.size().expand(s);
+        }
+        return s;
+    }
+    eq InstRoot.getChild().parentTotalSize() = Size.SCALAR;
+    eq FlatRoot.getChild().parentTotalSize() = Size.SCALAR;
+
+	syn FArraySubscripts FAbstractEquation.expandedSubscripts() {
+        List<FSubscript> list = parentExpandedSubscripts();
+		Size size = size();
+		for (int i = 0; i < size.ndims(); i++) {
+			list.add(size.createExpandedFSubscript(i));
+		}
+		return FArraySubscripts.createFArraySubscripts(list);
+	}
+
+    inh List<FSubscript> FAbstractEquation.parentExpandedSubscripts();
+    eq InstForClauseE.getChild().parentExpandedSubscripts() {
+        List<FSubscript> list = parentExpandedSubscripts();
+        for (InstForIndex i : getInstForIndexs()) {
+            list.add(i.createFSubscript());
+        }
+        return list;
+    }
+    eq InstRoot.getChild().parentExpandedSubscripts() = new List<FSubscript>();
+    eq FlatRoot.getChild().parentExpandedSubscripts() = new List<FSubscript>();
+
+    public FSubscript InstForIndex.createFSubscript() {
+        return getFExp().flatten(null).createFSubscript();
+    }
+    @Override
+    public FSubscript InstForIndexNoExp.createFSubscript() {
+        return hasFExp() ? super.createFSubscript() : new FColonSubscript();
+    }
+
+	/**
+	 * Get the array sizes. 
+	 */
+	syn Size FArraySubscripts.declarationSize() = declarationSize(subscripts());
+	
+	/**
+	 * Get the array size for a collection of FSubscripts.
+	 */
+	public static Size FArraySubscripts.declarationSize(Iterable<? extends Subscript> subscripts) {
+		int ndims = 0;
+		for (Subscript s : subscripts)
+			ndims++;
+		if (ndims == 0)
+			return Size.SCALAR;
+		MutableSize size = new MutableSize(ndims);
+		for (Subscript subscript : subscripts)
+			subscript.addDeclarationSize(size);
+		return size;
+	}
+	
+	/**
+	 * Add the size of the dimension denoted by this subscript when used 
+	 *        in a declaration to the given Size.
+	 */
+	public abstract void FSubscript.addDeclarationSize(MutableSize s);
+	
+	public void FExpSubscript.addDeclarationSize(MutableSize s) {
+		FExp e = getFExp();
+		if (e.ndims() == 0)
+			s.append(e);
+		else
+			s.append(e.size(), 0);
+	}
+	
+	public void FColonSubscript.addDeclarationSize(MutableSize s) {
+		FExp e = new FColonSizeExp(surroundingVariableDecl(), myDim());
+		e.setParent(this);
+		s.append(e);
+	}
+	
+	public void FIntegerSubscript.addDeclarationSize(MutableSize s) {
+		s.append(getValue());
+	}
+    
+    public void IntegerSubscript.addDeclarationSize(MutableSize s) {
+        s.append(value);
+    }
+	
+	/**
+	 * The variable declaration that this subscript is a part of the size of, if any.
+	 */
+	inh CommonVariableDecl FColonSubscript.surroundingVariableDecl();
+	eq FVariable.getFAccess().surroundingVariableDecl()                   = this;
+	eq InstComponentDecl.getFArraySubscripts().surroundingVariableDecl() = this;
+	eq FExp.getChild().surroundingVariableDecl()                         = null;
+	eq Root.getChild().surroundingVariableDecl()                         = null;
+	
+	/**
+	 * The dimension this subscript is used for.
+	 */
+	inh int FSubscript.myDim();
+	eq FArrayExpSubscripts.getFSubscript(int i).myDim() = i;
+
+	/**
+	 * Get the array sizes when the array subscripts are used in an
+	 * access. See also documentation of accessNdims(). 
+	 */
+	syn Size FArraySubscripts.accessSize();
+	eq FArrayLitSubscripts.accessSize() = Size.SCALAR;
+	syn lazy Size FArrayExpSubscripts.accessSize() {
+		if (accessNdims() == 0)
+			return Size.SCALAR;
+		MutableSize s = new MutableSize(accessNdims());
+		for (FSubscript fs : getFSubscripts()) 
+			if (fs.ndims() == 1)
+				s.append(fs.size());
+		return s;
+	}
+	
+	/**
+	 * Get the array sizes. 
+	 */
+	syn Size FExp.size() = Size.SCALAR;
+	syn lazy Size FAbstractArrayExp.size() = super.size();
+
+    eq FBinExp.size()   = overloadSize();
+    eq FUnaryExp.size() = overloadSize();
+
+    syn Size FExp.overloadSize() {
+        if (shouldUseOverloadedOperator()) {
+            InstClassDecl oper = overloadedOperator(true);
+            if (oper != null && !oper.myOutputs().isEmpty())
+                return oper.myOutputs().get(0).size();
+        }
+        return sizeBase();
+    }
+
+    syn Size FExp.sizeBase()  = null;
+    eq FBinExp.sizeBase()     = getLeft().size();
+    eq FUnaryExp.sizeBase()   = getFExp().size();
+    eq FArtmBinExp.sizeBase() = getLeft().isArray() ? getLeft().size() : getRight().size();
+
+    eq FDivExp.sizeBase() = getLeft().size();
+    eq FPowExp.sizeBase() = getLeft().size();
+
+    eq FMulExp.sizeBase() {
+        if (!getLeft().isArray())
+            return getRight().size();
+        if (!getRight().isArray())
+            return getLeft().size();
+        if (!isArray())
+            return Size.SCALAR;
+        MutableSize s = new MutableSize(ndims());
+        if (getLeft().ndims() == 2)
+            s.append(getLeft().size(), 0);
+        if (getRight().ndims() == 2)
+            s.append(getRight().size(), 1);
+        return s;
+    }
+
+    syn boolean FRangeExp.hasStep() = getNumFExp() > 2;
+
+    eq FRangeExp.size() {
+        MutableSize s = new MutableSize(1);
+        FExp start = getFExp(0);
+        FExp stop = getFExp(hasStep() ? 2 : 1);
+        start = start.makeRangeSizeExp();
+        stop = stop.makeRangeSizeExp();
+        FExp exp = stop;
+        if (hasStep() || !start.isIntegerLiteral(1)) {
+            exp = new FSubExp(stop, start);
+            if (hasStep())
+                exp = new FDivExp(exp, getFExp(1).treeCopy());
+            exp = new FAddExp(new FIntegerFuncExp(exp), new FIntegerLitExp(1));
+        } else if (promoteTypeForFExpList(getFExps()).isReal()) {
+            exp = new FIntegerFuncExp(exp);
+        }
+        if (!(exp instanceof FSizeExp)) {
+            exp = new FMaxExp(exp, new Opt(new FIntegerLitExp(0)));
+        }
+        s.append(dynamicFExp(exp));
+        return s;
+    }
+
+    /**
+     * Create a new expression suitable for use in an expression calculating the 
+     *        array size of a range expression.
+     */
+    public FExp FExp.makeRangeSizeExp() {
+        return type().wrapRangeSizeExp(fullCopy());
+    }
+
+ 	/**
+ 	 * Wrap the given expression so it is suitable for use in an expression 
+ 	 *        calculating the array size of a range expression.
+ 	 */
+ 	public FExp FType.wrapRangeSizeExp(FExp exp) {
+ 		return exp;
+ 	}
+ 	
+ 	public FExp FEnumType.wrapRangeSizeExp(FExp exp) {
+ 		return new FEnumIntegerExp(exp);
+ 	}
+ 	
+ 	public FExp FBooleanType.wrapRangeSizeExp(FExp exp) {
+ 		return new FIfExp(exp, new FIntegerLitExp(2), new FIntegerLitExp(1));
+ 	}
+
+    syn boolean FExp.isIntegerLiteral()         = false;
+    eq FIntegerLitExp.isIntegerLiteral()        = true;
+
+    syn boolean FExp.isIntegerLiteral(int v)    = false;
+    eq FIntegerLitExp.isIntegerLiteral(int v)   = getValue() == v;
+ 
+    syn boolean FExp.isRealLiteral()            = false;
+    eq FRealLitExp.isRealLiteral()              = true;
+
+    syn boolean FExp.isRealLiteral(double v)    = false;
+    eq FRealLitExp.isRealLiteral(double v)      = getValue() == v;
+    
+    syn boolean FExp.isZeroLiteral()  = isIntegerLiteral(0);
+    eq FRealLitExp.isZeroLiteral()    = isRealLiteral(0.0);
+
+    eq FArray.isZeroLiteral() {
+        for (FExp e : getFExps()) {
+            if (!e.isZeroLiteral()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+ 	eq FLinspace.size() {
+		MutableSize s = new MutableSize(ndims());
+ 		s.append(getN());
+		return s;
+ 	}
+	
+	eq FArray.size() {
+	    if (getFExp(0) == null)
+	        return new Size(0);
+		if (isIterArray())
+			return getFExp(0).size();
+		return getFExp(0).size().expand(getNumFExp());
+	}
+	
+	syn int FAbstractCat.dimension();
+	eq FCatExp.dimension()    = getDim().ceval().intValue() - 1;
+	eq FMatrix.dimension()    = 0;
+	eq FMatrixRow.dimension() = 1;
+	
+	syn int FSizeExp.dimension() = getDim().ceval().intValue() - 1;
+	
+	eq FAbstractCat.size() {
+		try {
+			int dim = dimension();
+			MutableSize ms = getFExp(0).size().promote(ndims()).mutableClone();
+			for (int i = 1; i < getNumFExp(); i++)
+				ms.add(dim, getFExp(i).size().promote(ndims()), dim);
+			return ms;
+		} catch (ConstantEvaluationException e) {
+			return Size.SCALAR;
+		}
+	}
+	
+	eq FReductionExp.size() = getFExp().isIterExp() ? iterExp().size() : Size.SCALAR;
+	
+	eq FIterExp.size() {
+		if (ndims() <= 0)
+			return Size.SCALAR;
+		MutableSize s = new MutableSize(ndims());
+		s.append(localSize());
+		s.append(getFExp().size());
+		return s;
+	}
+
+    /**
+     * The size of the iteration indices of this iteration expression.
+     */
+    syn lazy Size FIterExp.localSize() {
+        MutableSize s = new MutableSize(localNdims());
+        for (CommonForIndex fi : getForIndexList()) {
+            if (fi.expIsVector()) {
+                s.append(fi.size());
+            }
+        }
+        return s;
+    }
+
+    /**
+     * Check if the expression of this index is a vector (and thus usable).
+     */
+    syn boolean CommonForIndex.expIsVector() = getFExp().ndims() == 1;
+    eq InstForIndexNoExp.expIsVector()       = true;
+
+	/**
+	 * Check if this expression is inside an iteration expression.
+	 */
+	inh boolean FExp.inIterExp();
+	eq FIterExp.getFExp().inIterExp()  = true;
+	eq FClass.getChild().inIterExp()   = false;
+	eq InstNode.getChild().inIterExp() = false;
+	
+	/**
+	 * Return a size that represents the given size with sizes of surrounding iteration expressions appended.
+	 */
+	inh Size FExp.expandSizeForIterExp(Size s);
+	eq FIterExp.getFExp().expandSizeForIterExp(Size s)  = expandSizeForIterExp(s.expand(localSize()));
+	eq FClass.getChild().expandSizeForIterExp(Size s)   = s;
+	eq InstNode.getChild().expandSizeForIterExp(Size s) = s;
+	
+	eq FSubscriptedExp.size() = getFArraySubscripts().accessSize();
+    eq FComponentExp.size()   = type().size();
+	
+	eq FTranspose.size() {
+		Size size = getFExp().size();
+		if (size.ndims() < 2)
+			return size;
+		MutableSize s = new MutableSize(size.ndims());
+		s.append(size, 1);
+		s.append(size, 0);
+		for (int i = 2; i < s.ndims(); i++)
+			s.append(size, i);
+		return s;
+	}
+	
+	eq FCross.size()     = new Size(3);
+	eq FSkew.size()      = new Size(3, 3);
+
+    eq FOuterProduct.size() {
+        MutableSize s = new MutableSize(2);
+        s.append(getX().size(), 0);
+        s.append(getY().size(), 0);
+        return s;
+    }
+
+	eq FIdentity.size() {
+		MutableSize s = new MutableSize(2);
+		s.append(getFExp());
+		s.append(getFExp());
+		return s;
+	}
+	
+	eq FDiagonal.size() {
+		MutableSize s = new MutableSize(2);
+		Size s2 = getFExp().size();
+		if (s2 != Size.SCALAR) { 
+			s.append(s2, 0);
+			s.append(s2, 0);
+		}
+		return s;
+	}
+	
+	eq FDimensionConvert.size() {
+		if (getFExp().isArray() && isArray()) {
+			MutableSize s = new MutableSize(ndims());
+			Size s2 = getFExp().size(); 
+			for (int d : dimensionsToKeep()) {
+				if (d < s2.ndims())
+					s.append(s2, d);
+				else
+					s.append(1);
+			}
+			return s;
+		} else {
+			return sizeForScalarArg();
+		}
+	}
+	eq FScalarExp.size()        = Size.SCALAR;
+	
+    eq FVectorExp.size() {
+        Size s = getFExp().size();
+        if (s.ndims() > 0 && s.isUnknown()) {
+            FExp e = null;
+            for (int i = 0; i < s.ndims(); i++) {
+                FExp e1 = s.createFExp(i);
+                if (e == null) {
+                    e = e1;
+                } else {
+                    e = new FMulExp(e,e1);
+                }
+            }
+            dynamicFExp(e);
+            MutableSize ss = new MutableSize(1);
+            ss.set(0, e);
+            return ss;
+        }
+        return super.size();
+    }
+	
+	syn Size FDimensionConvert.sizeForScalarArg();
+	eq FScalarExp.sizeForScalarArg() = Size.SCALAR;
+	eq FVectorExp.sizeForScalarArg() = new Size(1);
+	eq FMatrixExp.sizeForScalarArg() = new Size(1, 1);
+	
+	eq FSizeExp.size()  = hasDim() ? Size.SCALAR : new Size(getFExp().ndims());
+	eq FNdimsExp.size() = Size.SCALAR;
+	
+	eq FSmoothExp.size() = getFExp().size();
+	
+	eq FUnaryBuiltIn.size()             = getFExp().size();
+	eq FVectUnaryBuiltIn.size()         = getFExp().size().contractRight(ndims());
+	
+	eq FEventGenExp.size()              = getX().size();
+	eq FMathematicalFunctionCall.size() = getFExp().size();
+	eq FHomotopyExp.size()              = vectorizedSize();
+	eq FSemiLinearExp.size()            = vectorizedSize();
+
+    eq FDelayExp.size()                 = vectorizedSize();
+    eq FSpatialDistExp.size()           = vectorizedSize();
+    
+    eq FReinit.size()                   = vectorizedSize();
+    eq FAssert.size()                   = vectorizedSize();
+    
+    eq FStringExp.size()                = getValue().size();
+
+    eq FExInStream.size()               = expDefiningSize().size();
+
+    syn Size FBuiltInFunctionCall.vectorizedSize() {
+        for (FExp e : myArgs())
+            if (e.isArray())
+                return e.size();
+        return Size.SCALAR;
+    }
+    eq FSpatialDistExp.vectorizedSize() {
+        return getIn0().size();
+    }
+    
+    syn int FBuiltInFunctionCall.vectorizedNdims() {
+        for (FExp e : myArgs())
+            if (e.isArray())
+                return e.ndims();
+        return 0;
+    }
+    eq FSpatialDistExp.vectorizedNdims() {
+        return getIn0().ndims();
+    }
+
+    /**
+     * An iterable over the arguments of the builtin.
+     * 
+     * Default implementation is simply an alias for childFExps().
+     */
+    syn Iterable<FExp> FBuiltInFunctionCall.myArgs() = childFExps();
+    eq FDelayExp.myArgs() = hasMax()
+            ? Arrays.asList(getFExp(), getDelay(), getMax())
+            : Arrays.asList(getFExp(), getDelay());
+    eq FSpatialDistExp.myArgs() = Arrays.asList(getIn0(), getIn1(), getX(),
+            getPositiveVelocity(), getInitialPoints(), getInitialValues());
+
+	eq FArrayDimAsArgsExp.size() {
+		if (!isArray())
+			return Size.SCALAR;
+		MutableSize s = new MutableSize(ndims());
+		for (FExp fe : getFExps()) 
+			s.append(fe);
+		appendSpecificLengths(s);
+		return s;
+	}
+	
+	protected void FArrayDimAsArgsExp.appendSpecificLengths(MutableSize s) {}
+	protected void FFillExp.appendSpecificLengths(MutableSize s) {
+		s.append(getFillExp().size());
+	}
+	
+	inh Size FFunctionCallLeft.size();
+	eq FFunctionCallEquation.getLeft(int i).size() = getCall().sizeOfOutput(i);
+	eq FFunctionCallStmt.getLeft(int i).size()     = getCall().sizeOfOutput(i);
+	
+	eq FFunctionCall.size()    = hasOutputs() ? sizeOfOutput(0) : Size.SCALAR;
+	eq InstFunctionCall.size() = hasOutputs() ? sizeOfOutput(0) : Size.SCALAR;
+    eq InstPartialFunctionCall.size() = Size.SCALAR;
+
+    eq FIfExp.size() {
+        if (ndims() > 0) {
+            MutableSize res = new MutableSize(ndims());
+            for (FExp exp : getSizeExps()) {
+                res.append(exp);
+            }
+            return res;
+        } else {
+            return getThenExp().size();
+        }
+    }
+
+    syn nta List<FExp> FIfExp.getSizeExps() {
+        List<FExp> res = new List<>();
+        for (int i = 0; i < ndims(); i++) {
+            res.add(new FIfExp(getIfExp().treeCopy(), getThenExp().size().createFExp(i), getElseExp().size().createFExp(i)));
+        }
+        return res;
+    }
+
+    eq InstIfExp.size() {
+        if (isParameterIf()) {
+            try {
+                return cevalSelectExp().size();
+            } catch (ConstantEvaluationException e) {
+            }
+        }
+        return getThenExp().size();
+    }
+
+	/**
+	 * Get the array sizes.
+	 */
+	syn Size CommonAccess.size();
+	eq FAccess.size() {
+		if (ndims() == 0)
+			return Size.SCALAR;
+		
+		MutableSize size = new MutableSize(ndims());
+		for (FArraySubscripts fas : allFArraySubscripts())
+			for (Subscript sub : fas.subscripts()) 
+				if (sub.ndims() >= 1)
+					size.append(sub.size());
+		return size;
+	}
+	eq CommonAccessExp.size() = getAccess().size();
+	
+    /**
+     * Get the array sizes. 
+     */
+    eq InstAccess.size() = Size.SCALAR;
+    eq InstGlobalAccess.size() = getInstAccess().size();
+    eq InstScalarAccess.size() = getExpandedSubscripts().accessSize();
+    eq InstArrayAccess.size()  = getFArraySubscripts().accessSize();
+    eq InstDot.size() {
+        if (isArray()) {
+            MutableSize s = new MutableSize(ndims());
+            for (InstAccess ia : getInstAccesss()) {
+                s.append(ia.size());
+            }
+            return s;
+        } else {
+            return Size.SCALAR;
+        }
+    }
+
+    /**
+     * Get the size of all parts of an InstDot up to this part.
+     */
+    inh Size InstAccess.partSize();
+    eq BaseNode.getChild().partSize() = null;
+    eq InstDot.getInstAccess(int i).partSize() {
+        int ndims = 0;
+        for (int j = 0; j <= i; j++) {
+            ndims += getInstAccess(j).ndims();
+        }
+        if (ndims == 0) {
+            return Size.SCALAR;
+        } else {
+            MutableSize s = new MutableSize(ndims);
+            for (int j = 0; j <= i; j++) {
+                s.append(getInstAccess(j).size());
+            }
+            return s;
+        }
+    }
+
+    /**
+     * Get the array sizes. 
+     */
+    syn Size InstNode.size()               = FArraySubscripts.declarationSize(myFSubscripts()); 
+    syn lazy Size InstComponentDecl.size() = declaredSize();
+    eq InstAssignable.size() {
+        Size s = super.size();
+        if (s.isUnknown() && hasBindingFExp() && 
+                (!inRecordDecl() || !isModifiable()) && 
+                (!isInput() || !inFunction()) &&
+                !getBindingFExp().isCircular()) {
+            s = s.createKnown(getBindingFExp());
+        }
+        return s;
+    }
+    
+    /**
+     * Get the array sizes as declared. May be unknown. 
+     */
+    syn Size InstComponentDecl.declaredSize() = 
+        hasFArraySubscripts() ? getFArraySubscripts().declarationSize() : defaultSize();
+    syn Size InstComponentDecl.declaredSizeCalc() =
+            hasFArraySubscripts() ? getFArraySubscripts().declarationSize() : defaultSizeCalc();
+
+    /**
+     * Find the declared size for a component that does not have any array subscripts in the declaration. 
+     * For all components except the NTA of InstComponentRedeclare, this is simply scalar.
+     */
+    inh Size InstComponentDecl.defaultSize();
+    eq InstComponentRedeclare.getInstComponentDecl().defaultSize() = myInstReplacingComponent().declaredSize();
+    eq ASTNode.getChild().defaultSize()                            = Size.SCALAR;
+
+    /**
+     * Find the declared calculated size for a component that does not have any array subscripts in the declaration. 
+     * For all components except the NTA of InstComponentRedeclare, this is simply scalar.
+     */
+    inh Size InstComponentDecl.defaultSizeCalc();
+    eq InstComponentRedeclare.getInstComponentDecl().defaultSizeCalc() = myInstReplacingComponent().declaredSizeCalc();
+    eq ASTNode.getChild().defaultSizeCalc()                            = Size.SCALAR;
+    
+	/**
+	 * Get the array sizes. 
+	 */	
+	syn lazy Size FAbstractVariable.size() = Size.SCALAR;
+	eq FVariable.size()      = isScalarized()? Size.SCALAR: getFAccess().declarationSize();
+    eq FFunctionVariable.size() = type().size();
+
+    /**
+     * Get the array size of the loop index expression. 
+     */ 
+    syn Size CommonForIndex.size() = getFExp().size();
+    eq InstForIndexNoExp.size()    = hasFExp() ? getFExp().size() : new Size(-1);
+
+	/**
+	 * Get the array sizes. 
+	 */
+	syn Size FAccess.declarationSize() = Size.SCALAR;
+	syn lazy Size FAccessFull.declarationSize() {
+		FAccessPart last = getFAccessPart(getNumFAccessPart()-1);
+		if (last.hasFArraySubscripts()) {
+			return last.getFArraySubscripts().declarationSize(); 
+		} else {
+			return Size.SCALAR;
+		}
+	}
+	
+	/**
+	 * check if an expression is an array expression.
+	 * 
+	 * @return True if array dimension > 0 else false
+	 */
+	syn boolean FExp.isArray() = ndims()>0;
+
+    /**
+     * Check if an expression is an array expression.
+     */
+    syn boolean CommonAccess.isArray() = ndims() > 0;
+
+	/**
+	 * check if an access is an array expression.
+	 * 
+	 * @return True if array dimension > 0 else false
+	 */
+	syn boolean InstAccess.isArray() = ndims()>0;
+
+	/**
+	 * check if a variable is an array expression.
+	 * 
+	 * @return True if array dimension > 0 else false
+	 */
+	syn boolean FAbstractVariable.isArray() = ndims()>0;
+	
+	/**
+	 * check if an instance node is an array expression.
+	 * 
+	 * @return True if array dimension > 0 else false
+	 */
+	syn boolean InstNode.isArray() = ndims()>0;
+
+    public abstract String CommonForIndex.name();
+
+	/**
+	 * Expand for all values of for indices given in <code>indices</code>.
+	 * 
+	 * This is used to get the set of values for array indices while error checking 
+	 * and to expand summation reduction expressions.
+	 * 
+	 * Size of new Array will be (n + m), where n = indices.size() and m = ndims().  
+	 */
+    public ArrayExp Array.createExpanded(Iterable<? extends CommonForIndex> forIndices);
+
+    public ArrayExp ArrayExp.createExpanded(Iterable<? extends CommonForIndex> forIndices) {
+		return createExpanded(this, forIndices);
+	}
+
+    public static ArrayExp ArrayExp.createExpanded(Array exp, Iterable<? extends CommonForIndex> forIndices) {
+		Indices newIndices = Indices.create(forIndices);
+		ArrayExp arr = new ArrayExp(Indices.create(expandedSize(exp, newIndices.size())));
+		Map<String,FExp> indexMap = new HashMap<String,FExp>();
+		for (Index i : newIndices) {
+			newIndices.fillIndexMap(indexMap, i, forIndices);
+			for (CommonForIndex fi : forIndices)
+				indexMap.put(fi.uniqueIterExpName(), fi.evaluationValue().buildLiteral());
+            fillSubset(arr, i, indexMap, exp);
+		}
+        for (CommonForIndex fi : forIndices) {
+            fi.clearEvaluationValue();
+        }
+		return arr;
+    }
+
+	protected static Size ArrayExp.expandedSize(Array exp, Size size) {
+		return exp.size().expand(size);
+	}
+
+    protected static void ArrayExp.fillSubset(ArrayExp arr, Index i, Map<String,FExp> indexMap, Array exp) {
+		for (Index i2 : exp.indices()) {
+            arr.set(i.expand(i2), createSubsetExp(exp.get(i2), indexMap));
+		}
+	}
+
+    protected static FExp ArrayExp.createSubsetExp(FExp e, Map<String,FExp> indexMap) {
+        return e.dynamicFExp(e.fullCopy()).replaceIndices(indexMap);
+    }
+
+    public ArrayExp FExp.createExpanded(Iterable<? extends CommonForIndex> forIndices) {
+        return ArrayExp.createExpanded(this, forIndices);
+    }
+
+	/**
+	 * Replaces all uses of indices in <code>indexMap</code> with the respective expressions.
+	 * 
+	 * May alter the tree below this.
+	 */
+	protected ASTNode ASTNode.replaceIndices(Map<String,FExp> indexMap) {
+		ASTNode res = replaceFromIndexMap(indexMap);
+		if (this == res) {
+			for (int i = 0, n = getNumChild(); i < n; i++) {
+				ASTNode sub = getChild(i);
+				ASTNode repl = sub.replaceIndices(indexMap);
+				if (repl != sub)
+					setChild(repl, i);
+			}
+		}
+		return res;
+	}
+	
+	protected FExp FExp.replaceIndices(Map<String,FExp> indexMap) {
+		return (FExp) super.replaceIndices(indexMap);
+	}
+	
+	/**
+	 * If this node is a use of an index in <code>indexMap</code>, return the 
+	 *        respective expression, otherwise return <code>this</code>.
+	 */
+	protected ASTNode ASTNode.replaceFromIndexMap(Map<String,FExp> indexMap) {
+		return this;
+	}
+    
+	protected ASTNode CommonAccessExp.replaceFromIndexMap(Map<String,FExp> indexMap) {
+		FExp res = indexMap.get(name());
+		return (res == null) ? this : res;
+	}
+	
+	/**
+	 * Find the closest ancestor that is an FExpSubscript, if any.
+	 */
+	inh FExpSubscript CommonAccess.surroundingFExpSubscript();
+	inh FExpSubscript FExpSubscript.surroundingFExpSubscript();
+	eq FExpSubscript.getChild().surroundingFExpSubscript() = this;
+	eq Root.getChild().surroundingFExpSubscript()          = null;
+	
+	/**
+	 * Find the all ancestors that are FExpSubscripts, if any.
+	 */
+	syn ArrayList<FExpSubscript> CommonAccess.allSurroundingFExpSubscripts() {
+		ArrayList<FExpSubscript> list = new ArrayList<FExpSubscript>();
+		FExpSubscript cur = surroundingFExpSubscript();
+		while (cur != null) {
+			list.add(cur);
+			cur = cur.surroundingFExpSubscript();
+		}
+		return list;
+	}
+
+    /**
+     * Computes a generic array expansion of the expression.
+     * 
+     * @return An Array with scalar expressions if this is an array expression, 
+     *          <code>this</code> otherwise.
+     */
+    syn Array FExp.getArray() = this;
+
+    eq FAbstractArrayExp.getArray() {
+        if (isArray()) {
+            if (canBuildArrayFromChild()) {
+                return childToBuildArray().getArray();
+            } else {
+                return getArrayExp();
+            }
+        } else {
+            return this;
+        }
+    }
+
+    eq FDeferExp.getArray() = getFExp().getArray();
+
+    /*
+     * canBuildArrayFromChild() and childToBuildArray() are designed so an expression can get its Array 
+     * directly from a child, rather than building a new ArrayExp nta which would be a copy.
+     */
+    
+    syn boolean FAbstractArrayExp.canBuildArrayFromChild() = false;
+    eq FArray .canBuildArrayFromChild() = isIterArray();
+    eq FPowExp.canBuildArrayFromChild() = isArray() && getRight().ceval().intValue() == 1;
+    eq FIfExp .canBuildArrayFromChild() = isArray() && !getThenExp().size().equivalent(getElseExp().size(), inFunction());
+
+    syn FExp FAbstractArrayExp.childToBuildArray() { throw new UnsupportedOperationException(); }
+    eq FArray .childToBuildArray() = getFExp(0);
+    eq FPowExp.childToBuildArray() = getLeft();
+    eq FIfExp .childToBuildArray() = cevalSelectExp();
+
+    /**
+     * Computes a generic array expansion of the expression. If this expression is not an array the result is undefined.
+     * Normally {@link #getArray()} should be called instead.
+     * 
+     * This is used mainly to scalarize array expressions. Should be overridden for all 
+     * expression types possible, since default implementation clones the original expression 
+     * for each cell.
+     * 
+     * @return An ArrayExp with scalar expressions if this is an array expression, 
+     *          <code>null</code> otherwise.
+     */
+    syn lazy ArrayExp FAbstractArrayExp.getArrayExp() {
+        if (useTempVar())
+            return createTempArray();
+        
+        ArrayExp res = new ArrayExp(indices());
+        for (Index i : res.indices())
+            res.set(i, new FSubscriptedExp(unboundCopy(), i.createFArraySubscripts()));
+        return res;
+    }
+    
+    /**
+     * Computes a generic array expansion of the temporary replacing this expression.
+     */
+    syn ArrayExp FExp.createTempArray() {
+        ArrayExp res = new ArrayExp(indices());
+        for (Index i : res.indices()) {
+            res.set(i, tempExp(i));
+        }
+        return res;
+    }
+	
+	eq FBinExp.getArrayExp() {
+		/* Standard implementation covers many binary operators.
+		 * Apply operator element-wise, if one operand is scalar, use it with 
+		 * all elements in other operand. Used for operators that does not 
+		 * allow a scalar and an array as well, since that is caught by the 
+		 * error check.
+		 */
+		Array left  = getLeft().getArray();
+		Array right = getRight().getArray();
+		ArrayExp res   = new ArrayExp(indices());
+		for (Index i : res.indices())
+			res.set(i, createNode(left.get(i).fullCopy(), right.get(i).fullCopy()));
+		return res;
+	}
+	
+	eq FUnaryExp.getArrayExp() {
+		Array src = getFExp().getArray();
+		ArrayExp res = new ArrayExp(indices());
+		for (Index i : res.indices())
+			res.set(i, createNode(src.get(i).fullCopy()));
+		return res;
+	}
+	
+	eq FMulExp.getArrayExp() {
+		if (isElementWise())
+			return super.getArrayExp();
+        if (useTempVar())
+            return createTempArray();
+		
+		ArrayExp res = new ArrayExp(indices());
+		for (Index i : res.indices()) 
+			res.set(i, composeMulScalarCellExp(i));
+		return res;
+	}
+	
+	protected FExp FMulExp.composeMulScalarCellExp(Index i) {
+		return vectorMultiplication(getLeft().getArray().leftMulIterator(i), 
+		                            getRight().getArray().rightMulIterator(i), type());
+	}
+	
+	protected static FExp FExp.vectorMultiplication(Iterator<FExp> left, Iterator<FExp> right, FType type) {
+		if (!left.hasNext())
+			return type.zeroLiteral();
+		FExp cur = new FMulExp( left.next().fullCopy(), right.next().fullCopy());
+		while (left.hasNext()) 
+			cur = new FAddExp(cur, new FMulExp( left.next().fullCopy(), right.next().fullCopy()));
+		return cur;
+	}
+
+    eq FPowExp.getArrayExp() {
+        int e = getRight().ceval().intValue();
+        if (e < 1) {
+            return new FIdentity(new FIntegerLitExp(size().get(0))).getArrayExp();
+        }
+        if (e == 1) {
+            /* Handled in getArray() */
+            throw new UnsupportedOperationException();
+        }
+        Array base = getLeft().getArray();
+        ArrayExp res = null;
+        FType type = type();
+        for (; e > 1; e--) {
+            ArrayExp cur = new ArrayExp(indices());
+            for (Index i : cur.indices()) {
+                Iterator<FExp> left = (res == null ? base : res).leftMulIterator(i);
+                Iterator<FExp> right = base.rightMulIterator(i);
+                cur.set(i, vectorMultiplication(left, right, type));
+            }
+            res = cur;
+        }
+        return res;
+    }
+
+	eq FTranspose.getArrayExp() {
+		Array inner = getFExp().getArray();
+		ArrayExp res = new ArrayExp(indices());
+		int[] ind = new int[ndims()];
+		Index ti = new Index(ind);
+		for (Index i : res.indices()) {
+			ind[0] = i.get(1);
+			ind[1] = i.get(0);
+			for (int j = 2; j < ind.length; j++)
+				ind[j] = i.get(j);
+			res.set(i, inner.get(ti));
+		}
+		return res;
+	}
+	
+	eq FSymmetric.getArrayExp() {
+		Array inner = getFExp().getArray();
+		ArrayExp res = new ArrayExp(indices());
+		int[] ind = new int[ndims()];
+		Index ti = new Index(ind);
+		for (Index i : res.indices()) {
+			ind[0] = i.get(0);
+			ind[1] = i.get(1);
+			if (ind[0] > ind[1]) {
+				int temp = ind[0];
+				ind[0] = ind[1];
+				ind[1] = temp;
+			}
+			res.set(i, inner.get(ti));
+		}
+		return res;
+	}
+	
+	eq FCross.getArrayExp() {
+		ArrayExp res = new ArrayExp(indices());
+		Array x = getX().getArray();
+		Array y = getY().getArray();
+		for (Index i : res.indices()) {
+			int j = i.first() % 3 + 1;
+			int k = j % 3 + 1;
+			FExp m1 = new FMulExp(x.get(j).fullCopy(), y.get(k).fullCopy());
+			FExp m2 = new FMulExp(x.get(k).fullCopy(), y.get(j).fullCopy());
+			res.set(i, new FSubExp(m1, m2));
+		}
+		return res;
+	}
+	
+	eq FSkew.getArrayExp() {
+		ArrayExp res = new ArrayExp(indices());
+		Array inner = getFExp().getArray();
+		Index j = new Index(new int[1]);
+		for (Index i : res.indices()) {
+			/* Result is:
+			 * [    0, -x[3],  x[2];
+			 *   x[3],     0, -x[1];
+			 *  -x[2],  x[1],     0 ]
+			 */
+			FExp cell = null;
+			j.set(0, 6 - i.get(0) - i.get(1));
+			switch ((i.get(0) - i.get(1) + 2) % 3) {
+			case 0:
+				cell = inner.get(j);
+				break;
+			case 1:
+				cell = new FNegExp(inner.get(j).fullCopy());
+				break;
+			case 2:
+				cell = new FIntegerLitExp(0);
+				break;
+			}
+			res.set(i, cell);
+		}
+		return res;
+	}
+	
+	eq FOuterProduct.getArrayExp() {
+		ArrayExp res = new ArrayExp(indices());
+		Array x = getX().getArray();
+		Array y = getY().getArray();
+		for (Index i : res.indices()) 
+			res.set(i, new FMulExp(x.get(i.first()).fullCopy(), y.get(i.last()).fullCopy()));
+		return res;
+	}
+	
+	eq FIdentity.getArrayExp() {
+		ArrayExp arr = new ArrayExp(indices());
+		for (Index i : arr.indices())
+			arr.set(i, new FIntegerLitExp((i.get(0) == i.get(1)) ? 1 : 0));
+		return arr;
+	}
+	
+	eq FDiagonal.getArrayExp() {
+		ArrayExp arr = new ArrayExp(indices());
+		Array inner = getFExp().getArray();
+		for (Index i : arr.indices())
+			arr.set(i, (i.get(0) == i.get(1)) ? inner.get(i.subIndex(1)) : new FIntegerLitExp(0));
+		return arr;
+	}
+	
+	eq FDimensionConvert.getArrayExp() {
+        if (useTempVar())
+            return createTempArray();
+		Indices ind = indices();
+		ArrayExp arr = new ArrayExp(ind);
+		if (getFExp().isArray()) {
+			Array x = getFExp().getArray();
+			for (Index i : ind)
+				arr.set(i, x.get(ind.translate(i)));
+		} else {
+			Index i = ind.iterator().next();
+			arr.set(i, getFExp());
+		}
+		return arr;
+	}
+	
+	eq FSizeExp.getArrayExp() {
+		if (hasDim()) 
+			return super.getArrayExp();
+		
+		ArrayExp arr = new ArrayExp(indices());
+		Size size = getFExp().size();
+		for (Index i : arr.indices())
+			arr.set(i, size.createFExp(i.first() - 1));
+		return arr;
+	}
+	
+	eq FArray.getArrayExp() {
+		ArrayExp arr = new ArrayExp(indices());
+		for (Index i : arr.indices())
+			fillArray(arr, i, 0);
+		return arr;
+	}
+	
+	eq FAbstractCat.getArrayExp() {
+		ArrayExp arr = new ArrayExp(indices());
+		int dim = dimension();
+		int adj = 0;
+		for (FExp exp : getFExps()) {
+			Array expArr = exp.getArray();
+			for (Index i : expArr.indices()) 
+				arr.set(i.adjusted(dim, adj, ndims()), expArr.get(i));
+			adj += (exp.ndims() > dim) ? exp.size().get(dim) : 1;
+		}
+		return arr;
+	}
+	
+	eq FReductionExp.getArrayExp() {
+		FIterExp exp = (FIterExp) getFExp();
+		ArrayExp arr = new ArrayExp(indices());
+		for (Index i : arr.indices())
+			arr.set(i, createNode(exp.extract(i)));
+		return arr;
+	}	
+	
+	public FExp FIterExp.extract(Index i) {
+		FExp exp = getFExp().getArray().get(i).fullCopy();
+		List fil = (List) getForIndexList().fullCopy();
+		return new FIterExp(exp, fil);
+	}
+
+    eq FIterExp.getArrayExp() = getFExp().getArray().createExpanded(getForIndexList());
+
+    eq FSubscriptedExp.getArrayExp() {
+        if (!getFExp().variability().knownParameterOrLess() && !getFArraySubscripts().variability().knownParameterOrLess()) {
+            FArraySubscripts fas = getFArraySubscripts();
+            ArrayExp arr = new ArrayExp(indices());
+            for (Index i : indices()) {
+                arr.set(i, new FSubscriptedExp(getFExp().treeCopy(), fas.specifyAll(i)));
+            }
+            return arr;
+        }
+        
+        NonConsecutiveIndices expIs = NonConsecutiveIndices.expIndices(getFExp().size(), getFArraySubscripts());
+        NonConsecutiveIndices fasIs = NonConsecutiveIndices.fasIndices(getFArraySubscripts());
+        ArrayExp arr = new ArrayExp(indices());
+        Iterator<Index> it = arr.indices().iterator();
+        
+        Array old = getFExp().getArray();
+        for (Index i : expIs) {
+            FExp e = old.subArrayFExp(i, expIs);
+            for (Index j : fasIs) {
+                FExp e2 = e;
+                FArraySubscripts fas = getFArraySubscripts().specify(j);
+                if (fas.ndims() > 0) {
+                    e2 = new FSubscriptedExp(e, fas);
+                }
+                arr.set(it.next(), e2);
+            }
+        }
+        
+        return arr;
+    }
+    
+    /**
+     * Filter out known subscripts and copy to a new FArraySubscripts. 
+     * Unknown non-scalar subscripts will be specified
+     * by the corresponding position in index.
+     */
+    syn FArraySubscripts FArraySubscripts.specify(Index index) = treeCopy();
+    eq FArrayExpSubscripts.specify(Index index) {
+        List<FSubscript> list = new List<FSubscript>();
+        int j = 0;
+        for (FSubscript fs : getFSubscripts()) {
+            if (!fs.variability().indexParameterOrLess()) {
+                if (fs.ndims() > 0) {
+                    fs = fs.specify(index.get(j));
+                } else {
+                    fs = fs.treeCopy();
+                }
+                j++;
+                list.add(fs);
+            }
+        }
+        return FArraySubscripts.createFArraySubscripts(list);
+    }
+    
+    syn FArraySubscripts FArraySubscripts.specifyAll(Index index) = treeCopy();
+    eq FArrayExpSubscripts.specifyAll(Index index) {
+        List<FSubscript> list = new List<FSubscript>();
+        int j = 0;
+        for (FSubscript fs : getFSubscripts()) {
+            if (fs.ndims() > 0) {
+                fs = fs.specify(index.get(j++));
+            } else {
+                fs = fs.treeCopy();
+            }
+            list.add(fs);
+        }
+        return FArraySubscripts.createFArraySubscripts(list);
+    }
+
+	eq FSmoothExp.getArrayExp() {
+		ArrayExp arr = new ArrayExp(indices());
+		Array inner = getFExp().getArray();
+		for (Index i : arr.indices())
+			arr.set(i, new FSmoothExp(getOrder().fullCopy(), inner.get(i)));
+		return arr;
+	}
+	
+	eq FVectUnaryBuiltIn.getArrayExp() {
+		// TODO: This only supports scalar -> scalar functions, see #528
+		ArrayExp arr = new ArrayExp(indices());
+		Array inner = getFExp().getArray();
+		for (Index i : arr.indices())
+			arr.set(i, createNode(inner.get(i)));
+		return arr;
+	}
+	
+	eq FUnaryBuiltIn.getArrayExp() {
+		ArrayExp arr = new ArrayExp(indices());
+		Array inner = getFExp().getArray();
+		for (Index i : arr.indices())
+			arr.set(i, createNode(inner.get(i)));
+		return arr;
+	}
+	
+	eq FEventGenExp.getArrayExp() {
+		ArrayExp arr = new ArrayExp(indices());
+		Array inner = getX().getArray();
+		for (Index i : arr.indices())
+			arr.set(i, createNode(inner.get(i)));
+		return arr;
+	}
+	
+	eq FBinEventGenExp.getArrayExp() {
+		ArrayExp arr = new ArrayExp(indices());
+		Array inner1 = getX().getArray();
+		Array inner2 = getY().getArray();
+		for (Index i : arr.indices())
+			arr.set(i, createNode(inner1.get(i), inner2.get(i)));
+		return arr;
+	}
+	
+	eq FMathematicalFunctionCall.getArrayExp() {
+		ArrayExp arr = new ArrayExp(indices());
+		Array inner = getFExp().getArray();
+		for (Index i : arr.indices())
+			arr.set(i, createNode(inner.get(i)));
+		return arr;
+	}
+	
+	eq FAtan2Exp.getArrayExp() {
+		ArrayExp arr = new ArrayExp(indices());
+		Array inner1 = getFExp().getArray();
+		Array inner2 = getY().getArray();
+		for (Index i : arr.indices())
+			arr.set(i, createNode(inner1.get(i), inner2.get(i)));
+		return arr;
+	}
+	
+	eq FHomotopyExp.getArrayExp() {
+		ArrayExp arr = new ArrayExp(indices());
+		Array inner1 = getActual().getArray();
+		Array inner2 = getSimplified().getArray();
+		for (Index i : arr.indices())
+			arr.set(i, createNode(inner1.get(i), inner2.get(i)));
+		return arr;
+	}
+	
+	eq FSemiLinearExp.getArrayExp() {
+		ArrayExp arr = new ArrayExp(indices());
+		Array inner1 = getX().getArray();
+		Array inner2 = getPosSlope().getArray();
+		Array inner3 = getNegSlope().getArray();
+		for (Index i : arr.indices())
+			arr.set(i, createNode(inner1.get(i), inner2.get(i), inner3.get(i)));
+		return arr;
+	}
+
+    eq FVectorFunctionCall.getArrayExp() {
+        ArrayExp arr = new ArrayExp(indices());
+        boolean[] vec = getVectorized();
+        int j;
+        for (Index i : arr.indices()) {
+            List<FExp> args = new List<FExp>();
+            j = 0;
+            for (FExp arg : getArgs()) 
+                args.add(vec[j++] ? arg.getArray().subArrayFExp(i) : arg);
+            arr.set(i, new FFunctionCall(getName().fullCopy(), args, getFType().scalarType()));
+        }
+        return arr;
+    }
+
+    eq FReinit.getArrayExp() {
+        ArrayExp arr = new ArrayExp(indices());
+        Array inner1 = getVar().getArray();
+        Array inner2 = getFExp().getArray();
+        for (Index i : arr.indices())
+            arr.set(i, new FReinit(inner1.get(i), inner2.get(i)));
+        return arr;
+    }
+    
+    eq FAssert.getArrayExp() {
+        ArrayExp arr = new ArrayExp(indices());
+        Array inner1 = getTest().getArray();
+        Array inner2 = getMsg().getArray();
+        Array inner3 = null;
+        if (hasLevel()) {
+            inner3 = getLevel().getArray();
+        }
+        for (Index i : arr.indices()) {
+            arr.set(i, new FAssert(inner1.get(i), inner2.get(i), hasLevel() ? new Opt<FExp>(inner3.get(i)) : new Opt<FExp>()));
+        }
+        return arr;
+    }
+
+    eq FDelayExp.getArrayExp() {
+        ArrayExp arr = new ArrayExp(indices());
+        for (Index i : arr.indices()) {
+            arr.set(i, createNode(getFExp().getArray().get(i), getDelay().getArray().get(i), 
+                    hasMax() ? new Opt(getMax().getArray().get(i)) : new Opt()));
+        }
+        return arr;
+    }
+    
+    eq FSpatialDistExp.getArrayExp() {
+        ArrayExp arr = new ArrayExp(indices());
+        boolean vecPoints = getInitialPoints().ndims() > 1;
+        boolean vecValues = getInitialValues().ndims() > 1;
+        FExp points = getInitialPoints();
+        FExp values = getInitialValues();
+        for (Index i : arr.indices()) {
+            if (vecPoints) {
+                points = getInitialPoints().getArray().subArrayFExp(i);
+            }
+            if (vecValues) {
+                values = getInitialValues().getArray().subArrayFExp(i);
+            }
+            arr.set(i, new FSpatialDistExp(getIn0().getArray().subArrayFExp(i), getIn1().getArray().subArrayFExp(i), getX().fullCopy(),
+                    getPositiveVelocity().fullCopy(), points, values));
+        }
+        return arr;
+    }
+
+    eq FExInStream.getArrayExp() {
+        ArrayExp arr = new ArrayExp(indices());
+        for (Index i : arr.indices()) {
+            FExInStream cell = new FExInStream(getDefault().getArray().get(i).treeCopy(), getEps().treeCopy(), new List<FExp>());
+            for (FExp e : getVars()) {
+                Index j = (e.ndims() < i.ndims()) ? i.partIndex(0, e.ndims()) : i;
+                cell.addVarNoTransform(e.getArray().get(j).treeCopy());
+            }
+            arr.set(i, cell);
+        }
+        return arr;
+    }
+
+	/**
+	 * Add a copy of this expression to arr at position i. 
+	 */
+	public void FExp.fillArray(ArrayExp arr, Index i, int level) {
+		if (isArray())
+            arr.set(i, getArray().get(i.subIndex(level)).copySymbolic());
+		else
+            arr.set(i, copySymbolic());
+	}
+	
+	/**
+	 * Add a copy of the expression at position i to arr. 
+	 * 
+	 * @param arr    the Array to add the expression to.
+	 * @param i      the index to add at, denotes position in both Array and FArray.
+	 * @param level  the level this FArray is at in a structure of nestled FArrays.
+	 */
+	public void FArray.fillArray(ArrayExp arr, Index i, int level) {
+	    if (isIterArray())
+	        super.fillArray(arr, i, level);
+	    else
+	        getFExp(i.get(level) - 1).fillArray(arr, i, level + 1);
+	}
+
+    eq InstFunctionCall.getArrayExp() {
+        if (variability().knownParameterOrLess()) {
+            try {
+                ArrayExp arr = new ArrayExp(indices());
+                CValue val = cevalArray(Index.NULL);
+                if (val.isArray()) {
+                    CValueArray carr = val.array();
+                    for (Index i : arr.indices()) {
+                        arr.set(i, carr.getCell(i).buildInstLiteral());
+                    }
+                    return arr;
+                }
+            } catch (ConstantEvaluationException r) {
+                // Constant evaluation may fail even if variability is known parameter or less.
+                // If so we want to do the same thing we would do if variability was higher.
+            }
+        }
+        return super.getArrayExp();
+    }
+
+    eq FFunctionCall.getArrayExp() {
+        FClass fc = myFClass();
+        if (!isComposite() || fc == null) {
+            return super.getArrayExp();
+        }
+        
+        if (isArray() && variability().knownParameterOrLess() && inKeptBExp()) {
+            ArrayExp arr = new ArrayExp(indices());
+            CValueArray carr = (CValueArray) cevalArray(Index.NULL);
+            for (Index i : arr.indices()) {
+                arr.set(i, carr.getCell(i).buildLiteral());
+            }
+            return arr;
+        }
+        
+        if (isFunctionCallArg()) {
+            return super.getArrayExp();
+        }
+        
+        return createTempArray();
+    }
+
+	/**
+	 * A name that is not a valid Modelica identifier, and is unique among the iteraton indices 
+	 * of nestled iteration expressions.
+	 */
+	syn lazy String CommonForIndex.uniqueIterExpName() = name() + '|' + iterExpDepth();
+	
+	/**
+	 * The number of nestled iteration expressions surrounding this index or iteration expression.
+	 */
+	inh int CommonForIndex.iterExpDepth();
+	inh int FIterExp.iterExpDepth();
+	eq FIterExp.getFExp().iterExpDepth()  = iterExpDepth() + 1;
+	eq FClass.getChild().iterExpDepth()   = 0;
+	eq InstNode.getChild().iterExpDepth() = 0;
+
+    eq FIfExp.getArrayExp() {
+        ArrayExp arr = new ArrayExp(indices());
+        Array thenArr = getThenExp().getArray();
+        Array elseArr = getElseExp().getArray();
+        for (Index i : arr.indices()) {
+            FExp ifExp = getIfExp().fullCopy();
+            arr.set(i, createNode(ifExp, thenArr.get(i), elseArr.get(i)));
+        }
+        return arr;
+    }
+
+	eq CommonAccessExp.getArrayExp() {
+		/*
+		 * Based on an array access, say x, corresponding to the declaration
+		 * Real x[2], the array {x[1],x[2]} is generated. 
+		 */
+		ArrayExp array = new ArrayExp(indices());
+		for (Index i : array.indices()) 
+			array.set(i, createSpecifiedNode(i, false));
+		return array;
+	}
+	
+
+    public abstract FExp CommonAccessExp.createSpecifiedNode(Index i, boolean scalarize);
+    public FExp InstAccessExp.createSpecifiedNode(Index i, boolean scalarize) {
+        return createNode(getInstAccess().specify(i, scalarize));
+    }
+    public FExp FAccessExp.createSpecifiedNode(Index i, boolean scalarize) {
+        return createNode(getFAccess().specify(i, scalarize));
+    }
+
+	/**
+	 * Returns a scalar CommonAccess, as specified by an index.
+	 * 
+	 * The use is marked scalarized if this use is.
+	 * 
+	 * @param i  the Index specifying what array subscripts to use
+	 */
+	public abstract CommonAccess CommonAccess.specify(Index i);
+	
+	/**
+	 * Returns a scalar CommonAccess, as specified by an index.
+	 * 
+	 * @param i          the Index specifying what array subscripts to use
+	 * @param scalarize  <code>true</code> if the use should be marked as scalarized 
+	 */
+	public abstract CommonAccess CommonAccess.specify(Index i, boolean scalarize);
+	
+	/**
+	 * Creates a new FAccess with the FArraySubscripts taken from the given Index.
+	 * 
+	 * The FAccess is marked scalarized if this use is.
+	 * 
+	 * @param i  the Index specifying what array subscripts to use
+	 */
+	public FAccess FAccess.specify(Index i) {
+		return specify(i, isScalarized());
+	}
+	
+	/**
+	 * Creates a new FAccess with the FArraySubscripts taken from the given Index.
+	 * 
+	 * @param i          the Index specifying what array subscripts to use
+	 * @param scalarize  <code>true</code> if the FAccess should be marked as scalarized 
+	 */
+	public FAccess FAccess.specify(Index i, boolean scalarize) {
+		FAccess access = copyAndAddFas(i.createFArraySubscripts());
+		access.scalarized = scalarize;
+		return access;
+	}
+	
+	public FAccess FAccessFull.specify(Index i, boolean scalarize) {
+		FAccessFull res = new FAccessFull();
+		int[] dim = new int[1];
+		int np = getNumFAccessPart();
+		for (int j = 0; j < np; j++) {
+			FAccessPart part = getFAccessPart(j);
+			int n = part.numFSubscripts();
+			if (n == 0 && j == np - 1)
+				n = i.ndims() - dim[0];
+			FArraySubscripts newfas = null;
+			if (n > 0) {
+                if (part.hasFArraySubscripts()) {
+                    newfas = part.getFArraySubscripts().createSpecified(i, dim);
+                } else {
+                    List<FSubscript> newSubscripts = new List<>();
+                    for (int k = 0; k < n; k++) {
+                        newSubscripts.add(new FIntegerSubscript(i.get(dim[0]++)));
+                    }
+                    newfas = FArraySubscripts.createFArraySubscripts(newSubscripts);
+				}
+                // If this is last part, append the rest of i to newfas
+                while (j == np - 1 && dim[0] < i.ndims())
+                    newfas.addFSubscript(i.get(dim[0]++));
+			}
+			FAccessPart newpart = (newfas == null) ? 
+					new FAccessPart(part.getName()) : 
+					new FAccessPartArray(part.getName(), newfas);
+			res.addFAccessPart(newpart);
+		}
+		res.scalarized = scalarize;
+		return res;
+	}
+	
+    public FArraySubscripts FArraySubscripts.createSpecified(Index i, int[] dim) {
+        return treeCopy();
+    }
+    
+    public FArraySubscripts FArrayExpSubscripts.createSpecified(Index i, int[] dim) {
+        if (ndims() == 0) {
+            return super.createSpecified(i, dim);
+        }
+        
+        List<FSubscript> subscripts = new List<>();
+        for (FSubscript fs : getFSubscripts()) {
+            subscripts.add(fs.createSpecified(i, dim));
+        }
+        return FArraySubscripts.createFArraySubscripts(subscripts);
+    }
+
+	/**
+	 * Creates a new FSubscript that specifies this array subscript to a single index.
+	 * 
+	 * - For scalar subscripts, a copy is returned.
+	 * - For colon subscripts, the given index is used as the new subscript.
+	 * - For other vector subscripts, the given index is used as the index of a 
+	 *   cell in the vector, and that cell is used as the new subscript.
+	 *   In this case, dim will be incremented.
+	 * 
+	 * @param i    the Index specifying what array subscripts to use
+	 * @param dim  the dimension in <code>i</code> to use, 
+	 *             wrapped in an array so that it can be changed by the method
+	 */
+	public FSubscript FSubscript.createSpecified(Index i, int[] dim) {
+		return fullCopy();
+	}
+	
+	public FSubscript FColonSubscript.createSpecified(Index i, int[] dim) {
+		return new FIntegerSubscript(i.get(dim[0]++));
+	}
+	
+	public FSubscript FExpSubscript.createSpecified(Index i, int[] dim) {
+		if (ndims() == 0)
+			return fullCopy();
+		
+		int index = i.get(dim[0]++) - 1;
+		return getFExp().getArray().getFExp(index).createFSubscript();
+	}
+	
+	/**
+	 * Gets the number of FSubscripts in the FArraySubscripts of this FAccessPart, if any.
+	 */
+	syn int FAccessPart.numFSubscripts() = 
+		hasFArraySubscripts() ? getFArraySubscripts().numSubscript() : 0;
+	
+	/**
+	 * Creates a new InstAccess with the FArraySubscripts taken from the given Index.
+	 * 
+	 * @param i  the Index specifying what array subscripts to use
+	 */
+	public InstAccess InstAccess.specify(Index i) {
+		return specifyEach(i, new int[1]);
+	}
+
+    /* Returns a scalar InstAccess, as specified by an index.
+     * 
+     * @param i          the Index specifying what array subscripts to use
+     * @param scalarize  ignored (needed by superclass implementation) 
+     */
+    public InstAccess InstAccess.specify(Index i, boolean scalarize) {
+        return specify(i);
+    }
+
+	/**
+	 * Create a copy with the FArraySubscripts of each part set to match the Index.
+	 * 
+	 * @param i    the Index specifying what array subscripts to use
+	 * @param dim  the next dimension in <code>i</code> to use, 
+	 *             wrapped in an array so that it can be changed by the method
+	 */
+	protected InstAccess InstAccess.specifyEach(Index i, int[] dim) {
+		return treeCopy();
+	}
+
+	protected InstDot InstDot.specifyEach(Index i, int[] dim) {
+		List<InstAccess> l = new List<InstAccess>();
+		for (InstAccess ia : getInstAccesss())
+			l.add(ia.specifyEach(i, dim));
+		return new InstDot(l);
+	}
+
+	protected InstGlobalAccess InstGlobalAccess.specifyEach(Index i, int[] dim) {
+		return new InstGlobalAccess(getInstAccess().specifyEach(i, dim));
+	}
+	
+	protected InstNamedAccess InstScalarAccess.specifyEach(Index i, int[] dim) { //TODO:Necessary?
+		FArraySubscripts oldfas = allFArraySubscripts().get(0);
+		int n = oldfas.ndims();
+		if (n > 0) {
+			return getArrayCopy(oldfas.createSpecified(i, dim));
+		} else {
+			return treeCopy();
+		}
+	}
+
+    /**
+     * Get a specific cell of this array component decl.
+     * 
+     * Only valid if this is an array and <code>i</code> refers to an element of it. 
+     */
+    syn InstComponentDecl InstComponentDecl.specify(Index i) = specifyHelper(i, 0);
+
+    syn InstComponentDecl InstComponentDecl.specifyHelper(Index i, int d) = 
+        (d >= i.ndims() || !isArray()) 
+            ? this 
+            : getInstComponentDecl(i.get(d) - 1).specifyHelper(i, d + 1);
+    eq InstPrimitive.specifyHelper(Index i, int d) = this;
+
+	syn InstArrayAccess InstScalarAccess.getArrayCopy(FArraySubscripts fas);
+	eq InstParseAccess.getArrayCopy(FArraySubscripts fas) = new InstParseArrayAccess(getID(), fas);
+	eq InstAmbiguousAccess.getArrayCopy(FArraySubscripts fas) = new InstAmbiguousArrayAccess(getID(), fas);
+	eq InstComponentAccess.getArrayCopy(FArraySubscripts fas) = new InstComponentArrayAccess(getID(), fas);
+
+	protected InstNamedAccess InstArrayAccess.specifyEach(Index i, int[] dim) {
+		InstArrayAccess res = treeCopy();
+		FArraySubscripts oldfas = allFArraySubscripts().get(0);
+		int n = oldfas.ndims();
+		if (n > 0) {
+			res.setFArraySubscripts(oldfas.createSpecified(i, dim));
+		}
+		return res;
+	}
+
+	eq FRangeExp.getArrayExp() {
+		//log.debug("FRangeExp.getArray(): size = " + size().get(0));
+		ArrayExp array = new ArrayExp(indices());
+		if (type().isReal()) {
+			double i1 = getFExp(0).ceval().realValue();
+			double i2 = 1.0;
+			if (hasStep()) 
+				i2 = getFExp(1).ceval().realValue();
+			for (Index i : array.indices()) { 
+				array.set(i, new FRealLitExp(i1));
+				i1 += i2;
+			}
+		} else {
+			int i1 = getFExp(0).ceval().intValue();
+			int i2 = 1;
+			if (hasStep()) 
+				i2 = getFExp(1).ceval().intValue();
+			for (Index i : array.indices()) { 
+				array.set(i, type().createLiteral(i1));
+				i1 += i2;
+			}
+		}
+		
+		return array;
+	}
+	
+	eq FLinspace.getArrayExp() {
+		int n = size().get(0);
+		FExp len = new FSubExp(getStopExp().fullCopy(), getStartExp().fullCopy());
+		FExp step = new FDivExp(len, new FIntegerLitExp(n - 1));
+		ArrayExp array = new ArrayExp(indices());
+		for (Index i : array.indices()) {
+			FExp part = new FMulExp(new FIntegerLitExp(i.first() - 1), step.unboundCopy());
+			array.set(i, new FAddExp(getStartExp().fullCopy(), part));
+		}
+		return array;
+	}
+	
+	eq FArrayDimAsArgsExp.getArrayExp() = new ArrayExp(indices()).fill(fillExp());
+	
+	/**
+	 * Get the expression the array is filled with.
+	 * 
+	 * E.g. a literal 1 in the case of <code>ones()</code>.
+	 * Will only create new nodes if necessary.
+	 */
+	syn FExp FArrayDimAsArgsExp.fillExp();
+	eq FZeros.fillExp()   = new FIntegerLitExp(0);
+	eq FOnes.fillExp()    = new FIntegerLitExp(1);
+	eq FFillExp.fillExp() = getFillExp();
+	
+	/**
+	 * Get the set of all array indices of an array access. 
+	 * 
+	 * @return An Indices object containing all indices in each array dimension.
+	 */
+	syn Indices FExp.indices()                   = Indices.create(size());
+	syn lazy Indices FAbstractArrayExp.indices() = super.indices();
+	eq CommonAccessExp.indices()                 = getAccess().indices();
+	eq FDimensionConvert.indices() {
+		int n = getFExp().ndims();
+		if (n == 0) {
+			return Indices.create(size());
+		} else {
+			int extra = Math.max(ndims() - n, 0);
+            int[] keep = dimensionsToKeep();
+            if (keep.length + extra == 0)
+                return Indices.create(Size.SCALAR);
+            return NonConsecutiveIndices.create(getFExp().size(), keep, extra);
+		}
+	}
+	
+	/**
+	 * Get the set of all array indices of an array access. 
+	 * 
+	 * @return An Indices object containing all indices in each array dimension.
+	 */
+	syn lazy Indices FArraySubscripts.indices() = Indices.createFromFas(this);
+	
+	/**
+	 * Get the set of all array indices of an array access. 
+	 * 
+	 * @return An Indices object containing all indices in each array dimension.
+	 */
+	syn Indices FSubscript.indices() = Indices.create(size());
+	
+	/**
+	 * Get the set of all array indices of an array access. 
+	 * 
+	 * @return An Indices object containing all indices in each array dimension.
+	 */
+	syn lazy Indices FType.indices() = Indices.create(size());
+	
+	/**
+	 * Get the set of all array indices of an array access. 
+	 * 
+	 * @return An Indices object containing all indices in each array dimension.
+	 */
+	syn Indices FExpSubscript.indices() = getFExp().indices();
+
+	/**
+	 * Get the set of all array indices of an array access. 
+	 * 
+	 * @return An Indices object containing all indices in each array dimension.
+	 */
+	syn Indices CommonAccess.indices() = Indices.createFromFas(allFArraySubscripts());
+
+	/**
+	 * Get the set of all array indices of an instance array access. 
+	 * 
+	 * @return An Indices object containing all indices in each array dimension.
+	 */
+	syn Indices InstAccess.indices() = Indices.createFromFas(allFArraySubscripts());
+
+    /**
+     * Get the set of array indices up to this part for a part of a dotted access. For 
+     * an access that is not part of a dotted access, this is equivalent to indices().
+     */
+    syn Indices InstAccess.combinedIndices() = Indices.createFromFas(combinedFArraySubscripts());
+
+	/**
+	 * Get the set of all array indices of an instance primitive component. 
+	 * 
+	 * @return An Indices object containing all indices in each array dimension.
+	 */
+	syn lazy Indices InstAssignable.indices() = Indices.create(size());
+
+	/**
+	 * Get the set of all array indices of an FVariable. 
+	 * 
+	 * @return An Indices object containing all indices in each array dimension.
+	 */
+    syn lazy Indices FAbstractVariable.indices() = Indices.create(size());
+
+	/**
+	 * Get the set of all array indices of an InstComponentDecl. 
+	 * 
+	 * @return An Indices object containing all indices in each array dimension.
+	 */
+	syn lazy Indices InstComponentDecl.indices() = Indices.create(size());
+	
+	/**
+	 * Get the set of all array indices of an array access. 
+	 * 
+	 * @return An Indices object containing all indices in each array dimension.
+	 */
+	syn Indices FEquation.indices() = getLeft().indices();
+	
+	/**
+	 * Get the set of all indices this array subscript spans.
+	 * 
+	 * @return an int array containing the indices spanned
+	 */
+	syn int[] FSubscript.myIndices();
+	
+	eq FColonSubscript.myIndices() {
+		int n = size().get(0);
+		if (n < 0)
+			return new int[0];
+		int[] ind = new int[n];
+		for (int i = 0; i < n; i++)
+			ind[i] = i + 1;
+		return ind;
+	}
+	
+	eq FExpSubscript.myIndices()     = getFExp().myIndices();
+	eq FIntegerSubscript.myIndices() = new int[] { getValue() };
+    
+    public int[] IntegerSubscript.myIndices() {
+        return new int[] {value()}; 
+    }
+
+    syn int[] FExp.myIndices() {
+        try {
+            int n = 0;
+            if (ndims() == 0) {
+                n = 1;
+            } else if (ndims() == 1) {
+                n = size().get(0);
+            }
+            if (n > 0) {
+                CValue arrVal = ceval();
+                if (!arrVal.isUnknown()) {
+                    int[] indices = new int[n];
+                    int j = 0;
+                    for (CValue val : arrVal) {
+                        if (!val.hasIntValue()) {
+                            return new int[0];
+                        }
+                        indices[j++] = val.intValue();
+                    }
+                    return indices;
+                }
+            }
+        } catch (ConstantEvaluationException e) {
+        }
+        return new int[0];
+    }
+
+    /**
+     * Get the set of all values this for index spans.
+     * 
+     * @return an int array containing the values spanned
+     */
+    syn int[] CommonForIndex.myIndices() = getFExp().myIndices();
+    eq InstForIndexNoExp.myIndices()     = hasFExp() ? getFExp().myIndices() : new int[0];
+
+	/**
+	 * Try to infer type of an expression from its surrounding Array.
+	 * 
+	 * An FExp that is the direct child of an Array always has the same type as the Array, except scalar.
+	 * 
+	 * @return  if this expression is in an Array, the inferred type, otherwise type()
+	 */
+	syn FType FExp.inferType() = inArray() ? inferredType() : type();
+	
+	/**
+	 * Check if this expression is the direct child of an Array.
+	 */
+	inh boolean FExp.inArray();
+	inh boolean List.inArray();
+	eq List.getChild().inArray()    = inArray();
+	eq Array.getChild().inArray()   = true;
+	eq ASTNode.getChild().inArray() = false;
+	
+	/**
+	 * Helper attribute to {@link FExp#inferType()}.
+	 */
+	inh FType FExp.inferredType();
+	inh FType List.inferredType();
+	eq List.getChild().inferredType()    = inferredType();
+	eq Array.getChild().inferredType()   = type().scalarType();
+	eq ASTNode.getChild().inferredType() = null;
+
+	/**
+	 * The type of the expression this ArrayExp belongs to.
+	 */
+	inh FType ArrayExp.type();
+	eq FAbstractArrayExp.getArrayExp().type()             = type();
+
+}
+
+aspect ArrayHelpers {
+	
+	/**
+	 * An array size. Can be multi-dimensional.
+	 */
+	public class Size {
+		
+		/**
+		 * Used for unknown lengths.
+		 */
+		public static final int UNKNOWN = -1;
+		
+		/**
+		 * Used to represent the size of scalar expressions.
+		 */
+		public static final Size SCALAR = new Size();
+		
+		protected int[] size;
+		
+		/**
+		 * Private constructor that creates a scalar size.
+		 */
+		private Size() {
+			size = new int[0];
+		}
+
+        /**
+         * Constructs a Size with the given lengths.
+         */
+        public Size(int... size) {
+            if (size.length == 0)
+                throw new IllegalArgumentException(
+                        "Can't create 0-dimensional Size object, use Size.SCALAR instead.");
+            this.size = size;
+        }
+
+		/**
+		 * Get the number of dimensions.
+		 */
+		public int ndims() {
+			return size.length;
+		}
+		
+		/**
+		 * Get length in the <code>i</code>th dimension.
+		 */
+		public int get(int i) {
+			return has(i) ? size[i] : UNKNOWN;
+		}
+		
+		/**
+		 * Get length in the last dimension.
+		 */
+		public int last() {
+			return get(size.length - 1);
+		}
+		
+		/**
+		 * Check if this size has an <code>i</code>th dimension.
+		 */
+		public boolean has(int i) {
+			return i >= 0 && i < size.length;
+		}
+
+        /**
+         * Returns the number of elements spanned by this Size.
+         * 
+         * Only valid if all dimensions are known or currently evaluable.
+         */
+        public int numElements() {
+            return numElements(0);
+        }
+
+        /**
+         * Returns the number of elements spanned by all but the <code>n</code> outermost 
+         * dimensions of this Size.
+         * 
+         * Only valid if all used dimensions are known or currently evaluable.
+         */
+        public int numElements(int n) {
+            int res = 1;
+            for (int i = n; i < size.length && res > 0; i++)
+                res *= get(i);
+            return res < 0 ? 0 : res;
+        }
+
+        /**
+         * True if any dimension is verified to be zero
+         */
+        public boolean isZero() {
+            return !isUnknown() && numElements() == 0;
+        }
+		
+		/**
+		 * Create a new FArraySubscripts object with ranges spanning this size.
+		 */
+		public FArraySubscripts rangeFArraySubscripts() {
+			FArrayExpSubscripts fas = new FArrayExpSubscripts();
+			for (int i = 0; i < size.length; i++)
+				fas.addFSubscript(rangeFSubscript(i));
+			return fas;
+		}
+
+        /**
+         * Create a new FSubscript for dimension <code>i</code>.
+         */
+        public FSubscript rangeFSubscript(int i) {
+            return size[i] == UNKNOWN ? new FColonSubscript() : new FExpSubscript(new FRangeExp(1, size[i]));
+        }
+
+		/**
+		 * Check if any lengths are unknown.
+		 */
+		public boolean isUnknown() {
+			for (int s : size)
+				if (s == UNKNOWN)
+					return true;
+			return false;
+		}
+		public boolean isUnknownNoEval() {
+		    return isUnknown();
+		}
+        
+        /**
+         * Check if length in dimension d is unknown.
+         */
+        public boolean isUnknown(int d) {
+            return !has(d) || size[d] == UNKNOWN;
+        }
+        
+		/**
+		 * Check if all lengths have a value (fix length or expression).
+		 */
+		public boolean isComplete() {
+			for (int i = 0; i < size.length; i++)
+				if (!hasValue(i))
+					return false;
+			return true;
+		}
+		
+		/**
+		 * Check is the length in any dimension equals 0.
+		 */
+		public boolean isEmpty() {
+			for (int i = 0; i < size.length; i++)
+				if (read(i) == 0)
+					return true;
+			return false;
+		}
+		
+		/**
+		 * Check if a given index fits within this size.
+		 * 
+		 * Unknown lengths are assumed to be long enough.
+		 */
+		public boolean isOKIndex(Index i) {
+			int[] ind = i.index();
+			if (size.length != ind.length)
+				return false;
+			for (int j = 0; j < size.length; j++) {
+				int a = ind[j];
+				int b = get(j);
+				if (a < 1 || (a > b && b != UNKNOWN))
+					return false;
+			}
+			return true;
+		}
+		
+		/**
+		 * Check if the lengths in the given dimension has a value (fix length or integer).
+		 */
+		protected boolean hasValue(int dim) {
+			return size[dim] != UNKNOWN;
+		}
+		
+		/**
+		 * Create a copy of this size.
+		 */
+		protected Size clone() {
+			return (size.length == 0) ? SCALAR : new Size(size.clone());
+		}
+		
+		/**
+		 * Create a copy of this size as a MutableSize.
+		 */
+		public MutableSize mutableClone() {
+			MutableSize ms = new MutableSize(size.length);
+			System.arraycopy(size, 0, ms.size, 0, size.length);
+			return ms;
+		}
+		
+		/**
+		 * Create a copy of this with <code>dim</code> dimensions, if necessary 
+		 *        adding dimensions of length 1 to the right side, or removing dimensions 
+		 *        from the left side.
+		 */
+		public Size promote(int dim) {
+			if (dim == size.length) 
+				return this;
+			if (dim == 0)
+				return SCALAR;
+			Size ns = new Size(new int[dim]);
+			int old = dim < size.length ? dim : size.length;
+			System.arraycopy(size, size.length - old, ns.size, 0, old);
+			Arrays.fill(ns.size, old, dim, 1);
+			return ns;
+		}
+		
+		/**
+		 * If this size contains any dimensions that are represented with expressions, then creates 
+		 * and attempts to evaluate a copy of this size. Otherwise, return this.
+		 */
+		public Size evaluated() {
+		    return this;
+		}
+		
+		/**
+		 * Return a Size that has the same lengths as this size where they are known, 
+		 *        and any that are unknown copied from the size of <code>exp</code>. 
+		 * 
+		 * If the size of <code>exp</code> has more dimensions, the last part is assumed to match this size.
+		 */
+		public Size createKnown(FExp exp) {
+			Size known;
+			if (!exp.size().isUnknown() || this instanceof MutableSize) { 
+				known = clone();
+			} else {
+				known = new MutableSize(size.length);
+				System.arraycopy(size, 0, known.size, 0, size.length);
+			}
+			known.fillUnknownFrom(exp);
+			return known;
+		}
+		
+		/**
+		 * Return a Size that have the same lengths as this size where they are known, 
+		 * and any that are unknown in this size but known in <code>s</code> is copied from there. 
+		 */
+		public Size createKnown(Size s) {
+			Size known = clone();
+			for (int i = 0; i < size.length; i++)
+				if (known.size[i] == UNKNOWN && s.size[i] != UNKNOWN)
+					known.set(i, s.size[i]);
+			return known;
+		}
+		
+		/**
+		 * Sets length <code>i</code> to <code>s</code>.
+		 */
+		protected void set(int i, int s) {
+			size[i] = s;
+		}
+		
+		/**
+		 * For each unknown length, copy the equivalent length from size of <code>exp</code>. 
+		 * 
+		 * If the size of <code>exp</code> have more dimensions than this, the last part is ignored.
+		 */
+		protected void fillUnknownFrom(FExp exp) {
+			Size other = exp.size();
+			if (other.size.length >= size.length)
+				for (int i = 0; i < size.length; i++) 
+					if (!hasValue(i))
+						copyFrom(i, exp, i);
+		}
+		
+		/**
+		 * Copy value of dimension <code>d2</code> in <code>other</code> to dimension 
+		 *        <code>d1</code> in <code>this</code>.
+		 */
+		protected void copyFrom(int d1, FExp exp, int d2) {
+			size[d1] = exp.size().size[d2];
+		}
+		
+		/**
+		 * Check if another object is equal to this one.
+		 */
+		public boolean equals(Object s) {
+			return s instanceof Size && equivalent((Size) s, false);
+		}
+		
+		/**
+		 * Calculate hash code.
+		 */
+		public int hashCode() {
+			int res = 0;
+			for (int i = 0; i < size.length; i++)
+				res = (res << 8) ^ size[i];
+			return res;
+		}
+		
+		/**
+		 * Check if another size is equivalent to this one.
+		 * 
+		 * @param allowUnknown  if <code>true</code>, consider unknown lengths equal to any length, 
+		 *                      otherwise consider unknown lengths to differ from all lengths, including
+		 *                      other unknown lengths
+		 */
+		public boolean equivalent(Size s, boolean allowUnknown) {
+			return equivalentExcept(s, allowUnknown, -1);
+		}
+		
+		/**
+		 * Check if another size is equivalent to this one, except in a given dimension.
+		 * 
+		 * @param allowUnknown  if <code>true</code>, consider unknown lengths equal to any length
+		 * @param dim			dimension not to check
+		 */
+		public boolean equivalentExcept(Size s, boolean allowUnknown, int dim) {
+			if (size.length != s.size.length)
+				return false;
+			for (int i = 0; i < size.length; i++) 
+				if (i != dim && !equivalentDim(s, allowUnknown, i, i)) 
+					return false;
+			return true;
+		}
+		
+		/**
+		 * Check if a specific dimension of another size is equivalent to a specific 
+		 *        dimension of this one.
+		 * 
+		 * @param allowUnknown  if <code>true</code>, consider unknown lengths equal to any length
+		 * @param myDim         the dimension in this Size to compare
+		 * @param itsDim        the dimension in the other Size to compare
+		 */
+		public boolean equivalentDim(Size s, boolean allowUnknown, int myDim, int itsDim) {
+			int myLen = read(myDim);
+			int itsLen = s.read(itsDim);
+			boolean same = myLen == itsLen;
+			if (same || !allowUnknown)
+				return same;
+			return myLen == UNKNOWN || itsLen == UNKNOWN;
+		}
+		
+		/**
+		 * Make sure that size is final, then get value of size[i].
+		 */
+		protected int read(int i) {
+			return size[i];
+		}
+		
+		private static final String SEP = ", ";
+		
+		/**
+		 * Returns a string representation on the form "[l1, l2, l3]".
+		 */
+		public String toString() {
+			if (size.length == 0)
+				return "scalar";
+			StringBuilder buf = new StringBuilder("[");
+			String prefix = "";
+			for (int i = 0; i < size.length; i++) {
+				buf.append(prefix);
+				buf.append(toString(i));
+				prefix = SEP;
+			}
+			buf.append("]");
+			return buf.toString();
+		}
+		
+		/**
+		 * Returns a string representation of a single length.
+		 */
+		protected String toString(int i) {
+			return (size[i] == UNKNOWN) ? ":" : Integer.toString(size[i]);
+		}
+		
+		/**
+		 * Returns a string representation on the form "l1, l2, l3".
+		 */
+		public String toUnclosedString() {
+			String tmp = toString();
+			return tmp.substring(1, tmp.length() - 1);
+		}
+
+        /**
+         * Creates a new Size that is a copy of this one, but with dimensions removed 
+         * from each side. If nothing is changed, <code>this</code> is returned. 
+         * 
+         * @param left   the number of dimensions to remove from the left side
+         * @param right  the number of dimensions to remove from the right side
+         */
+        public Size contract(int left, int right) {
+            int ndims = size.length - left - right;
+            if (ndims == size.length)
+                return this;
+            if (ndims <= 0)
+                return Size.SCALAR;
+            int[] ns = new int[ndims];
+            System.arraycopy(size, left, ns, 0, ndims);
+            return new Size(ns);
+        }
+
+		/**
+		 * Creates a new Size that is a copy of this one, but with dimensions removed 
+		 * from the left side. If nothing is changed, <code>this</code> is returned. 
+		 * 
+		 * @param n   the number of dimensions of the new size
+		 */
+		public Size contractLeft(int n) {
+			return contract(size.length - n, 0);
+		}
+		
+		/**
+		 * Creates a new Size that is a copy of this one, but with dimensions removed 
+		 * from the right side. If nothing is changed, <code>this</code> is returned. 
+		 * 
+		 * @param n   the number of dimensions of the new size
+		 */
+		public Size contractRight(int n) {
+			return contract(0, size.length - n);
+		}
+		
+		/**
+		 * Creates a new Size that is a copy of this one, but with one more dimension 
+		 * on the left side.
+		 * 
+		 * @param s  the length of the new dimension
+		 */
+		public Size expand(int s) {
+			int[] ns = new int[size.length + 1];
+			ns[0] = s;
+			System.arraycopy(size, 0, ns, 1, size.length);
+			return new Size(ns);
+		}
+		
+        /**
+         * Creates a new Size that is a copy of this one, but with one more dimension 
+         * on the right side.
+         * 
+         * @param s  the length of the new dimension
+         */
+        public Size expandRight(int s) {
+            int[] ns = new int[size.length + 1];
+            System.arraycopy(size, 0, ns, 0, size.length);
+            ns[size.length] = s;
+            return new Size(ns);
+        }
+
+        /**
+         * Creates a new Size that is a concatenation of <code>s</code> and this size.
+         * 
+         * <code>s</code> is added on the left side.
+         */
+        public Size expand(Size s) {
+            return s.createExpanded(s, this);
+        }
+
+        /**
+         * Creates a new Size that is a concatenation of this size and <code>s</code>.
+         * 
+         * <code>s</code> is added on the right side.
+         */
+        public Size expandRight(Size s) {
+            return s.createExpanded(this, s);
+        }
+
+        /**
+         * Delegate method for expand(Size) and expandRight(Size).
+         * 
+         * Creates a new size that is the concatenation of a and b.
+         */
+        protected Size createExpanded(Size a, Size b) {
+            int ndims = a.size.length + b.size.length;
+            if (ndims == 0)
+                return Size.SCALAR;
+            int[] ns = new int[ndims];
+            System.arraycopy(a.size, 0, ns, 0, a.size.length);
+            System.arraycopy(b.size, 0, ns, a.size.length, b.size.length);
+            return new Size(ns);
+        }
+        
+        /**
+         * Create an FArraySubscripts that defines this size as used in variable declarations.
+         * 
+         * Dimension that nothing is known about get an FColonSubscript.
+         */
+        public FArraySubscripts createFArraySubscripts() {
+            return FArraySubscripts.createFArraySubscripts(createFArraySubscriptsList());
+        }
+        
+        public FArraySubscripts createFArrayExpSubscripts() {
+            return new FArrayExpSubscripts(createFArraySubscriptsList());
+        }
+        
+        private List<FSubscript> createFArraySubscriptsList() {
+            List<FSubscript> list = new List<FSubscript>();
+            for (int i = 0; i < ndims(); i++) {
+                list.add(createFSubscript(i));
+            }
+            return list;
+        }
+        
+        /**
+         * Create an FSubscript that defines the length of dimension <code>d</code>.
+         * 
+         * If nothing is known of the length of the dimension, an FColonSubscript is created.
+         */
+        public FSubscript createFSubscript(int d) {
+            return hasValue(d) ? createFExp(d).createFSubscript() : new FColonSubscript();
+        }
+		
+		/**
+		 * Create an FArraySubscripts that spans this size.
+		 * 
+		 * Dimension that nothing is known about get an FColonSubscript.
+		 */
+		public FArraySubscripts createExpandedFArraySubscripts() {
+            List<FSubscript> list = new List<FSubscript>();
+            for (int i = 0; i < ndims(); i++) {
+                list.add(createExpandedFSubscript(i));
+			}
+			return FArraySubscripts.createFArraySubscripts(list);
+		}
+
+        /**
+         * Create an FSubscript that spans the length of dimension <code>d</code>.
+         * 
+         * If nothing is known of the length of the dimension, an FColonSubscript is created.
+         */
+        public FSubscript createExpandedFSubscript(int d) {
+            if (!isUnknown(d)) {
+                return createRangeExp(d).createFSubscript();
+            } else {
+                return new FColonSubscript();
+            }
+        }
+
+        /**
+         * Create a range expression spanning this size.
+         */
+        public FRangeExp createRangeExp(int d) {
+            List<FExp> lim = new List<FExp>();
+            lim.add(new FIntegerLitExp(1));
+            lim.add(createFExp(d));
+            return new FRangeExp(lim);
+        }
+
+		/**
+		 * Create an FExp that describes this size.
+		 * 
+		 * The resulting expression is not expanded like createSizeFExp().
+		 */
+		public FExp createFExp() {
+			List<FExp> cells = new List<FExp>();
+			for (int i = 0; i < size.length; i++)
+				cells.add(createFExp(i));
+			return new FArray(cells);
+		}
+		
+		/**
+		 * Create an FExp that describes the length of dimension <code>d</code>.
+		 * 
+		 * The resulting expression is not expanded like createSizeFExp().
+		 */
+		public FExp createFExp(int d) {
+			return new FIntegerLitExp(size[d]);
+		}
+		
+        public FExp createFExpForced(int d) {
+            return createFExp(d);
+        }
+		
+		/**
+		 * Create an FExp that describes the number of elements of this size.
+		 */
+		public FExp createNumElementsFExp() {
+			return new FIntegerLitExp(numElements());
+		}
+
+        /**
+         * Create a zero expression of this size.
+         */
+        public FExp createZeroFExp() {
+            if (size.length == 0) {
+                return new FIntegerLitExp(0);
+            } else {
+                return fillDimsOfExp(new FZeros());
+            }
+        }
+
+        /**
+         * Add dimensions to an FArrayDimAsArgsExp so that it will have this size 
+         * (assuming a scalar expression for fill).
+         */
+        public FArrayDimAsArgsExp fillDimsOfExp(FArrayDimAsArgsExp exp) {
+            for (int i = 0; i < size.length; i++)
+                exp.addFExp(createFExp(i));
+            return exp;
+        }
+	}
+	
+	/**
+	 * A mutable Size that can handle FExp sizes, possibly with unknown ceval().
+	 */
+	public class MutableSize extends Size {
+		
+		private int i;
+		private FExp[] exps;
+		private boolean[] evaluated;
+		
+		/**
+		 * Constructs a new mutable Size of <code>ndims</code> dimensions.
+		 */
+		public MutableSize(int ndims) {
+			super(new int[ndims]);
+			Arrays.fill(size, UNKNOWN);
+			exps = new FExp[ndims];
+			i = 0;
+			evaluated = new boolean[ndims];
+		}
+		
+		/**
+		 * Constructs the size described by a vector expression.
+		 */
+		public MutableSize(FExp exp) {
+			this(exp.ndims() == 1 ? exp.size().get(0) : 0);
+			for (FExp dim : exp.getArray().iterable())
+				append(dim);
+		}
+		
+		/**
+		 * Sets the next length to <code>s</code>.
+		 * 
+		 * May overwrite lengths set with <code>set()</code>.
+		 */
+		public void append(int s) {
+			set(i++, s);
+		}
+		
+		/**
+		 * Sets the next length to the value of <code>e</code>.
+		 * 
+		 * May overwrite lengths set with <code>set()</code>.
+		 */
+		public void append(FExp e) {
+			set(i++, e);
+		}
+		
+		/**
+		 * Sets the next length to the length of dimension <code>d</code> 
+		 *        of <code>s</code>.
+		 * 
+		 * May overwrite lengths set with <code>set()</code>.
+		 */
+		public void append(Size s, int d) {
+			set(i++, s, d);
+		}
+		
+		/**
+		 * Sets the next <code>s.ndims()</code> lengths from <code>s</code>.
+		 * 
+		 * May overwrite lengths set with <code>set()</code>.
+		 */
+		public void append(Size s) {
+			if (s instanceof MutableSize) {
+				MutableSize ms = (MutableSize) s;
+				for (int j = 0; j < ms.size.length; j++, i++) {
+					exps[i] = ms.exps[j];
+					size[i] = ms.size[j];
+				}
+			} else {
+				for (int si : s.size) {
+					size[i++] = si;
+				}
+			}
+		}
+		
+		/**
+		 * Sets length <code>i</code> to <code>s</code>.
+		 */
+		public void set(int i, int s) {
+			size[i] = s;
+		}
+
+        /**
+         * Sets length <code>d</code> to the value of <code>e</code>.
+         */
+        public void set(int d, FExp e) {
+            int s = UNKNOWN;
+            if (okExp(e) && e.hasOnlyLiterals()) {
+                try {
+                    CValue val = e.ceval();
+                    if (val.hasIntValue()) {
+                        s = val.intValue();
+                    }
+                } catch (ConstantEvaluationException cee) {
+                }
+            }
+            size[d] = s;
+            exps[d] = (s == UNKNOWN) ? e : null;
+        }
+
+        /**
+         * Sets length <code>d1</code> to the length of dimension <code>d2</code> 
+         *        of <code>s</code>.
+         * 
+         * May overwrite lengths set with <code>set()</code>.
+         */
+        public void set(int d1, Size s, int d2) {
+            if (d2 >= s.size.length) {
+                size[d1] = -1;
+                exps[d1] = null;
+            } else {
+                size[d1] = s.size[d2];
+                exps[d1] = (s instanceof MutableSize) ? ((MutableSize) s).exps[d2] : null;
+            }
+        }
+
+        /**
+         * Make sure dimension i of size is ready to use.
+         */
+        private void evaluate(int i) {
+            if (i >= 0 && i < evaluated.length && !evaluated[i]) {
+                evaluated[i] = true;
+                if (exps[i] != null) {
+                    try {
+                        CValue val = exps[i].ceval();
+                        if (val.hasIntValue()) {
+                            size[i] = val.intValue();
+                        }
+                    } catch (ConstantEvaluationException e) {
+                    }
+                }
+            }
+        }
+
+		/**
+		 * Make sure size is ready to use.
+		 */
+		private void evaluate() {
+			for (int i = 0; i < size.length; i++) 
+				evaluate(i);
+		}
+		
+		/**
+		 * Adds <code>s</code> to length <code>d</code>.
+		 */
+		public void add(int d, int s) {
+            if (size[d] == Size.UNKNOWN || s == Size.UNKNOWN) {
+                size[d] = Size.UNKNOWN;
+            } else {
+                size[d] = size[d] + s;
+            }
+        }
+
+        /**
+         * Adds the value of <code>e</code> to length <code>d</code>.
+         */
+        public void add(int d, FExp e) {
+            boolean ok = false;
+            try {
+                CValue val = e.ceval();
+                if (val.hasIntValue()) {
+                    add(d, val.intValue());
+                    ok = true;
+                }
+            } catch (ConstantEvaluationException cee) {}
+            if (!ok) {
+                FExp e2 = new FAddExp(createFExp(d), e.createSizeFExp());
+                exps[d] = e.dynamicFExp(e2);
+                size[d] = UNKNOWN;
+            }
+        }
+
+		/**
+		 * Adds the length of dimension <code>d2</code> of <code>s</code> 
+		 *        to length <code>d1</code> of this size.
+         *
+         * Adds both expressions and evaluated sizes.
+		 */
+		public void add(int d1, Size s, int d2) {
+            addFExp(d1, s, d2);
+            add(d1, s.size[d2]);
+		}
+		
+        /**
+         * If there is an expression in dimension <code>d1</code> of <code>this</code> or 
+         * dimension <code>d2</code> of size <code>s</code>, add the two size representations 
+         * into a new <code>FExp</code> in <code>this</code>.
+         */
+        protected void addFExp(int d1, Size s, int d2) {
+            FExp n = null;
+            if (hasFExp(d1)) {
+                n = getFExp(d1);
+            } else if (s instanceof MutableSize) {
+                MutableSize ms = (MutableSize) s;
+                if (ms.hasFExp(d2)) {
+                    n = ms.getFExp(d2);
+                }
+            }
+            
+            if (n == null) {
+                return;
+            }
+            
+            FExp e = new FAddExp(createFExpForced(d1), s.createFExpForced(d2));
+            exps[d1] = n.dynamicFExp(e);
+        }
+        
+        /**
+         * Returns true if there is an FExp representing size in 
+         * dimension <code>d</code>, else false.
+         */
+        protected boolean hasFExp(int d) {
+            return exps[d] != null;
+        }
+        
+        /**
+         * Get the FExp representing size in dimension <code>d</code>.
+         * It might be null.
+         */
+        protected FExp getFExp(int d) {
+            return exps[d];
+        }
+
+        /**
+         * Get length in the <code>i</code>th dimension.
+         */
+        public int get(int i) {
+            evaluate(i);
+            if (i < 0 || i >= size.length)
+                return UNKNOWN;
+            if (size[i] != Size.UNKNOWN) // We want to evaluate FColonSizeExps as well
+                return size[i];
+            try {
+                if (exps[i] != null)
+                    return exps[i].ceval().intValue();
+            } catch (ConstantEvaluationException e) {
+            }
+            return UNKNOWN;
+        }
+
+		/**
+		 * Check if the lengths in the given dimension has a value (fix length or integer).
+		 */
+		protected boolean hasValue(int dim) {
+            return size[dim] != UNKNOWN || okExp(dim);
+		}
+		
+        /**
+         * Check if an expression is valid.
+         */
+        protected static boolean okExp(FExp e) {
+            return okExp(e, false);
+        }
+        
+        protected boolean okExp(int i) {
+            return okExp(i, false);
+        }
+        
+        protected static boolean okExp(FExp e, boolean allowUnknownSize) {
+            return e != null && e.isValidExp(allowUnknownSize);
+        }
+        
+        protected boolean okExp(int i, boolean allowUnknownSize) {
+            return size[i] == Size.UNKNOWN && okExp(exps[i], allowUnknownSize);
+        }
+		
+		/**
+		 * Copy value of dimension <code>d2</code> in size of <code>exp</code> to dimension 
+		 *        <code>d1</code> in <code>this</code>.
+		 */
+		protected void copyFrom(int d1, FExp exp, int d2) {
+			set(d1, exp.size(), d2);
+            if (exps[d1] != null && exps[d1] instanceof FColonSizeExp) {
+                exps[d1] = exp.dynamicFExp(exps[d1].createSizeFExp());
+            }
+			if (!hasValue(d1)) {
+				FExp copyExp = exp.fullCopy();
+				Opt dimExp = new Opt(new FIntegerLitExp(d2 + 1));
+				FSizeExp sizeExp  = new FSizeExp(copyExp, dimExp);
+				exps[d1] = exp.dynamicFExp(sizeExp);
+			}
+		}
+		
+		/**
+		 * Creates a new Size that is a copy of this one, but with dimensions removed 
+		 * from each side.
+		 * 
+		 * @param left   the number of dimensions to remove from the left side
+		 * @param right  the number of dimensions to remove from the right side
+		 */
+		public Size contract(int left, int right) {
+			int ndims = size.length - left - right;
+			if (ndims == 0)
+				return Size.SCALAR;
+			MutableSize ns = new MutableSize(ndims);
+			System.arraycopy(size, left, ns.size, 0, ndims);
+			System.arraycopy(exps, left, ns.exps, 0, ndims);
+			return ns;
+		}
+		
+		/**
+		 * Creates a new Size that is a copy of this one, but with one more dimension 
+		 * on the left side.
+		 * 
+		 * @param s  the length of the new dimension
+		 */
+		public Size expand(int s) {
+			evaluate();
+			MutableSize ns = new MutableSize(size.length + 1);
+			ns.size[0] = s;
+			ns.exps[0] = null;
+			System.arraycopy(size, 0, ns.size, 1, size.length);
+			System.arraycopy(exps, 0, ns.exps, 1, size.length);
+			return ns;
+		}
+
+        /**
+         * Creates a new Size that is a concatenation of <code>s</code> and this size.
+         * 
+         * <code>s</code> is added on the left side.
+         */
+        public Size expand(Size s) {
+            return createExpanded(s, this);
+        }
+
+        /**
+         * Creates a new Size that is a concatenation of this size and <code>s</code>.
+         * 
+         * <code>s</code> is added on the right side.
+         */
+        public Size expandRight(Size s) {
+            return createExpanded(this, s);
+        }
+
+        /**
+         * Delegate method for expand(Size) and expandRight(Size). Creates a new size that is the concatenation of a and b.
+         */
+        protected Size createExpanded(Size a, Size b) {
+            int ndims = a.size.length + b.size.length;
+            if (ndims == 0)
+                return Size.SCALAR;
+            MutableSize ns = new MutableSize(ndims);
+            if (a instanceof MutableSize) {
+                MutableSize m = (MutableSize) a;
+                m.evaluate();
+                System.arraycopy(m.exps, 0, ns.exps, 0, m.size.length);
+            }
+            if (b instanceof MutableSize) {
+                MutableSize m = (MutableSize) b;
+                m.evaluate();
+                System.arraycopy(m.exps, 0, ns.exps, a.size.length, m.size.length);
+            }
+            System.arraycopy(a.size, 0, ns.size, 0, a.size.length);
+            System.arraycopy(b.size, 0, ns.size, a.size.length, b.size.length);
+            return ns;
+        }
+        
+		/**
+		 * Create an FExp that describes the length of dimension <code>d</code>.
+		 * 
+		 * the resulting expression is not expanded like createSizeFExp().
+		 */
+		public FExp createFExp(int d) {
+			evaluate(d);
+            return (okExp(d, true)) ?
+					exps[d].createSizeFExp() : 
+					super.createFExp(d);
+		}
+        
+        /**
+         * Create an FExp that describes the length of dimension <code>d</code>.
+         * 
+         * Uses the FExp even if there is an evaluated size.
+         */
+        public FExp createFExpForced(int d) {
+            return (hasFExp(d)) ?
+                    getFExp(d).createSizeFExp() : 
+                    super.createFExpForced(d);
+        }
+        
+		/**
+		 * Create an FExp that describes the number of elements of this size.
+		 */
+		public FExp createNumElementsFExp() {
+			evaluate();
+			int known = 1;
+			FExp res = null;
+			for (int i = 0; i < size.length; i++) {
+				// TODO: this will fail if hasValue(i) == false
+				if (size[i] == UNKNOWN) {
+					FExp e = exps[i].unboundCopy();
+					res = (res == null) ? e : new FMulExp(res, e);
+				} else {
+					known *= size[i];
+				}
+			}
+			if (res == null)
+				res = new FIntegerLitExp(known);
+			else if (known > 1)
+				res = new FMulExp(res, new FIntegerLitExp(known));
+			return res;
+		}
+
+		/**
+         * If this size contains any dimensions that are represented with expressions, then creates 
+         * and attempts to evaluate a copy of this size. Otherwise, return this.
+         */
+        public Size evaluated() {
+            boolean copy = false;
+            for (FExp e : exps) {
+                if (e != null) {
+                    copy = true;
+                    break;
+                }
+            }
+            if (copy) {
+                MutableSize res = new MutableSize(size.length);
+                System.arraycopy(size, 0, res.size, 0, size.length);
+                System.arraycopy(exps, 0, res.exps, 0, exps.length);
+                res.evaluate();
+                return res;
+            } else {
+                return this;
+            }
+        }
+        
+        /**
+         * Create a new FSubscript with a range spanning dimension <code>i</code>.
+         */
+        public FSubscript rangeFSubscript(int i) {
+            evaluate(i);
+            return !okExp(i) ? super.rangeFSubscript(i) : 
+                new FExpSubscript(new FRangeExp(new FIntegerLitExp(1), exps[i].fullCopy()));
+        }
+
+		/**
+		 * Returns a string representation of a single length.
+		 */
+		protected String toString(int i) {
+			evaluate(i);
+            return !okExp(i) ? super.toString(i) : exps[i].prettyPrint("");
+		}
+		
+		/**
+		 * Create a copy of this size.
+		 */
+		protected MutableSize clone() {
+			MutableSize ms = new MutableSize(size.length);
+			System.arraycopy(size, 0, ms.size, 0, size.length);
+			System.arraycopy(exps, 0, ms.exps, 0, exps.length);
+			ms.evaluated = evaluated;
+			return ms;
+		}
+		
+		/**
+		 * Create a copy of this size as a MutableSize.
+		 */
+		public MutableSize mutableClone() {
+			return clone();
+		}
+		
+		/**
+		 * Create a copy of this with <code>dim</code> dimensions, if necessary 
+		 *        adding dimensions of length 1 to the right side, or removing dimensions 
+		 *        from the left side.
+		 */
+		public Size promote(int dim) {
+			evaluate();
+			if (dim == size.length) 
+				return this;
+			if (dim == 0)
+				return SCALAR;
+			MutableSize ns = new MutableSize(dim);
+			int old = dim < size.length ? dim : size.length;
+			System.arraycopy(size, size.length - old, ns.size, 0, old);
+			System.arraycopy(exps, exps.length - old, ns.exps, 0, old);
+			Arrays.fill(ns.size, old, dim, 1);
+			return ns;
+		}
+		
+		/**
+		 * Make sure that size is final, then get value of size[i].
+		 */
+		protected int read(int i) {
+			evaluate(i);
+			return size[i];
+		}
+		
+		public boolean isUnknown() {
+			evaluate();
+			return super.isUnknown();
+		}
+		
+        @Override
+        public boolean isUnknownNoEval() {
+            return super.isUnknown();
+        }
+		
+	}
+    
+    public interface Array {
+        /**
+         * Creates an iterator that iterates over all FExp nodes in this Array.
+         */
+        public Iterator<FExp> iteratorFExp();
+        
+        /**
+         * Returns an Iterable<FExp> containing all expressions in Array.
+         */
+        public Iterable<FExp> iterable();
+        
+        /**
+         * Creates a left-hand iterator for multiplication. 
+         * 
+         * Creates an iterator that iterates over all FExp nodes involved in 
+         * calculating the cell i in a multiplication with this Array at the 
+         * left side. 
+         */
+        public Iterator<FExp> leftMulIterator(Index i);
+        
+        /**
+         * Creates a right-hand iterator for multiplication. 
+         * 
+         * Creates an iterator that iterates over all FExp nodes involved in 
+         * calculating the cell i in a multiplication with this Array at the 
+         * right side. 
+         */
+        public Iterator<FExp> rightMulIterator(Index i);
+        public FExp getFExp(int i);
+        public FExp get(Index i);
+        public FExp get(int i);
+        public Indices indices();
+        public int ndims();
+        public Size size();
+        
+        /**
+         * Create an FExp describing the part of this array indicated by <code>i</code>.
+         */
+        public FExp subArrayFExp(Index i);
+        public FExp subArrayFExp(Index i, NonConsecutiveIndices indices);
+        public ASTNode unboundCopy();
+    }
+    
+	public class ArrayExp implements Array {
+		
+		protected Indices indices;
+		protected int length;
+		
+		/**
+		 * Create an ArrayExp spanning a given Indices.
+		 */
+		public ArrayExp(Indices indices) {
+			this.indices = indices;
+			setChild(new List<FExp>(), 0);
+			length = indices.numElements();
+			if (length > 0)
+				setFExp(null, length - 1);
+		}
+		
+		/**
+		 * Creates an iterator that iterates over all FExp nodes in this Array.
+		 */
+		public Iterator<FExp> iteratorFExp() {
+			return getFExps().iterator();
+		}
+		
+		/**
+		 * Returns an Iterable<FExp> containing all expressions in Array.
+		 */
+		public Iterable<FExp> iterable() {
+			return getFExps();
+		}
+		
+		/**
+		 * Creates a left-hand iterator for multiplication. 
+		 * 
+		 * Creates an iterator that iterates over all FExp nodes involved in 
+		 * calculating the cell i in a multiplication with this Array at the 
+		 * left side. 
+		 * 
+		 * If this Array is a vector, i is ignored and an iterator that iterates 
+		 * over all elements in the Array is returned. 
+		 * 
+		 * If this Array is a matrix, an iterator that iterates over the row 
+		 * specified by i is returned.
+		 */
+		public Iterator<FExp> leftMulIterator(Index i) {
+			if (ndims() < 2)
+				return new AIterator();
+			else
+				return createMatrixRowIterator(i.first(), size().get(1));
+		}
+		
+		/**
+		 * Creates a right-hand iterator for multiplication. 
+		 * 
+		 * Creates an iterator that iterates over all FExp nodes involved in 
+		 * calculating the cell i in a multiplication with this Array at the 
+		 * right side. 
+		 * 
+		 * If this Array is a vector, i is ignored and an iterator that iterates 
+		 * over all elements in the Array is returned. 
+		 * 
+		 * If this Array is a matrix, an iterator that iterates over the column 
+		 * specified by i is returned.
+		 */
+		public Iterator<FExp> rightMulIterator(Index i) {
+			if (ndims() < 2)
+				return new AIterator();
+			else
+				return createMatrixColIterator(i.last(), size().get(1), size().get(0));
+		}
+		
+		/**
+		 * Returns the element referenced by <code>i</code> in this Array.
+		 */
+		public FExp get(Index i) {
+			return getFExp(i.internal(indices));
+		}
+		
+		/**
+		 * Returns element <code>i</code> in this Array.
+		 * 
+		 * For vectors, this is equivalent to <code>get(new Index(new int[]{i}))</code>.
+		 */
+		public FExp get(int i) {
+			return getFExp(i - 1);
+		}
+		
+		/**
+		 * Sets the element referenced by <code>i</code> in this Array to <code>exp</code>.
+		 */
+		public void set(Index i, FExp exp) {
+			setFExp(exp.unboundCopy(), i.internal(indices));
+		}
+		
+		/**
+		 * Returns the Indices associated with this Array.
+		 */
+		public Indices indices() {
+			return indices;
+		}
+		
+		/**
+		 * Set all expressions in Array to copies of <code>exp</code>.
+		 * 
+		 * If <code>exp</code> is an array, it is duplicated as many times as 
+		 * nessecary to fill this Array with scalar expressions.
+		 * 
+		 * @return <code>this</code> 
+		 */
+		public ArrayExp fill(FExp exp) {
+			if (exp.isArray()) {
+				int n = exp.size().numElements();
+				for (int i = 0; i < length; i++)
+					setFExp(exp.getArray().getFExp(i % n).fullCopy(), i);
+			} else {
+				for (int i = 0; i < length; i++)
+					setFExp(exp.fullCopy(), i);
+			}
+			return this;
+		}
+		
+		/**
+		 * Returns the number of dimensions spanned by this Array.
+		 */
+		public int ndims() {
+			return indices.ndims();
+		}
+		
+		/**
+		 * Returns the size of this Array in each dimension.
+		 */
+		public Size size() {
+			return indices.size();
+		}
+		
+	    /**
+	     * Recursive method for building an FArray describing this Array.
+	     *        For use by methods creating specific types of FArrays.
+	     *  
+	     * @param it       the iterator returned by a call to {@link #iteratorFExp()}
+	     * @param builder  helper object that processes each subexpression
+	     * @param dim      the dimension to start at, use 0 to process entire array
+	     * 
+	     * @see #buildScalarized(java.util.Map,FExp)
+	     */
+        protected FExp buildFArray(Iterator<FExp> it, ElementBuilder builder, int dim) {
+            return buildFArray(it, builder, dim, size(), null);
+        }
+        
+        protected FExp buildFArray(Iterator<FExp> it, ElementBuilder builder, int dim, Size size, boolean[] b) {
+            FArray arr = new FArray(new List<FExp>());
+            int n = size.get(dim);
+            if (b != null) {
+                if (dim >= b.length) {
+                    return builder.build(it.next().unboundCopy());
+                } else if (!b[dim]) {
+                    return buildFArray(it, builder, dim + 1, size, b);
+                }
+            }
+            if (dim < size.ndims() - 1) {
+                for (int i = 0; i < n; i++)
+                    arr.addFExp(buildFArray(it, builder, dim + 1, size, b));
+            } else {
+                for (int i = 0; i < n; i++) 
+                    arr.addFExp(builder.build(it.next()).unboundCopy());
+            }
+            return arr;
+        }
+		
+	    /**
+	     * Build an FArray describing this Array.
+	     *        For use by methods creating specific types of FArrays.
+	     *  
+	     * @param builder  helper object that processes each subexpression
+	     * 
+	     * @see #buildScalarized(java.util.Map,FExp)
+	     * @see #buildFArray(Iterator,ElementBuilder,int)
+	     */
+	    protected FExp buildFArray(ElementBuilder builder) {
+			Size s = size();
+			if (s.isEmpty()) {
+				List<FExp> dims = new List<FExp>();
+				for (int i = 0, n = s.ndims(); i < n ; i++)
+					dims.add(s.createFExp(i));
+				return new FFillExp(dims, type().zeroLiteral());
+			} else {
+		    	return buildFArray(iteratorFExp(), builder, 0);
+			}
+	    }
+	    
+        protected FExp buildFArray() {
+            return buildFArray(new IdentityBuilder());
+        }
+	    
+	    /**
+	     * Create an FExp describing the part of this array indicated by <code>i</code>.
+	     * 
+	     * If <code>i</code> has fewer dimensions than this, an FArray is created.
+	     * Otherwise a copy of a specific cell is returned. 
+	     */
+        public FExp subArrayFExp(Index i) {
+            if (i.ndims() >= ndims())
+                return get(i).fullCopy();
+            int start = i.internal(indices);
+            Iterator<FExp> it = new AIterator(start, 1, length - start);
+            return buildFArray(it, new IdentityBuilder(), i.ndims());
+        }
+	    
+        public FExp subArrayFExp(Index i, NonConsecutiveIndices indices) {
+            if (i.ndims() >= ndims())
+                return get(indices.translate(i)).fullCopy();
+            
+            boolean[] b = new boolean[ndims()];
+            indices = indices.locked(i, b);
+            Iterator<FExp> it = new IndexIterator(indices);
+            return buildFArray(it, new IdentityBuilder(), 0, indices.size(), b);
+        }
+        
+        public class IndexIterator implements Iterator<FExp> {
+            
+            
+            private Iterator<Index> it;
+            private Indices indices;
+            
+            public IndexIterator(Indices indices) {
+                this.indices = indices;
+                this.it = indices.iterator();
+            }
+            
+            @Override
+            public boolean hasNext() {
+                return it.hasNext();
+            }
+
+            @Override
+            public FExp next() {
+                return get(indices.translate(it.next()));
+            }
+
+            @Override
+            public void remove() {
+                throw new UnsupportedOperationException();
+            }
+        }
+		
+		/**
+		 * Create an iterator that iterates over a row. Assumes the Array is a matrix.
+		 */
+		private AIterator createMatrixRowIterator(int row, int width) {
+			return new AIterator((row - 1) * width, 1, width);
+		}
+		
+		/**
+		 * Create an iterator that iterates over a column. Assumes the Array is a matrix.
+		 */
+		private AIterator createMatrixColIterator(int col, int width, int height) {
+			return new AIterator(col - 1, width, height);
+		}
+
+		
+	    /**
+	     * Discribes the helper object for {@link #buildFArray(Iterator,ElementBuilder,int)}. 
+	     */
+	    protected interface ElementBuilder {
+	    	public FExp build(FExp e);
+	    }
+	    
+	    /**
+	     * Builder for buildFArray(), that returns a straight copy of the FExp.
+	     */
+	    public class IdentityBuilder implements ElementBuilder {
+	    	public FExp build(FExp exp) {
+	    		return exp.fullCopy();
+	    	}
+	    }
+		
+	    
+		/**
+		 * Iterates over FExp nodes in this Array.
+		 */
+		private class AIterator implements Iterator<FExp> {
+			
+			private int i = 0;
+			private int s;
+			private int l;
+			private int n;
+			
+			/**
+			 * Create an iterator that iterates over all elements in the Array. 
+			 */
+			public AIterator() {
+				s = 0;
+				l = 1;
+				n = length;
+			}
+			
+			/**
+			 * Create an iterator that iterates over a consecutive strech of the elements 
+			 * in the Array. 
+			 */
+			public AIterator(int start, int step, int number) {
+				s = start;
+				l = step;
+				n = number;
+			}
+			
+			public boolean hasNext() {
+				return i < n;
+			}
+			
+			public FExp next() {
+				if (i >= n)
+					throw new NoSuchElementException();
+				return getFExp(s + l * i++);
+			}
+			
+			public void remove() {
+				throw new UnsupportedOperationException();
+			}
+			
+		}
+		
+	}
+
+    public class FExp implements Array {
+        
+        public Iterator<FExp> iteratorFExp() {
+            return iterable().iterator();
+        }
+        public Iterable<FExp> iterable() {return Collections.singleton(this);}
+        public Iterator<FExp> leftMulIterator(Index i) {return iteratorFExp();}
+        public Iterator<FExp> rightMulIterator(Index i) {return iteratorFExp();}
+        
+        public FExp getFExp(int i) {
+            return this;
+        }
+        
+        public FExp get(Index i) {
+            return this;
+        }
+        
+        public FExp get(int i) {
+            return this;
+        }
+        
+        public FExp subArrayFExp(Index i) {
+            return this;
+        }
+        
+        public FExp subArrayFExp(Index i, NonConsecutiveIndices indices) {
+            return this;
+        }
+    }
+
+	
+	/**
+	 * Represents the index/indices of a single cell in an (possibly 
+	 *        multi-dimensional) array.
+	 *        
+	 * Index objects are reused to a high degree. Always use fix() when retaining 
+	 * an Index object.
+	 */
+	public class Index {
+		
+		public static final Index NULL = new Index(0);
+		
+		protected int[] index;
+		
+		/**
+		 * Construct an Index representing the indices given in <code>ind</code>.
+		 */
+		public Index(int[] ind) {
+			index = ind;
+		}
+		
+		/**
+		 * Returns the indices that specify this cell.
+		 */
+		public int[] index() {
+			return index;
+		}
+		
+		/**
+		 * Returns the number of dimensions of this Index.
+		 */
+		public int ndims() {
+			return index.length;
+		}
+		
+		/**
+		 * Returns the index for the first dimension.
+		 */
+		public int first() {
+			return index.length > 0 ? index[0] : -1;
+		}
+		
+		/**
+		 * Returns the index for the last dimension.
+		 */
+		public int last() {
+			return index.length > 0 ? index[index.length - 1] : -1;
+		}
+        
+        /**
+         * Returns an iterator over the indices for each dimension.
+         */
+        public IntIterator iterator() {
+            return new IntIterator() {
+                int d = 0;
+                
+                public boolean hasNext() { return d < index.length; }
+                
+                public int next() { return index[d++]; }
+            };
+        }
+        
+		/**
+		 * Returns the index for the <code>i</code>th dimension (zero-based).
+		 */
+		public int get(int i) {
+			return index[i];
+		}
+		
+		/**
+		 * Sets the index for the <code>i</code>th dimension (zero-based).
+		 */
+		public void set(int i, int index) {
+			this.index[i] = index;
+		}
+		
+		/**
+		 * Compare two Index for equality.
+		 */
+		public boolean equals(Object i) {
+			return (i instanceof Index) && Arrays.equals(index, ((Index) i).index);
+		}
+		
+		/**
+		 * Calculate hash code.
+		 * 
+		 * Creates perfect hash when ndims() <= 3 and all indices are <= 1023.
+		 */
+		public int hashCode() {
+			int shift = index.length <= 3 ? 10 : 5;
+			int res = 0;
+			for (int i = 0; i < index.length; i++)
+				res = (res << shift) ^ index[i];
+			return res;
+		}
+		
+		/**
+		 * Returns an Index that describes the last <code>ndims() - level</code> dimensions 
+		 * of this Index.
+		 * 
+		 * @param level  the first index to copy. Must be between 0 and ndims(), inclusive.
+		 */
+		public Index subIndex(int level) {
+			return partIndex(level, index.length);
+		}
+        
+        /**
+         * Returns an Index that describes dimensions from <code>i</code>, inclusively, 
+         * to <code>j</code>, excludingly, of this Index.
+         * 
+         * @param i  the first index to copy. Must be between 0 and ndims(), inclusively.
+         * @param j  the index after the last to copy. Must be between <code>i</code> and ndims(), inclusively.
+         */
+        public Index partIndex(int i, int j) {
+            if (i == 0 && j == index.length)
+                return this;
+            if (i == j)
+                return Index.NULL;
+            Index copy = new Index(j - i);
+            System.arraycopy(index, i, copy.index, 0, copy.index.length);
+            return copy;
+        }
+		
+		/**
+		 * Creates a new Index that is a copy of this Index, but promoted to <code>ndims</code> 
+		 * dimensions by adding ones to the end.
+		 * 
+		 * The new Index will not be bound to any Indices object.
+		 */
+		public Index promote(int ndims) {
+			return adjusted(0, 0, ndims);
+		}
+		
+		/**
+		 * Creates a new Index that is a copy of this Index, but with <code>adj</code>
+		 *        added to dimension <code>dim</code> and promoted to <code>ndims</code> 
+		 *        dimensions by adding ones to the end.
+		 * 
+		 * The new Index will not be bound to any Indices object.
+		 */
+		public Index adjusted(int dim, int adj, int ndims) {
+			Index copy = new Index(new int[ndims]);
+			System.arraycopy(index, 0, copy.index, 0, index.length);
+			Arrays.fill(copy.index, index.length, ndims, 1);
+			copy.index[dim] += adj;
+			return copy;
+		}
+		
+		/**
+		 * Create a new FArraySubscripts object describing this index.
+		 */
+		public FArraySubscripts createFArraySubscripts() {
+			return new FArrayLitSubscripts(index);
+		}
+
+        /**
+         * Returns an Index that has the same value as this one, but will not be changed by 
+         * an iterator that might have returned this Index. Usually creates a copy.
+         * Always use fix() when saving an Index.
+         */
+        public Index fix() {
+            if (index.length == 0) {
+                return Index.NULL;
+            } else {
+                return new Index(index.clone());
+            }
+        }
+
+		/**
+		 * Returns an Index that is the result of appending <code>i</code> to this Index.
+		 * 
+		 * @param i  the Index to append.
+		 */
+		public Index expand(Index i) {
+			if (index.length == 0)
+				return i;
+			if (i.index.length == 0)
+				return this;
+			Index expanded = new Index(index.length + i.index.length);
+			System.arraycopy(index, 0, expanded.index, 0, index.length);
+			System.arraycopy(i.index, 0, expanded.index, index.length, i.index.length);
+			return expanded;
+		}
+		
+		/**
+		 * Return a string representation on the form "[i1,i2,i3]".
+		 */
+		public String toString() {
+			return buildString(new StringBuilder("[")).append(']').toString();
+		}
+		
+		/**
+		 * Return a string representation on the form "i1,i2,i3".
+		 */
+		public String toUnclosedString() {
+			return buildString(new StringBuilder()).toString();
+		}
+		
+		/**
+		 * Internal implementation of toString methods.
+		 * 
+		 * Note that this must give the same result as a prettyPrint() on an equivalent 
+		 * FArraySubscripts, or inlining breaks.
+		 */
+		private StringBuilder buildString(StringBuilder buf) {
+			boolean sep = false;
+			for (int i : index) {
+				if (sep)
+					buf.append(',');
+				buf.append(i);
+				sep = true;
+			}
+			return buf;
+		}
+		
+		
+		/**
+		 * Return the internal index in an Array of the cell this Index refers to.
+		 *        Only for use from Array.
+		 * 
+		 * @param ind  the indices to resolve the internal index with
+		 */
+		public int internal(Indices ind) {
+			return ind.internal(this);
+		}
+		
+		/**
+		 * Construct an empty Index.
+		 */
+		protected Index() {
+		}
+		
+		/**
+		 * Construct an Index of ndims dimensions, 
+		 *        pointing at the spot before the first cell.
+		 */
+		protected Index(int ndims) {
+			index = new int[ndims];
+			for (int i = ndims - 2; i >= 0; i--)
+				index[i] = 1;
+			if (ndims > 0)
+				index[ndims - 1] = 0;
+		}
+		
+	}
+	
+	/**
+	 * Indices represents the set of array indices in each dimension.
+	 * 
+	 * Only supports indices of the form (1..n1, 1..n2, ... , 1..nk). 
+	 * See {@link NonConsecutiveIndices}. 
+	 * 
+	 * New Indices objects should be created with the create() methods. 
+	 * The subclass used is selected automatically. 
+	 * 
+	 * The Indices class is typically used to iterate over all possible indices
+	 * of an array access of declaration.
+	 */
+	public class Indices implements Iterable<Index> {
+		protected int ndims;
+		protected Size size;
+		
+		/**
+		 *  Used to represent the Indices of scalar expressions.
+		 */
+		public static final Indices SCALAR = new Indices(Size.SCALAR);
+		
+		/**
+		 * A perfect hash for all Indices that have consecutive indicies, 
+		 *        ndims <= 3 and size[i] <= 1023 for 0 <= i < ndims. -1 for other 
+		 *        Indices.
+		 */
+		protected int hash;
+		
+		/**
+		 * Create an Indices object based on array sizes. 
+		 */
+		public static Indices create(Size size) {
+			if (size == Size.SCALAR)
+				return SCALAR;
+			else
+				return new Indices(size);
+		}
+		
+		/**
+		 * Create an Indices object based on FArraySubcripts.
+		 */
+		public static Indices createFromFas(FArraySubscripts fas) {
+			return NonConsecutiveIndices.createFromFas(fas);
+		}
+		
+		/**
+		 * Create an Indices object based on a list of FArraySubcripts.
+		 */
+		public static Indices createFromFas(java.util.List<FArraySubscripts> fasl) {
+			return NonConsecutiveIndices.createFromFas(fasl);
+		}
+		
+		/**
+		 * Create an Indices object based on a list of int arrays.
+		 */
+		public static Indices create(ArrayList<int[]> ind) {
+			return NonConsecutiveIndices.create(ind, true);
+		}
+		
+		/**
+		 * Create an Indices object based on a list of CommonForIndexes.
+		 */
+		public static Indices create(Iterable<? extends CommonForIndex> forIndices) {
+			ArrayList<int[]> ind = new ArrayList<int[]>();
+			for (CommonForIndex fi : forIndices) 
+				ind.add(fi.myIndices());
+			return NonConsecutiveIndices.create(ind, false);
+		}
+		
+		/**
+		 * Check that i is valid for this Indices object.
+		 */
+		public boolean isValid(Index i) {
+			if (i.ndims() != ndims)
+				return false;
+			int[] index = i.index();
+			for (int j = 0; j < ndims; j++)
+				if (index[j] < 1 || index[j] > size.get(j))
+					return false;
+			return true;
+		}
+		
+		/**
+		 * Returns an Iterator, that iterates over all indices spanned by this Indices object.
+		 */
+		public Iterator<Index> iterator() {
+			return new IIterator();
+		}
+		
+		/**
+		 * Returns the number of elements spanned by this Indices object.
+		 */
+		public int numElements() {
+			return size.numElements();
+		}
+		
+		/**
+		 * Returns the number of dimensions spanned by this Indices object.
+		 */
+		public int ndims() {
+			return ndims;
+		}
+		
+		/**
+		 * Returns the size of this Indices object in each dimension.
+		 */
+		public Size size() {
+			return size;
+		}
+
+        /**
+         * Translates an Index to the corresponding Index in the underlying expression. 
+         * If i has fewer dimensions than this, than it should correspond to the outermost ones.
+         * 
+         * Note that for some implementations, the returned index may be changed by subsequent 
+         * calls to this method.
+         * 
+         * Default implementation always returns <code>i</code>.
+         */
+        public Index translate(Index i) {
+            return i;
+        }
+
+        public Indices translated() {
+            return this;
+        }
+
+		/**
+		 * Add values to an index map for a given index from this set and a given set of for indices.
+		 * 
+		 * Also sets the evaluation values of the index variables.
+		 */
+		public void fillIndexMap(Map<String,FExp> indexMap, Index i, Iterable<? extends CommonForIndex> forIndices) {
+			int j = 0;
+			int[] ii = translate(i).index();
+			for (CommonForIndex fi : forIndices) {
+				indexMap.put(fi.name(), new FIntegerLitExp(ii[j]));
+				fi.setEvaluationValue(new CValueInteger(ii[j]));
+				j++;
+			}
+		}
+				
+		
+		/**
+		 * Internal constructor to create an Indices object based on array sizes. 
+		 */
+		protected Indices(Size size) {
+			ndims = size.ndims();
+            this.size = size;
+			hash = -1;
+			if (ndims < 4) {
+				int h = 0;
+				for (int i = 0; i < ndims; i++) {
+					int s = size.get(i);
+					if (s > 1023) 
+						return;
+					h = (h << 10) | s;
+				}
+				hash = h;
+			}
+		}
+				
+		/**
+		 * Calculate the internal index in an Array that spans this Indices.
+		 */
+		protected int internal(Index i) {
+			if (i.ndims() > ndims)
+				throw new UnsupportedOperationException("Too many dimensions in Index.");
+			int[] index = i.index();
+			int res = 0;
+			for (int j = 0; j < ndims; j++)
+				res = res * size.get(j) + (j < index.length ? index[j] - 1 : 0);
+			return res;
+		}
+		
+        /**
+         * Iterates over all indices spanned by this Indices.
+         */
+        protected class IIterator implements Iterator<Index> {
+            
+            protected IIndex index;
+            protected int max;
+            
+            public IIterator() {
+                index = new IIndex();
+                max = numElements() - 1;
+            }
+            
+            public boolean hasNext() {
+                return index.internal < max;
+            }
+            
+            public Index next() {
+                if (index.internal >= max)
+                    throw new NoSuchElementException();
+                index.internal++;
+                if (ndims == 0) {
+                    return Index.NULL;
+                }
+                int[] ind = index.index();
+                int i;
+                for (i = ndims - 1; i > 0 && ind[i] >= size.get(i); i--)
+                    ind[i] = 1;
+                ind[i]++;
+                return index;
+            }
+            
+            public void remove() {
+                throw new UnsupportedOperationException();
+            }
+            
+        }
+		
+		/**
+		 * Internal implementation of Index.
+		 */
+		protected class IIndex extends Index {
+			
+			public int internal;
+			
+			/**
+			 * Construct an Index over the number of dimensions of the enclosing Indices, 
+			 *        pointing at the spot before the first cell.
+			 */
+			public IIndex() {
+				super(ndims);
+				internal = -1;
+			}
+			
+			/**
+			 * Return the internal index in an Array of the cell this Index refers to.
+			 *        Only for use from Array.
+			 * 
+			 * @param ind  the indices to resolve the internal index with
+			 */
+			public int internal(Indices ind) {
+				if (Indices.this == ind || (hash != -1 && hash == ind.hash)) 
+					return internal;
+				else
+					return ind.internal(this);
+			}
+			
+		}
+		
+	}
+
+	/**
+	 * NonConsecutiveIndices describes a set of array indices that isn't 
+	 *        limited to 1..n.
+	 * 
+	 * For example, consider the declaration Real x[4,4,4] and the access
+	 * x[:,1,1:2:4]. The array indices for the declaration is then
+	 * {1,2,3,4}, {1,2,3,4}, and {1,2,3,4} respectively for the three dimensions.
+	 * For the access, we have {1,2,3,4}, {1} and {1,3} respectively. The access 
+	 * will have size [4,2], and this class will handle the necessary translations 
+	 * between indices.
+	 */
+	public class NonConsecutiveIndices extends Indices {
+		// The indices are stored as a list of integer arrays.
+		protected ArrayList<int[]> indices; 
+		protected Index trans;
+		protected boolean[] trim;
+		
+		/**
+		 * Create a NonConsecutiveIndices object based on FArraySubcripts.
+		 *        Use Indices.create(FArraySubscripts fas).
+		 */
+        public static NonConsecutiveIndices createFromFas(FArraySubscripts fas) {
+			int n = fas.numSubscript();
+			ArrayList<int[]> ind = new ArrayList<int[]>(n);
+			boolean[] trim = new boolean[n];
+            createFromFas(Collections.singleton(fas), ind, trim);
+			return new NonConsecutiveIndices(ind, trim, 0);
+		}
+		
+		/**
+		 * Create a NonConsecutiveIndices object based on a list of FArraySubcripts.
+		 *        Use Indices.create(ArrayList<FArraySubscripts> fasl).
+		 */
+		public static NonConsecutiveIndices createFromFas(java.util.List<FArraySubscripts> fasl) {
+			int n = 0;
+			for (FArraySubscripts fas : fasl)
+				n += fas.numSubscript();
+			ArrayList<int[]> ind = new ArrayList<int[]>(n);
+			boolean[] trim = new boolean[n];
+            createFromFas(fasl, ind, trim);
+			return new NonConsecutiveIndices(ind, trim, 0);
+		}
+        
+        private static void createFromFas(Iterable<FArraySubscripts> fasl, ArrayList<int[]> ind, boolean[] trim) {
+            int i = 0;
+            for (FArraySubscripts fas : fasl) {
+                for (Subscript s : fas.subscripts()) { 
+                    ind.add(s.myIndices());
+                    trim[i++] = s.ndims() == 0;
+                }
+            }
+        }
+        
+        /**
+         * Create a NonConsecutiveIndices object based on a list of int arrays
+         *        Use Indices.create(ArrayList<int[]> ind).
+         * 
+         * @param ind   one array for each dimension, containing the indices to span for that dimension.
+         * @param trim  remove dimensions that only span one index.
+         */
+        public static NonConsecutiveIndices create(ArrayList<int[]> ind, boolean trim) {
+            boolean[] trims = new boolean[ind.size()];
+            for (int i = 0; i < trims.length; i++)
+                trims[i] = trim && ind.get(i).length == 1;
+            return new NonConsecutiveIndices(ind, trims, 0);
+        }
+
+        /**
+         * Create a NonConsecutiveIndices object based on a Size, an array of dimensions to trim, 
+         * and a number of extra dimensions to add to the end.
+         */
+        public static NonConsecutiveIndices create(Size s, int[] dim, int extra) {
+            int n = s.ndims();
+            ArrayList<int[]> ind = new ArrayList<int[]>(n);
+            boolean[] trims = new boolean[n];
+            for (int i = 0; i < n; i++) {
+                ind.add(new int[] { 1 });
+                trims[i] = true;
+            }
+            for (int d : dim) {
+                if (d < n) {
+                    int[] ii = new int[s.get(d)];
+                    for (int i = 0; i < ii.length; i++)
+                        ii[i] = i + 1;
+                    ind.set(d, ii);
+                    trims[d] = false;
+                }
+            }
+            return new NonConsecutiveIndices(ind, trims, extra);
+        }
+
+        /**
+         * Internal constructor to create a NonConsecutiveIndices object based on a 
+         * list of int arrays containing the used indexes on the underlying array.
+         * 
+         * @param trim   the dimensions to remove
+         * @param extra  number of extra dimensions of length 1 to add
+         */
+        protected NonConsecutiveIndices(ArrayList<int[]> ind, boolean[] trim, int extra) {
+            super(getSize(ind, trim, extra));
+            this.trim = trim;
+            indices = ind;
+            trans = intializeTranslated(ind.size());
+        }
+
+        /**
+         * Translates an Index to the corresponding Index in the underlying expression. 
+         * If i has fewer dimensions than this, than it should correspond to the outermost ones.
+         * 
+         * Note that the returned Index may be changed by subsequent calls to this method, 
+         * use {@link Index.fix()} if you need to save it.
+         */
+        @Override
+        public Index translate(Index i) {
+            int[] ii = i.index();
+            int transNDims = ii.length + trim.length - ndims;
+            if (trans.ndims() != transNDims) {
+                trans = intializeTranslated(transNDims);
+            }
+            int[] ti = trans.index();
+            for (int ji = 0, jt = 0; ji < ndims && jt < ti.length; ji++, jt++) {
+                while (trim[jt]) {
+                    jt++;
+                }
+                ti[jt] = indices.get(jt)[ii[ji] - 1];
+            }
+            return trans;
+        }
+
+        /**
+         * Prepare a new Index for returning from the translate method.
+         */
+        protected Index intializeTranslated(int n) {
+            Index trans = new Index(n);
+            for (int i = 0; i < n; i++) {
+                if (indices.get(i).length > 0) {
+                    trans.index()[i] = indices.get(i)[0];
+                }
+            }
+            return trans;
+        }
+
+        @Override
+        public Indices translated() {
+            return new TranslatedIndices(this);
+        }
+
+        private static class TranslatedIndices extends Indices {
+            
+            private NonConsecutiveIndices indices;
+            
+            private TranslatedIndices(NonConsecutiveIndices indices) {
+                super(indices.size);
+                this.indices = indices;
+            }
+            
+            @Override
+            public Iterator<Index> iterator() {
+                return new Iter();
+            }
+            
+            private class Iter implements Iterator<Index> {
+                
+                private Iterator<Index> iterator;
+                
+                private Iter() {
+                    iterator = indices.iterator();
+                }
+                
+                public boolean hasNext() {
+                    return iterator.hasNext();
+                }
+                public Index next() {
+                    return indices.translate(iterator.next());
+                }
+                public void remove() {
+                    iterator.remove();
+                }
+            }
+        }
+
+		/**
+		 * Calculate size for this indices from a list of int arrays containing the 
+		 * used indexes on the underlying array.
+		 */
+		protected static Size getSize(ArrayList<int[]> ind, boolean[] trim, int extra) {
+			int n = 0;
+			for (boolean tr : trim)
+				if (!tr)
+					n++;
+            if (n + extra == 0) {
+                return Size.SCALAR;
+            }
+			MutableSize size = new MutableSize(n + extra);
+			for (int i = 0; i < trim.length; i++)
+				if (!trim[i])
+					size.append(ind.get(i).length);
+			for (int i = 0; i < extra; i++)
+				size.append(1);
+			return size;
+		}
+		
+        /**
+         * Create a new Indices object with the earlier active dimensions (trim=false)
+         * specified by the corresponding position in index and the earlier inactive
+         * dimensions enabled.
+         */
+        public NonConsecutiveIndices locked(Index index, boolean[] b) {
+            ArrayList<int[]> newInd = new ArrayList<int[]>();
+            boolean[] newTrim = new boolean[indices.size()];
+            index = translate(index);
+            for (int k = 0; k < indices.size(); k++) {
+                if (trim[k]) {
+                    newInd.add(indices.get(k));
+                } else {
+                    int[] t = new int[1];
+                    t[0] = index.index()[k];
+                    newInd.add(t);
+                }
+                b[k] = trim[k];
+                newTrim[k] = false;
+            }
+            return new NonConsecutiveIndices(newInd, newTrim, 0);
+        }
+        
+        /**
+         * Create a new Indices object with the earlier inactive dimensions 
+         * enabled and replaced using the surrounding size for the corresponding
+         * dimension in fas. 
+         */
+        public static NonConsecutiveIndices expIndices(Size s, FArraySubscripts fas) {
+            int n2 = s.ndims();
+            int n1 = n2 - fas.ndims();
+            ArrayList<int[]> newInd = new ArrayList<int[]>();
+            boolean[] newTrim = new boolean[n2];
+            for (int k = 0; k < n1; k++) {
+                newInd.add(ASTNode.range(s.get(k)));
+                newTrim[k] = false;
+            }
+            fas.expIndices(newInd, newTrim, n1);
+            return new NonConsecutiveIndices(newInd, newTrim, 0);
+        }
+        
+        /**
+         * Create a new Indices object with the earlier inactive dimensions 
+         * enabled and replaced using subscript size for the corresponding
+         * dimension in fas. Earlier active dimensions are disabled.
+         */
+        public static NonConsecutiveIndices fasIndices(FArraySubscripts fas) {
+            ArrayList<int[]> newInd = new ArrayList<int[]>();
+            boolean[] newTrim = new boolean[fas.numSubscript()];
+            for (int k = 0; k < newTrim.length; k++) {
+                Subscript fs = fas.subscript(k);
+                if (fs.ndims() == 0 || fs.variability().indexParameterOrLess()) {
+                    newInd.add(new int[0]);
+                    newTrim[k] = true;
+                } else {
+                    newInd.add(ASTNode.range(fs.size().numElements()));
+                    newTrim[k] = false;
+                }
+            }
+            return new NonConsecutiveIndices(newInd, newTrim, 0);
+        }
+    }
+    
+    public abstract void FArraySubscripts.expIndices(ArrayList<int[]> newInd, boolean[] newTrim, int offset);
+    public void FArrayExpSubscripts.expIndices(ArrayList<int[]> newInd, boolean[] newTrim, int offset) {
+        for (int k = 0; k < getNumFSubscript(); k++) {
+            FSubscript fs = getFSubscript(k);
+            if (fs.variability().indexParameterOrLess()) {
+                int[] i = fs.myIndices();
+                newInd.add(i);
+                newTrim[k + offset] = false;
+            } else {
+                newInd.add(ASTNode.range(fs.mySize().get(0)));
+                newTrim[k + offset] = true;
+            }
+        }
+    }
+    public void FArrayLitSubscripts.expIndices(ArrayList<int[]> newInd, boolean[] newTrim, int offset) {
+        for (int k = 0; k < subscripts.length; k++) {
+            int[] i = subscript(k).myIndices();
+            newInd.add(i);
+            newTrim[k + offset] = false;
+        }
+    }
+
+
+    public static int[] ASTNode.range(int n) {
+        int[] res = new int[n];
+        for (int i = 0; i < n; i++) {
+            res[i] = i + 1;
+        }
+        return res;
+    }
+}

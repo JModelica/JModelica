@@ -1,0 +1,104 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.StringReader;
+import java.util.Collection;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public class ErrorTestCase extends TestCase {
+
+    protected String errorMessage;
+
+    /**
+     * Perform tests on a set of semantic problems.
+     * 
+     * @return  <code>true</code> if test case shoule stop after this method
+     */
+    protected boolean testProblems(Collection<Problem> problems) {
+        filterProblems(problems);
+
+        if (problems.size() == 0) {
+            return getCheckType() == ErrorCheckType.CHECK;
+        }
+
+        String test = formatErrorMessage(problems);
+        String correct = getErrorMessage();
+        String f_test = filterTestResult(test, true);
+        String f_correct = filterTestResult(correct, false);
+
+        compareResult("Wrong errors reported.", f_correct, f_test);
+        return true;
+    }
+
+    /**
+     * Format a collection of problems into an error report, the same way the compiler 
+     * would.
+     */
+    protected String formatErrorMessage(Collection<Problem> problems) {
+        return new CompilerException(problems).getMessage(true);
+    }
+
+	/**
+	 * Perform tests on the set of semantic problems found after transform canonical step.
+	 * 
+	 * @return  <code>true</code> if test case shoule stop after this method
+	 */
+	protected boolean testTransformedProblems(Collection<Problem> problems) {
+		if (!testProblems(problems))
+			fail("No errors reported.");
+		return true;
+	}
+
+    private static Map<Pattern, String> resultFilters = createResultFilters();
+
+    private static Map<Pattern, String> createResultFilters() {
+        Map<Pattern, String> m = new LinkedHashMap<Pattern, String>();
+        m.put(Pattern.compile("^\\s*[0-9]+.+:"), "");
+        m.put(Pattern.compile("in ([a-zA-Z]+) '([^'\\\\]|\\\\.|/.)+'([:,])"), "in $1 '...'$3");
+        m.put(Pattern.compile("in file '([^'\\\\]|\\\\.|/.)+'"), "in file '...'");
+        m.put(Pattern.compile("Resolved path: '([^'\\\\]|\\\\.|/.)+'"), "Resolved path: '...'");
+        m.put(Pattern.compile("'[a-zA-Z]:\\\\([^\\\\^']+\\\\)*([^']+)'"), "'$2'");
+        m.put(Pattern.compile("\\\\"),"/");
+        return m;
+    }
+
+    public String filterTestResult(String str, boolean adjustLine) {
+        if (adjustLine) {
+            str = adjustErrorLines(str, getSourceFileName(), getBeginLine());
+        }
+        str = filterTestResult(str, resultFilters);
+        return str;
+    }
+
+	/**
+	 * @return the errorMessage
+	 */
+	public String getErrorMessage() {
+		return errorMessage;
+	}
+
+	/**
+	 * @param errorMessage the errorMessage to set
+	 */
+	public void setErrorMessage(String errorMessage) {
+		this.errorMessage = errorMessage;
+	}
+
+}

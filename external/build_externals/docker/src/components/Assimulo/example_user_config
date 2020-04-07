@@ -1,0 +1,29 @@
+OS=linux
+PLATFORM=# set to ubuntu or centos
+DIST_VERSION=# set to distribution platform, example 18.04 for ubuntu, 7.4.1708 for centos
+PYTHON_VERSION=# set to 2.7, currently we only support 2.7
+BITNESS=# set to 64, we only support 64 for linux environments
+
+
+# PATH_TO_MOUNT is the path needed to mount JModelica into the Docker.
+# Note you need to have double slash in the beginning.
+# Set to your local checkout of JModelica
+PATH_TO_MOUNT=# modify this //c/Users/your-username/name-of-branch
+
+
+# Set JM_HOME to your local checkout of JModelica
+JM_HOME=C:/Users/your-username/name-of-branch
+
+#   for CentOS set to lib64/python${PYTHON_VERSION}/site-packages
+#   for Ubuntu set to lib/python${PYTHON_VERSION}/site-packages
+PLATFORM_SITE_PACKAGES=# see above
+
+#   for CentOS set to /usr/lib64/python${PYTHON_VERSION}/site-packages/assimulo
+#   for Ubuntu set to /usr/local/lib/python${PYTHON_VERSION}/dist-packages/assimulo
+WHEEL_INSTALL_DIR=# see above
+
+
+# Dont modify the variables below
+DISTRO=${PLATFORM}_${DIST_VERSION}_${PYTHON_VERSION}
+ASSIMULO_FOLDER_INSTALL_DIR=${JM_HOME}/${DISTRO}/assimulo/folder/assimulo
+EXTRA_SETUP_ARGS=--with_openmp=True

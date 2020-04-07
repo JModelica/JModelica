@@ -1,0 +1,1057 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import java.util.Collection;
+import java.util.LinkedHashSet;
+import java.util.BitSet;
+//import org.jmodelica.modelica.compiler.AliasManager.AliasVariable;
+
+/**
+ * Computation of alias sets.
+ */
+aspect AliasVariables {
+
+    /**
+     * Check if an FVariable is an alias.
+     * 
+     * Returns true if alias, else false.
+     * 
+     * @return True if alias, else false.
+     */
+    syn boolean FAbstractVariable.isAlias() = false; 
+    eq FVariable.isAlias()                  = alias() != null; 
+    
+    /**
+     * Retreives the alias set for this variable or null if not an alias
+     * 
+     *  @return AliasSet that this variable belongs to
+     */
+    syn AliasManager.AliasSet FVariable.aliasSet() = myFClass().getAliasManager().getAliasSet(this);
+
+    /**
+     * Get the model variable corresponding to the alias.
+     * 
+     * If the FVariable is an alias, the alias() return corresponding model
+     * FVariable, else null.
+     * 
+     * @return The corresponding model variable if alias, otherwise null.
+     */
+    syn FVariable FAbstractVariable.alias() = null;
+
+    syn lazy FVariable FVariable.alias() {
+        AliasManager.AliasSet aliasSet = aliasSet();
+        if (aliasSet == null || inRecord()) {
+            return null;
+        }
+        FVariable res = aliasSet.getModelVariable().getFVariable();
+        return (res == this) ? null : res;
+    }
+
+	/**
+	 * Returns true if the alias is negated otherwise false.
+	 * 
+	 * @return True if negated alias, otherwise false.
+	 */
+	syn boolean FAbstractVariable.isNegated() = false;
+
+    eq FVariable.isNegated() {
+        AliasManager aliasManager = myFClass().getAliasManager();
+        AliasManager.AliasVariable alias = aliasManager.getAliasVariable(this);
+        if (alias == null) {
+            return false;
+        }
+        AliasManager.AliasSet aliasSet = alias.getSet();
+        AliasManager.AliasVariable iav = aliasSet.getModelVariable();
+        return (alias.isNegated() != iav.isNegated());
+    }
+
+    /**
+     * Set each attribute of this variable to the most relevant version from the 
+     * variables of the alias set.
+     * 
+     * What is most relevant depends on the attribute, see respective subclass of 
+     * AliasManager.AttributePropagator.
+     */
+    public void FVariable.propagateAttributesFromAlias() {
+        AliasManager.AliasSet aliasSet = aliasSet();
+        if (aliasSet != null) {
+            AliasManager.AliasVariable myAv = aliasSet.getModelVariable();
+            if (myAv.getFVariable() == this && shouldPropagateAttributesForAlias()) {
+                AliasManager.AttributePropagatorMap map = new AliasManager.AttributePropagatorMap(myAv);
+                for (AliasManager.AliasVariable av : aliasSet) 
+                    if (av.getFVariable() != this) 
+                        map.addAlias(av);
+                map.propagate();
+            }
+        }
+    }
+
+    /**
+     * Should attribute propatation be done for alias sets keeping this variable?
+     * 
+     * Intended to allow extensions to deactivate alias propagation for some variables.
+     */
+    syn boolean FVariable.shouldPropagateAttributesForAlias() = true;
+
+	/**
+	 * An FClass has an alias manager.
+	 */
+	private AliasManager FClass.aliasManager = new AliasManager();
+
+	/**
+	 * Get the alias manager.
+	 * 
+	 * @return the alias manager.
+	 */
+	public AliasManager FClass.getAliasManager() {
+		return aliasManager;
+	}
+	
+	/**
+	 * AliasManager contains the connection sets of an FClass.
+	 * 
+	 * The alias sets are build by adding pairs of FVariables, in addition
+	 * to information about whether the alias pair is negated.
+	 */
+	public class AliasManager {
+	
+		// Alias error messages.
+		private Collection<String> aliasErrorMessages = new ArrayList<String>();
+		
+		// A set of alias sets
+		private Set<AliasSet> aliasSets = new LinkedHashSet<AliasSet>();
+		
+		// A map that maps FVariable to its alias set.
+		private Map<FVariable, AliasVariable> variableMap = new HashMap<FVariable, AliasVariable>();
+		
+		/**
+		 * Report any detected alias errors.
+		 * 
+		 * @param fc  where to report errors
+		 */
+		public void reportAliasErrors(FClass fc) {
+			for (String msg : aliasErrorMessages)
+				fc.error(msg);
+			aliasErrorMessages.clear();
+		}
+		
+		/**
+		 * Get the set of alias sets.
+		 * 
+		 * @return A set containing the alias sets.
+		 */
+		public Set<AliasSet> getAliasSets() {
+			return aliasSets;
+		}
+		
+		/**
+		 * Get the AliasVariable object corresponding to an FVariable
+		 * 
+		 * @param fv An FVariable object
+		 * @return The alias variable that corresponds to an FVariable
+		 */
+		public AliasVariable getAliasVariable(FVariable fv) {
+			return variableMap.get(fv);
+		}
+		
+
+		/**
+		 * Retrieve the alias set corresponding to an FVariable.
+		 * 
+		 * Returns null if the FVariable is not present in an alias set.
+		 * 
+		 * @param fv  An FVariable.
+		 * @return The alias set corresponding to the alias variable.
+		 */
+		public AliasSet getAliasSet(FVariable fv) {
+			AliasVariable alias = variableMap.get(fv);
+			if (alias == null)
+				return null;
+			return alias.getSet();
+		}
+		
+		/**
+		 * Remove a variable and its alias set from the alias manager.
+		 */
+        public void unAlias(FVariable fv) {
+            AliasSet as = fv.aliasSet();
+            for (AliasVariable av : as)
+                variableMap.remove(av.fv);
+            aliasSets.remove(as);
+        }
+        
+		/**
+		 * Add a pair of alias variables to the alias manager.
+		 */
+		public void addAliasVariables(AliasPair pair) {
+			addAliasVariables(pair.fv1, pair.fv2, pair.negated);
+		}
+
+		/**
+		 * Add a pair of alias variables to the alias manager.
+		 * 
+		 * @param fvA An FVariable.
+		 * @param fvB Another FVariable.
+		 * @param neg True if the alias pair is negated, otherwise false.
+		 * 
+		 */
+		public void addAliasVariables(FVariable fvA, FVariable fvB, boolean neg) {
+			/*
+			 * Rules for alias sets:
+			 * 
+			 *  1. An alias variable can only occur in one alias set
+			 *  2. An alias variable can occur either negated or
+			 *     non-negated in an alias set, not both.
+			 *  
+			 *  These rules are enforced by the algorithm below: if a
+			 *  rule is about to be broken an error message is generated.
+			 *  			
+			 *  Notice that LinkedHashSets are expected to be persistent, 
+			 *  therfore alias sets need to be temporarily removed from the
+			 *  set, then modified, then reinserted.
+			 */
+			
+			AliasVariable aliasA = getAliasVariable(fvA);
+			AliasVariable aliasB = getAliasVariable(fvB);
+			
+			if (aliasA != null && aliasB != null) {
+				merge(aliasA, aliasB, neg);
+			} else if (aliasA != null) {
+				add(aliasA.getSet(), fvB, aliasA.isNegated() ? !neg : neg);
+			} else if (aliasB != null) {
+				add(aliasB.getSet(), fvA, aliasB.isNegated() ? !neg : neg);
+			} else {
+				join(fvA, fvB, neg);
+			}
+            if (fvA.isTemporary())
+                getAliasVariable(fvA).setTempAssignRight(fvB);
+		}
+		
+		private static final String MERGE_ERROR_MESSAGE = 
+				"Alias error: trying to add the %salias pair (%s,%s%s) to the alias set %s";
+		
+		/**
+		 * Merges two alias variables <code>aliasA</code> and <code>aliasB</code>.
+		 * The implementation also check the rules for a alias set is maintained.
+		 * 
+		 * @param aliasA First alias variable
+		 * @param aliasB Second alias variable
+		 * @param neg True if the alias pair is negated, otherwise false.
+		 */
+		private void merge(AliasVariable aliasA, AliasVariable aliasB, boolean neg) {
+			AliasSet mergeSet = aliasB.getSet();
+			AliasSet resultSet = aliasA.getSet();
+			if (resultSet == mergeSet) {
+				if ((aliasA.isNegated() == aliasB.isNegated()) == neg) {
+					aliasErrorMessages.add(String.format(MERGE_ERROR_MESSAGE, 
+							neg ? "negated " : "", 
+							aliasA.getFVariable().name(), 
+							neg ? "-" : "", 
+							aliasB.getFVariable().name(), 
+							resultSet)); 
+				}
+				return;
+			}
+			boolean shouldNegate = aliasA.isNegated() == aliasB.isNegated() ? neg : !neg;
+            resultSet.merge(mergeSet, shouldNegate);
+			aliasSets.remove(mergeSet);
+		}
+		
+		/**
+		 * Add a new variable to an exisiting alias set.
+		 * 
+		 * @param set The existing alias set
+		 * @param fv The new alias variable
+		 * @param neg True if the alias variable is negated, otherwise false.
+		 */
+		private void add(AliasSet set, FVariable fv, boolean neg) {
+			set.add(new AliasVariable(fv, neg, variableMap));
+		}
+		
+		/**
+		 * Creates a new alias set based on the two variables.
+		 * 
+		 * @param fvA First variable
+		 * @param fvB First variable
+		 * @param neg True if the alias pair is negated, otherwise false.
+		 */
+		private void join(FVariable fvA, FVariable fvB, boolean negate) {
+			AliasSet set = new AliasSet();
+			aliasSets.add(set);
+			set.add(new AliasVariable(fvA, false, variableMap));
+			set.add(new AliasVariable(fvB, negate, variableMap));
+		}
+		
+		/**
+		 * Print the alias sets, with start attributes.
+		 * 
+		 * @return A string containing the alias sets.
+		 */
+		@Override
+		public String toString() {
+			StringBuilder str = new StringBuilder();
+			for (AliasSet aliasSet : aliasSets) {
+				str.append(aliasSet.toStringWithStart() +"\n");
+			}
+			return str.toString();		
+		}
+
+        /**
+         * Removes the alias set for the temporary variable provided.
+         * Errorchecks are done to ensure that only temporary variables are
+         * removed. However if the system variable is a temporary variable
+         * then all of the variables in the set should be temporaries.
+         * 
+         * This method returns a collection with all the variables removed
+         */
+        public Collection<FVariable> removeTemporaryVariableSet(FVariable fv) {
+            if (!fv.isTemporary()) {
+                throw new UnsupportedOperationException("FVariable " + fv.name() + " of java class " + fv.getClass().getSimpleName() + " is not a temporary variable!");
+            }
+            AliasVariable av = variableMap.get(fv);
+            if (av == null) {
+                return Collections.<FVariable>emptyList();
+            }
+            AliasSet as = av.getSet();
+            Collection<FVariable> removedVars = new ArrayList<FVariable>();
+            for (AliasVariable aliasVar : as) {
+                if (!aliasVar.getFVariable().isTemporary()) {
+                    throw new UnsupportedOperationException("FVariable " + fv.name() + " of java class " + fv.getClass().getSimpleName() + " is not a temporary variable!");
+                }
+                variableMap.remove(aliasVar.getFVariable());
+                removedVars.add(aliasVar.getFVariable());
+            }
+            aliasSets.remove(as);
+            return removedVars;
+        }
+
+		/**
+		 * A class representing a set of alias variables.
+		 */
+		public class AliasSet implements Iterable<AliasVariable> {
+			
+			// List of aliases
+			private java.util.List<AliasVariable> aliases = new ArrayList<AliasVariable>();
+            private AliasVariable model = null;
+            private long score = 0;
+			
+			/**
+			 * Private constructor
+			 */
+			private AliasSet() {
+			}
+			
+            /*
+             * Recompute the model variable.
+             */
+            public void recompute() {
+                AliasVariable oldModelVariable = model;
+                java.util.List<AliasVariable> oldAliases = aliases;
+                aliases = new ArrayList<>();
+                model = null;
+                score = 0;
+                for (AliasVariable v : oldAliases) {
+                    add(v);
+                }
+            }
+			
+			/**
+			 * An iterator over all the alias variables in this set.
+			 * 
+			 * @return An iterator for this set
+			 */
+			@Override
+			public Iterator<AliasVariable> iterator() {
+				return aliases.iterator();
+			}
+			
+			/**
+			 * Adds a new alias variable to this set.
+			 * 
+			 * @param newAlias Alias variable to add
+			 */
+			private void add(AliasVariable newAlias) {
+                _add(newAlias);
+                model(newAlias);
+			}
+			
+            /**
+             * Adds a new alias variable to this set
+             * without updating model variable.
+             * 
+             * @param newAlias Alias variable to add
+             */
+            private void _add(AliasVariable newAlias) {
+                newAlias.setSet(this);
+                aliases.add(newAlias);
+            }
+            
+            /**
+             * Update model variable if <code>newAlias</code>
+             * has a better alias heuristic score.
+             * 
+             * @param newAlias Alias variable to check
+             */
+            private void model(AliasVariable newAlias) {
+                if (newAlias != null) {
+                    long newScore = newAlias.getFVariable().aliasHeuristicScore();
+                    if (newScore > score) {
+                        model = newAlias;
+                        score = newScore;
+                    }
+                }
+            }
+            
+            /**
+             * Add all AliasVariables from <code>mergeSet</code> into
+             * <code>this</code>. Does not modify or remove <code>mergeSet</code>.
+             * 
+             * @param mergeSet Alias set absorb
+             * @param negate True if set should be negated
+             */
+            private void merge(AliasSet mergeSet, boolean negate) {
+                for (AliasVariable a : mergeSet) {
+                    if (negate)
+                        a.negated = !a.negated;
+                    _add(a);
+                }
+                if (mergeSet.score > score) {
+                    model = mergeSet.model;
+                    score = mergeSet.score;
+                }
+            }
+            
+			
+			/**
+             * Get the model variable of this alias set.
+			 * 
+             * @return The model variable of this alias set.
+			 */
+            public AliasVariable getModelVariable() {
+                return model;
+			}
+			
+			/**
+			 * Method for retreiving the number of aliases in this set.
+			 * 
+			 * @return The number of aliases in this set
+			 */
+			public int numAliases() {
+				return aliases.size();
+			}
+			
+			@Override
+			public String toString() {
+				return toString(false);
+			}
+			
+			public String toStringWithStart() {
+				return toString(true);
+			}
+			
+			private String toString(boolean withStart) {
+				String sep = withStart ? ", " : ",";
+				StringBuilder str = new StringBuilder();
+				str.append("{");
+				
+                AliasVariable model = getModelVariable();
+                str.append(model.toString(withStart));
+				
+				for (AliasVariable alias : aliases) {
+                    if (alias == model)
+						continue;
+					str.append(sep);
+					str.append(alias.toString(withStart));
+				}
+				str.append("}");
+				return str.toString();
+			}
+			
+			/**
+			 * A more verbose version of toString().
+			 * 
+			 * @return More info about this set
+			 */
+			public String toStringVerbose() {
+				StringBuilder str = new StringBuilder();
+                str.append("Alias set: (" + getModelVariable().getFVariable().name() + ")\n");
+				for (AliasVariable alias : aliases) {
+					if (alias.isNegated()) {
+						str.append("-");
+					}
+					str.append(alias.getFVariable().name());
+					str.append(" " + alias.getFVariable().aliasHeuristicScore() + " ");
+					str.append(" " + alias.getFVariable().varKind() + "\n");
+				}
+				return str.toString();
+			}
+
+            protected void removeVariableFromSet(AliasVariable var) {
+                aliases.remove(var);
+            }
+
+			
+		}
+		
+		/**
+		 * AliasVariable is used to encapsulate an FVariable and whether
+		 * the alias is negated. 
+		 * 
+		 * AliasVariable implements the Comparable interface and objects of the 
+		 * class are used in the alias sets.
+		 */
+		public static class AliasVariable {
+			
+			// The FVariable
+			private FVariable fv;
+			// Negated attribute
+			private boolean negated = false;
+			
+			// The set that this alias variable belong to
+			private AliasSet set;
+			
+			/**
+			 * Constructor.
+			 * 
+			 * @param fv           An FVariable.
+			 * @param negated      True if the alias is negated, otherwise false.
+			 * @param variableMap  Map to add the new AliasVariable to.
+			 */
+			private AliasVariable(FVariable fv, boolean negated, Map<FVariable, AliasVariable> variableMap) {
+				this.fv = fv;
+				this.negated = negated;
+				variableMap.put(fv, this);
+			}
+		
+			/**
+			 * Returns true if the alias is negated.
+			 * 
+			 * @return True if the alias is negated, otherwise false.
+			 */
+			public boolean isNegated() {
+				return negated;
+			}
+		
+			/**
+			 * Getter for the FVariable.
+			 * 
+			 * @return The FVariable.
+			 */
+			public FVariable getFVariable() {
+				return fv;
+			}	
+			
+			/**
+			 * Returns the alias set that this alias variable belong to.
+			 * 
+			 * @return Alias set that this alias belong to
+			 */
+			public AliasSet getSet() {
+				return set;
+			}
+			
+			/**
+			 * Private method for changing the set that this alias belong to.
+			 * This method should only be used when the alias initially is added
+			 * of when two alias sets are merged.
+			 * 
+			 * @param set The new set that this alias should belong to
+			 */
+			private void setSet(AliasSet set) {
+				this.set = set;
+			}
+			
+			@Override
+			public String toString() {
+				return toString(false);
+			}
+			
+			protected String toString(boolean withStart) {
+				StringBuilder buf = new StringBuilder();
+				if (isNegated())
+					buf.append('-');
+				FVariable fv = getFVariable();
+				buf.append(fv.displayName());
+				if (withStart && fv.startAttributeSet()) {
+					buf.append("(start=");
+                    buf.append(fv.startAttributeExp().toString());
+					buf.append(")");
+				}
+				return buf.toString();
+			}
+			
+            /**
+             * This tempAssignRight functionality is needed when resolving the
+             * original alias variable for variable incidences in equations.
+             * Due to how the functioninlining works this information would
+             * otherwise be lost. E.g.:
+             *   x = z;
+             *   temp_1 = x;
+             *   y = cos(temp_1);
+             * Which might eventually become:
+             *   y = cos(z);
+             * In this situation we wan't to know that the x was the original
+             * reference in the cos expression. Hence this functionality
+             */
+            private FVariable tempAssignRight;
+            
+            private void setTempAssignRight(FVariable var) {
+                tempAssignRight = var;
+            }
+            
+            public FVariable getTempAssignRight() {
+                return tempAssignRight;
+            }
+		}
+		
+		
+		public static class AttributePropagatorMap {
+
+			private Map<String, AttributePropagator> map;
+			private AliasVariable target;
+
+			public AttributePropagatorMap(AliasVariable av) {
+				map = new LinkedHashMap<String,AttributePropagator>();
+				target = av;
+				addAlias(av);
+			}
+
+			public void propagate() {
+				List<FAttribute> l = new List<FAttribute>();
+				for (AttributePropagator ap : map.values())
+					ap.propagate(l);
+				target.getFVariable().setFAttributeList(l);
+			}
+			
+			public void addAlias(AliasVariable av) {
+				FVariable fv = av.getFVariable();
+				boolean neg = av.isNegated();
+				for (FAttribute attr : fv.getFAttributes())
+					addAttribute(attr, fv, neg);
+				if (fv.myFDerivedType() != null)
+					for (FAttribute attr : fv.myFDerivedType().getFAttributes())
+						addTypeAttribute(attr, fv, neg);
+			}
+			
+			private void addAttribute(FAttribute attr, FVariable fv, boolean neg) {
+				get(attr.name()).addAttribute(attr, neg);
+			}
+
+			private void addTypeAttribute(FAttribute attr, FVariable fv, boolean neg) {
+				AttributePropagator ap = get(attr.name());
+				if (!ap.lastIsInFV(fv))
+					ap.addAttribute(attr, neg);
+			}
+
+			private AttributePropagator get(String name) {
+				AttributePropagator ap = map.get(name);
+				if (ap == null) {
+					ap = createAttributePropagator(name);
+					ap.addToMap(map);
+				}
+				return ap;
+			}
+
+			private AttributePropagator createAttributePropagator(String name) {
+				if (name.equals(FAttribute.START) || name.equals(FAttribute.NOMINAL))
+					return new LevelAttributePropagator(name);
+				else if (name.equals(FAttribute.FIXED))
+				    return new BooleanReduceAttributePropagator(name, false);
+                else if (name.equals(FAttribute.MIN) || name.equals(FAttribute.MAX))
+                    return new MinMaxAttributePropagator(name);
+				else
+					return new KeepAttributePropagator(name);
+			}
+
+			private abstract class AttributePropagator {
+
+			    protected String name;
+				protected ArrayList<FAttribute> list = new ArrayList<FAttribute>();
+				protected BitSet neg = new BitSet();
+                
+                public AttributePropagator(String name) {
+                    this.name = name;
+                }
+
+				public void addAttribute(FAttribute attr, boolean neg) {
+					this.neg.set(list.size(), neg);
+					list.add(attr);
+				}
+
+				public boolean lastIsInFV(FVariable fv) {
+					int n = list.size();
+					return n > 0 && list.get(n - 1).isInFV(fv);
+				}
+				
+				public void addToMap(Map<String, AttributePropagator> map) {
+                    map.put(name, this);
+				}
+
+                protected void select(int i, List<FAttribute> l) {
+                    if (i < 0)
+                        return;
+                    FAttribute sel = list.get(i);
+                    
+                    // Don't add attributes from own type
+                    FVariable targetFV = target.getFVariable();
+                    boolean inTarget = sel.isInFV(targetFV);
+                    if (!inTarget && targetFV.findAttribute(name) == sel)
+                        return;
+                    
+                    // If it is taken from elsewhere, we need a copy
+                    if (!inTarget) {
+                        sel = sel.fullCopy();
+                        sel.parent = list.get(i).parent;
+                    }
+                    
+                    // Value may need to be negated
+                    if (neg.get(i) != target.isNegated() && sel.hasValue())
+                        negate(sel);
+                    
+                    l.add(sel);
+                }
+
+				protected void negate(FAttribute sel) {
+				    sel.setValue(sel.getValue().createNegated());
+				}
+				
+				public abstract void propagate(List<FAttribute> l);
+
+			}
+			
+			/**
+			 * Used for attributes that are not specifically handled.
+			 * 
+			 * Only adds back the attribute from the target variable, if any.
+			 */
+			private class KeepAttributePropagator extends AttributePropagator {
+                
+                public KeepAttributePropagator(String name) {
+                    super(name);
+                }
+
+				public void propagate(List<FAttribute> l) {
+					if (list.size() > 0 && list.get(0).isInFV(target.getFVariable())) 
+						l.add(list.get(0));
+				}
+				
+			}
+			
+			/**
+			 * Selects the attribute that was set "closest to the user".
+			 * 
+			 * Used for start and nominal.
+			 * 
+			 * Selects the value with lowest level among attributes set on variables, 
+			 * or if no such are found the first found from a type. 
+			 */
+			private class LevelAttributePropagator extends AttributePropagator {
+				
+				private final static int NO_KIND   = 0;
+				private final static int TYPE_KIND = 1;
+				private final static int FV_KIND   = 2;
+				
+				public LevelAttributePropagator(String name) {
+				    super(name);
+				}
+
+				public void propagate(List<FAttribute> l) {
+					int selKind = NO_KIND;
+					int selLevel = 0;
+					int selIndex = -1;
+					int i = 0;
+					for (FAttribute attr : list) {
+						int curKind = attr.isInFV() ? FV_KIND : TYPE_KIND;
+						int curLevel = attr.getLevel();
+						if (curKind > selKind || (curKind == FV_KIND && curLevel < selLevel)) {
+							selKind = curKind;
+							selLevel = curLevel;
+							selIndex = i;
+						}
+						i++;
+					}
+					select(selIndex, l);
+				}
+				
+			}
+            
+            /**
+             * Combine values from all variables in alias set using boolean operation (and/or).
+             * 
+             * Used for fixed.
+             */
+            private class BooleanReduceAttributePropagator extends AttributePropagator {
+                
+                private boolean isAnd;
+                
+                public BooleanReduceAttributePropagator(String name, boolean isAnd) {
+                    super(name);
+                    this.isAnd = isAnd;
+                }
+
+                public void propagate(List<FAttribute> l) {
+                    boolean res = isAnd;
+                    int i = 0;
+                    int selIndex = -1;
+                    boolean selVal = false;
+                    for (FAttribute attr : list) {
+                        boolean val = false;
+                        boolean set = false;
+                        if (attr.hasValue()) {
+                            try {
+                                CValue cval = attr.getValue().ceval();
+                                if (cval.hasBooleanValue()) {
+                                    val = cval.booleanValue();
+                                    set = true;
+                                }
+                            } catch (ConstantEvaluationException e) {}
+                        }
+                        res = isAnd ? (res && val) : (res || val);
+                        if (val == res && (selIndex < 0 || selVal != res)) {
+                            selIndex = i;
+                            selVal = val;
+                        }
+                        i++;
+                    }
+                    select(selIndex, l);
+               }
+                
+                protected void negate(FAttribute sel) {}
+                
+            }
+            
+            /**
+             * Find strictest combination of min/max values.
+             * 
+             * Reports an error if this results in min > max.
+             */
+            private class MinMaxAttributePropagator extends AttributePropagator {
+                
+                private boolean propagated = false;
+                
+                public MinMaxAttributePropagator(String name) {
+                    super(name);
+                }
+                
+                public void addToMap(Map<String, AttributePropagator> map) {
+                    map.put(FAttribute.MIN, this);
+                    map.put(FAttribute.MAX, this);
+                }
+
+                public void propagate(List<FAttribute> l) {
+                    if (propagated)
+                        return;
+                    propagated = true;
+                    
+                    double min = Double.NEGATIVE_INFINITY;
+                    double max = Double.POSITIVE_INFINITY;
+                    int i = 0;
+                    int selMin = -1;
+                    int selMax = -1;
+                    boolean targetNeg = target.isNegated();
+                    for (FAttribute attr : list) {
+                        boolean isMin = attr.name().equals(FAttribute.MIN);
+                        double val = isMin ? Double.NEGATIVE_INFINITY : Double.POSITIVE_INFINITY;
+                        try {
+                            if (attr.hasValue()) {
+                                CValue cval = attr.getValue().ceval();
+                                if (cval.hasRealValue()) {
+                                    val = cval.realValue();
+                                }
+                            }
+                        } catch (ConstantEvaluationException e) {}
+                        if (neg.get(i) != targetNeg) {
+                            val = -val;
+                            isMin = !isMin;
+                        }
+                        if (isMin) {
+                            if (val > min) {
+                                min = val;
+                                selMin = i;
+                            }
+                        } else {
+                            if (val < max) {
+                                max = val;
+                                selMax = i;
+                            }
+                        }
+                        i++;
+                    }
+                    int p = l.getNumChild();
+                    select(selMin, l, FAttribute.MIN);
+                    select(selMax, l, FAttribute.MAX);
+                    if (min > max) 
+                        target.getFVariable().error("Variable %s is part of alias set that results in min/max combination with no possible values, min = %s, max = %s", 
+                                target.getFVariable().name(), l.getChild(p).getValue(), l.getChild(p + 1).getValue());
+                }
+                
+                protected void select(int i, List<FAttribute> l, String name) {
+                    this.name = name;
+                    select(i, l);
+                }
+                
+                protected void negate(FAttribute sel) {
+                    super.negate(sel);
+                    String name = sel.name().equals(FAttribute.MIN) ? FAttribute.MAX : FAttribute.MIN;
+                    sel.getName().setFAccess(new FAccessString(name));
+                }
+                
+            }
+        }
+
+    }
+
+    /**
+     * Get the heuristic score for keeping this variable in an alias set.
+     * 
+     * The variable with the highest score should be kept. Score is always > 0.
+     */
+    syn long FVariable.aliasHeuristicScore() {
+        long score = 0;
+        
+        // Annotations
+        score *= 10;
+        if (containsActiveAnnotations()) {
+            score += 1;
+        }
+        
+        score *= 10;
+        VisibilityType t = getVisibilityType();
+        if (t.isProtected()) {
+            // Some models fail to simulate without this
+            t = VisibilityType.PUBLIC;
+        }
+        score += t.ordinal();
+        
+        // Parameter
+        score *= 10;
+        if (variability().parameterOrLess()) {
+            if (isConstant()) {
+                score += 3;
+            } else if (isIndependentParameter()) {
+                score += 2;
+            } else {
+                score += 1;
+            }
+        }
+
+        // Stateselect level
+        score *= 100;
+        FAttribute stateSelectAttribute = findAttribute(FAttribute.STATE_SELECT);
+        if (isReal() && stateSelectAttribute != null) {
+            if (!stateSelectAttribute.isInDerivedType()) {
+                score += stateSelectAttribute().ordinal() * 10;
+            } else {
+                score += stateSelectAttribute().ordinal();
+            }
+        }
+
+        // Fixed attribute == true
+        score *= 10;
+        if (isFixed()) {
+            score += 1;
+        }
+
+        // Start attribute set
+        score *= 10;
+        if (startAttributeSet()) {
+            score += 1;
+        }
+
+        // Distance to user
+        score *= 1000;
+        score += 999 - Math.min(getFAccess().numDots(), 999);
+
+        // Number of differentiation steps in dummy derivative
+        score *= 10;
+        score += 9 - Math.min(order(), 9);
+        
+        return score;
+	}
+
+}
+
+aspect DerivativeRewriting {
+    private Map<FVariable, FVariable> AliasManager.derivativeBindingPairs = new HashMap<FVariable, FVariable>();
+
+    public void AliasManager.addDerivativeBindingPair(FVariable var, FVariable derVar) {
+        if (derivativeBindingPairs == null)
+            return;
+        derivativeBindingPairs.put(var, derVar);
+    }
+
+    public FVariable AliasManager.derivativeEquivalent(FVariable var) {
+        return derivativeBindingPairs == null ? null : derivativeBindingPairs.get(var);
+    }
+    
+    public void AliasManager.stopCollectingDerivativeBindings() {
+        derivativeBindingPairs = null;
+    }
+
+    public void FAbstractEquation.propagateDerivativeBindings() {
+    }
+    
+    public void FEquation.propagateDerivativeBindings() {
+        if (!isDerivativeBindingEquation())
+            return;
+        FAbstractVariable right = getRight().asFAccessExp().myFV();
+        FAbstractVariable left = getLeft().asFAccessExp().myFV();
+        if (!left.isFVariable() || !right.isFVariable())
+            return;
+        if (left.isTemporary() || right.isTemporary())
+            return;
+        if (left.isInput() || right.isInput())
+            return;
+        if (left.variability().discreteOrLess() || right.variability().discreteOrLess())
+            return;
+        boolean rightIsDer = right.isDerivativeVariable();
+        boolean leftIsDer = left.isDerivativeVariable();
+        FVariable var;
+        FVariable derVar;
+        if (rightIsDer && !leftIsDer) {
+            var = left.asFVariable();
+            derVar = right.asFVariable();
+        } else if (!rightIsDer && leftIsDer) {
+            var = right.asFVariable();
+            derVar = left.asFVariable();
+        } else {
+            return;
+        }
+        //aliasClass = AliasClass.DER_ALIAS;
+        myFClass().getAliasManager().addDerivativeBindingPair(var, derVar.getMeIntegrated());
+    }
+
+    syn boolean FAbstractEquation.isDerivativeBindingEquation() = false;
+    eq FEquation.isDerivativeBindingEquation() {
+        if (!getRight().isAccess() || !getLeft().isAccess())
+            return false;
+        if (!inEquationSection())
+            return false;
+        boolean rightIsDer = getRight().isAbstractDerAccess();
+        boolean leftIsDer = getLeft().isAbstractDerAccess();
+        return rightIsDer && !leftIsDer || !rightIsDer && leftIsDer;
+    }
+
+    syn boolean FExp.isDerAccess() = false;
+    eq FDerExp.isDerAccess() = true;
+
+    syn boolean FExp.isAbstractDerAccess() = false;
+    eq FAbstractDerExp.isAbstractDerAccess() = true;
+
+    syn FVariable FAbstractVariable.derivativeEquivalent() = null;
+    syn lazy FVariable FVariable.derivativeEquivalent() = myFClass().getAliasManager().derivativeEquivalent(this);
+
+}

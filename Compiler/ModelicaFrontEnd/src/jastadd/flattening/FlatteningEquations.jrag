@@ -1,0 +1,135 @@
+/*
+    Copyright (C) 2016 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect FlatEquations {
+
+    public void FAbstractEquation.flatten(Flattener f) {
+        List<FAbstractEquation> l = getType().isInitial() ? f.getInitialEquations() : f.getNormalEquations();
+        flattenEqn(f, l);
+    }
+
+    public static void FAbstractEquation.flattenEqnList(Flattener f, List<FAbstractEquation> l,
+            List<FAbstractEquation> eqs) {
+        for (FAbstractEquation fae : eqs) {
+            fae.flattenEqn(f, l);
+        }
+    }
+
+    public void FAbstractEquation.flattenAttrs(Flattener f, FAbstractEquation eqn) {
+        List<FAttribute> flatAttrs = new List<FAttribute>();
+        for (FAttribute attr : getFAttributes())
+            flatAttrs.add(attr.flatten(f));
+        eqn.setFAttributeList(flatAttrs);
+    }
+
+    public abstract void FAbstractEquation.flattenEqn(Flattener f, List<FAbstractEquation> l);
+
+    @Override
+    public void FUnsupportedEquation.flattenEqn(Flattener f, List<FAbstractEquation> l) {
+        l.add(treeCopy());
+    }
+
+    @Override
+    public void FEquation.flattenEqn(Flattener f, List<FAbstractEquation> l) {
+        FEquation flattened = createNode(new List<FAttribute>(), getLeft().flatten(f), getRight().flatten(f));
+        flattenAttrs(f, flattened);
+        flattened.setLocation(this);
+        l.add(flattened);
+    }
+
+    @Override
+    public void InstForClauseE.flattenEqn(Flattener f, List<FAbstractEquation> l) {
+        Indices ind = Indices.create(getInstForIndexs());
+        for (Index i : ind) {
+            ind.translate(i).setValues(getInstForIndexs());
+            getFAbstractEquations().flushAllRecursive();
+            FAbstractEquation.flattenEqnList(f, l, getFAbstractEquations());
+        }
+        
+        for (InstForIndex ifi : getInstForIndexs()) {
+            ifi.clearEvaluationValue();
+        }
+    }
+
+    @Override
+    public void FForClauseE.flattenEqn(Flattener f, List<FAbstractEquation> l) {
+        l.add(treeCopy());
+    }
+
+    @Override
+    public void FIfWhenElseEquation.flattenEqn(Flattener f, List<FAbstractEquation> l) {
+        List<FAbstractEquation> toList = new List<FAbstractEquation>();
+        FAbstractEquation.flattenEqnList(f, toList, getFAbstractEquations());
+        FIfWhenElseEquation res = createEmptyNode();
+        res.setType(getType());
+        res.setFAbstractEquationList(toList);
+        flattenIfWhenTo(f, res);
+        if (!res.isEmpty()) {
+            l.add(res);
+        }
+    }
+
+    public void FIfWhenElseEquation.flattenIfWhenTo(Flattener f, FIfWhenElseEquation res) {}
+
+    public void FIfWhenEquation.flattenIfWhenTo(Flattener f, FIfWhenElseEquation res) {
+        FIfWhenEquation ifWhen = (FIfWhenEquation) res;
+        if (hasElse()) {
+            List<FAbstractEquation> elseRes = new List<FAbstractEquation>();
+            getElse().flattenEqn(f, elseRes);
+            if (elseRes.getNumChildNoTransform() > 0) {
+                ifWhen.setElse((FIfWhenElseEquation)elseRes.getChildNoTransform(0));
+            }
+        }
+        ifWhen.setTest(getTest().flatten(f));
+    }
+
+    syn boolean FIfWhenElseEquation.isEmpty() = getNumFAbstractEquation() == 0;
+    eq FIfWhenEquation.isEmpty()              = super.isEmpty() && (!hasElse() || getElse().isEmpty());
+
+    @Override
+    public void FConnectClause.flattenEqn(Flattener f, List<FAbstractEquation> l) {}
+
+    @Override
+    public void FFunctionCallEquation.flattenEqn(Flattener f, List<FAbstractEquation> l) {
+        if (ignoreInFlattening()) {
+            return;
+        }
+        FExp call = getCall().flatten(f);
+        if (!(call instanceof FAbstractFunctionCall)) {
+            return;
+        }
+        List<FFunctionCallLeft> lefts = new List<FFunctionCallLeft>();
+        for (FFunctionCallLeft left : getLefts()) { 
+            lefts.add(left.flatten(f));
+        }
+        FFunctionCallEquation flattened =  new FFunctionCallEquation(lefts, (FAbstractFunctionCall) call);
+        flattenAttrs(f, flattened);
+        l.add(flattened);
+    }
+
+    public FFunctionCallLeft FFunctionCallLeft.flatten(Flattener f) {
+        return new FFunctionCallLeft(hasFExp() ? new Opt(getFExp().flatten(f)) : new Opt());
+    }
+
+    @Override
+    public void FAlgorithm.flattenEqn(Flattener f, List<FAbstractEquation> l) {
+        List l2 = new List();
+        FStatement.flattenFStatementList(f, getFStatements(), l2);
+        l.add(new FAlgorithm(l2));
+    }
+
+}
+

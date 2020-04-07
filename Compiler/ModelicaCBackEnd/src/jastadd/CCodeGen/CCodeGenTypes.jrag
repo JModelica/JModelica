@@ -1,0 +1,714 @@
+/*
+Copyright (C) 2009-2019 Modelon AB
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, version 3 of the License.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import org.jmodelica.util.ccompiler.Dynamicity;
+
+aspect CCodeGenTypes {
+
+    syn String FAbstractVariable.type_C(CodePrinter p) = type().type_C(p);
+    syn String FFunctionCallLeft.type_C(CodePrinter p) = type().type_C(p);
+
+
+    syn String FFunctionVariable.typeReturn_C(CodePrinter p) = isComposite() ? type_C(p) : (type_C(p) + "*");
+
+    syn String FExp.typeReturn_C(CodePrinter p) {
+        String type = isArray() ? type().nameArray_C(p) : type().nameScalar_C(p);
+        if (!type().isExternalObject()) {
+            type = type + "*";
+        }
+        return type;
+    }
+
+    syn String FType.type_C(CodePrinter p) = isArray() ? arrayType_C(p) : scalarType_C(p);
+
+    syn String FType.scalarType_C(CodePrinter p)         = nameScalar_C(p);
+    eq FRecordType.scalarType_C(CodePrinter p)           = nameScalar_C(p) + "*";
+
+    syn String FType.arrayType_C(CodePrinter p)          = nameArray_C(p) + "*";
+
+    syn String FType.nameScalar_C(CodePrinter p, boolean external) = external ? nameScalarExt_C(p) : nameScalar_C(p);
+    syn String FType.nameArray_C(CodePrinter p, boolean external)  = external ? nameArrayExt_C(p) : nameArray_C(p);
+
+    public abstract String FType.nameScalar_C(CodePrinter p);
+    syn String FArrayType.nameScalar_C(CodePrinter p)  = getFPrimitiveType().nameScalar_C(p);
+    syn String FCellType.nameScalar_C(CodePrinter p)   = "jmi_real_t";
+    eq FRecordType.nameScalar_C(CodePrinter p)         = (getFClass() != null ? myFRecordDecl().name_C() : 
+        ASTNode.underScore(getName())) + "_" + C_SUFFIX_REC;
+    eq FStringType.nameScalar_C(CodePrinter p)         = "jmi_string_t";
+    eq FExternalObjectType.nameScalar_C(CodePrinter p) = "jmi_extobj_t";
+    eq FFunctionType.nameScalar_C(CodePrinter p)       = p.funcNameUnderscore(myFFunctionDecl(), C_SUFFIX_FP)+ "*";
+
+    public abstract String FType.nameArray_C(CodePrinter p);
+    syn String FArrayType.nameArray_C(CodePrinter p)   = getFPrimitiveType().nameArray_C(p);
+    syn String FCellType.nameArray_C(CodePrinter p)    = "jmi_array_t";
+    eq FRecordType.nameArray_C(CodePrinter p)          = nameScalar_C(p) + C_SUFFIX_ARRAY;
+    eq FStringType.nameArray_C(CodePrinter p)          = "jmi_string_array_t";
+    eq FExternalObjectType.nameArray_C(CodePrinter p)  = "jmi_extobj_array_t";
+
+    public abstract String FType.nameScalarExt_C(CodePrinter p);
+    syn String FArrayType.nameScalarExt_C(CodePrinter p) = getFPrimitiveType().nameScalarExt_C(p);
+    syn String FCellType.nameScalarExt_C(CodePrinter p)  = nameScalar_C(p);
+    eq FRecordType.nameScalarExt_C(CodePrinter p)        = nameScalar_C(p) +  C_SUFFIX_EXT;
+    eq FIntegerType.nameScalarExt_C(CodePrinter p)       = "jmi_int_t";
+    eq FBooleanType.nameScalarExt_C(CodePrinter p)       = "jmi_int_t";
+    eq FEnumType.nameScalarExt_C(CodePrinter p)          = "jmi_int_t";
+
+    public abstract String FType.nameArrayExt_C(CodePrinter p);
+    syn String FArrayType.nameArrayExt_C(CodePrinter p) = getFPrimitiveType().nameArrayExt_C(p);
+    syn String FCellType.nameArrayExt_C(CodePrinter p)  = nameArray_C(p);
+    eq FIntegerType.nameArrayExt_C(CodePrinter p)       = "jmi_int_array_t";
+    eq FBooleanType.nameArrayExt_C(CodePrinter p)       = "jmi_int_array_t";
+    eq FEnumType.nameArrayExt_C(CodePrinter p)          = "jmi_int_array_t";
+
+
+    /* Corresponding external c representation */
+    syn String FExp.argType_C(CodePrinter p, boolean ref) = type().argType_C(p, ref);
+    eq FSizeExp.argType_C(CodePrinter p, boolean ref)     = ref ? type().argType_C(p, ref) : "size_t";
+
+    public abstract String FType.argType_C(CodePrinter p, boolean ref);
+    syn String FArrayType.argType_C(CodePrinter p, boolean ref)   = getFPrimitiveType().argType_C(p, ref);
+    syn String FCellType.argType_C(CodePrinter p, boolean ref)    = argTypeBase_C(p) + (ref ? "*" : "");
+    eq FStringType.argType_C(CodePrinter p, boolean ref)          = "const " + super.argType_C(p, ref);
+
+    syn String FCellType.argTypeBase_C(CodePrinter p)    = type_C(p);
+    eq FPrimitiveType.argTypeBase_C(CodePrinter p)       = "double";
+    eq FIntegerType.argTypeBase_C(CodePrinter p)         = "int";
+    eq FBooleanType.argTypeBase_C(CodePrinter p)         = "int";
+    eq FEnumType.argTypeBase_C(CodePrinter p)            = "int";
+    eq FExternalObjectType.argTypeBase_C(CodePrinter p)  = "void*";
+    eq FStringType.argTypeBase_C(CodePrinter p)          = "char*";
+
+    /*
+     * Returns true if the type defined in argTypeBase_C() is a pointer.
+     */
+    syn boolean FType.isArgTypeBaseRef()  = false;
+    eq FArrayType.isArgTypeBaseRef()  = getFPrimitiveType().isArgTypeBaseRef();
+    eq FExternalObjectType.isArgTypeBaseRef()  = true;
+    eq FStringType.isArgTypeBaseRef()  = true;
+
+    /* Macro type tokens */
+    syn String FType.macroType() = macroTypeScalar() + (isArray() ? "_ARR" : "");
+
+    syn String FType.macroTypeScalar() = "GEN";
+    eq FArrayType.macroTypeScalar()   = getFPrimitiveType().macroTypeScalar();
+    eq FStringType.macroTypeScalar()   = "STR";
+
+    syn String FType.macroTypeDecl(boolean external) = external ? macroTypeDeclScalar() + "_EXT" : macroTypeDeclScalar();
+
+    public abstract String FType.macroTypeDeclScalar();
+    syn String FArrayType.macroTypeDeclScalar()  = getFPrimitiveType().macroTypeDeclScalar();
+    syn String FCellType.macroTypeDeclScalar()   = "GEN";
+    eq FRealType.macroTypeDeclScalar()           = "REA";
+    eq FIntegerType.macroTypeDeclScalar()        = "INT";
+    eq FBooleanType.macroTypeDeclScalar()        = "BOO";
+    eq FEnumType.macroTypeDeclScalar()           = "ENU";
+    eq FStringType.macroTypeDeclScalar()         = "STR";
+    eq FExternalObjectType.macroTypeDeclScalar() = "EXO";
+
+    public void FAbstractVariable.print(TypePrinter_C tp, String name, String indent) {
+        tp.reset(name, this, size(), false, indent);
+        type().print(tp);
+    }
+
+    @Override
+    public void FFunctionVariable.prettyPrint_C(CodePrinter p, CodeStream str, String indent) {
+        p.printInit(this, str, indent, type());
+    }
+
+    public void FType.printDecl_C(CodePrinter p, CodeStream str, String indent, String name, FExp src) {
+        printDecl_C(p, str, indent, name, src, false);
+    }
+
+    public void FType.printDecl_C(CodePrinter p, CodeStream str, String indent, String name, FExp src, boolean external) {
+        print(p.createDeclPrinter(str), indent, name, src, external);
+    }
+
+    public void FType.printInit_C(CodePrinter p, CodeStream str, String indent, String name, FExp src) {
+        printInit_C(p, str, indent, name, src, false);
+    }
+
+    public void FType.printInit_C(CodePrinter p, CodeStream str, String indent, String name, FExp src, boolean external) {
+        print(p.createInitSetPrinter(str), indent, name, src, external);
+    }
+
+    interface TypePrintable_C extends Named_C {
+        public FExp myBackingFExp();
+        public CodeGenContext myCodeGenContext();
+        public boolean useAlias_C();
+        public String alias_C(CodePrinter p);
+    }
+
+    FExp              implements TypePrintable_C;
+    FFunctionCallLeft implements TypePrintable_C;
+    FAbstractVariable implements TypePrintable_C;
+
+    syn FExp FExp             .myBackingFExp() = this;
+    syn FExp FFunctionCallLeft.myBackingFExp() = getFExp();
+    syn FExp FAbstractVariable.myBackingFExp() = null;
+
+    syn boolean FExp.useAlias_C()              = false;
+    syn boolean FFunctionCallLeft.useAlias_C() = getFExp().useAlias_C();
+    syn boolean FAbstractVariable.useAlias_C() = true;
+
+    syn String FExp.alias_C(CodePrinter p) {
+        return alias_C(p, myCodeGenContext());
+    }
+
+    syn String FExp.alias_C(CodePrinter p, CodeGenContext cgc) {
+        String res = cgc.alias(this);
+        if (res == null) {
+            res = prettyPrint_C();
+        }
+        return res;
+    }
+    eq CommonAccessExp.alias_C(CodePrinter p, CodeGenContext cgc) {
+        String res = cgc.alias(myCommonVarDecl());
+        if (res == null) {
+            res = super.alias_C(p, cgc);
+        }
+        return res;
+    }
+    syn String FFunctionCallLeft.alias_C(CodePrinter p) = getFExp().alias_C(p);
+    syn String FAbstractVariable.alias_C(CodePrinter p) = p.getExecStep().name(this);
+
+    public void FType.print(TypePrinter_C tp, String indent, CodePrinter.ExecuteCodePrinter ep, TypePrintable_C src, boolean external) {
+        print(tp, indent, ep.name(src), src, external);
+    }
+
+    public void FType.print(TypePrinter_C tp, String indent, String name, TypePrintable_C src, boolean external) {
+        tp.reset(name, src, size(), external, indent);
+        print(tp);
+    }
+
+    public void FType.print(TypePrinter_C p)               { p.print(this); }
+    public void FRecordType.print(TypePrinter_C p)         { p.print(this); }
+    public void FExternalObjectType.print(TypePrinter_C p) { p.print(this); }
+
+    public abstract class TypePrinter_C {
+        protected CodePrinter p;
+        protected CodeStream str;
+        protected TypePrintable_C src;
+        protected boolean external = false;
+        protected boolean subDecls = false; // Used in CAD
+        
+        private Stack<Level> levels   = new Stack<Level>();
+        
+        public TypePrinter_C(CodePrinter p, CodeStream str) {
+            this.p = p;
+            this.str = str;
+        }
+        
+        public TypePrinter_C(CodePrinter p, CodeStream str, String indent, String name, TypePrintable_C src, Size s, boolean external) {
+            this(p, str);
+            reset(name, src, s, external, indent);
+        }
+        
+        public void reset(String name, TypePrintable_C src, Size s, boolean external, String indent) {
+            this.src = src;
+            levels = new Stack<Level>();
+            levels.push(new Level(name, indent, !s.variability().knownParameterOrLess() || external, src));
+            this.external = external;
+        }
+        
+        public void resetUnknown(String name, FType type, String indent) {
+            this.src = null;
+            levels = new Stack<Level>();
+            levels.push(new Level(name, indent, type.isArray() || type.isExternalObject(), null));
+            this.external = false;
+        }
+        
+        public void setSubDecls(boolean subDecls) { this.subDecls = subDecls; }
+        
+        protected String name()     { return levels.peek().name; }
+        protected String indent()   { return levels.peek().indent; }
+        protected boolean dynamic() { return levels.peek().dynamic; }
+        
+        protected class Level {
+            String name;
+            String indent;
+            boolean dynamic;
+            TypePrintable_C src;
+            public Level(String name, String indent, boolean dynamic, TypePrintable_C src) {
+                this.name    = name;
+                this.indent  = indent;
+                this.dynamic = dynamic;
+                this.src = src;
+            }
+        }
+        
+        protected void pushLevel(String name, boolean indent, Size s, TypePrintable_C src) {
+            levels.push(new Level(name, indent ? p.indent(indent()) : indent(), !s.variability().knownParameterOrLess() || dynamic(), src));
+        }
+        
+        protected void pushLevelExt(String name, boolean indent, Size s) {
+            levels.push(new Level(name, indent ? p.indent(indent()) : indent(), s.ndims() > 0, null));
+        }
+        
+        protected void popLevel() {
+            levels.pop();
+        }
+        
+        
+        protected Dynamicity dynamicity(FType type) {
+            return (dynamic() ? Dynamicity.HEAP : Dynamicity.STACK);
+        }
+        
+        public void print(FType type) {
+            if (type.isArray()) {
+                printArray(type);
+            } else {
+                printScalar(type);
+            }
+        }
+        
+        public void print(FRecordType type) {
+            printComposite(type);
+        }
+        
+        public void print(FExternalObjectType type) {
+            printComposite(type);
+        }
+        
+        FExp levelSrc(Index i) {
+            TypePrintable_C levelSrc = levels.peek().src;
+            if (levelSrc != null) {
+                FExp exp = levelSrc.myBackingFExp();
+                if (exp != null && exp instanceof FArray && exp.type().isRecord()) {
+                    return exp.fArrayCell(i, 0);
+                }
+            }
+            return null;
+        }
+        
+        FExp levelSrc(String name) {
+            TypePrintable_C levelSrc = levels.peek().src;
+            if (levelSrc != null) {
+                FExp exp = levelSrc.myBackingFExp();
+                if (exp != null && exp instanceof FRecordConstructor) {
+                    return exp.component(name);
+                }
+            }
+            return null;
+        }
+        
+        public void printComposite(FType type) {
+            print(type);
+            if (type.isArray()) {
+                if (dynamic()) {
+                    printDynArray(type);
+                } else {
+                    for (Index i : type.indices()) {
+                        pushLevel(type.arrayAccess(type.ndims(), name(), i.toUnclosedString()), false, Size.SCALAR, levelSrc(i));
+                        printComps(type);
+                        popLevel();
+                    }
+                }
+            } else {
+                printComps(type);
+            }
+        }
+        
+        protected void printComps(FType type) {
+            if (type.isRecord()) {
+                printComps((FRecordType) type);
+            }
+        }
+        
+        protected void printComps(FRecordType type) {
+            for (FRecordComponentType comp : type.getComponents()) {
+                if (shouldPrintComp(comp)) {
+                    String compName = name() + "->" + comp.getName();
+                    boolean useTempName = !dynamic() && comp.getFType().isComposite();
+                    String tempName = useTempName ? acquireTemp(compName) : compName;
+                    FExp compExp = levelSrc(comp.getName());
+                    FType compType = (compExp == null || compExp.type().isNoType()) 
+                            ? comp.getFType() : compExp.type();
+                    pushLevel(tempName, false, compType.size(), compExp);
+                    compType.print(this);
+                    popLevel();
+                    if (useTempName)
+                        tempWriteBack(compName, tempName);
+                }
+            }
+        }
+        
+        protected boolean shouldPrintComp(FRecordComponentType comp) {
+            return comp.getFType().isComposite();
+        }
+        
+        protected void printExt(FExternalObjectType type) {
+            
+        }
+        
+        protected void printComps(FExternalObjectType type) {
+            int i = 0;
+            String name = acquireTemp(name());
+            for (ExternalArgument arg : type.myConstructorStmt().varsToSerialize()) {
+                if (arg.isOutput()) {
+                    i++;
+                    continue;
+                }
+                FType t = arg.type();
+                pushLevelExt(name + "_arg" + i, false, t.size());
+                boolean b = t.parent == null;
+                if (b) {
+                    // This needs to be done since some exps does
+                    // not parent their calculated type
+                    t.setParent(type);
+                }
+                t.print(this);
+                if (b) {
+                    t.setParent(null);
+                }
+                popLevel();
+                i++;
+            }
+        }
+        
+        protected void printScalar(FType type) {}
+        abstract protected void printArray(FType type);
+        abstract protected void printDynArray(FType type);
+        abstract protected String acquireTemp(String name);
+        protected void tempWriteBack(String compName, String tempName) {}
+        
+        protected void printSizesAsArgs(FType type) {
+            printNumElements(type);
+            str.print(", ");
+            str.print(type.ndims());
+            printDimensions(type);
+        }
+        protected void printNumElements(FType type) {
+            if (external && dynamic()) {
+                type.size().printNumElements_C(p, str, indent(), src.alias_C(p));
+            } else {
+                type.size().printNumElements_C(p, str, indent(), src);
+            }
+        }
+        protected void printDimensions(FType type) {
+            str.print(", ");
+            if (external && dynamic()) {
+                type.size().printDimensions_C(p, str, indent(), src.alias_C(p));
+            } else {
+                type.size().printDimensions_C(p, str, indent(), src);
+            }
+        }
+    }
+    
+    public class DeclPrinter_C extends TypePrinter_C {
+        protected boolean print = true;
+        public DeclPrinter_C(CodePrinter p, CodeStream str) {
+            super(p, str);
+        }
+
+        @Override
+        protected String acquireTemp(String key) {
+            String tmp = src.nextTempName_C();
+            src.myCodeGenContext().recordChildTempNames().put(key, tmp);
+            return tmp;
+        }
+
+        @Override
+        protected void printScalar(FType type) {
+            if (print) {
+                type.printScalarDecl_C(p, str, indent(), external, name());
+            }
+        }
+
+        @Override
+        protected void printArray(FType type) {
+            if (print) {
+                str.print(indent(), "JMI_ARR(",
+                        dynamicity(type), ", ", 
+                        type.nameScalar_C(p, external), ", ",
+                        type.nameArray_C(p, external), ", ",
+                        name(), ", ");
+                printSizesAsArgs(type);
+                str.println(")");
+            }
+        }
+
+        @Override
+        protected void printNumElements(FType type) {
+            if (dynamic())
+                str.print("-1");
+            else
+                super.printNumElements(type);
+        }
+
+        @Override
+        protected void printDimensions(FType type) {
+            
+        }
+
+        @Override
+        protected void printDynArray(FType type) {
+            String ind    = acquireTemp(name());
+            String maxind = ind + "_max";
+            print = true;
+            pushLevel(ind, false, Size.SCALAR, null);
+            type.fRealScalarType().print(this);
+            popLevel();
+            pushLevel(maxind, false, Size.SCALAR, null);
+            type.fRealScalarType().print(this);
+            popLevel();
+            print = type.isExternalObject();
+            pushLevel(type.arrayAccess(1, name(), ind), false, new MutableSize(1), null);
+            printComps(type);
+            popLevel();
+            print = true;
+        }
+    }
+    
+    public class InitPrinter_C extends TypePrinter_C {
+        public InitPrinter_C(CodePrinter p, CodeStream str) {
+            super(p, str);
+        }
+
+        @Override
+        protected String acquireTemp(String key) {
+            return src.myCodeGenContext().recordChildTempNames().get(key);
+        }
+
+        @Override
+        protected void printArray(FType type) {
+            str.print(indent(), "JMI_ARRAY_INIT_", type.ndims(), "(", 
+                    dynamicity(type), ", ",
+                    type.nameScalar_C(p, external), ", ",
+                    type.nameArray_C(p, external), ", ",
+                    name(), ", ");
+            printSizesAsArgs(type);
+            str.println(")");
+        }
+
+        @Override
+        protected void printDynArray(FType type) {
+            String ind    = acquireTemp(name());
+            String maxind = ind + "_max";
+            if (initMaxInd()) {
+                str.print(indent() + maxind + " = ");
+                printNumElements(type);
+                str.println(" + 1;");
+            }
+            str.formatln("%sfor (%s = 1; %s < %s; %s++) {", indent(), ind, ind, maxind, ind);
+            pushLevel(type.arrayAccess(1, name(), ind), true, new MutableSize(1), null);
+            printComps(type);
+            popLevel();
+            str.println(indent() + "}");
+        }
+
+        protected boolean initMaxInd() { return true; }
+
+        @Override
+        protected void tempWriteBack(String compName, String tempName) {
+            str.formatln("%s%s = %s;", indent(), compName, tempName);
+        }
+    }
+    
+    public class InitSetPrinter_C extends InitPrinter_C {
+        public InitSetPrinter_C(CodePrinter p, CodeStream str) {
+            super(p, str);
+        }
+
+        @Override
+        protected void printScalar(FType type) {
+            type.printInitStartValue_C(p, str, indent(), name());
+        }
+
+        @Override
+        protected boolean shouldPrintComp(FRecordComponentType comp) {
+            return super.shouldPrintComp(comp) || comp.getFType().isString();
+        }
+    }
+
+    public void FType.printInitStartValue_C(CodePrinter p, CodeStream str, String indent, String name) {
+        
+    }
+
+    @Override
+    public void FStringType.printInitStartValue_C(CodePrinter p, CodeStream str, String indent, String name) {
+        str.print(indent);
+        str.print("JMI_INI(");
+        str.print(macroTypeScalar());
+        str.print(", ");
+        str.print(name);
+        str.print(")\n");
+    }
+
+    public void Size.printNumElements_C(CodePrinter p, CodeStream str, String indent, TypePrintable_C src) {
+        str.print(numElements());
+    }
+
+    @Override
+    public void MutableSize.printNumElements_C(CodePrinter p, CodeStream str, String indent, TypePrintable_C src) {
+        if (!variability().knownParameterOrLess()) {
+            for (int i = 0; i < size.length; i++) {
+                FExp exp = exps[i];
+                if (i > 0) {
+                    str.print(" * ");
+                }
+                if (exps[i] == null && size[i] == Size.UNKNOWN) {
+                    printSize_C(p, str, indent, src.alias_C(p), i);
+                } else if (exp == null) {
+                    str.print(size[i]);
+                } else {
+                    boolean addParenthesis = exp.addParenthesis(Precedence.MULTIPLICATIVE);
+                    if (addParenthesis) {
+                        str.print("(");
+                    }
+                    p.print(exp, str, indent);
+                    if (addParenthesis) {
+                        str.print(")");
+                    }
+                }
+            }
+        } else {
+            super.printNumElements_C(p, str, indent, src);
+        }
+    }
+
+    public void Size.printDimensions_C(CodePrinter p, CodeStream str, String indent, TypePrintable_C src) {
+        str.print(toUnclosedString());
+    }
+
+    @Override
+    public void MutableSize.printDimensions_C(CodePrinter p, CodeStream str, String indent, TypePrintable_C src) {
+        if (!variability().knownParameterOrLess()) {
+            for (int i = 0; i < size.length; i++) {
+                if (i > 0) {
+                    str.print(", ");
+                }
+                if (exps[i] == null && size[i] == Size.UNKNOWN) {
+                    printSize_C(p, str, indent, src.alias_C(p), i);
+                } else if (exps[i] == null) {
+                    str.print(size[i]);
+                } else {
+                    exps[i].prettyPrint_C(p, str, indent);
+                }
+            }
+        } else {
+            super.printDimensions_C(p, str, indent, src);
+        }
+    }
+
+    public void Size.printNumElements_C(CodePrinter p, CodeStream str, String indent, String name) {
+        printDimsWithSep_C(p, str, indent, name, " * ");
+    }
+
+    public void Size.printDimensions_C(CodePrinter p, CodeStream str, String indent, String name) {
+        printDimsWithSep_C(p, str, indent, name, ", ");
+    }
+
+    private void Size.printDimsWithSep_C(CodePrinter p, CodeStream str, String indent, String name, String sep) {
+        printSize_C(p, str, indent, name, 0);
+        for (int i = 1; i < ndims(); i++) {
+            str.print(sep);
+            printSize_C(p, str, indent, name, i);
+        }
+    }
+
+    public void Size.printSize_C(CodePrinter p, CodeStream str, String indent, String name, int dim) {
+        str.print("jmi_array_size(", name, p.sep(), dim, ")");
+    }
+
+    public void Size.printSize_C(CodePrinter p, CodeStream str, String indent, FExp e, int dim) {
+        str.print("jmi_array_size(");
+        p.print(e, str, indent);
+        str.print(p.sep(), dim, ")");
+    }
+
+    public void Size.print(CodePrinter.StepPrinter p, CodeStream str, String indent) {}
+
+    @Override
+    public void MutableSize.print(CodePrinter.StepPrinter p, CodeStream str, String indent) {
+        if (isUnknown()) {
+            for (int i = 0; i < size.length; i++) {
+                if (size[i] == Size.UNKNOWN && exps[i] != null) {
+                    p.print(exps[i], str, indent);
+                }
+            }
+        } else {
+            super.print(p, str, indent);
+        }
+    }
+
+    public void FType.printDecl_C(CodePrinter p, CodeStream str, String indent, 
+            Dynamicity dyn, String name, boolean external) {
+        if (isArray()) {
+            printArrayDecl_C(p, str, indent, dyn, name, external);
+        } else {
+            printScalarDecl_C(p, str, indent, external, name);
+        }
+    }
+
+    public void FType.printArrayDecl_C(CodePrinter p, CodeStream str, String indent, 
+            Dynamicity dyn, String name, boolean external) {
+        str.print(indent, "JMI_ARR(",
+                dyn, ", ", 
+                nameScalar_C(p, external), ", ",
+                nameArray_C(p, external), ", ",
+                name, ", ");
+        if (dyn.isHeap()) {
+            str.print("-1");
+        } else {
+            size().printNumElements_C(p, str, indent, (TypePrintable_C)null);
+        }
+        str.print(", ");
+        str.print(ndims());
+        str.println(")");
+    }
+
+    public void FType.printScalarDecl_C(CodePrinter p, CodeStream str, String indent, boolean external, String name) {
+        str.print(indent);
+        str.print("JMI_DEF(");
+        str.print(macroTypeDecl(external));
+        str.print(", ");
+        str.print(name);
+        str.print(")\n");
+    }
+
+    @Override
+    public void FRecordType.printScalarDecl_C(CodePrinter p, CodeStream str, String indent, boolean external, String name) {
+        str.formatln("%sJMI_RECORD_STATIC(%s, %s)", indent, nameScalar_C(p, external), name);
+    }
+    
+    public void FType.printInit_C(CodePrinter p, CodeStream str, String indent, 
+            Dynamicity dyn, String name, boolean external) {
+        if (isArray()) {
+            printInitArray_C(p, str, indent, dyn, name, external);
+        } else {
+            printInitScalar_C(p, str, indent, dyn, name, external);
+        }
+    }
+    
+    public void FType.printInitArray_C(CodePrinter p, CodeStream str, String indent, 
+            Dynamicity dyn, String name, boolean external) {
+        str.print(indent, "JMI_ARRAY_INIT_", ndims(), "(",
+                dyn, ", ", 
+                nameScalar_C(p, external), ", ",
+                nameArray_C(p, external), ", ",
+                name, ", ");
+        size().printNumElements_C(p, str, indent, (TypePrintable_C)null);
+        str.print(", ");
+        str.print(ndims());
+        str.print(", ");
+        size().printDimensions_C(p, str, indent, (TypePrintable_C)null);
+        str.print(")\n");
+    }
+    
+    public void FType.printInitScalar_C(CodePrinter p, CodeStream str, String indent, 
+            Dynamicity dyn, String name, boolean external) {
+        str.print(indent, name, " = jmi_dynamic_function_pool_alloc(&dyn_mem, 1*sizeof(", nameScalar_C(p), "), TRUE);\n");
+    }
+}

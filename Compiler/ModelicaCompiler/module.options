@@ -1,0 +1,460 @@
+
+
+********************************************************************************
+STRING c_compiler compiler uncommon "gcc"
+
+"The C compiler to use to compile generated C code."
+
+********************************************************************************
+BOOLEAN copy_source_files_to_fmu compiler user false
+
+"If enabled, the generated source files will be copied to the FMU."
+
+********************************************************************************
+BOOLEAN generate_only_initial_system compiler user false
+
+"If enabled, then only the initial equation system will be generated."
+
+********************************************************************************
+REAL tearing_division_tolerance compiler user 1.0E-10
+
+"The minimum allowed size for a divisor constant when performing tearing."
+
+********************************************************************************
+BOOLEAN divide_by_vars_in_tearing compiler user false
+
+"If enabled, a less restrictive strategy is used for solving equations in the 
+tearing algorithm. Specifically, division by parameters and variables is 
+permitted, by default no such divisions are made during tearing."
+
+********************************************************************************
+STRING local_iteration_in_tearing compiler uncommon "off"
+"off" "annotation" "all"
+
+"This option controls whether equations can be solved local in tearing. 
+Possible options are: 
+'off', local iterations are not used (default). 
+'annotation', only equations that are annotated are candidates. 
+'all', all equations are candidates."
+
+********************************************************************************
+BOOLEAN automatic_tearing compiler user true
+
+"If enabled, then automatic tearing of equation systems is performed."
+
+********************************************************************************
+BOOLEAN allow_non_scalar_nested_blocks compiler uncommon true
+
+"If disabled, an error is given if there are nested blocks which are 
+non-scalar."
+
+********************************************************************************
+BOOLEAN convert_free_dependent_parameters_to_algebraics compiler user true
+
+"If enabled, then free dependent parameters are converted to algebraic 
+variables."
+
+********************************************************************************
+BOOLEAN generate_dae compiler internal false
+
+"If enabled, then code for solving DAEs are generated."
+
+********************************************************************************
+INTEGER generate_sparse_block_jacobian_threshold compiler experimental 100 0 Integer.MAX_VALUE
+
+"Threshold for when a sparse Jacobian should be generated. If the number of 
+torn variables is less than the threshold a dense Jacobian is generated."
+
+********************************************************************************
+BOOLEAN generate_ode compiler internal true
+
+"If enabled, then code for solving ODEs are generated. "
+
+********************************************************************************
+BOOLEAN generate_mof_files compiler user false
+
+"If enabled, then flat model before and after transformations will be 
+generated."
+
+********************************************************************************
+STRING fmu_type compiler internal ""
+
+"Semicolon separated list of defines to set, e.g. FMUCS20."
+
+********************************************************************************
+STRING extra_lib_dirs compiler internal ""
+
+"The value of this option is appended to the MODELICAPATH when searching for 
+libraries. Deprecated."
+
+********************************************************************************
+BOOLEAN state_start_values_fixed compiler user false
+
+"If enabled, then initial equations are generated automatically for 
+differentiated variables even though the fixed attribute is equal to fixed. 
+Setting this option to true is, however, often practical in optimization 
+problems."
+
+********************************************************************************
+BOOLEAN eliminate_alias_variables compiler uncommon true
+
+"If enabled, then alias variables are eliminated from the model."
+
+********************************************************************************
+BOOLEAN eliminate_alias_parameters compiler uncommon true false
+
+"If enabled, then alias parameters are eliminated from the model."
+
+********************************************************************************
+BOOLEAN eliminate_alias_constants compiler uncommon true
+
+"If enabled, then alias constants are eliminated from the model."
+
+********************************************************************************
+BOOLEAN eliminate_linear_equations compiler uncommon true
+
+"If enabled, then equations with linear sub expressions are substituted and 
+eliminated."
+
+********************************************************************************
+BOOLEAN common_subexp_elim compiler uncommon true false
+
+"If enabled, the compiler performs a global analysis on the equation system and 
+extract identical function calls into common equations."
+
+********************************************************************************
+INTEGER external_constant_evaluation compiler user 5000
+
+"Time limit (ms) when evaluating constant calls to external functions during 
+compilation. 0 indicates no evaluation. -1 indicates no time limit."
+
+********************************************************************************
+INTEGER external_constant_evaluation_max_proc compiler uncommon 10
+
+"The maximum number of processes kept alive for evaluation of external 
+functions during compilation. This speeds up evaluation of functions using 
+external objects during compilation.If less than 1, no processes will be kept 
+alive, i.e. this feature is turned off."
+
+********************************************************************************
+BOOLEAN halt_on_warning compiler user false
+
+"If enabled, compilation warnings will cause compilation to abort."
+
+********************************************************************************
+BOOLEAN generate_xml_equations compiler internal false
+
+"If enabled, then model equations are generated in XML format."
+
+********************************************************************************
+BOOLEAN index_reduction compiler user true
+
+"If enabled, then index reduction is performed for high-index systems."
+
+********************************************************************************
+INTEGER munkres_max_incidences compiler deprecated 0
+
+"The maximum number of incidences that can be in a graph when solving a munkres 
+problem. A value of zero or less results in no limit."
+
+********************************************************************************
+BOOLEAN propagate_derivatives compiler uncommon true
+
+"If enabled, the compiler will try to replace ordinary variable references with 
+derivative references. This is done by first finding equations on the form 
+x = der(y). If possible, uses of x will then be replaced with der(x)."
+
+********************************************************************************
+BOOLEAN equation_sorting compiler uncommon true
+
+"If enabled, then the equation system is separated into minimal blocks that can 
+be solved sequentially."
+
+********************************************************************************
+BOOLEAN generate_fmi_me_xml compiler internal true
+
+"If enabled, the model description part of the XML variables file will be FMI 
+for model exchange compliant. To generate an XML which will validate with FMI 
+schema the option generate_xml_equations must also be false."
+
+********************************************************************************
+BOOLEAN generate_fmi_cs_xml compiler internal false
+
+"If enabled, the model description part of the XML variables file will be FMI 
+for co simulation compliant. To generate an XML which will validate with FMI 
+schema the option generate_xml_equations must also be false."
+
+********************************************************************************
+STRING fmi_version compiler internal "1.0"
+"1.0" "2.0"
+
+"Version of the FMI specification to generate FMU for."
+
+********************************************************************************
+BOOLEAN expose_temp_vars_in_fmu compiler uncommon false
+
+"If enabled, then all temporary variables are exposed in the FMU XML and 
+accessible as ordinary variables"
+
+********************************************************************************
+BOOLEAN enable_variable_scaling compiler uncommon false
+
+"If enabled, then the 'nominal' attribute will be used to scale variables in 
+the model."
+
+********************************************************************************
+BOOLEAN event_indicator_scaling compiler experimental false
+
+"If enabled, event indicators will be scaled with nominal heuristics"
+
+********************************************************************************
+BOOLEAN normalize_minimum_time_problems compiler uncommon true
+
+"If enabled, then minimum time optimal control problems encoded in Optimica 
+are converted to fixed interval problems by scaling of the 
+derivative variables. Has no effect for Modelica models."
+
+********************************************************************************
+BOOLEAN enable_structural_diagnosis compiler uncommon true
+
+"If enabled, structural error diagnosis based on matching of equations to 
+variables is used."
+
+********************************************************************************
+BOOLEAN automatic_add_initial_equations compiler uncommon true
+
+"If enabled, then additional initial equations are added to the model based 
+equation matching. Initial equations are added for states that are not 
+matched to an equation."
+
+********************************************************************************
+BOOLEAN compliance_as_warning compiler internal false
+
+"If enabled, then compliance errors are treated as warnings instead. This can 
+lead to the compiler or solver crashing. Use with caution!"
+
+********************************************************************************
+BOOLEAN component_names_in_errors compiler user true
+
+"If enabled, the compiler will include the name of the component where the 
+error was found, if applicable."
+
+********************************************************************************
+STRING filter_warnings compiler user ""
+
+"A comma separated list of warning identifiers that should be omitted from the 
+logs."
+
+********************************************************************************
+BOOLEAN generate_html_diagnostics compiler user false
+
+"If enabled, model diagnostics are generated in HTML format. This includes the 
+flattened model, connection sets, alias sets and BLT form."
+
+********************************************************************************
+STRING generate_html_diagnostics_output_directory compiler user "."
+
+"Path to directory where compiler output should be generated for the option 
+'generate_html_diagnostics'. Default value is '.'. Directory is created if 
+it doesn't exist. The html diagnostics is generated in a subdirectory of this 
+directory."
+
+********************************************************************************
+INTEGER diagnostics_limit compiler uncommon 500 0 Integer.MAX_VALUE
+
+"This option specifies the equation system size at which the compiler will 
+start to reduce model diagnostics. This option only affects diagnostic output 
+that grows faster than linear with the number of equations."
+
+********************************************************************************
+BOOLEAN export_functions compiler uncommon false
+
+"Export used Modelica functions to generated C code in a manner that is 
+compatible with the external C interface in the Modelica Language 
+Specification."
+
+********************************************************************************
+BOOLEAN export_functions_vba compiler uncommon false
+
+"Create VBA-compatible wrappers for exported functions. Requires the option 
+export_functions."
+
+********************************************************************************
+BOOLEAN state_initial_equations compiler user false
+
+"If enabled, the compiler ignores initial equations in the model and adds 
+parameters for controlling intitial values of states.Default is false."
+
+********************************************************************************
+STRING inline_functions compiler uncommon "trivial"
+"none" "trivial" "all"
+
+"Controlles what function calls are inlined. 
+'none' - no function calls are inlined. 
+'trivial' - inline function calls that will not increase the number of 
+variables in the system. 
+'all' - inline all function calls that are possible."
+
+********************************************************************************
+STRING homotopy_type compiler uncommon "actual"
+"homotopy" "actual" "simplified"
+
+"Decides how homotopy expressions are interpreted during compilation. Can be 
+set to either 'simplified' or 'actual' which will compile the model using only 
+the simplified or actual expressions of the homotopy() operator."
+
+********************************************************************************
+BOOLEAN debug_csv_step_info compiler debug false
+
+"Debug option, outputs a csv file containing profiling recorded during 
+compilation."
+
+********************************************************************************
+BOOLEAN debug_invoke_gc compiler debug false
+
+"Debug option, if enabled, GC will be invoked between the different steps 
+during model compilation. This makes it possible to output accurate memory 
+measurements."
+
+********************************************************************************
+BOOLEAN debug_duplicate_generated compiler debug false
+
+"Debug option, duplicates any generated files to stdout."
+
+********************************************************************************
+STRING debug_transformation_steps compiler debug "none"
+"none" "diag" "full"
+
+"Options for debugging the different transformation steps. If enabled, 
+diagnostics files are written after each transformation step. Allowed values 
+are 
+'none', 
+'diag' (only fixed-size model diagnostics), 
+'full' (write diagnostics and flat tree)."
+
+********************************************************************************
+BOOLEAN debug_sanity_check compiler debug false
+
+"If enabled, flat tree will be checked for consistency between transformation 
+steps."
+
+********************************************************************************
+BOOLEAN write_iteration_variables_to_file compiler uncommon false
+
+"If enabled, two text files containing one iteration variable name per row is 
+written to disk. The files contains the iteration variables for the DAE and the 
+DAE initialization system respectively. The files are output to the resource 
+directory of the FMU."
+
+********************************************************************************
+BOOLEAN algorithms_as_functions compiler experimental false
+
+"If enabled, convert algorithm sections to function calls."
+
+********************************************************************************
+BOOLEAN write_tearing_pairs_to_file compiler uncommon false
+
+"If enabled, two text files containing tearing pairs is written to disk. The 
+files contains the tearing pairs for the DAE and the DAE initialization system 
+respectively. The files are output to the working directory."
+
+********************************************************************************
+BOOLEAN check_inactive_contitionals compiler user false
+
+"If enabled, check for errors in inactive conditional components when 
+compiling. When using check mode, this is always done."
+
+********************************************************************************
+BOOLEAN ignore_within compiler uncommon false
+
+"If enabled, ignore within clauses both when reading input files and when 
+error-checking."
+
+********************************************************************************
+STRING nonlinear_solver compiler user "kinsol"
+"kinsol" "minpack" "realtime"
+
+"Decides which nonlinear equation solver to use. Alternatives are 'kinsol or 
+'minpack'."
+
+********************************************************************************
+STRING init_nonlinear_solver compiler user "kinsol"
+"kinsol" "minpack" "realtime"
+
+"Decides which nonlinear equation solver to use in the initial system. 
+Alternatives are 'kinsol or 'minpack'."
+
+********************************************************************************
+BOOLEAN generate_event_switches compiler experimental true
+
+"If enabled, event generating expressions generates switches in the c-code. 
+Setting this option to false can give unexpected results."
+
+********************************************************************************
+BOOLEAN relational_time_events compiler deprecated true
+
+"Deprecated, use option time_events instead. If enabled, then relational 
+operators are allowed to generate time events."
+
+********************************************************************************
+BOOLEAN time_events compiler user true
+
+"If enabled, operators are allowed to generate time events."
+
+********************************************************************************
+BOOLEAN event_output_vars compiler user false
+
+"If enabled, output variables are added to model description for each generated 
+state event indicator."
+
+********************************************************************************
+BOOLEAN disable_smooth_events compiler experimental false
+
+"If enabled, no events will be generated for smooth operator if order equals to 
+zero."
+
+********************************************************************************
+BOOLEAN enable_block_function_extraction compiler user false
+
+"Looks for function calls in blocks. If a function call in a block doesn't 
+depend on the block in question, it is extracted from the block."
+
+********************************************************************************
+STRING function_incidence_computation compiler uncommon "none"
+"none" "all"
+
+"Controls how matching algorithm computes incidences for function call 
+equations. Possible values: 'none', 'all'. With 'none' all outputs are assumed 
+to depend on all inputs. With 'all' the compiler analyses the function to 
+determine dependencies."
+
+********************************************************************************
+INTEGER max_n_proc compiler uncommon 4
+
+"The maximum number of processes used during c-code compilation."
+
+********************************************************************************
+STRING cc_extra_flags_applies_to compiler uncommon "functions"
+"none" "functions" "all"
+
+"Parts of c-code to compile with extra compiler flags specified by 
+ccompiler_extra_flags"
+
+********************************************************************************
+STRING cc_extra_flags compiler uncommon ":O1"
+":O1" ":O2"
+
+"Optimization level for c-code compilation"
+
+********************************************************************************
+STRING MODELICAPATH compiler internal ""
+
+"The MODELICAPATH to use during compilation."
+
+********************************************************************************
+STRING compiler_version compiler internal "compiler_version_file_not_read"
+
+"The version string for the compiler. Uses default value during unit testing."
+
+********************************************************************************
+

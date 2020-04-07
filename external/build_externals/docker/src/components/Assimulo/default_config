@@ -1,0 +1,22 @@
+OS=linux
+PLATFORM=ubuntu
+DIST_VERSION=18.04
+PYTHON_VERSION=2.7
+TARGET=assimulo
+BITNESS=64
+DISTRO=${PLATFORM}_${DIST_VERSION}_${PYTHON_VERSION}
+EXTRA_SETUP_ARGS=--with_openmp=True
+
+# used to be able to parallelize jobs with CI by overriding this
+DOCKER_NAME_SUFFIX=""
+
+# NOTE: Some paths have double slash to avoid msys path expansion
+JM_HOME_IN_DOCKER=//tmp/jm_home
+BUILD_EXTERNALS=${JM_HOME}/external/build_externals/build
+BUILD_THIRDPARTY=${JM_HOME}/ThirdParty/build_thirdparties/build
+DOCKER_UTILS=${JM_HOME}/Docker/generation
+BUILD_DIR=${JM_HOME}/${DISTRO}/${TARGET}${BITNESS}
+DOCKER_BUILD_DIR=//${JM_HOME_IN_DOCKER}/${DISTRO}/${TARGET}${BITNESS}
+CONFIG_HOME=${JM_HOME}/external/build_externals/docker/src/components/Assimulo
+DOCKER_CONFIG_HOME=${JM_HOME_IN_DOCKER}/external/build_externals/docker/src/components/Assimulo
+ARTIFACT_FILE=${JM_HOME}/${DISTRO}/${TARGET}${BITNESS}/artifacts_${TARGET}

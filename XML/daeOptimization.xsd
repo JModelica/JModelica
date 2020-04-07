@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- edited with XMLSpy v2008 rel. 2 (http://www.altova.com) by Magnus Gäfvert (Modelon AB) -->
+<!--
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License version 3 as published
+    by the Free Software Foundation, or optionally, under the terms of the
+    Common Public License version 1.0 as published by IBM.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License, or the Common Public License, for more details.
+
+    You should have received copies of the GNU General Public License
+    and the Common Public License along with this program.  If not,
+    see <http://www.gnu.org/licenses/> or
+    <http://www.ibm.com/developerworks/library/os-cpl.html/> respectively.
+-->
+<xs:schema xmlns:opt="https://svn.jmodelica.org/trunk/XML/daeOptimization.xsd" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:exp="https://svn.jmodelica.org/trunk/XML/daeExpressions.xsd" targetNamespace="https://svn.jmodelica.org/trunk/XML/daeOptimization.xsd" elementFormDefault="qualified" attributeFormDefault="unqualified">
+	<xs:import namespace="https://svn.jmodelica.org/trunk/XML/daeExpressions.xsd" schemaLocation="optExpressions.xsd"/>
+	<xs:complexType name="Constraint">
+		<xs:annotation>
+			<xs:documentation>Constraint complex type definition</xs:documentation>
+		</xs:annotation>
+		<xs:complexContent>
+			<xs:extension base="exp:BinaryOperation"/>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:complexType name="TimeVariable">
+		<xs:annotation>
+			<xs:documentation>Time variable type definition</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="Value" type="xs:float" minOccurs="0"/>
+			<xs:element name="Free" type="xs:boolean" minOccurs="0"/>
+			<xs:element name="InitialGuess" type="xs:float" minOccurs="0"/>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:element name="Optimization">
+		<xs:annotation>
+			<xs:documentation>Optimization problem representation</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element name="ObjectiveFunction" type="exp:OptExp"/>
+				<xs:element name="IntegrandObjectiveFunction" type="exp:OptExp"/>
+				<xs:element name="IntervalStartTime" type="opt:TimeVariable"/>
+				<xs:element name="IntervalFinalTime" type="opt:TimeVariable"/>
+				<xs:element name="TimePoints">
+					<xs:complexType>
+						<xs:sequence minOccurs="0" maxOccurs="unbounded">
+							<xs:element name="TimePoint">
+								<xs:complexType>
+									<xs:sequence maxOccurs="unbounded">
+										<xs:element name="QualifiedName">
+											<xs:complexType>
+												<xs:sequence maxOccurs="unbounded">
+													<xs:element name="QualifiedNamePart" maxOccurs="unbounded">
+														<xs:complexType>
+															<xs:sequence>
+																<xs:element name="ArraySubscripts" minOccurs="0">
+																	<xs:complexType>
+																		<xs:choice minOccurs="0" maxOccurs="unbounded">
+																			<xs:element name="IndexExpression" type="exp:Exp">
+																				<xs:annotation>
+																					<xs:documentation>Array index</xs:documentation>
+																				</xs:annotation>
+																			</xs:element>
+																			<xs:element ref="exp:UndefinedDimension"/>
+																		</xs:choice>
+																	</xs:complexType>
+																</xs:element>
+															</xs:sequence>
+															<xs:attribute name="name" type="xs:normalizedString" use="required"/>
+														</xs:complexType>
+													</xs:element>
+												</xs:sequence>
+											</xs:complexType>
+										</xs:element>
+									</xs:sequence>
+									<xs:attribute name="index" type="xs:integer" use="required"/>
+									<xs:attribute name="value" type="xs:double" use="required"/>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+					</xs:complexType>
+				</xs:element>
+				<xs:element name="PathConstraints">
+					<xs:complexType>
+						<xs:choice minOccurs="0" maxOccurs="unbounded">
+							<xs:element name="ConstraintEq" type="opt:Constraint"/>
+							<xs:element name="ConstraintGeq" type="opt:Constraint"/>
+							<xs:element name="ConstraintLeq" type="opt:Constraint"/>
+						</xs:choice>
+					</xs:complexType>
+				</xs:element>
+				<xs:element name="PointConstraints">
+					<xs:complexType>
+						<xs:choice minOccurs="0" maxOccurs="unbounded">
+							<xs:element name="ConstraintEq" type="opt:Constraint"/>
+							<xs:element name="ConstraintGeq" type="opt:Constraint"/>
+							<xs:element name="ConstraintLeq" type="opt:Constraint"/>
+						</xs:choice>
+					</xs:complexType>
+				</xs:element>
+			</xs:sequence>
+			<xs:attribute name="static" type="xs:boolean"/>
+		</xs:complexType>
+	</xs:element>
+</xs:schema>

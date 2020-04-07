@@ -1,0 +1,1561 @@
+/*
+    Copyright (C) 2009-2015 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Set;
+import java.util.Stack;
+
+import org.jmodelica.util.exceptions.MunkresException;
+import org.jmodelica.util.exceptions.IndexReductionException;
+import org.jmodelica.util.munkres.SparseMunkresProblem;
+import org.jmodelica.util.munkres.MunkresProblem;
+import org.jmodelica.util.munkres.MunkresCost;
+
+aspect IndexReduction {
+    
+    syn boolean FClass.indexReductionErrorsAsWarnings() = false;
+    
+    public class FClass {
+        /**
+         * Generate array initialization statements for unknown function arrays.
+         */
+        public class indexReduction extends Transformation {
+            public indexReduction() {
+                super("index_reduction");
+            }
+            
+            public void perform() {
+                try {
+                    // Make sure that we don't do this if any errors have been reported previously
+                    breakOnErrors();
+                    
+                    DAEBiPGraph = computeMatchedDAEBiPGraph(createBLTInput());
+                    if (shouldReduceIndex(DAEBiPGraph))
+                        reduceIndex();
+                } catch (IndexReductionException e) {
+                    if (indexReductionErrorsAsWarnings())
+                        warning(e.getMessage());
+                    else
+                        error(e.getMessage());
+                    // We need to check structure and give warning since a bad system can affect index reduction
+                    checkStructure();
+                } catch (EquationDifferentiationException e) {
+                    error(e.getMessage());
+                }
+                breakOnErrors();
+            }
+        }
+    }
+    
+    private boolean FClass.shouldReduceIndex(BiPGraph g) {
+        return !g.isComplete() && continuousEquations().size() > 0 && derivativeVariables().size() > 0;
+    }
+    
+    /**
+     * Perform index reduction on model.
+     * 
+     * @return  the new graph
+     */
+    private void FClass.reduceIndex() {
+        logVerbose("Flat tree before index reduction");
+        logVerbose(this);
+        logVerbose("Index reduction starts...");
+        IndexReductionResult result;
+        while (true) {
+            IndexReductionBiPGraph g = new IndexReductionBiPGraph();
+            g.setStepLogger(this);
+            // Only do index reduction based on real variables and equations
+            g.addVariables(new FClassBLTInput(this), VAR_TYPES_REAL);
+            g.addEquations(continuousNonMetaEquations(), VAR_TYPES_REAL);
+            logVerbose(g);
+            g.maximumMatching(true);
+            logVerbose("DAE system real variables only");
+            logVerbose(g.printMatchingObj());
+            
+            try {
+                boolean printPantelidesSteps = g.getEquations().size() <= myOptions().getIntegerOption("diagnostics_limit");
+                if (!printPantelidesSteps) {
+                    logVerbose("The BiPGraph will not be printed during pantelides, the model is too big. "
+                            + "Limit, compiler option 'diagnostics_limit', is set to %d and model size is %d. ",
+                            myOptions().getIntegerOption("diagnostics_limit"), g.getEquations().size());
+                }
+                int dynamicStatesLimit = myOptions().getBooleanOption("dynamic_states") ?
+                        myOptions().getIntegerOption("dynamic_states_limit") :
+                        0;
+                result = g.reduceIndex(new IndexReductionFunctionInliner(this),
+                        dynamicStatesLimit,
+                        myOptions().getIntegerOption("munkres_max_incidences"),
+                        printPantelidesSteps);
+                break;
+            } catch (EquationDifferentiationException e) {
+                logVerbose("Unable to differentiate equation:\n%s", e.equation);
+                if (ssPreferVars == null || ssPreferVars.isEmpty())
+                    throw e;
+                Set<FVariable> removableVars = g.removablePreferDerivatives(ssPreferVars);
+                if (removableVars.isEmpty())
+                    throw e;
+                logVerbose("Retrying index reduction without the following state select prefer derivatives:");
+                for (FVariable var : removableVars) {
+                    logVerbose("  %s", var.name());
+                    ssPreferVars.remove(var.getMeIntegrated());
+                }
+                logVerbose("");
+                
+                // Remove SS=prefer derivatives
+                List<FVariable> vars = new List<FVariable>();
+                for (FVariable var : getFVariableListNoTransform()) {
+                    if (!removableVars.contains(var))
+                        vars.add(var);
+                }
+                setFVariableList(vars);
+                root().flushAllRecursive();
+            }
+        }
+        
+        // Add the new equations
+        // Replace selected dummy derivatives with algebraics
+        // Enable rewrite of identifiers? (not necessary?)
+        for (FAbstractEquation fe : result.getEquations()) {
+            if (fe.variability().fixedParameterOrLess()) {
+                addParameterEquation(fe);
+            } else if (fe.variability().parameterOrLess()) {
+                addFInitialEquation(fe);
+            } else {
+                addFEquation(fe);
+            }
+        }
+        
+        getAliasManager().stopCollectingDerivativeBindings();
+        
+        Collection<FVariable> l = new ArrayList<FVariable>();
+        
+        for (FVariable fv : getFVariables()) {
+            if (fv.isDerivativeVariable()) {
+                if (result.getDummyDerivatives().contains(fv)) {
+                    FDummyDerivativeVariable fdv = new FDummyDerivativeVariable(fv.getVisibilityType(),
+                        fv.getTypePrefixVariability(), fv.getFAccess().fullCopy(), fv.order());
+                    l.add(fdv);
+                } else if (fv.order() > 1) {
+                    // Convert higher order derivative variables into
+                    // first order derivatives, generating variables for each step
+                    FAccess accessPrev = fv.getFAccess().treeCopy();
+                    for (int i = 1; i < fv.order(); i++) {
+                        FAccess access = fv.getFAccess().createDerPrefixedName(i);
+                        l.add(new FRealVariable(VisibilityType.PUBLIC,
+                                fv.getTypePrefixVariability(), access.fullCopy()));
+                        // Derivative variable is added later
+                        addFEquation(new FEquation(new FAccessExp(access), new FDerExp(accessPrev.treeCopy())));
+                        accessPrev = access;
+                    }
+                }
+            } else {
+                l.add(fv);
+            }
+        }
+
+        setFVariableList(new List<FVariable>(l));
+
+        applyDynamicStateResult(result);
+        
+        logVerbose(this);
+        
+        enableFHDerRewrite();
+
+        // flushAllRecursiveClearFinal must be used here in order to
+        // trigger rewrites of FDerExp -> FDummyDerExp
+        root().flushAllRecursiveClearFinal();
+
+        aliasElimination.apply();
+        // Add derivative variables
+        setFDerivativeVariables.apply();
+
+        root().flushAllRecursive();
+
+        logVerbose(this);
+        logVerbose(aliasManager);
+
+        // Produce errors and warnings:
+        Set<FVariable> stateSelectAlwaysVars = new HashSet<FVariable>();
+        for (FVariable fv : variables()) {
+            if (fv.aliasSet() != null) {
+                for (AliasManager.AliasVariable av : fv.aliasSet()) {
+                    if (av.getFVariable().stateSelectAttribute() == FRealVariable.StateSelect.ALWAYS)
+                        stateSelectAlwaysVars.add(av.getFVariable());
+                }
+            } else if (fv.stateSelectAttribute() == FRealVariable.StateSelect.ALWAYS) {
+                stateSelectAlwaysVars.add(fv);
+            }
+        }
+        for (FVariable fv : differentiatedRealVariables()) {
+            if (fv.stateSelectAttribute() == FRealVariable.StateSelect.NEVER)
+                fv.warning(fv.name() + " has stateSelect=never, but must be selected as state");
+            stateSelectAlwaysVars.remove(fv);
+        }
+        for (FVariable fv : stateSelectAlwaysVars) 
+            if (fv.isSetInReinit())
+                fv.error(fv.name() + " is assigned in reinit(), but could not be selected as state");
+            else
+                fv.warning(fv.name() + " has stateSelect=always, but could not be selected as state");
+
+        logInfo(stateDiagnosticsObj());
+        
+        DAEBiPGraph = computeMatchedDAEBiPGraph(createBLTInput());
+        logVerbose("BiPGraph after index reduction");
+        logVerbose(DAEBiPGraph);
+        logVerbose("BiPGraph matching after index reduction");
+        logVerbose(DAEBiPGraph.printMatchingObj());
+
+        if (!DAEBiPGraph.isComplete()) {
+            // If we get here, index reduction failed
+            throw new IndexReductionException();
+        }
+    }
+    
+    public Object FClass.stateDiagnosticsObj() {
+        return new Object() {
+            public String toString() {
+                if (differentiatedRealVariables().isEmpty())
+                    return "There are no states in the model";
+                StringBuilder sb = new StringBuilder();
+                sb.append("States:\n");
+                for (FVariable fv : differentiatedRealVariables()) {
+                    if (fv.isDynamicState())
+                        continue;
+                    if (fv.isFDynamicStateVariable()) {
+                        FDynamicStateVariable var = fv.asFDynamicStateVariable();
+                        if (var.getNumber() != 1)
+                            continue;
+                        DynamicStateSet set = var.getSet();
+                        sb.append(String.format("  Set of dynamic states with %d states and %d algebraics:\n", set.numStates(), set.numAlgebraics()));
+                        for (FVariable state : set.fVars()) {
+                            sb.append(state.prettyPrint("    "));
+                            sb.append('\n');
+                        }
+                    } else {
+                        sb.append(fv.prettyPrint("  "));
+                        sb.append('\n');
+                    }
+                }
+                return sb.toString();
+            }
+        };
+    }
+
+    /**
+     * Check if this variable is marked as being set by a reinit().
+     */
+    syn boolean FAbstractVariable.isSetInReinit() = false;
+    eq FRealVariable.isSetInReinit() {
+        FAttribute a = findAttribute(FAttribute.STATE_SELECT);
+        return a != null && a.isInternal();
+    }
+
+    
+    /**
+     * Create a new FAccess that is a copy of this one, prefixed with "_der" <code>order</code> times in the last name part.
+     */
+    public FAccess FAccess.createDerPrefixedName(int order) {
+        FAccess pref = copyPrefix();
+        String name = lastActualPartName();
+        if (name.startsWith("_"))
+            name = name.substring(1);
+        name = createDerPrefixString(order) + name;
+        FAccess der;
+        if (hasFArraySubscripts())
+            der = pref.copyAndAppend(name, getFArraySubscripts().fullCopy());
+        else
+            der = pref.copyAndAppend(name);
+        der.scalarized = true;
+        return der;
+    }
+    
+    /**
+     * Create a new FAccess that is a copy of this one, prefixed with "_der" <code>order</code> times in the first name
+     * part. This function is used in functions, instead of createDerPrefixedName(int).
+     */
+    public FAccess FAccess.createDerPrefixedFunctionName(int order) {
+        String prefix = createDerPrefixString(order);
+        return copyAndAddPrefix(prefix, true);
+    }
+    
+    public class IndexReductionBiPGraph extends AbstractBiPGraph<IndexReductionEq, IndexReductionVar, IndexReductionSCCBlock> {
+
+        @Override
+        protected IndexReductionEq createEq(String name, FAbstractEquation eqn, int groupNumber, Collection<IndexReductionEq> groupMembers, TypePrefixVariability variability, FType type, boolean isMeta) {
+            return new IndexReductionEq(name, eqn, groupNumber, groupMembers, variability, type, isMeta);
+        }
+
+        @Override
+        protected IndexReductionVar createVar(String name, FVariable var) {
+            return new IndexReductionVar(name, var);
+        }
+
+        @Override
+        public boolean canMatch(IndexReductionEq e, IndexReductionVar v) {
+            return super.canMatch(e, v) && !e.isNonDiffUse(v) && getVariable(v.getName()) != null;
+        }
+
+        @Override
+        protected IndexReductionSCCBlock createComponentBlock() {
+            return new IndexReductionSCCBlock();
+        }
+
+    }
+    
+    public class IndexReductionEq extends AbstractEq<IndexReductionEq, IndexReductionVar> {
+
+        private IndexReductionEq meDifferentiated = null;
+        private IndexReductionEq meIntegrated = null;
+        private Set<String> nonDiffVars;
+        private Set<FAbstractEquation> nonDiffEqns;
+        private Set<IndexReductionVar> remoteVars = null;
+
+        public IndexReductionEq(String name, FAbstractEquation eqn, int groupNumber, Collection<IndexReductionEq> groupMembers, TypePrefixVariability variability, FType type, boolean isMeta) {
+            super(name, eqn, groupNumber, groupMembers, variability, type, isMeta);
+        }
+
+        public int numDifferentiations() {
+            return getMeIntegrated() == null ? 0: getMeIntegrated().numDifferentiations() + 1; 
+        }
+
+        public void setMeDifferentiated(IndexReductionEq e) {
+            this.meDifferentiated = e;
+            this.getEquation().setMeDifferentiated(e.getEquation());
+        }
+
+        public IndexReductionEq getMeDifferentiated() {
+            return this.meDifferentiated;
+        }
+
+        public void setMeIntegrated(IndexReductionEq e) {
+            this.meIntegrated = e;
+            this.getEquation().setMeIntegrated(e.getEquation());
+        }
+
+        public IndexReductionEq getMeIntegrated() {
+            return this.meIntegrated;
+        }
+
+        public boolean isNonDiffUse(IndexReductionVar var) {
+            computeNonDiffCache();
+            return nonDiffVars.contains(var.getName());
+        }
+
+        public int numDiffableVars() {
+            int n = 0;
+            for (IndexReductionVar var : getVariables())
+                if (!isNonDiffUse(var))
+                    n++;
+            return n;
+        }
+        
+        public boolean diffExtraEqn(FAbstractEquation eqn) {
+            computeNonDiffCache();
+            return !nonDiffEqns.contains(eqn);
+        }
+
+        private Collection<FAbstractEquation> extraEquations = Collections.emptyList();
+
+        public void setExtraEquations(Collection<FAbstractEquation> extraEquations) {
+            this.extraEquations = extraEquations;
+        }
+
+        public Collection<FAbstractEquation> getExtraEquations() {
+            return extraEquations;
+        }
+
+        /**
+         * This method computes which equations and variables that shouldn't be
+         * differentiated. This is done by visiting the original equations,
+         * following referenced variables and visiting extra equations where
+         * they are referenced. This is done recursivly through all extra
+         * equations. If we enter a functioncall argument that is "noDerivtive"
+         * or "zeroDerivative", then week keep track of that and referenced
+         * variables and equations are makred as nondiff.
+         * 
+         * This method sets the same cache lists to all group members.
+         */
+        private void computeNonDiffCache() {
+            if (nonDiffVars != null && nonDiffEqns != null)
+                return;
+            Map<String, Collection<FAbstractEquation>> varToEqnMap = new HashMap<String, Collection<FAbstractEquation>>();
+            
+            Collection<FAbstractEquation> mainEqns = new LinkedHashSet<FAbstractEquation>();
+            Stack<WorklistPair> worklist = new Stack<WorklistPair>();
+            for (IndexReductionEq member : getGroupMembers()) {
+                worklist.add(new WorklistPair(member.getEquation(), false));
+                mainEqns.add(member.getEquation());
+            }
+            
+            for (FAbstractEquation eqn : new ChainedIterable<FAbstractEquation>(mainEqns, extraEquations)) {
+                for (FAccessExp access : eqn.referencedCommonAccessExps()) {
+                    Collection<FAbstractEquation> eqnList = varToEqnMap.get(access.name());
+                    if (eqnList == null) {
+                        eqnList = new HashSet<FAbstractEquation>();
+                        varToEqnMap.put(access.name(), eqnList);
+                    }
+                    eqnList.add(eqn);
+                }
+            }
+            
+            
+            Map<String, Boolean> varNonDiffMap = new HashMap<String, Boolean>();
+            Map<FAbstractEquation, Boolean> eqnNonDiffMap = new HashMap<FAbstractEquation, Boolean>();
+            while (!worklist.isEmpty()) {
+                WorklistPair pair = worklist.pop();
+                FAbstractEquation eqn = pair.eqn;
+                boolean nonDiff = pair.value;
+                Boolean currentNonDiffValue = eqnNonDiffMap.get(eqn);
+                // If we already have visited and concluded that it should be diffed or if we are checking nondiff and already visited, then skip
+                if (currentNonDiffValue != null && (!currentNonDiffValue || nonDiff))
+                    continue;
+                eqnNonDiffMap.put(eqn, nonDiff);
+                for (FAccessExp access : eqn.referencedCommonAccessExps()) {
+                    Boolean oldValue = varNonDiffMap.get(access.name());
+                    boolean value = (oldValue == null || oldValue) && (nonDiff || access.inNonDiffArg());
+                    varNonDiffMap.put(access.name(), value);
+                    Collection<FAbstractEquation> eqnList = varToEqnMap.get(access.name());
+                    if (eqnList == null)
+                        continue;
+                    for (FAbstractEquation otherEqn : eqnList)
+                        worklist.add(new WorklistPair(otherEqn, value));
+                }
+            }
+            
+            Set<String> nonDiffVars = Collections.emptySet();
+            for (Map.Entry<String, Boolean> entry : varNonDiffMap.entrySet()) {
+                if (entry.getValue()) {
+                    if (nonDiffVars.isEmpty())
+                        nonDiffVars = new HashSet<String>();
+                    nonDiffVars.add(entry.getKey());
+                }
+            }
+            
+            Set<FAbstractEquation> nonDiffEqns = Collections.emptySet();
+            for (Map.Entry<FAbstractEquation, Boolean> entry : eqnNonDiffMap.entrySet()) {
+                if (entry.getValue()) {
+                    if (nonDiffEqns.isEmpty())
+                        nonDiffEqns = new HashSet<FAbstractEquation>();
+                    nonDiffEqns.add(entry.getKey());
+                }
+            }
+            
+            for (IndexReductionEq member : getGroupMembers()) {
+                member.nonDiffVars = nonDiffVars;
+                member.nonDiffEqns = nonDiffEqns;
+            }
+        }
+
+        private static class WorklistPair {
+            public final FAbstractEquation eqn;
+            public final boolean value;
+            public WorklistPair(FAbstractEquation eqn, boolean value) {
+                this.eqn = eqn;
+                this.value = value;
+            }
+        }
+
+        @Override
+        public String printEquation() {
+            if (extraEquations.size() == 0)
+                return super.printEquation();
+            StringBuilder sb = new StringBuilder();
+            sb.append(super.printEquation());
+            for (FAbstractEquation eqn : extraEquations) {
+                sb.append("\n    Extra: ");
+                sb.append(eqn.toString());
+            }
+            return sb.toString();
+        }
+        
+        /**
+         * Used by index reduction for indicating that the incidence isn't
+         * direct but through other low order equations and variables.
+         */
+        public void addVariable(IndexReductionVar var, boolean remote) {
+            super.addVariable(var);
+            if (remote) {
+                if (remoteVars == null) {
+                    remoteVars = new HashSet<IndexReductionVar>();
+                }
+                remoteVars.add(var);
+            }
+        }
+        
+        /**
+         * Used by index reduction for indicating that the incidence isn't
+         * direct but through other low order equations and variables.
+         */
+        public boolean isRemoteVar(IndexReductionVar var) {
+            if (remoteVars == null) {
+                return false;
+            } else {
+                return remoteVars.contains(var);
+            }
+        }
+    }
+
+    public class IndexReductionVar extends AbstractVar<IndexReductionEq, IndexReductionVar> {
+
+        private IndexReductionVar meDifferentiated = null; // A reference to this variable differentiated once
+        private IndexReductionVar meIntegrated = null;
+
+        public IndexReductionVar(String name, FVariable v) {
+            super(name, v);
+        }
+
+        public void setMeDifferentiated(IndexReductionVar var) {
+            this.meDifferentiated = var;
+            this.getVariable().setMeDifferentiated(var.getVariable());
+        }
+
+        public IndexReductionVar getMeDifferentiated() {
+            return this.meDifferentiated;
+        }
+
+        public void setMeIntegrated(IndexReductionVar var) {
+            this.meIntegrated = var;
+            this.getVariable().setMeIntegrated(var.getVariable());
+        }
+
+        public IndexReductionVar getMeIntegrated() {
+            return this.meIntegrated;
+        }
+
+        public int numDifferentiations() {
+            return getVariable().order();
+        }
+
+    }
+    
+    public static final int IndexReductionBiPGraph.MAX_N_EQ_DIFFS = 5;
+    public static final int IndexReductionBiPGraph.MAX_N_FEXP_IN_EQ = 10000;
+    
+    private void IndexReductionBiPGraph.differentiateVariable(IndexReductionVar var, Collection<FVariable> newDiffedVars, Collection<IndexReductionVar> varsToRemove) {
+        if (var.getMeDifferentiated() != null)
+            return;
+        // Create a new differentiated variable
+        FVariable diffedFVar = var.getVariable().createFDerivativeVariable();
+        newDiffedVars.add(diffedFVar);
+        // Add the differentiated variable to the graph 
+        IndexReductionVar diffedVar = addVariable(diffedFVar.name(), diffedFVar);
+        // a reference from the visited variable to its 
+        // differentiated counterpart
+        varsToRemove.add(var);
+        var.setMeDifferentiated(diffedVar);
+        diffedVar.setMeIntegrated(var);
+    }
+    
+    public class IndexReductionFunctionInliner extends AbstractFunctionInliner {
+        
+        private final FClass fclass;
+        private final FIndexReductionResolver resolver;
+        private final Collection<FVariable> newVariables = new ArrayList<FVariable>();
+        private final Collection<FAbstractEquation> newEquations = new ArrayList<FAbstractEquation>();
+        private final Collection<FAbstractEquation> lastSplitFFCE = new ArrayList<FAbstractEquation>();
+        private final boolean inlineEnabled;
+        
+        public IndexReductionFunctionInliner(FClass fclass) {
+            this.resolver = fclass.dynamicResolver(new FIndexReductionResolver(fclass));
+            this.fclass = fclass;
+            inlineEnabled = fclass.myOptions().getStringOption("inline_functions") != OptionRegistry.Inlining.NONE;
+        }
+
+        @Override
+        protected String nextTempVarName() {
+            return fclass.nextTempVarName();
+        }
+
+        @Override
+        public boolean isInlinable(FFunctionDecl func, FFunctionCall call) {
+            if (inlineEnabled)
+                return func.isTrivialInlinable(false, call);
+            else
+                return false;
+        }
+
+        @Override
+        protected void addVar(FVariable var) {
+            resolver.dynamicVariable(var);
+            newVariables.add(var);
+        }
+
+        public <V extends FAbstractEquation> V dynamicEquation(V eqn) {
+            return resolver.dynamicEquation(eqn);
+        }
+
+        @Override
+        protected void addEquation(FAbstractEquation eqn) {
+            eqn.flushAllRecursiveClearFinal();
+            dynamicEquation(eqn);
+            newEquations.add(eqn);
+        }
+
+        @Override
+        public void inline(List<FAbstractEquation> oldEquationList, Collection<FAbstractEquation> newEquationList) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        protected Collection<FAbstractEquation> handleInlinedFunctionCallEquation(FFunctionCallEquation original, Collection<FAbstractEquation> result2) {
+            lastSplitFFCE.clear();
+            for (FAbstractEquation eqn : result2) {
+                lastSplitFFCE.add(eqn);
+                resolver.dynamicEquation(eqn);
+                newEquations.add(eqn);
+            }
+            return null;
+        }
+
+        public Collection<FVariable> getNewVariables() {
+            return newVariables;
+        }
+
+        public Collection<FAbstractEquation> getNewEquations() {
+            return newEquations;
+        }
+
+        public Collection<FAbstractEquation> getLastSplitFFCE() {
+            return lastSplitFFCE;
+        }
+        
+        public void reset() {
+            newVariables.clear();
+            newEquations.clear();
+            lastSplitFFCE.clear();
+        }
+    }
+    
+    private static FAbstractEquation IndexReductionBiPGraph.differentiateEquation(FAbstractEquation fEqn, IndexReductionFunctionInliner inliner) {
+        if (fEqn.numFExp() > MAX_N_FEXP_IN_EQ)
+            throw new IndexReductionException("Maximum number of expressions in a single equation has been reached");
+        
+        Collection<FAbstractEquation> diffedFEqns = fEqn.diff("time");
+        if (diffedFEqns.size() != 1)
+            throw new UnsupportedOperationException("Differentiation of equations should result" +
+                    " in a single equation when differentiating on time");
+        return inliner.dynamicEquation(diffedFEqns.iterator().next());
+    }
+    
+
+    public <V> AbstractBiPGraph.AssignmentIncidenceMap FAbstractEquation.assignmentIncidenceMap(AbstractBiPGraph g, EnumSet<AbstractBiPGraph.VarType> variableTypes, AbstractBiPGraph.VariableResolver resolver) {
+        throw new UnsupportedOperationException("FAbstractEquation.assignmentIncidenceMap() isn't implemented for equations of type " + getClass().getSimpleName() + "!");
+    }
+
+    @Override
+    public <V> AbstractBiPGraph.AssignmentIncidenceMap FEquation.assignmentIncidenceMap(AbstractBiPGraph g, EnumSet<AbstractBiPGraph.VarType> variableTypes, AbstractBiPGraph.VariableResolver resolver) {
+        return g.new SingleAssignmentIncidenceMap(this, resolver);
+    }
+
+    @Override
+    public <V> AbstractBiPGraph.AssignmentIncidenceMap FFunctionCallEquation.assignmentIncidenceMap(AbstractBiPGraph g, EnumSet<AbstractBiPGraph.VarType> variableTypes, AbstractBiPGraph.VariableResolver resolver) {
+        return g.new SplitIncidenceMap(this, resolver, variableTypes);
+    }
+
+    public class IndexReductionBiPGraph {
+        private class ExtraEquationVariableResolver implements VariableResolver<IndexReductionEq, IndexReductionVar> {
+            
+            private final Map<String, AssignmentIncidenceMap> extraEqMap;
+            private final Set<String> evaluationStack = new LinkedHashSet<String>();
+            
+            private ExtraEquationVariableResolver(Collection<FAbstractEquation> equations) {
+                extraEqMap = new HashMap<String, AssignmentIncidenceMap>();
+                for (FAbstractEquation equation : equations) {
+                    AssignmentIncidenceMap incidenceMap = equation.assignmentIncidenceMap(IndexReductionBiPGraph.this, null, this);
+                    for (CommonAccessExp lhs : incidenceMap.assigned()) {
+                        extraEqMap.put(lhs.name(), incidenceMap);
+                    }
+                }
+            }
+            
+            @Override
+            public Set<IndexReductionVar> lookupVars(Iterable<FAccessExp> set) {
+                Set<IndexReductionVar> res = new LinkedHashSet<IndexReductionVar>();
+                lookupVars(set, res);
+                return res;
+            }
+    
+            private void lookupVars(Iterable<FAccessExp> set, Set<IndexReductionVar> resolvedVars) {
+                for (FAccessExp use : set) {
+                    String varName = use.name();
+                    IndexReductionVar var = getVariable(varName);
+                    if (var != null) {
+                        resolvedVars.add(var);
+                    } else {
+                        AssignmentIncidenceMap incidenceMap = extraEqMap.get(varName);
+                        if (incidenceMap != null) {
+                            if (!evaluationStack.add(varName)) {
+                                throw new UnsupportedOperationException("Oh boy, we have a circularity in our evaluation of extra equations during index reduction, this is not supported. Stack: " + evaluationStack);
+                            }
+                            try {
+                                lookupVars(incidenceMap.rhs(varName), resolvedVars);
+                            } finally {
+                                evaluationStack.remove(varName);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    /**
+     * This method is big and complex due to that function inlining has to be
+     * done on the differentiated equation. This results in additional
+     * equations and variables are spawned by the inlining algorithm. None
+     * of these equations or variables are inserted into the index reduction
+     * problem, there is no need for it. Instead they are hidden inside the 
+     * original equation or variable. There are situations where the original
+     * equation (function call equation) is split into several equations. This
+     * is hanled by introducing the equations into the index reduction problem
+     * as normal but keeping them as group members so that all are
+     * differentiated if one is differentiated. The referenced variables are 
+     * derived from all of the equations in this case.
+     * 
+     * All of these special cases makes this method complex.
+     * 
+     */
+    private void IndexReductionBiPGraph.differentiateEquation(IndexReductionEq baseEqn,
+            Collection<FVariable> newDiffedVars,Collection<IndexReductionVar> varsToRemove,
+            IndexReductionResult result, Stack<IndexReductionEq> eqToMatchStack,
+            IndexReductionFunctionInliner inliner, Map<String, FVariable> temporaryVarsMap) {
+        if (baseEqn.getMeDifferentiated() != null)
+            return;
+        
+        getStepLogger().logVerbose("Differentiating %s", baseEqn);
+        
+        // Go through all group members and collect all unique AST equations.
+        // There might be several equations the second time an inlined
+        // equation is differentiated.
+        Set<FAbstractEquation> originalFEqns = new LinkedHashSet<FAbstractEquation>();
+        for (IndexReductionEq eqn : baseEqn.getGroupMembers())
+            originalFEqns.add(eqn.getEquation());
+        
+        if (baseEqn.numDifferentiations() > MAX_N_EQ_DIFFS)
+            throw new IndexReductionException("Maximum number of differentiations has been reached");
+        
+        // Handle nonscalar equations and LHS variables that needs to be differentiated
+        for (IndexReductionEq eqn : baseEqn.getGroupMembers()) {
+            for (IndexReductionVar var : eqn.getVariables()) {
+                if (!eqn.isNonDiffUse(var)) {
+                    if (var.getMatching() != null && var.getMatching() != eqn)
+                        eqToMatchStack.add(var.getMatching());
+                    differentiateVariable(var, newDiffedVars, varsToRemove);
+                }
+            }
+        }
+        
+        // Differentiate equations
+        java.util.List<FAbstractEquation> diffedFEqns = new ArrayList<FAbstractEquation>();
+        Set<FAbstractEquation> originalDiffedFEqns = new LinkedHashSet<FAbstractEquation>();
+        for (FAbstractEquation originalFEqn : originalFEqns) {
+            FAbstractEquation originalDiffedFEqn = differentiateEquation(originalFEqn, inliner);
+            originalDiffedFEqns.add(originalDiffedFEqn);
+            diffedFEqns.add(originalDiffedFEqn);
+        }
+        Collection<FAbstractEquation> extraEquations = new ArrayList<FAbstractEquation>();
+        for (FAbstractEquation fEqn : baseEqn.getExtraEquations()) {
+            getStepLogger().logVerbose("  Extra equation: %s", fEqn);
+            extraEquations.add(fEqn);
+            if (baseEqn.diffExtraEqn(fEqn)) {
+                FAbstractEquation diffedFEqn = differentiateEquation(fEqn, inliner);
+                getStepLogger().logVerbose("    Diffed into: %s", diffedFEqn);
+                if (diffedFEqn.isContinuous()) {
+                    diffedFEqns.add(diffedFEqn);
+                } else {
+                    getStepLogger().logVerbose("    Diffed not added!");
+                }
+            } else {
+                getStepLogger().logVerbose("    Not diffed!");
+            }
+        }
+        
+        // Handle inlining of function calls
+        Collection<FAbstractEquation> newExtraEquations = new ArrayList<FAbstractEquation>();
+        Stack<FAbstractEquation> inlineStack = new Stack<FAbstractEquation>();
+        for (FAbstractEquation fEqn : diffedFEqns) {
+            if (fEqn.hasInlinableFunctions(inliner))
+                inlineStack.push(fEqn);
+            else if (!originalDiffedFEqns.contains(fEqn))
+                newExtraEquations.add(fEqn);
+            for (FAccessExp use : fEqn.findFAccessExpsInTree()) {
+                String baseName = use.getAccess().name();
+                FVariable topTempDerivative = temporaryVarsMap.get(baseName);
+                if (topTempDerivative == null)
+                    continue;
+                if (topTempDerivative.order() >= use.order())
+                    continue;
+                for (int i = topTempDerivative.order(); i <= use.order(); i++) {
+                    topTempDerivative = topTempDerivative.createFDerivativeVariable();
+                    newDiffedVars.add(topTempDerivative);
+                    result.addDummyDerivative(topTempDerivative);
+                }
+                temporaryVarsMap.put(baseName, topTempDerivative);
+            }
+        }
+        
+        if (inlineStack.size() > 0) {
+            
+            ASTNode.log.debug("Differentiated equation has inlinable functions");
+            while (!inlineStack.isEmpty()) {
+                inliner.reset();
+                FAbstractEquation fEqn = inlineStack.pop();
+                ASTNode.log.debug("  Performing function inlining on %s", fEqn);
+                Collection<FAbstractEquation> inlinedFEqns = fEqn.inlineFunctions(inliner);
+                
+                for (FAbstractEquation spawnedFExp : inliner.getNewEquations()) {
+                    ASTNode.log.debug("Additional equation introduced, %s", spawnedFExp);
+                    if (spawnedFExp.hasInlinableFunctions(inliner))
+                        inlineStack.add(spawnedFExp);
+                    else
+                        newExtraEquations.add(spawnedFExp);
+                }
+                
+                for (FVariable var : inliner.getNewVariables()) {
+                    newDiffedVars.add(var);
+                    temporaryVarsMap.put(var.name(), var);
+                }
+                
+                if (inlinedFEqns == null) {
+                    if (originalDiffedFEqns.contains(fEqn)) {
+                        ASTNode.log.debug("Inlining done, original equation has been split into multiple equations");
+                        originalDiffedFEqns.remove(fEqn); // Remove the original equation if it has been split
+                        originalDiffedFEqns.addAll(inliner.getLastSplitFFCE());
+                        newExtraEquations.removeAll(inliner.getLastSplitFFCE());
+                    } else {
+                        ASTNode.log.debug("Inlining done, equation has been split into multiple equations");
+                    }
+                    
+                } else {
+                    for (FAbstractEquation inlinedFEqn : inlinedFEqns) {
+                        ASTNode.log.debug("Equation inlined, got %s", inlinedFEqn);
+                        if (inlinedFEqn.hasInlinableFunctions(inliner)) {
+                            inlineStack.add(inlinedFEqn);
+                        } else if (!originalDiffedFEqns.contains(inlinedFEqn)) {
+                            newExtraEquations.add(inlinedFEqn);
+                        }
+                    }
+                }
+            }
+        }
+        
+        for (FAbstractEquation extraFEqn : newExtraEquations) {
+            result.addEquation(extraFEqn);
+            extraEquations.add(extraFEqn);
+        }
+        
+        // Construct a list of all the variables that should be common in all
+        // of the equations.
+        // Always add variables from extra equations
+        ExtraEquationVariableResolver extraResolver = new ExtraEquationVariableResolver(extraEquations);
+        
+        // Check so that the differentiated equation has the same number of
+        // members as the original.
+        int numScalarsInDiffed = 0;
+        for (FAbstractEquation newEqn : originalDiffedFEqns)
+            numScalarsInDiffed += newEqn.numScalarEquations();
+        if (baseEqn.getGroupMembers().size() != numScalarsInDiffed)
+            throw new IndexReductionException("Number of scalar equations in differentiated equation(" + numScalarsInDiffed + ") does not match the number in original equation(" + baseEqn.getGroupMembers().size() + "). Original equation:\n" + baseEqn.getEquation());
+        
+        Collection<IndexReductionEq> diffedOriginalEqs = new ArrayList<IndexReductionEq>();
+        // Go through differentiated equations that corresponds to the original
+        // equations. Add all of these equations to the BiPGraph. We need to
+        // remember equations that are differentiated from the "orignal"
+        // equation so that we can add links later. Also add links between
+        // differentiated equation and the original equation.
+        Iterator<IndexReductionEq> eqnIt = baseEqn.getGroupMembers().iterator();
+        for (FAbstractEquation newEqn : originalDiffedFEqns) {
+            result.addEquation(newEqn);
+            
+            IncidenceMap incMap = newEqn.createIncidenceMap(this, null, extraResolver);
+            
+            // Build new differentiated BiP equations for each scalar.
+            for (int i = 0; i < newEqn.numScalarEquations(); i++) {
+                IndexReductionEq original = eqnIt.next();
+                getStepLogger().logVerbose("About to add equation: %s", newEqn);
+                // Add the differentiated equation
+                IndexReductionEq diffedEqn = addEquation(newEqn, i, diffedOriginalEqs, incMap.variability(i), incMap.type(i), original.getName() + "_d");
+                
+                incMap.addEdges(diffedEqn, true);
+                
+                diffedOriginalEqs.add(diffedEqn);
+                diffedEqn.setExtraEquations(extraEquations);
+                
+                // Set a reference from the visited equation to
+                // its differentiated counterpart
+                original.setMeDifferentiated(diffedEqn);
+                diffedEqn.setMeIntegrated(original);
+                
+                getStepLogger().logVerbose("Added equation: %s, %s", diffedEqn, diffedEqn.printEquation());
+                
+                if (original.getMatching() != null && !match(diffedEqn, original.getMatching().getMeDifferentiated()))
+                    eqToMatchStack.add(diffedEqn);
+            }
+            getStepLogger().logVerbose("Equation added");
+        }
+        
+    }
+    
+    public Set<FVariable> IndexReductionBiPGraph.removablePreferDerivatives(Set<FVariable> preferVars) {
+        Set<FVariable> removableVars = new HashSet<FVariable>();
+        for (FVariable preferVar : preferVars) {
+            FVariable fDerVar = preferVar.getMeDifferentiated();
+            if (fDerVar == null)
+                continue;
+            AbstractVar derVar = getVariable(fDerVar.name());
+            if (derVar != null && derVar.getMatching() == null)
+                removableVars.add(derVar.getVariable());
+        }
+        return removableVars;
+    }
+    
+    public IndexReductionResult IndexReductionBiPGraph.reduceIndex(IndexReductionFunctionInliner inliner,
+            int dynamicStateLimit, int maximumNbrOfMunkresIncidences, boolean printPantelidesSteps) {
+        IndexReductionResult result = new IndexReductionResult();
+        FClass fclass = null;
+        Stack<IndexReductionEq> eqToMatchStack = new Stack<IndexReductionEq>();
+        for (IndexReductionEq e : getEquations()) {
+            if (e.getEquation().isContinuous()) {
+                eqToMatchStack.push(e);
+                fclass = e.getEquation().myFClass();
+            }
+        }
+        Collections.reverse(eqToMatchStack);
+        
+        // If there are no equations, we cannot do index reduction.
+        if (eqToMatchStack.isEmpty())
+            throw new IndexReductionException("No continuous equations was given");
+        
+        java.util.List<FVariable> newDiffedVars = new ArrayList<FVariable>();
+        // This map is used to ensure that all temporary variables that are
+        // introduced during inlining can be marked as dummy derivatives
+        Map<String, FVariable> temporaryVarsMap = new HashMap<String, FVariable>();
+        
+        // Algoritm step numbering from the original Pantelides paper
+        // Loop over all equations (step 3)
+        while (!eqToMatchStack.empty() ){
+            IndexReductionEq eqToMatch = eqToMatchStack.pop(); // Step 3a
+            
+            // Ensure that we have the top differentiated equation, it might
+            // have been differentiated since it was put on the stack.
+            while (eqToMatch.getMeDifferentiated() != null)
+                eqToMatch = eqToMatch.getMeDifferentiated();
+            
+            // Ignore, if it is already been matched.
+            // TODO: Can this happen?
+            if (eqToMatch.getMatching() != null)
+                continue;
+            
+            // If the equation is not matched
+            
+            // Since the states are not added to the graph,
+            // Step 3b-1 is skipped and is done at the end of 
+            // the iteration 
+            lightReset(); // Step 3b-2
+            // Find an augmenting path, step 3b-4
+            //n_ind = 0;
+            boolean pathFound = augmentPath(eqToMatch);
+            Collection<IndexReductionEq> visitedEquations = getVisitedEquations();
+            Collection<IndexReductionVar> visitedVariables = getVisitedVariables();
+            getStepLogger().logVerbose("*************");
+            getStepLogger().logVerbose("Looking for augmented path starting in equation: %s", eqToMatch);
+            if (pathFound)
+                getStepLogger().logVerbose("Path found!");
+            else
+                getStepLogger().logVerbose("Path not found!");
+            
+            getStepLogger().logVerbose("Visisted equations:");
+            for (IndexReductionEq ee : visitedEquations)
+                getStepLogger().logVerbose("  %s", ee.printEquation());
+            
+            getStepLogger().logVerbose("Visisted variables:");
+            for (IndexReductionVar vv : visitedVariables)
+                getStepLogger().logVerbose("  %s", vv);
+            
+            if (!pathFound) { // Step 3b-5
+                Collection<IndexReductionVar> varsToRemove = new ArrayList<IndexReductionVar>();
+                for (IndexReductionVar var : visitedVariables) { // Loop over all visited variables, Step 3b-5i
+                    // Differentiate variable
+                    differentiateVariable(var, newDiffedVars, varsToRemove);
+                }
+                for (IndexReductionEq eqn : visitedEquations) { // Step 3b-5ii
+                    // Differentiate equation
+                    differentiateEquation(eqn, newDiffedVars, varsToRemove, result, eqToMatchStack, inliner, temporaryVarsMap);
+                }
+                // Remove variables that have been differentiated, Step 3b-1
+                for (IndexReductionVar var : varsToRemove) {
+                    // Copy matching to differentiated var
+                    if (var.getMatching() != null && var.getMatching().getMeDifferentiated() != null
+                            && !match(var.getMatching().getMeDifferentiated(), var.getMeDifferentiated()))
+                        // Or if that fails, add it to the list of equations to visit.
+                        eqToMatchStack.add(var.getMatching().getMeDifferentiated());
+                    // Remove var
+                    removeVariable(var);
+                }
+                // Set the next equation to start matching from, 
+                // Step 3b-5iv
+                // Push the matched equation to the stack of equations to be matched
+                eqToMatchStack.push(eqToMatch);
+                if (printPantelidesSteps) {
+                    getStepLogger().logVerbose("Graph after addition of equations and variables:");
+                    getStepLogger().logVerbose(this);
+                }
+            }
+            if (printPantelidesSteps) {
+                getStepLogger().logVerbose("Matching:");
+                getStepLogger().logVerbose(printMatchingObj());
+                getStepLogger().logVerbose("*************");
+            }
+        }
+        fclass.addFDerivativeVariables(newDiffedVars);
+        for (FAbstractEquation eqn : result.getEquations())
+            eqn.flushAllRecursive();
+
+        // Remove equations that are not connected
+        java.util.List<IndexReductionEq> eqToRemove = new ArrayList<IndexReductionEq>();
+        for (IndexReductionEq e : getEquations())
+            if (e.getMeDifferentiated() != null)
+                eqToRemove.add(e);
+        for (IndexReductionEq e : eqToRemove)
+            removeEquation(e);
+        
+        getStepLogger().logVerbose("Index reduction done!");
+        getStepLogger().logVerbose(this);
+        getStepLogger().logVerbose("Matching:");
+        getStepLogger().logVerbose(printMatchingObj());
+        
+        if (getUnmatchedEquations().size() > 0 || getUnmatchedVariables().size() > 0)
+            throw new IndexReductionException("There were unmatched equations and/or variables left after index reduction.");
+        
+        if (result.getEquations().isEmpty()) {
+            getStepLogger().logVerbose("Index reduction did not change the system. Munkres is skipped.");
+            return result;
+        }
+        // Selection of dummy derivatives
+        /*
+            The algorithm is implemented differently than in the original paper
+            by Mattsson and S\ufffdderlind. In the paper, each block is treated
+            individually by selecting all dummy derivatives of one block
+            before proceeding to the next block. This approach, however, makes
+            it hard to handle user preferences for state selection as defined
+            by the stateSelect attribute. This is because selection of
+            dummy derivatives in one block may restrict the choices in 
+            following blocks, even though a global analysis would yield that
+            it would indeed be possible to satisfy user selection.
+            
+            Therefore, all equations in blocks containing differentiated
+            equations are treated in one block.
+            
+            NOTE: This algorithm has been changed from time to time and has now
+            diverged from the original one that was presented in the paper.
+        */
+        
+        Collection<IndexReductionSCCBlock> components = tarjan(fclass.myStepUtil(), true);
+    
+        Set<IndexReductionVar> varsToKeep = new HashSet<IndexReductionVar>();
+        // Remove all equations and variables that doesn't exist in blocks that
+        // contains differentiated equations or variables.
+        for (IndexReductionSCCBlock block : components) {
+            if (block.containsDifferentatedComponents()) {
+                getStepLogger().logVerbose(" ********* Found block containing diffed equations ***********");
+                getStepLogger().logVerbose(block);
+                for (IndexReductionEq eqn : block.getMembers())
+                    for (IndexReductionVar var : eqn.getVariables())
+                        if (var.numDifferentiations() > 0)
+                            varsToKeep.add(var);
+            } else {
+                for (IndexReductionEq eqn : block.getMembers())
+                    removeEquation(eqn);
+            }
+        }
+        
+        for (IndexReductionVar var : new ArrayList<IndexReductionVar>(getVariables()))
+            if (!varsToKeep.contains(var))
+                removeVariable(var);
+        
+        // Lists of equations and variables, notation is the same as in the 
+        // paper, only zHat is needed, g, h and z is handled by the BiPGraph.
+
+        java.util.List<FVariable> zHat = new ArrayList<FVariable>();
+
+        lookForHigherOrderVars();
+
+        // Initialize variable to keep track of there are still 
+        // differentiated equations
+        boolean remainingDifferentiatedEquations = true;
+        
+        // Iterate
+        while (remainingDifferentiatedEquations) {
+            getStepLogger().logVerbose("----------------");
+            // Step 3: Remove equations that aren't differentiated.
+            for (IndexReductionEq eqn : new ArrayList<IndexReductionEq>(getEquations()))
+                if (eqn.getMeIntegrated() == null)
+                    removeEquation(eqn);
+            
+            // Step 4: Select independent columns.
+            getStepLogger().logVerbose(this);
+            
+            // Compute weights for variables based on state select, linearity
+            // and other attributes.
+            Map<IndexReductionVar, IndexReductionCost> weights = new HashMap<IndexReductionVar, IndexReductionCost>();
+            Map<IndexReductionEq, Map<IndexReductionVar, Coefficient>> coefficientsMatrix = new HashMap<IndexReductionEq, Map<IndexReductionVar, Coefficient>>();
+            for (IndexReductionVar var : getVariables()) {
+                FVariable fv = var.getVariable();
+                int linearity = calculateLinearityWeight(var, coefficientsMatrix);
+                if (var.getMeIntegrated() != null)
+                    linearity += calculateLinearityWeight(var.getMeIntegrated(), coefficientsMatrix);
+                boolean fixed = fv.getTopIntegrated().isFixed();
+                IndexReductionCost weight = new IndexReductionCost(fv.stateSelection(), fixed, fv.order(), linearity);
+                getStepLogger().logVerbose("Weight: %s %s", var, weight);
+                weights.put(var, weight);
+            }
+            
+            // Run matching
+            try {
+                ASTNode.beginStep("Munkres");
+                int numIncidences = countNumberOfIncidences();
+                if (maximumNbrOfMunkresIncidences > 0 && numIncidences > maximumNbrOfMunkresIncidences) {
+                    throw new IndexReductionException("The dummy derivative problem is too big, there is " + numIncidences +
+                            " incidences in the graph, limit is set to " + maximumNbrOfMunkresIncidences +
+                            ". The limit can be changed by setting the option 'munkres_max_incidences'");
+                }
+                matchMunkres(weights);
+            } finally {
+                ASTNode.endStep("Munkres");
+            }
+            getStepLogger().logVerbose(printMatchingObj());
+            Set<IndexReductionVar> dsVars = Collections.emptySet();
+            if (dynamicStateLimit != 0) {
+                dsVars = computeDynamicStateSets(dynamicStateLimit, coefficientsMatrix, result);
+            }
+            getStepLogger().logVerbose(printMatchingObj());
+            
+            // Step 5: prepare for next iteration
+            // Mark all variables for removal. Add the integrated variable for
+            // each matched variable to the graph and add the matched variable
+            // to zHat.
+            Collection<IndexReductionVar> varsToRemove = new ArrayList<IndexReductionVar>();
+            getStepLogger().logVerbose(" Dummy derivatives selected in iteration: ");
+            for (IndexReductionVar var : new ArrayList<IndexReductionVar>(getVariables())) {
+                varsToRemove.add(var);
+                if (var.getMatching() != null) {
+                    if (!dsVars.contains(var)) {
+                        getStepLogger().logVerbose("   %s", var);
+                        zHat.add(var.getVariable());
+                    }
+                    insert(getOrCreateIntegrated(var));
+                }
+            }
+            getStepLogger().logVerbose("");
+            
+            // Add the "integrated" equation for all equations in the graph and
+            // remove the differentiated equation.
+            for (IndexReductionEq eqn : new ArrayList<IndexReductionEq>(getEquations())) {
+                IndexReductionEq inEqn = eqn.getMeIntegrated();
+                insert(inEqn);
+                for (IndexReductionVar var : eqn.getVariables()) {
+                    if (var.getMeIntegrated() != null)
+                        inEqn.addVariable(var.getMeIntegrated(), eqn.isRemoteVar(var));
+                }
+                removeEquation(eqn);
+            }
+            
+            // Remove all variables that was marked for removal earlier.
+            for (IndexReductionVar var : varsToRemove)
+                removeVariable(var);
+            
+            // Check if there are remaining differentiated equations
+            remainingDifferentiatedEquations = false;
+            for (IndexReductionEq eqn : getEquations())
+                if (eqn.getMeIntegrated()!=null)
+                    remainingDifferentiatedEquations = true;
+        }
+        
+        getStepLogger().logVerbose(" Dummy derivatives: ");
+        for (FVariable var : zHat) {
+            result.addDummyDerivative(var);
+            getStepLogger().logVerbose("   %s", var);
+        }
+        getStepLogger().logVerbose("");
+        
+        return result;
+    }
+    
+    public class IndexReductionBiPGraph {
+        public static class Coefficient {
+            public final FExp exp;
+            public final COEFFICIENT_STATE state;
+            
+            public Coefficient(FExp exp, COEFFICIENT_STATE state) {
+                this.exp = exp;
+                this.state = state;
+            }
+        }
+        
+        public enum COEFFICIENT_STATE{
+            CONSTANT, CONTINUOUS, EXCEPTION, SPLIT;
+            public static COEFFICIENT_STATE create(TypePrefixVariability variability) {
+                if (variability == null)
+                    return EXCEPTION;
+                if (variability.lessOrEqual(Variability.FIXEDPARAMETER))
+                    return CONSTANT;
+                return CONTINUOUS;
+            }
+        }
+    }
+    
+    public int IndexReductionBiPGraph.calculateLinearityWeight(IndexReductionVar var, Map<IndexReductionEq, Map<IndexReductionVar, Coefficient>> coefficientsMatrix) {
+        int weight = 0;
+        for (IndexReductionEq eqn : getEquations())
+            weight += eqn.calculateLinearityWeight(var, coefficientsMatrix);
+        return weight;
+    }
+    
+    public int IndexReductionEq.calculateLinearityWeight(IndexReductionVar var, Map<IndexReductionEq, Map<IndexReductionVar, IndexReductionBiPGraph.Coefficient>> coefficientsMatrix) {
+        Map<IndexReductionVar, IndexReductionBiPGraph.Coefficient> coefficients = coefficientsMatrix.get(this);
+        if (coefficients == null) {
+            coefficients = new HashMap<IndexReductionVar, IndexReductionBiPGraph.Coefficient>();
+            coefficientsMatrix.put(this, coefficients);
+        }
+        if (!extraEquations.isEmpty()) {
+            if (getVariables().contains(var))
+                coefficients.put(var, new IndexReductionBiPGraph.Coefficient(null, IndexReductionBiPGraph.COEFFICIENT_STATE.SPLIT));
+            return 0;
+        }
+        try {
+            FVariable variable = var.getVariable();
+            if (!getEquation().referencedFVariables().contains(variable))
+                return 0;
+            Collection<FAbstractEquation> feqds = getEquation().diff(variable.name());
+            TypePrefixVariability variability = Variability.CONSTANT;
+            for (FAbstractEquation feqd : feqds)
+                variability = variability.combine(feqd.variability());
+            if (feqds.size() > 1) {
+                Iterator<FAbstractEquation> it = feqds.iterator();
+                while (it.hasNext() && feqds.size() > 1) {
+                    FAbstractEquation eqn = it.next();
+                    if (eqn.isZeroEquation()) {
+                        it.remove();
+                    }
+                }
+            }
+            FAbstractEquation eqn = feqds.iterator().next();
+            coefficients.put(var, new IndexReductionBiPGraph.Coefficient(feqds.size() > 1 ? new FNoExp() : eqn.asSubExp(), IndexReductionBiPGraph.COEFFICIENT_STATE.create(variability)));
+            
+            if (!variability.lessOrEqual(Variability.FIXEDPARAMETER)) {
+                return 2;
+            } else if (!variability.lessOrEqual(Variability.CONSTANT))
+                return 0;
+        } catch(EquationDifferentiationException e) {
+            coefficients.put(var, new IndexReductionBiPGraph.Coefficient(null, IndexReductionBiPGraph.COEFFICIENT_STATE.EXCEPTION));
+        }
+        return 0;
+    }
+    
+    syn FExp FAbstractEquation.asSubExp() = new FNoExp();
+    eq FEquation.asSubExp() = getLeft().dynamicFExp(new FSubExp(getLeft().fullCopy(), getRight().fullCopy()));
+    
+    public void IndexReductionBiPGraph.insert(IndexReductionEq eqn) {
+        equationMap.put(eqn.getName(), eqn);
+        insertIntoEquationIndexMap(eqn.getEquation(), eqn);
+    }
+    
+    public void IndexReductionBiPGraph.insert(IndexReductionVar var) {
+        variableMap.put(var.getName(), var);
+    }
+    
+    public IndexReductionVar IndexReductionBiPGraph.getOrCreateIntegrated(IndexReductionVar var) {
+        IndexReductionVar inVar = var.getMeIntegrated();
+        if (inVar != null)
+            return inVar;
+        
+        FVariable inFVar = var.getVariable().getMeIntegrated();
+        if (inFVar == null)
+            throw new UnsupportedOperationException(var + " does not have any integrated variable!");
+        
+        return addVariable(inFVar.name(), inFVar);
+        
+    }
+    
+    
+    syn FRealVariable.StateSelect FVariable.stateSelectAttribute() = FRealVariable.StateSelect.DEFAULT;
+    eq FRealVariable.stateSelectAttribute() = isTemporary() ? FRealVariable.StateSelect.AVOID : StateSelect.values()[stateSelectAttributeInt() - 1];
+    
+    public class FAbstractVariable {
+        public enum StateSelect {
+            NEVER   (IndexReductionBiPGraph.IndexReductionCost.STATE_SELECT_NEVER_WEIGHT_POSITION), 
+            AVOID   (IndexReductionBiPGraph.IndexReductionCost.STATE_SELECT_AVOID_WEIGHT_POSITION), 
+            DEFAULT (IndexReductionBiPGraph.IndexReductionCost.STATE_SELECT_DEFAULT_WEIGHT_POSITION), 
+            PREFER  (IndexReductionBiPGraph.IndexReductionCost.STATE_SELECT_PREFER_WEIGHT_POSITION), 
+            ALWAYS  (IndexReductionBiPGraph.IndexReductionCost.STATE_SELECT_ALWAYS_WEIGHT_POSITION);
+            
+            private int weightPos;
+            
+            private StateSelect(int weightPos) {
+                this.weightPos = weightPos;
+            }
+            
+            public int weightPos() {
+                return weightPos;
+            }
+        }
+    }
+    
+    syn StateSelect FAbstractVariable.stateSelection() {
+        throw new UnsupportedOperationException("Unable to get state select from variable type " + getClass().getSimpleName());
+    }
+    eq FVariable.stateSelection() = getTopIntegrated().stateSelectAttribute();
+    
+    public class IndexReductionBiPGraph {
+        
+        public static class IndexReductionCost implements MunkresCost<IndexReductionCost> {
+            
+            private static final int NUM_WEIGHTS = 8;
+            public static final int STATE_SELECT_ALWAYS_WEIGHT_POSITION  = 0;
+            public static final int STATE_SELECT_PREFER_WEIGHT_POSITION  = 1;
+            public static final int STATE_SELECT_DEFAULT_WEIGHT_POSITION = 2;
+            public static final int STATE_SELECT_AVOID_WEIGHT_POSITION   = 3;
+            public static final int STATE_SELECT_NEVER_WEIGHT_POSITION   = 4;
+            private static final int FIXED_WEIGHT_POSITION               = 5;
+            private static final int ORDER_WEIGHT_POSITION               = 6;
+            private static final int LINEARITY_WEIGHT_POSITION           = 7;
+            
+            private int[] weights = new int[NUM_WEIGHTS];
+            
+            private IndexReductionCost() {
+            }
+            
+            public IndexReductionCost(FAbstractVariable.StateSelect stateSelect, boolean fixed, int order, int linearity) {
+                if (order < 2) {
+                    weights[stateSelect.weightPos()] += 1;
+                }
+                weights[FIXED_WEIGHT_POSITION] += fixed ? 1 : 0;
+                weights[ORDER_WEIGHT_POSITION] += -order;
+                weights[LINEARITY_WEIGHT_POSITION] += linearity;
+            }
+            
+            @Override
+            public int compareTo(IndexReductionCost other) {
+                for (int i = 0; i < weights.length; i++) {
+                    int diff = Integer.compare(weights[i], other.weights[i]);
+                    if (diff != 0)
+                        return diff;
+                }
+                return 0;
+            }
+            
+            @Override
+            public void subtract(IndexReductionCost other) {
+                for (int i = 0; i < weights.length; i++)
+                    weights[i] -= other.weights[i];
+            }
+            
+            @Override
+            public void add(IndexReductionCost other) {
+                for (int i = 0; i < weights.length; i++)
+                    weights[i] += other.weights[i];
+            }
+            
+            @Override
+            public boolean isZero() {
+                for (int i = 0; i < weights.length; i++)
+                    if (weights[i] != 0)
+                        return false;
+                return true;
+            }
+            
+            @Override
+            public IndexReductionCost copy() {
+                IndexReductionCost copy = new IndexReductionCost();
+                for (int i = 0; i < weights.length; i++)
+                    copy.weights[i] = weights[i];
+                return copy;
+            }
+            
+            public String toString() {
+                StringBuilder sb = new StringBuilder();
+                sb.append("(");
+                for (int i = 0; i < weights.length; i++) {
+                    if (i > 0)
+                        sb.append(", ");
+                    sb.append(weights[i]);
+                }
+                sb.append(")");
+                return sb.toString();
+            }
+            
+            public static IndexReductionCost zeroCost() {
+                return new IndexReductionCost();
+            }
+        }
+    }
+
+    public int[][] IndexReductionBiPGraph.matchMunkres(Map<IndexReductionVar, IndexReductionCost> weights, IndexReductionCost cost[][], boolean useRemote) {
+        int i = 0;
+        
+        for (IndexReductionEq eqn : getEquations()) {
+            int j = 0;
+            for (IndexReductionVar var : variableMap.values()) {
+                IndexReductionCost incideceCost;
+                if (eqn.getVariables().contains(var) && canMatch(eqn, var) && var.numDifferentiations() >= eqn.numDifferentiations() && (!eqn.isRemoteVar(var) || useRemote)) {
+                    incideceCost = weights.get(var);
+                } else {
+                    incideceCost = null;
+                }
+                cost[i][j++] = incideceCost;
+            }
+            i++;
+        }
+        
+        MunkresProblem<IndexReductionCost> munk = new SparseMunkresProblem<IndexReductionCost>(cost);
+        return munk.solve();
+    }
+
+    public void IndexReductionBiPGraph.matchMunkres(Map<IndexReductionVar, IndexReductionCost> weights) {
+
+        if (equationMap.size()==0 || variableMap.size()==0) {
+            throw new IndexReductionException("Empty set of equations or variables was given to the dummy derivative algorithm");
+        }
+
+        IndexReductionCost cost[][] = new IndexReductionCost[equationMap.size()][variableMap.size()];
+        int[][] result;
+        java.util.List<IndexReductionEq> eqs = new ArrayList<IndexReductionEq>(equationMap.values());
+        java.util.List<IndexReductionVar> vars = new ArrayList<IndexReductionVar>(variableMap.values());
+        try {
+            result = matchMunkres(weights, cost, true);
+        } catch (MunkresException e) {
+            throw new IndexReductionException("Munkres algorithm was unable to find a matching; " + e.getMessage());
+        }
+
+        IndexReductionCost opt_cost = IndexReductionCost.zeroCost();
+        getStepLogger().logVerbose("Munkres result:");
+        for (int i = 0; i < result.length; i++) {
+            opt_cost.add(cost[result[i][0]][result[i][1]]);
+            IndexReductionEq eqn = eqs.get(result[i][0]);
+            IndexReductionVar var = vars.get(result[i][1]);
+            if (!match(eqn, var))
+                throw new IndexReductionException("Munkres matched to unmatchable incidence, unable to match " + eqn + " with " + var);
+            getStepLogger().logVerbose("%s: %s %s", eqn, var, cost[result[i][0]][result[i][1]]);
+        }
+        getStepLogger().logVerbose("Optimal cost: %s", opt_cost);
+    }
+
+    public class IndexReductionResult {
+
+        private java.util.List<FAbstractEquation> addedEquations;
+        private java.util.List<FVariable> dummyDerivatives;
+
+        public IndexReductionResult() {
+            addedEquations = new ArrayList<FAbstractEquation>();
+            dummyDerivatives = new ArrayList<FVariable>();
+        }
+
+        public void addEquation(FAbstractEquation fe) {
+            addedEquations.add(fe); 
+        }
+
+        public void addDummyDerivative(FVariable fv) {
+            dummyDerivatives.add(fv);   
+        }
+
+        public java.util.List<FAbstractEquation> getEquations() {
+            return addedEquations;
+        }
+
+        public java.util.List<FVariable> getDummyDerivatives() {
+            return dummyDerivatives;
+        }
+
+    }
+    
+    public class IndexReductionSCCBlock extends SCCBlock<IndexReductionEq, IndexReductionVar> {
+
+        public boolean containsDifferentatedComponents() {
+            for (IndexReductionEq eqn : getMembers())
+                if (eqn.getMeIntegrated() != null || eqn.getMatching().getMeIntegrated() != null)
+                    return true;
+            return false;
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder sb = new StringBuilder();
+            for (IndexReductionEq eqn : getMembers()) {
+                sb.append(eqn.getEquation());
+                sb.append('\n');
+            }
+            return sb.toString();
+        }
+
+    }
+    
+    public void IndexReductionBiPGraph.lookForHigherOrderVars() {
+        Map<IndexReductionVar, Collection<IndexReductionEq>> varToEqMap = computeVariableToEquationMap();
+        Map<IndexReductionVar, Collection<IndexReductionVar>> visitedCache = new HashMap<IndexReductionVar, Collection<IndexReductionVar>>();
+
+        for (IndexReductionEq eqn : getEquations()) {
+            eqn.lookForHigherOrderVars(varToEqMap, visitedCache);
+        }
+
+        
+    }
+
+    public void IndexReductionEq.lookForHigherOrderVars(Map<IndexReductionVar, Collection<IndexReductionEq>> reverseMap,
+            Map<IndexReductionVar, Collection<IndexReductionVar>> visitedCache) {
+        Set<IndexReductionVar> newIncidences = new HashSet<IndexReductionVar>();
+        for (IndexReductionVar var : getVariables()) {
+            if (var.numDifferentiations() < numDifferentiations()) { // && isNonDiffUse(var)) {
+                newIncidences.addAll(lookForHigherOrderVars(reverseMap, visitedCache, var));
+            }
+        }
+        for (IndexReductionVar incidence : newIncidences) {
+            addVariable(incidence, true);
+        }
+    }
+
+    public Collection<IndexReductionVar> IndexReductionEq.lookForHigherOrderVars(Map<IndexReductionVar, Collection<IndexReductionEq>> reverseMap, 
+            Map<IndexReductionVar, Collection<IndexReductionVar>> visitedCache, IndexReductionVar startVar) {
+        Collection<IndexReductionVar> higherOrderVars = visitedCache.get(startVar);
+        if (higherOrderVars != null)
+            return higherOrderVars;
+        
+        higherOrderVars = new ArrayList<IndexReductionVar>();
+        
+        Queue<IndexReductionVar> queue = new ArrayDeque<IndexReductionVar>();
+        queue.add(startVar);
+        
+        while (!queue.isEmpty()) {
+            IndexReductionVar currentVar = queue.poll();
+            if (visitedCache.containsKey(currentVar))
+                continue;
+            visitedCache.put(currentVar, higherOrderVars);
+            for (IndexReductionEq eqn : reverseMap.get(currentVar)) {
+                if (eqn.numDifferentiations() >= numDifferentiations())
+                    continue;
+                for (IndexReductionVar var : eqn.getVariables()) {
+                    if (var == currentVar)
+                        continue;
+                    if (var.numDifferentiations() >= numDifferentiations())
+                        higherOrderVars.add(var);
+                    else if (!higherOrderVars.contains(var))
+                        queue.add(var);
+                }
+            }
+        }
+        return higherOrderVars;
+    }
+}

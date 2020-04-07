@@ -1,0 +1,7 @@
+<design>
+
+<package name="dummy" package="mod.dummy"/>
+<package name="client1" package="mod.putstatic"/>
+<package name="client2" package="mod.arraydepend2"/>
+
+</design>

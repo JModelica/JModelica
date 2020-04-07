@@ -1,0 +1,33 @@
+<project default="invalid">
+  <target name="invalid">
+    <fail>Don't call this file directly.</fail>
+  </target>
+
+  <target name="setup">
+    <taskdef resource="net/sf/antcontrib/antcontrib.properties">
+      <classpath location="${antcontrib.jar}"/>
+    </taskdef>
+  </target>
+
+  <target name="missingName" depends="setup">
+    <propertycopy from="foo"/>
+  </target>
+
+  <target name="missingFrom" depends="setup">
+    <propertycopy name="foo"/>
+  </target>
+
+  <target name="nonSilent" depends="setup">
+    <propertycopy name="foo" from="bar"/>
+  </target>
+
+  <target name="silent" depends="setup">
+    <propertycopy name="foo" from="bar" silent="true"/>
+  </target>
+
+  <target name="normal" depends="setup">
+    <property name="org" value="MyOrg" />
+    <property name="org.MyOrg.DisplayName" value="My Organiziation" />
+    <propertycopy name="displayName" from="org.${org}.DisplayName" />
+  </target>
+</project>

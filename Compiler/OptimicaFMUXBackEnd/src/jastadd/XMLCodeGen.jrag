@@ -1,0 +1,61 @@
+/*
+Copyright (C) 2009 Modelon AB
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, version 3 of the License.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect XMLCodeGen_Optimica {
+
+	//
+	public void FTimedVariable.prettyPrint_XML(Printer p, CodeStream str, String indent){
+		String namespace = "exp";
+		String tag = "TimedVariable";	
+		String tagId = "Identifier";
+		String tagExp = "Instant";
+		
+		CommonAccess iduse = this.getName();
+		FExp arg = this.getArg();
+		
+		str.print(indent + "<" + namespace + ":" + tag);
+		str.println(" timePointIndex = \"" + myFOptClass().timePointIndex(arg.ceval().realValue()) + "\" >");
+		
+		//Identifier	
+		iduse.prettyPrint_XML(str,p.indent(indent));
+		
+		str.println(indent + "</"+ namespace + ":" + tag + ">");	
+	}
+	
+	public void FRelationConstraint.prettyPrint_XML(Printer p, CodeStream str, String indent) {
+		String namespace="opt";
+		String tag = xmlTag();	
+		FExp left = getLeft();
+		FExp right= getRight();
+		
+		str.println(indent + "<" + namespace + ":" + tag + ">");
+		left.prettyPrint_XML(str,p.indent(indent));
+		right.prettyPrint_XML(str,p.indent(indent));
+		str.println(indent + "</" + namespace + ":" + tag + ">");
+	}
+	
+	eq FAssert.isIgnoredXML() = inOptimization();
+		
+}
+
+aspect OptimicaXMLTagBinding{
+	
+		syn String FRelationConstraint.xmlTag();
+		eq FConstraintEq.xmlTag() = "ConstraintEq";
+		eq FConstraintGeq.xmlTag() = "ConstraintGeq";
+		eq FConstraintLeq.xmlTag() = "ConstraintLeq";
+		
+}

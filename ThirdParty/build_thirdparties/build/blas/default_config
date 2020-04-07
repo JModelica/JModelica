@@ -1,0 +1,6 @@
+BUILD_DIR=${SDK_HOME}/build
+JM_HOME=${SDK_HOME}/src
+BLAS_BUILD_DIR=${BUILD_DIR}/build_blas
+FORTRAN_FLAGS="-fPIC -O2"
+BLAS_INSTALL_DIR=${BUILD_DIR}/blas_install
+BLAS_SRC_DIR=${JM_HOME}/ThirdParty/Blas

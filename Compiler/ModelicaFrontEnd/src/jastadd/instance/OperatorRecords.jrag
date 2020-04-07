@@ -1,0 +1,520 @@
+/*
+    Copyright (C) 2014 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import java.util.Set;
+import java.util.HashSet;
+import java.util.Collections;
+
+
+aspect OperatorRecordTypes {
+
+    syn      Map<String,InstClassDecl> InstRestriction.operatorMap() = null;
+    syn lazy Map<String,InstClassDecl> InstOperatorRecord.operatorMap() {
+        Map<String,InstClassDecl> res = new HashMap<String,InstClassDecl>();
+        for (InstClassDecl icd : myInstClassDecl().allInstClassDecls())
+            icd.addOperatorsToMap(res);
+        return res;
+    }
+    eq InstConnector.operatorMap() = 
+        (inheritedRestriction() != null) ? inheritedRestriction().operatorMap() : super.operatorMap();
+
+    /**
+     * Add operators to operator map. Operators add themselves and packages add any contained operators.
+     */
+    public void InstClassDecl.addOperatorsToMap(Map<String,InstClassDecl> map) {
+        if (isOperator()) {
+            // TODO: error if already in map? see https://trac.modelica.org/Modelica/ticket/1459
+            map.put(name(), this);
+        } else if (isPackage()) {
+            for (InstClassDecl icd : allInstClassDecls())
+                icd.addOperatorsToMap(map);
+        }
+    }
+
+
+    public static final String FExp.OP_CON  = "'constructor'";
+    public static final String FExp.OP_ZERO = "'0'";
+    public static final String FExp.OP_STR  = "'String'";
+    public static final String FExp.OP_ADD  = "'+'";
+    public static final String FExp.OP_SUB  = "'-'";
+    public static final String FExp.OP_MUL  = "'*'";
+    public static final String FExp.OP_DIV  = "'/'";
+    public static final String FExp.OP_POW  = "'^'";
+    public static final String FExp.OP_EQ   = "'=='";
+    public static final String FExp.OP_NEQ  = "'<>'";
+    public static final String FExp.OP_GT   = "'>'";
+    public static final String FExp.OP_LT   = "'<'";
+    public static final String FExp.OP_GEQ  = "'>='";
+    public static final String FExp.OP_LEQ  = "'<='";
+    public static final String FExp.OP_AND  = "'and'";
+    public static final String FExp.OP_OR   = "'or'";
+    public static final String FExp.OP_NEG  = "'-'";
+    public static final String FExp.OP_NOT  = "'not'";
+
+    public static final Set<String> FExp.OPERATORS = new HashSet<String>(Arrays.asList(
+            OP_CON, OP_ZERO, 
+            OP_STR, 
+            OP_ADD, OP_SUB, OP_MUL, OP_DIV, OP_POW, OP_EQ, OP_NEQ, OP_GT, OP_LT, OP_GEQ, OP_LEQ, OP_AND, OP_OR, 
+            OP_NEG, OP_NOT));
+    public static final Set<String> FExp.CONSTRUCTOR_OPERATORS = new HashSet<String>(Arrays.asList(
+            OP_CON, OP_ZERO));
+    public static final Set<String> FExp.CONVERSION_OPERATORS = new HashSet<String>(Arrays.asList(
+            OP_STR));
+    public static final Set<String> FExp.BINARY_OPERATORS = new HashSet<String>(Arrays.asList(
+            OP_ADD, OP_SUB, OP_MUL, OP_DIV, OP_POW, OP_EQ, OP_NEQ, OP_GT, OP_LT, OP_GEQ, OP_LEQ, OP_AND, OP_OR));
+    public static final Set<String> FExp.UNARY_OPERATORS = new HashSet<String>(Arrays.asList(
+            OP_NEG, OP_NOT));
+
+    /**
+     * The name of the operator to use for expressions of this type containing overloaded operators.
+     */
+    syn String FExp.operatorName() = null;
+    eq FStringExp.operatorName()   = OP_STR;
+    eq FDotAddExp.operatorName()   = OP_ADD;
+    eq FDotSubExp.operatorName()   = OP_SUB;
+    eq FDotMulExp.operatorName()   = OP_MUL;
+    eq FDotDivExp.operatorName()   = OP_DIV;
+    eq FPowExp.operatorName()      = OP_POW;
+    eq FEqExp.operatorName()       = OP_EQ;
+    eq FNeqExp.operatorName()      = OP_NEQ;
+    eq FGtExp.operatorName()       = OP_GT;
+    eq FLtExp.operatorName()       = OP_LT;
+    eq FGeqExp.operatorName()      = OP_GEQ;
+    eq FLeqExp.operatorName()      = OP_LEQ;
+    eq FAndExp.operatorName()      = OP_AND;
+    eq FOrExp.operatorName()       = OP_OR;
+    eq FNegExp.operatorName()      = OP_NEG;
+    eq FNotExp.operatorName()      = OP_NOT;
+
+
+    eq FOperatorRecordType.hasAdd() = getOperators().get(FExp.OP_ADD) != null;
+    eq FOperatorRecordType.hasNeg() = getOperators().get(FExp.OP_NEG) != null;
+
+    public FExp FOperatorRecordType.zeroLiteral() {
+        InstClassDecl func = matchOverloadedZero();
+        if (func != null && func.myOutputs().size() > 0) {
+            try {
+                Map<CommonVariableDecl,CValue> map = new HashMap<CommonVariableDecl,CValue>();
+                func.evaluate(ASTNode.defaultVariableEvaluator(), map);
+                return map.get(func.myOutputs().get(0)).buildInstLiteral();
+            } catch (ConstantEvaluationException e) {
+                
+            }
+        }
+        return super.zeroLiteral();
+    }
+    
+    public FExp FType.flattenZeroLiteral(Flattener f) {
+        return sizedZeroLiteral();
+    }
+    
+    @Override
+    public FExp FOperatorRecordType.flattenZeroLiteral(Flattener f) {
+        InstClassDecl func = matchOverloadedZero();
+        return (func != null) ? func.flattenOverloadedFunctionCall(f) : zeroLiteral();
+    }
+
+}
+
+
+aspect OverloadedOperatorBinding {
+
+    /**
+     * Calculate the type of an operator expression involving operator records.
+     * 
+     * For binary expressions <code>this</code> should be the left hand side.
+     * 
+     * @param right     the type of the right-hand side of the expression, <code>null</code> for unary operators
+     * @param operator  the name of the operator to look for
+     * @param loose     <code>true</code> if dimensions should be matched loosely
+     */
+    syn FType FType.matchOverloadedOperatorType(FType right, String operator, boolean loose, boolean allowUnknown) {
+        FType res = matchOverloadedOperatorType(right, operator);
+        if (res.isUnknown() && (isArray() || right.isArray())) {
+            if (loose ? looslyDimensionCompatible(right, allowUnknown) : dimensionCompatible(right, allowUnknown)) {
+                FType scalar = scalarType().matchOverloadedOperatorType(right.scalarType(), operator);
+                res = scalar.sizedType(isScalar() ? right.size() : size());
+            }
+        }
+        return res;
+    }
+
+
+    /**
+     * Calculate the type of an operator expression involving operator records.
+     * 
+     * For binary expressions <code>this</code> should be the left hand side.
+     * 
+     * @param right     the type of the right-hand side of the expression, <code>null</code> for unary operators
+     * @param operator  the name of the operator to look for
+     */
+    syn FType FType.matchOverloadedOperatorType(FType right, String operator) {
+        InstClassDecl func = matchOverloadedOperator(right, operator);
+        return (func == null) ? fUnknownType() : func.myOutputs().get(0).type();
+    }
+
+
+    /**
+     * Check if this expression should use an overloaded operator.
+     * 
+     * Returns <code>true</code> for binary and unary expressions if any FExp child is of operator record type.
+     * Note that this might return <code>true</code> for an expression that has <code>operatorName() == null</code>.
+     */
+    syn boolean FExp.shouldUseOverloadedOperator() = false;
+    eq FBinExp.shouldUseOverloadedOperator()       = getLeft().type().isOperatorRecord() || getRight().type().isOperatorRecord();
+    eq FUnaryExp.shouldUseOverloadedOperator()     = getFExp().type().isOperatorRecord();
+
+    /**
+     * Calculate the function to use for this operator expression involving operator records.
+     * 
+     * Returns null if none or more than one function matches or if this is not an operator record expression.
+     */
+    syn InstClassDecl FExp.overloadedOperator() = null;
+    eq FBinExp.overloadedOperator()   = overloadedOperatorFor(getLeft().type(), getRight().type());
+    eq FUnaryExp.overloadedOperator() = overloadedOperatorFor(getFExp().type(), null);
+
+    /**
+     * Calculate the function to use for this operator expression involving operator records, 
+     * given knowledge on whether array handling should be done by the operator or by the normal rules.
+     * 
+     * Returns null if none or more than one function matches or if this is not an operator record expression.
+     * 
+     * @param useSize  if <code>false</code>, try to match a function with scalar inputs, ignoring operand sizes
+     */
+    syn InstClassDecl FExp.overloadedOperator(boolean useSize) = null;
+    eq FBinExp.overloadedOperator(boolean useSize)   = overloadedOperatorFor(getLeft().type(), getRight().type(), useSize);
+    eq FUnaryExp.overloadedOperator(boolean useSize) = overloadedOperatorFor(getFExp().type(), null, useSize);
+
+    /**
+     * Calculate the function to use for this operator expression involving operator records.
+     * 
+     * Returns null if none or more than one function matches.
+     * 
+     * @param left   the type of the left operand
+     * @param right  the type of the right operand for binary operators, and <code>null</code> for unary operators
+     */
+    syn InstClassDecl FExp.overloadedOperatorFor(FType left, FType right) {
+        String operator = operatorName();
+        InstClassDecl func = overloadedOperatorFor(left, right, true);
+        if (func == null && (left.isArray() || (right != null && right.isArray())))
+            func = overloadedOperatorFor(left, right, false);
+        return func;
+    }
+
+    /**
+     * Calculate the function to use for this operator expression involving operator records, 
+     * given knowledge on whether array handling should be done by the operator or by the normal rules.
+     * 
+     * Returns null if none or more than one function matches.
+     * 
+     * @param left     the type of the left operand
+     * @param right    the type of the right operand for binary operators, and <code>null</code> for unary operators
+     * @param useSize  if <code>false</code>, try to match a function with scalar inputs, ignoring operand sizes
+     */
+    syn InstClassDecl FExp.overloadedOperatorFor(FType left, FType right, boolean useSize) {
+        String operator = operatorName();
+        if (!useSize) {
+            left = left.scalarType();
+            right = right == null ? null : right.scalarType();
+        }
+        return left.matchOverloadedOperator(right, operator);
+    }
+
+    /**
+     * Calculate the function to use for an operator expression involving operator records.
+     * 
+     * Returns null if none or more than one function matches or expression does not include operator records.
+     * For binary expressions <code>this</code> should be the left hand side.
+     * 
+     * @param right     the type of the right-hand side of the expression, <code>null</code> for unary operators
+     * @param operator  the name of the operator to look for
+     */
+    syn InstClassDecl FType.matchOverloadedOperator(FType right, String operator) = 
+        matchOverloadedOperator(right, operator, true);
+
+    /**
+     * Calculate the function to use for an operator expression involving operator records.
+     * 
+     * Returns null if none or more than one function matches or expression does not include operator records.
+     * 
+     * @param other     the type of the other side of the expression, <code>null</code> for unary operators
+     * @param operator  the name of the operator to look for
+     * @param isLeft    <code>true</code> if this type was on the left hand side of the expression, 
+     *                  must be <code>true</code> for unary operators
+     */
+    syn InstClassDecl FType.matchOverloadedOperator(FType other, String operator, boolean isLeft) {
+        Collection<InstClassDecl> match = matchOverloadedOperators(other, operator, isLeft);
+        return (match.size() == 1) ? match.iterator().next() : null;
+    }
+
+    /**
+     * Calculate the functions that match an operator expression involving operator records.
+     * 
+     * If expression does not include operator records, the empty set is returned.
+     * For binary expressions <code>this</code> should be the left hand side.
+     * 
+     * @param right     the type of the right-hand side of the expression, <code>null</code> for unary operators
+     * @param operator  the name of the operator to look for
+     */
+    syn Collection<InstClassDecl> FType.matchOverloadedOperators(FType right, String operator) = 
+        matchOverloadedOperators(right, operator, true);
+
+    /**
+     * Calculate the functions that match an operator expression involving operator records.
+     * 
+     * If expression does not include operator records, the empty set is returned.
+     * 
+     * @param other     the type of the other side of the expression, <code>null</code> for unary operators
+     * @param operator  the name of the operator to look for
+     * @param isLeft    <code>true</code> if this type was on the left hand side of the expression, 
+     *                  must be <code>true</code> for unary operators
+     */
+    syn Collection<InstClassDecl> FType.matchOverloadedOperators(FType other, String operator, boolean isLeft) =
+        (other != null && other.isOperatorRecord()) ? 
+                other.matchOverloadedOperators(this, operator, !isLeft) : 
+                Collections.<InstClassDecl>emptyList();
+    eq FOperatorRecordType.matchOverloadedOperators(FType other, String operator, boolean isLeft) {
+        if (operator == null)
+            return Collections.emptyList();
+        OperatorMatches mine = matchOverloadedOperators(operator, this, other, isLeft);
+        OperatorMatches others = OperatorMatches.EMPTY;
+        if (other instanceof FOperatorRecordType) {
+            FOperatorRecordType other2 = (FOperatorRecordType) other;
+            if (!other2.getName().equals(getName()))
+                others = other2.matchOverloadedOperators(operator, other, this, !isLeft);
+        }
+        return mine.combine(others).matches();
+    }
+
+    /**
+     * Find the constructor to use to convert a given type to this type.
+     * 
+     * Returns null if none or more than one constructor matches or this is not a operator record type.
+     * 
+     * @param other     the type to convert
+     */
+    syn InstClassDecl FType.matchOverloadedConstructor(FType other) = null;
+    eq FOperatorRecordType.matchOverloadedConstructor(FType other) {
+        Collection<InstClassDecl> match = matchOverloadedConstructors(other);
+        return (match.size() == 1) ? match.iterator().next() : null;
+    }
+
+    /**
+     * Find the constructors that match for a conversion a given type to this type.
+     * 
+     * If this is not a operator record type, the empty set is returned.
+     * 
+     * @param other     the type to convert
+     */
+    syn Collection<InstClassDecl> FType.matchOverloadedConstructors(FType other) = null;
+    eq FOperatorRecordType.matchOverloadedConstructors(FType other)              = 
+        isArray() ? Collections.<InstClassDecl>emptyList() : matchOverloadedOperators(FExp.OP_CON, other, null, true).matches();
+
+    /**
+     * Find the zero function for an operator record type.
+     * 
+     * Returns null if none or more than one constructor matches or this is not a operator record type.
+     */
+    syn InstClassDecl FType.matchOverloadedZero() = null;
+    eq FOperatorRecordType.matchOverloadedZero() {
+        InstClassDecl op = getOperators().get(FExp.OP_ZERO);
+        if (op == null) 
+            return null;
+        Collection<InstClassDecl> match = op.operatorFunctions();
+        return (match.size() == 1) ? match.iterator().next() : null;
+    }
+
+    /**
+     * Calculate the functions in this operator record type that matches an operator expression 
+     * involving operator records.
+     * 
+     * @param operator  the name of the operator to look for
+     * @param a         an operand that is of the operator record type that contains this function
+     * @param b         the other operand. If it is <code>null</code>, then the function should be unary.
+     * @param aIsLeft   <code>true</code> if a is the left operand, must be true if b is <code>null</code>
+     */
+    syn OperatorMatches FOperatorRecordType.matchOverloadedOperators(String operator, FType a, FType b, boolean aIsLeft) {
+        InstClassDecl op = getOperators().get(operator);
+        return (op != null) ? op.matchOverloadedOperators(a, b, aIsLeft) : OperatorMatches.EMPTY;
+    }
+
+    /**
+     * Calculate the functions that matches the two given types in this operator.
+     * 
+     * Delegates to the restriction, where results are cached.
+     * 
+     * @param a         an operand that is of the operator record type that contains this function
+     * @param b         the other operand. If it is <code>null</code>, then the function should be unary.
+     * @param aIsLeft   <code>true</code> if a is the left operand, must be true if b is <code>null</code>
+     */
+    syn OperatorMatches InstClassDecl.matchOverloadedOperators(FType a, FType b, boolean aIsLeft) =
+        OperatorMatches.EMPTY;
+    eq InstBaseClassDecl.matchOverloadedOperators(FType a, FType b, boolean aIsLeft)              =
+        getInstRestriction().matchOverloadedOperators(a, b, aIsLeft);
+
+    /**
+     * Calculate the functions that matches the two given types in this operator.
+     * 
+     * @param a         an operand that is of the operator record type that contains this function
+     * @param b         the other operand. If it is <code>null</code>, then the function should be unary.
+     * @param aIsLeft   <code>true</code> if a is the left operand, must be true if b is <code>null</code>
+     */
+    syn OperatorMatches InstRestriction.matchOverloadedOperators(FType a, FType b, boolean aIsLeft)           = 
+        OperatorMatches.EMPTY;
+    syn lazy OperatorMatches InstOperator.matchOverloadedOperators(FType a, FType b, boolean aIsLeft)         = 
+        new OperatorMatches(operatorFunctions(), a, b, aIsLeft);
+    syn lazy OperatorMatches InstOperatorFunction.matchOverloadedOperators(FType a, FType b, boolean aIsLeft) = 
+        new OperatorMatches(operatorFunctions(), a, b, aIsLeft);
+    eq InstConnector.matchOverloadedOperators(FType a, FType b, boolean aIsLeft)                              = 
+        (inheritedRestriction() != null) ? inheritedRestriction().matchOverloadedOperators(a, b, aIsLeft) : super.matchOverloadedOperators(a, b, aIsLeft);
+
+    /**
+     * Get a list of all functions in this operator.
+     * 
+     * If this is not an operator or operator function, an empty list is returned.
+     */
+    syn java.util.List<InstClassDecl> InstClassDecl.operatorFunctions() = Collections.emptyList();
+    eq InstBaseClassDecl.operatorFunctions()                            = getInstRestriction().operatorFunctions();
+
+    /**
+     * Get a list of all functions in the operator that has this restriction.
+     * 
+     * If this is not an operator or operator function, an empty list is returned.
+     */
+    syn java.util.List<InstClassDecl> InstRestriction.operatorFunctions() = Collections.emptyList();
+    eq InstOperatorFunction.operatorFunctions() = Collections.singletonList(myInstClassDecl());
+    syn lazy java.util.List<InstClassDecl> InstOperator.operatorFunctions() {
+        ArrayList<InstClassDecl> res = new ArrayList<InstClassDecl>();
+        for (InstClassDecl icd : myInstClassDecl().allInstClassDecls())
+            if (icd.isFunction())
+                res.add(icd);
+        return res;
+    }
+    eq InstConnector.operatorFunctions() = 
+        (inheritedRestriction() != null) ? inheritedRestriction().operatorFunctions() : super.operatorFunctions();
+
+    /**
+     * Check if this function matches the two given types as an overloaded operator.
+     * 
+     * @param a         an operand that is of the operator record type that contains this function
+     * @param b         the other operand. If it is <code>null</code>, then the function should be unary.
+     * @param aIsLeft   <code>true</code> if a is the left operand, must be true if b is <code>null</code>
+     * @param indirect  if <code>true</code>, then look for a constructor that can convert b to fit this function
+     */
+    syn boolean InstClassDecl.matchesAsOperatorFunction(FType a, FType b, boolean aIsLeft, boolean indirect) {
+        java.util.List<InstComponentDecl> inputs = myInputs();
+        int n = inputs.size();
+        InstComponentDecl in1 = (n > 0) ? inputs.get(0) : null;
+        InstComponentDecl in2 = (n > 1) ? inputs.get(1) : null;
+        InstComponentDecl ain = aIsLeft ? in1 : in2;
+        InstComponentDecl bin = aIsLeft ? in2 : in1;
+        
+        // Check that function is unary in unary case and binary in binary case (since '-' can contain both)
+        if ((n < 2 || in2.hasBindingFExp()) != (b == null))
+            return false;
+        for (int i = 2; i < n; i++)
+            if (!inputs.get(i).hasBindingFExp())
+                return false;
+        
+        // Unary case
+        if (b == null)
+            return ain != null && ain.type().typeCompatible(a);  // a matches first argument
+        
+        // Indirect binary case
+        if (indirect) {
+            if (bin == null || !bin.type().isOperatorRecord())  // if b isn't an operator record, no indirect match
+                return false;
+            // Find constructor matching single argument
+            return ain != null && ain.type().typeCompatible(a, true) &&  // a matches its argument
+                   bin.type().matchOverloadedConstructor(b) != null;     // there is a single matching constructor for b
+        }
+        
+        // Direct binary case
+        return ain != null && ain.type().typeCompatible(a, true) &&  // a matches its argument
+               bin != null && bin.type().typeCompatible(b, true);    // b matches its argument
+    }
+
+    /**
+     * A set of functions matching an expression involving operator records.
+     */
+    public class OperatorMatches {
+
+        public static final OperatorMatches EMPTY = new OperatorMatches();
+
+        // As this object will be cached, save memory by using efficient versions when possible
+        java.util.List<InstClassDecl> direct   = Collections.emptyList();
+        java.util.List<InstClassDecl> indirect = Collections.emptyList();
+
+        private OperatorMatches() {}
+
+        public OperatorMatches(Iterable<InstClassDecl> functions, FType a, FType b, boolean aIsLeft) {
+            for (InstClassDecl func : functions)
+                if (func.matchesAsOperatorFunction(a, b, aIsLeft, false))
+                    direct = add(direct, func);
+            if (b != null && direct.isEmpty())
+                for (InstClassDecl func : functions)
+                    if (func.matchesAsOperatorFunction(a, b, aIsLeft, true))
+                        indirect = add(direct, func);
+        }
+
+        public boolean isEmpty() {
+            return direct.isEmpty() && indirect.isEmpty();
+        }
+
+        public boolean isOK() {
+            return (direct.isEmpty() ? direct.size() : indirect.size()) == 1;
+        }
+
+        public java.util.List<InstClassDecl> matches() {
+            return direct.isEmpty() ? indirect : direct;
+        }
+
+        public OperatorMatches combine(OperatorMatches other) {
+            if (other.isEmpty())
+                return this;
+            if (isEmpty())
+                return other;
+            OperatorMatches res = new OperatorMatches();
+            res.direct = merge(direct, other.direct);
+            res.indirect = merge(indirect, other.indirect);
+            return res;
+        }
+
+        private static java.util.List<InstClassDecl> merge(java.util.List<InstClassDecl> a, java.util.List<InstClassDecl> b) {
+            if (b.isEmpty())
+                return a;
+            if (a.isEmpty())
+                return b;
+            ArrayList<InstClassDecl> res = new ArrayList<InstClassDecl>(a.size() + b.size());
+            res.addAll(a);
+            res.addAll(b);
+            return res;
+        }
+
+        private static java.util.List<InstClassDecl> add(java.util.List<InstClassDecl> list, InstClassDecl element) {
+            if (list.isEmpty())
+                return Collections.singletonList(element);
+            if (list.size() == 1)
+                list = new ArrayList<InstClassDecl>(list);
+            list.add(element);
+            return list;
+        }
+
+    }
+
+    syn Map<String,InstClassDecl> FType.getOperators() = Collections.emptyMap();
+
+}

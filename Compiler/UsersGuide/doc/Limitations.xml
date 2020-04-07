@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<chapter version="5.0" xmlns="http://docbook.org/ns/docbook"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns:xs="http://www.w3.org/2001/XMLSchema"
+         xmlns:xlink="http://www.w3.org/1999/xlink"
+         xmlns:xi="http://www.w3.org/2001/XInclude"
+         xmlns:svg="http://www.w3.org/2000/svg"
+         xmlns:m="http://www.w3.org/1998/Math/MathML"
+         xmlns:html="http://www.w3.org/1999/xhtml"
+         xmlns:db="http://docbook.org/ns/docbook">
+  <title>Limitations</title>
+
+  <para>This page lists the current limitations of the JModelica.org platform.
+  </para>
+
+    <para>The Modelica compliance of the front-end is limited; the following
+    features are currently not supported:</para>
+
+    <itemizedlist>
+
+      <listitem xml:id="lim_1">
+          <para>Support for partial function calls is limited.
+          </para>
+      </listitem>
+
+      <listitem xml:id="lim_2">
+        <para>The following built-in functions are not
+        supported:<informaltable border="1" frame="void" width="25%">
+            <tr>
+              <td><code>terminal()</code></td>
+            </tr>
+          </informaltable></para>
+      </listitem>
+
+      <listitem xml:id="lim_3">
+        <para>The following built-in functions are only supported in
+        FMUs:<informaltable border="1" frame="void" width="100%">
+            <tr>
+              <td><code>ceil(x)</code></td>
+
+              <td><code>integer(x)</code></td>
+
+              <td><code>reinit(x, expr)</code></td>
+            </tr>
+
+            <tr>
+              <td><code>div(x,y)</code></td>
+
+              <td><code>mod(x,y)</code></td>
+
+              <td><code>sample(start,interval)</code></td>
+            </tr>
+
+            <tr>
+              <td><code>edge(b)</code></td>
+
+              <td><code>pre(y)</code></td>
+
+              <td><code>semiLinear(...)</code></td>
+            </tr>
+
+            <tr>
+              <td><code>floor(x)</code></td>
+
+              <td><code>rem(x,y)</code></td>
+
+              <td><code>sign(v)</code></td>
+            </tr>
+
+            <tr>
+              <td><code>initial()</code></td>
+
+              <td><code>delay(...)</code></td>
+
+              <td><code>spatialDistribution(...)</code></td>
+            </tr>
+          </informaltable></para>
+      </listitem>
+
+      <listitem xml:id="lim_4">
+        <para>The following operators are only partially supported:
+        <informaltable border="1" frame="void" width="100%">
+            <tr>
+              <td><code>homotopy()</code></td>
+            </tr>
+          </informaltable></para>
+      </listitem>
+
+      <listitem>
+        <para>The following annotations are not supported:
+        <informaltable border="1" frame="void" width="100%">
+            <tr>
+              <td><code xml:id="lim_24">version</code></td>
+              <td><code xml:id="lim_25">arrayLayout</code></td>
+              <td><code xml:id="lim_26">obsolete</code></td>
+            </tr>
+            <tr>
+              <td><code xml:id="lim_5">uses</code></td>
+              <td><code xml:id="lim_27">HideResult</code></td>
+              <td><code xml:id="lim_28">unassignedMessage</code></td>
+            </tr>
+            <tr>
+              <td><code xml:id="lim_29">inverse</code></td>
+              <td></td>
+              <td></td>
+            </tr>
+          </informaltable></para>
+      </listitem>
+      </itemizedlist>
+
+      <itemizedlist>
+      <listitem xml:id="lim_6">
+        <para>The following annotations are limited:</para>
+        <itemizedlist>
+           <listitem>
+             <para>The <code>zeroDerivative</code> annotation is treated the same as
+                   the <code>noDerivative</code> annotation.</para>
+           </listitem>
+        </itemizedlist>
+      </listitem>
+
+      <listitem xml:id="lim_7">
+           <para>There is limited support for using arrays in record arrays.
+           </para>
+       </listitem>
+       <listitem xml:id="lim_8">
+      <para>There is limited support for Q-identifiers (e.g. component names
+      starting with a single quote) </para>
+    </listitem>
+       <listitem xml:id="lim_9">
+           <para>No support for non-parameter array size declarations. This means that all array size
+                 declarations must be of constant or parameter variability.
+           </para>
+       </listitem>
+
+      <listitem xml:id="lim_10">
+            <para>Index reduction fails in some complex cases. It is possible to work around this by
+                  setting the <code>stateSelect</code> attribute manually.</para>
+      </listitem>
+
+    </itemizedlist>
+
+    <para>In the Optimica front-end the following constructs are not
+    supported:</para>
+
+    <itemizedlist>
+      <listitem xml:id="lim_11">
+        <para>Annotations for transcription information.</para>
+      </listitem>
+    </itemizedlist>
+
+    <para>The following limitations apply to optimization using CasADi-based
+    collocation with JModelica.org:<itemizedlist>
+        <listitem xml:id="lim_12">
+          <para>Incomplete support for the <literal>Integer</literal> and
+          <literal>Boolean</literal> types: To the extent that they are
+          supported, they are treated more or less like reals.</para>
+        </listitem>
+
+        <listitem xml:id="lim_13">
+          <para>No support for <literal>String</literal> and
+          <literal>enumeration</literal> types.</para>
+        </listitem>
+
+        <listitem xml:id="lim_14">
+          <para>Attributes with any name can be set on any type of
+          variable.</para>
+        </listitem>
+
+        <listitem xml:id="lim_15">
+          <para>The property of whether an optimization problem has free or
+          fixed time horizon cannot be changed after compilation.</para>
+        </listitem>
+      </itemizedlist></para>
+
+    <para>The following limitations apply to FMUs compiled with
+    JModelica.org:</para>
+
+    <itemizedlist>
+
+      <listitem xml:id="lim_16">
+        <para>The dependenciesKind attribute in the XML file for FMU 2.0 is
+        not generated.</para>
+      </listitem>
+
+      <listitem xml:id="lim_17">
+        <para>Directional derivatives are known to have limitations in some
+        cases.</para>
+      </listitem>
+
+      <listitem xml:id="lim_18">
+        <para>Asynchronous simulation is not supported.</para>
+      </listitem>
+
+      <listitem xml:id="lim_19">
+        <para>FMU states (<code>set, get</code> and <code>serialize</code>) are not supported.</para>
+      </listitem>
+    </itemizedlist>
+</chapter>

@@ -1,0 +1,432 @@
+/*
+    Copyright (C) 2017 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import org.jmodelica.util.collections.SubClassIterator;
+import org.jmodelica.util.collections.SingleIterable;
+import org.jmodelica.util.collections.ChainedIterable;
+import org.jmodelica.util.collections.FilteredIterator;
+import org.jmodelica.util.collections.FilteredIterable;
+import org.jmodelica.util.collections.NestledIterator;
+import org.jmodelica.util.collections.NestledIterable;
+import org.jmodelica.util.collections.SubClassIterable;
+import org.jmodelica.util.Criteria;
+
+import java.util.Collections;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.HashMap;
+import java.util.Set;
+import java.util.HashSet;
+
+
+aspect SourceTraversal {
+
+
+    syn Iterable<SrcAbstractEquation> SrcClassDecl.equations();
+    eq SrcClassDecl.equations()     = Collections.<SrcAbstractEquation>emptyList();
+    eq SrcLibNode.equations()       = myClass().equations();
+    eq SrcFullClassDecl.equations() = new Iterable<SrcAbstractEquation>() {
+        public Iterator<SrcAbstractEquation> iterator() {
+            return new ClauseElementIterator<SrcAbstractEquation>() {
+                protected Iterator<SrcAbstractEquation> subIterator(SrcClause c) {
+                    return c.equationIterator();
+                }
+            };
+        }
+    };
+
+    syn Iterable<SrcExtendsClause> SrcClassDecl.superClasses();
+    eq SrcClassDecl.superClasses()       = Collections.<SrcExtendsClause>emptyList();
+    eq SrcShortClassDecl.superClasses()  = 
+        Collections.<SrcExtendsClause>singletonList(getSrcExtendsClauseShortClass());
+    eq SrcLibNode.superClasses()         = myClass().superClasses();
+    eq SrcExtendClassDecl.superClasses() = new ChainedIterable(
+            new SingleIterable(getSrcInlineExtendsClause()), super.superClasses());
+    eq SrcFullClassDecl.superClasses()   = new Iterable<SrcExtendsClause>() {
+        public Iterator<SrcExtendsClause> iterator() {
+            return new ClauseElementIterator<SrcExtendsClause>() {
+                protected Iterator<SrcExtendsClause> subIterator(SrcClause c) {
+                    return c.extendsIterator();
+                }
+            };
+        }
+    };
+    
+    syn Iterable<SrcComponentClause> SrcClassDecl.componentClauses();
+    eq SrcClassDecl.componentClauses()     = Collections.<SrcComponentClause>emptyList();
+    eq SrcLibNode.componentClauses()       = myClass().componentClauses();
+    eq SrcFullClassDecl.componentClauses() = new Iterable<SrcComponentClause>() {
+        public Iterator<SrcComponentClause> iterator() {
+            return new ClauseElementIterator<SrcComponentClause>() {
+                protected Iterator<SrcComponentClause> subIterator(SrcClause c) {
+                    return c.componentClauseIterator();
+                }
+            };
+        }
+    };
+    
+    syn Iterable<SrcComponentDecl> SrcClassDecl.components() = 
+        new NestledIterable<SrcComponentDecl,SrcComponentClause>(componentClauses()) {
+            protected Iterable<SrcComponentDecl> subIterable(SrcComponentClause c) {
+                return c.getSrcComponentDecls();
+            }
+        };
+    eq SrcEnumClassDecl.components() = 
+        new ChainedIterable(componentsIterable(), enumBase().componentsIterable());
+    
+    syn Iterable<SrcComponentDecl> SrcEnumClassDecl.componentsIterable() = super.components();
+    syn SrcEnumClassDecl SrcEnumClassDecl.enumBase() = 
+        ((SourceRoot) root()).getProgram().getEnumBaseDecl();
+    
+    syn Iterable<SrcModificationOrRedeclareElement> SrcClassDecl.elementModifications();
+    eq SrcClassDecl.elementModifications()     = 
+        Collections.<SrcModificationOrRedeclareElement>emptyList();
+    eq SrcLibNode.elementModifications()       = myClass().elementModifications();
+    eq SrcFullClassDecl.elementModifications() = 
+        new FilteredIterable(
+            components(),
+            new Criteria<SrcModificationOrRedeclareElement>() {
+                public boolean test(SrcModificationOrRedeclareElement elem) {
+                    return elem.hasRedeclare();
+                }
+            });
+
+    syn Iterable<SrcImportClause> SrcClassDecl.imports();
+    eq SrcClassDecl.imports()     = Collections.<SrcImportClause>emptyList();
+    eq SrcFullClassDecl.imports() = new Iterable<SrcImportClause>() {
+        public Iterator<SrcImportClause> iterator() {
+            return new ClauseElementIterator<SrcImportClause>() {
+                protected Iterator<SrcImportClause> subIterator(SrcClause c) {
+                    return c.importIterator();
+                }
+            };
+        }
+    };
+
+    syn Iterable<SrcClassDecl> SrcClassDecl.classes();
+    eq SrcClassDecl.classes()     = Collections.<SrcClassDecl>emptyList();
+    eq SrcLibNode.classes()       = myClass().classes();
+    eq SrcFullClassDecl.classes() = new Iterable<SrcClassDecl>() {
+        public Iterator<SrcClassDecl> iterator() {
+            return new ClauseElementIterator<SrcClassDecl>() {
+                protected Iterator<SrcClassDecl> subIterator(SrcClause c) {
+                    return c.classIterator();
+                }
+            };
+        }
+    };
+    syn lazy Iterable<SrcClassDecl> SrcLibClassDecl.classes() {
+        // Imposes ordering specified in SrcLibClassDecl.order
+        Map<String,SrcClassDecl> map = new LinkedHashMap<>();
+        for (SrcClassDecl cd : super.classes()) {
+            map.put(cd.name(), cd);
+        }
+        for (SrcLibNode ln : getSrcLibNodes()) {
+            map.put(ln.name(), ln);
+        }
+        
+        ArrayList<SrcClassDecl> l = new ArrayList<SrcClassDecl>();
+        for (String name : getOrder()) {
+            SrcClassDecl cd = map.get(name);
+            if (cd != null) {
+                l.add(cd);
+                map.remove(name);
+            }
+        }
+        for (SrcClassDecl cd : map.values())
+            l.add(cd);
+
+        return l;
+    }
+    syn Iterable<SrcClassDecl> Program.classes() {
+        ArrayList<SrcClassDecl> l = new ArrayList<SrcClassDecl>();
+        for (SrcStoredDefinition sd : getUnstructuredEntitys()) {
+            for (SrcClassDecl cd : sd.getSrcClassDecls()) {
+                if (!cd.isError()) {
+                    l.add(cd);
+                }
+            }
+        }
+        // Libraries are loaded when needed in instance lookup instead
+        return l;
+    }
+
+    private boolean SrcLibClassDecl.needsOrderCorrection = false;
+
+    public void SrcLibClassDecl.setOrder(java.util.List<String> order) {
+        needsOrderCorrection = false;
+        this.order = order;
+    }
+
+    /**
+     * Get the class and constant ordering loaded from package.order, but 
+     * corrected for any discrepancies from the order in package.mo and 
+     * what classes are present in separate files.
+     */
+    public java.util.List<String> SrcLibClassDecl.getOrder() {
+        if (needsOrderCorrection) {
+            // package.order file
+            Set<String> orderNames = new HashSet<>(order);
+            
+            // package.mo file
+            ArrayList<String> moFileOrder = new ArrayList<>();
+            for (SrcClause clause : getSrcClauses()) {
+                clause.collectNameOrder(moFileOrder);
+            }
+            Set<String> moNames = new HashSet<>(moFileOrder);
+            
+            // Classes that are in separate files/folders
+            Map<String,java.util.List<SrcLibNode>> files = new HashMap<>();
+            for (SrcLibNode ln : getSrcLibNodes()) {
+                String lcName = ln.name().toLowerCase();
+                // There could plausibly be two .mo files and/or folders that only differ
+                // in case. It should be very rare, so we optimize for there only being one.
+                java.util.List<SrcLibNode> prev = files.put(lcName, Collections.singletonList(ln));
+                if (prev != null) {
+                    java.util.List<SrcLibNode> list = new ArrayList<>(prev);
+                    list.add(ln);
+                    files.put(lcName, list);
+                }
+            }
+            
+            /* Process order in package.mo, and for each name there that is also in package.order,
+             * process package.order up to that point. 
+             */ 
+            ArrayList<String> newOrder = new ArrayList<>();
+            Set<String> passedMoNames = new HashSet<>(moFileOrder.size());
+            Set<String> processedMoNames = new HashSet<>(order.size());
+            Iterator<String> iter = order.iterator();
+            for (String moName : moFileOrder) {
+                if (orderNames.contains(moName) && !passedMoNames.contains(moName)) {
+                    for (String orderName; iter.hasNext() && !moName.equals(orderName = iter.next()); ) {
+                        if (moNames.contains(orderName) && !processedMoNames.contains(orderName)) {
+                            passedMoNames.add(orderName);
+                        } else {
+                            processOrderNameNotInPackageFile(orderName, files, newOrder);
+                        }
+                    }
+                }
+                newOrder.add(moName);
+                processedMoNames.add(moName);
+            }
+            
+            // Tail of package.order file (after the last name from package.mo file)
+            while (iter.hasNext()) {
+                processOrderNameNotInPackageFile(iter.next(), files, newOrder);
+            }
+            
+            // Any classes as separate files that was missing from package.order
+            ArrayList<String> fileClassNames = new ArrayList<>();
+            for (java.util.List<SrcLibNode> list : files.values()) {
+                for (SrcLibNode ln : list) {
+                    fileClassNames.add(ln.name());
+                }
+            }
+            Collections.sort(fileClassNames, String.CASE_INSENSITIVE_ORDER);
+            newOrder.addAll(fileClassNames);
+            
+            order = newOrder;
+            needsOrderCorrection = false;
+        }
+        return order;
+    }
+
+    private void SrcLibClassDecl.processOrderNameNotInPackageFile(
+            String orderName, Map<String,java.util.List<SrcLibNode>> files, 
+            ArrayList<String> newOrder) {
+        String lcName = orderName.toLowerCase();
+        java.util.List<SrcLibNode> list = files.get(lcName);
+        if (list != null) {
+            for (SrcLibNode ln : list) {
+                boolean match = ln.name().equals(orderName);
+                if (!match) {
+                    /* Expected class name and file name disagree on case, 
+                     * trigger parsing to get name from class decl - this updates ln.name().
+                     * Then compare again to see if it was actually a match.
+                     */
+                    ln.getSrcStoredDefinition();
+                    match = ln.name().equals(orderName);
+                }
+                if (match) {
+                    newOrder.add(orderName);
+                    files.remove(lcName);
+                    return;
+                }
+            }
+        }
+    }
+
+    public void SrcClause.collectNameOrder(java.util.List<String> order) {}
+
+    public void SrcElementList.collectNameOrder(java.util.List<String> order) {
+        for (SrcElement elem : getSrcElements()) {
+            elem.collectNameOrder(order);
+        }
+    }
+
+    public void SrcElement.collectNameOrder(java.util.List<String> order) {}
+
+    public void SrcClassDecl.collectNameOrder(java.util.List<String> order) {
+        order.add(name());
+    }
+
+    public void SrcComponentClause.collectNameOrder(java.util.List<String> order) {
+        if (isConstant()) {
+            for (SrcComponentDecl comp : getSrcComponentDecls()) {
+                order.add(comp.name());
+            }
+        }
+    }
+
+
+    public class SrcFullClassDecl {
+
+        protected abstract class ClauseElementIterator<T> extends NestledIterator<T,SrcClause> {
+            public ClauseElementIterator() {
+                super(getSrcClauses().iterator());
+            }
+        }
+
+    }
+
+    syn Iterator<SrcAbstractEquation> SrcClause.equationIterator() = null;
+    eq SrcEquationClause.equationIterator()                     = getSrcAbstractEquations().iterator();
+
+    syn Iterator<SrcAlgorithm> SrcClause.algorithmIterator() = null;
+    eq SrcAlgorithm.algorithmIterator()                   = new SingleIterator(this);
+
+    syn Iterator<SrcExtendsClause> SrcClause.extendsIterator() = null;
+    eq SrcElementList.extendsIterator()                     = 
+        new SubClassIterator(SrcExtendsClause.class, getSrcElements().iterator());
+
+    syn Iterator<SrcComponentClause> SrcClause.componentClauseIterator() = null;
+    eq SrcElementList.componentClauseIterator()                       = 
+        new SubClassIterator(SrcComponentClause.class, getSrcElements().iterator());
+
+    syn Iterator<SrcImportClause> SrcClause.importIterator() = null;
+    eq SrcElementList.importIterator()                     = 
+        new SubClassIterator(SrcImportClause.class, getSrcElements().iterator());
+
+    syn Iterator<SrcClassDecl> SrcClause.classIterator() = null;
+    eq SrcElementList.classIterator()                     = 
+        new FilteredIterator(
+            new SubClassIterator(SrcClassDecl.class, getSrcElements().iterator()), 
+            NOT_ERROR_NODE_CRITERIA);
+
+
+    public interface SrcModificationOrRedeclareElement {
+        public InstModification newInstModification();
+        public boolean hasRedeclare();
+    }
+
+    SrcModification  implements SrcModificationOrRedeclareElement;
+    SrcComponentDecl implements SrcModificationOrRedeclareElement;
+// TODO: Handle class redeclares through this interface as well
+//       (will need to update SrcFullClassDecl.elementModifications() then)
+//    SrcBaseClassDecl implements SrcModificationOrRedeclareElement;
+
+    syn SrcForIndexDecl SrcForIndex.getSrcForIndexDecl() = (SrcForIndexDecl) getSrcComponentDecl(0);
+
+    syn SrcComponentDecl SrcComponentRedeclare.getSrcComponentDecl() = 
+        getSrcComponentClause().getSrcComponentDecl(0);
+
+    syn boolean SrcModification.hasRedeclare() = false;
+    eq SrcElementRedeclare.hasRedeclare()      = true;
+
+    inh SrcComponentClause SrcComponentDecl.myComponentClause();
+    eq SrcComponentClause.getSrcComponentDecl().myComponentClause() = this;
+
+    syn SrcComponentClause InstComponentDecl.myComponentClause() = 
+        getSrcComponentDecl().myComponentClause();
+
+    /**
+     * Get the string comment a.k.a. description string that applies to this element, 
+     * or null if there is none.
+     */
+    syn SrcStringComment SrcClassDecl.myStringComment()               = null;
+    eq SrcBaseClassDecl.myStringComment()                          = 
+        selectStringComment(getConstrainingClauseComment());
+    eq SrcFullClassDecl.myStringComment()                          = 
+        selectStringComment(getConstrainingClauseComment(), this);
+    syn SrcStringComment SrcExtendsClauseShortClass.myStringComment() = 
+        selectStringComment(getSrcComment());
+    syn SrcStringComment SrcImportClause.myStringComment()            = 
+        selectStringComment(getSrcComment());
+    syn SrcStringComment SrcComponentClause.myStringComment()         = 
+        selectStringComment(getSrcComment());
+    syn SrcStringComment SrcComponentDecl.myStringComment()           = 
+        selectStringComment(myComponentClause().getSrcComment(), getSrcComment());
+    syn SrcStringComment SrcElementModification.myStringComment()     = 
+        selectStringComment(getSrcComment());
+    syn SrcStringComment SrcAbstractEquation.myStringComment()        = 
+        selectStringComment(getSrcComment());
+    syn SrcStringComment SrcStatement.myStringComment()               = 
+        selectStringComment(getSrcComment());
+
+    syn SrcStringComment InstClassDecl.myStringComment()     = getSrcClassDecl().myStringComment();
+    syn SrcStringComment InstComponentDecl.myStringComment() = getSrcComponentDecl().myStringComment();
+
+    public interface StringCommentSource {
+        public boolean hasSrcStringComment();
+        public SrcStringComment getSrcStringComment();
+    }
+    SrcComment implements StringCommentSource;
+    SrcFullClassDecl implements StringCommentSource;
+
+    /**
+     * Helper method for myStringComment() methods. 
+     * Selects the first found among the arguments.
+     */
+    protected static SrcStringComment ASTNode.selectStringComment(StringCommentSource... sources) {
+        for (StringCommentSource src : sources) {
+            if (src != null && src.hasSrcStringComment()) {
+                return src.getSrcStringComment();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Iterable over each part of a qualified name.
+     */
+    syn Iterable<? extends SrcAccess> SrcAccess.nameParts();
+    eq SrcAccess.nameParts()       = new SingleIterable(this);
+    eq SrcGlobalAccess.nameParts() = getSrcAccess().nameParts();
+    eq SrcDot.nameParts()          = getSrcNamedAccesss();
+
+    public <T extends SrcClause> Iterable<T> SrcClassDecl.clauses(Class<T> type) {
+        return Collections.<T>emptyList();
+    }
+    @Override
+    public <T extends SrcClause> Iterable<T> SrcLibNode.clauses(Class<T> type) {
+        return myClass().clauses(type);
+    }
+    @Override
+    public <T extends SrcClause> Iterable<T> SrcFullClassDecl.clauses(Class<T> type) {
+        return new SubClassIterable<SrcClause, T>(type, getSrcClauses());
+    }
+    syn Iterable<SrcElementList>    SrcClassDecl.elementLists()    = clauses(SrcElementList.class);
+    syn Iterable<SrcEquationClause> SrcClassDecl.equationClauses() = clauses(SrcEquationClause.class);
+    syn Iterable<SrcAlgorithm>      SrcClassDecl.algorithms()      = clauses(SrcAlgorithm.class);
+
+    public <T extends SrcElement> Iterable<T> SrcElementList.elements(Class<T> type) {
+        return new SubClassIterable<SrcElement, T>(type, getSrcElements());
+    }
+    syn Iterable<SrcClassDecl>       SrcElementList.classDecls()       = elements(SrcClassDecl.class);
+    syn Iterable<SrcComponentClause> SrcElementList.componentClauses() = elements(SrcComponentClause.class);
+    syn Iterable<SrcExtendsClause>   SrcElementList.extendsClauses()   = elements(SrcExtendsClause.class);
+    syn Iterable<SrcImportClause>    SrcElementList.importClauses()    = elements(SrcImportClause.class);
+}

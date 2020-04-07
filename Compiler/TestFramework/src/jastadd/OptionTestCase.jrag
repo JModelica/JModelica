@@ -1,0 +1,155 @@
+/*
+    Copyright (C) 2009-2017 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import org.jmodelica.util.collections.ListUtil;
+
+/**
+ * Test class to be used in the test framework for testing {@link AbstractOptionRegistry} options.
+ * <p>
+ * This test case compares expected default values of options to their actual values in the registry. A null result
+ * denotes the case where the option does not exist.
+ * 
+ * E.g.:
+ * 
+ * annotation(__JModelica(UnitTesting(tests={
+ *     OptionTestCase(
+ *         name="OptionTest1",
+ *         description="Tests three options.",
+ *         names={ "eliminate_alias_variables", "bad_option", "inline_functions" },
+ *         defaults={ true, null, "trivial" }
+ *     )})));
+ * 
+ * Note that the "defaults" attribute is required to have either as many values as "names," or a singular value,
+ * in which case all options under test are expected to have that default value. Also note that option names are
+ * converted to lower case before their values are retrieved from the registry.
+ */
+public class OptionTestCase extends TestCase {
+    private java.util.List<Object> defaults   = Collections. <Object> emptyList();
+    private java.util.List<String> names      = Collections. <String> emptyList();
+
+    /**
+     * Retrieve the names of the options under test.
+     * 
+     * @return the names of the options under test.
+     */
+    public java.util.List<String> getNames() {
+        return names;
+    }
+
+    /**
+     * Sets the names of the options to test.
+     * 
+     * @param names the names of the options to test.
+     */
+    public void setNames(Object[] names) {
+        this.names = ListUtil.stringList(names);
+    }
+
+    /**
+     * Retrieve the expected default values of the options under test.
+     * 
+     * @return the expected default values of the options under test.
+     */
+    public java.util.List<Object> getDefaults() {
+        return defaults;
+    }
+
+    /**
+     * Sets the expected default values of the options under test.
+     * 
+     * @param values    the expected default values of the options under test.
+     */
+    public void setDefaults(Object[] values) {
+        this.defaults = ListUtil.create(values);
+    }
+
+    /**
+     * Checks all options against their expected default values. If there is any mismatch, the test fails.
+     * <p>
+     * Option names are considered only cas l
+     * 
+     * @param options   the options' registry containing all option specifications.
+     */
+    private  void checkOptions(AbstractOptionRegistry options) {
+        StringBuilder error = new StringBuilder();
+        StringBuilder correct = new StringBuilder();
+
+        for (int i = 0; i < checkSizes(); ++i) {
+            String name = names.get(i).toLowerCase();
+
+            Object testValue    = defaults.get(i);
+            Object defaultValue = getOptionDefault(options, name);
+
+            correct.append(name + " : " + valueString(testValue) + "\n");
+            error.append(name + " : " + valueString(defaultValue) + "\n");
+        }
+
+        assertEquals("Erroneous default option values.", correct.toString(), error.toString());
+    }
+
+    /**
+     * Returns the representation of a value as used in the test annotation.
+     * <p>
+     * I.e. strings are wrapped in citation marks.
+     * 
+     * @param object    the object which annotation string value to get.
+     */
+    private String valueString(Object object) {
+        if (object == null) {
+            return "null";
+        }
+
+        String result = object.toString();
+        if (object.getClass() == String.class && !result.equals("null")) {
+            result = '\"' + result + '\"';
+        }
+
+        return result;
+    }
+
+    /**
+     * Checks if there is an equal number of option names and expected values.
+     * 
+     * @throws  IllegalStateException   if the number of keys and values does not match.
+     */
+    private int checkSizes() {
+        int expected = names.size();
+        int actual = defaults.size();
+
+        if (defaults.size() == 1) {
+            Object val = defaults.get(0);
+            actual = expected;
+
+            for (int i = 1; i < expected; ++i) {
+                defaults.add(val);
+            }
+        }
+
+        if (expected != actual) {
+            throw new IllegalArgumentException("Option tests require either one default value for all option names, " +
+                    "or one default value per name.");
+        }
+
+        return expected;
+    }
+
+    @Override
+    public boolean testOptions(AbstractOptionRegistry options) {
+        checkOptions(options);
+        return true;
+    }
+
+}

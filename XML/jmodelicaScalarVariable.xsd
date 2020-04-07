@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- edited with XMLSpy v2009 (http://www.altova.com) by Magnus Gäfvert (Modelon AB) -->
+<!--
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License version 3 as published
+    by the Free Software Foundation, or optionally, under the terms of the
+    Common Public License version 1.0 as published by IBM.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License, or the Common Public License, for more details.
+
+    You should have received copies of the GNU General Public License
+    and the Common Public License along with this program.  If not,
+    see <http://www.gnu.org/licenses/> or
+    <http://www.ibm.com/developerworks/library/os-cpl.html/> respectively.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:exp="https://svn.jmodelica.org/trunk/XML/daeExpressions.xsd" elementFormDefault="qualified" attributeFormDefault="unqualified">
+	<xs:import namespace="https://svn.jmodelica.org/trunk/XML/daeExpressions.xsd" schemaLocation="daeExpressions.xsd"/>
+	<xs:include schemaLocation="fmiExtendedScalarVariable.xsd"/>
+	<xs:complexType name="jmodelicaScalarVariable">
+		<xs:annotation>
+			<xs:documentation>Properties of a scalar variable</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:choice>
+				<xs:element name="Real">
+					<xs:complexType>
+						<xs:attribute name="declaredType" type="xs:string">
+							<xs:annotation>
+								<xs:documentation>If present, name of type defined with TypeDefinitions (fmiType) providing defaults.</xs:documentation>
+							</xs:annotation>
+						</xs:attribute>
+						<xs:attribute name="quantity" type="xs:normalizedString"/>
+						<xs:attribute name="unit" type="xs:normalizedString"/>
+						<xs:attribute name="displayUnit" type="xs:normalizedString">
+							<xs:annotation>
+								<xs:documentation>Default display unit, provided the conversion of displayUnit to unit is defined in UnitDefinitions (fmiBaseUnit).</xs:documentation>
+							</xs:annotation>
+						</xs:attribute>
+						<xs:attribute name="relativeQuantity" type="xs:boolean" use="optional" default="false">
+							<xs:annotation>
+								<xs:documentation>If relativeQuantity=true, offset for displayUnit must be ignored.</xs:documentation>
+							</xs:annotation>
+						</xs:attribute>
+						<xs:attribute name="min" type="xs:double"/>
+						<xs:attribute name="max" type="xs:double"/>
+						<xs:attribute name="nominal" type="xs:double"/>
+						<xs:attribute name="start" type="xs:double"/>
+						<xs:attribute name="fixed" type="xs:boolean">
+							<xs:annotation>
+								<xs:documentation>Only allowed, if start is present; =true: fixed initial value =false: guess value</xs:documentation>
+							</xs:annotation>
+						</xs:attribute>
+						<xs:attribute name="free" type="xs:boolean"/>
+						<xs:attribute name="initialGuess" type="xs:double"/>
+					</xs:complexType>
+				</xs:element>
+				<xs:element name="Integer">
+					<xs:complexType>
+						<xs:attribute name="declaredType" type="xs:string">
+							<xs:annotation>
+								<xs:documentation>If present, name of type defined with TypeDefinitions (fmiType) providing defaults.</xs:documentation>
+							</xs:annotation>
+						</xs:attribute>
+						<xs:attribute name="quantity" type="xs:normalizedString"/>
+						<xs:attribute name="min" type="xs:int"/>
+						<xs:attribute name="max" type="xs:int"/>
+						<xs:attribute name="start" type="xs:int"/>
+						<xs:attribute name="fixed" type="xs:boolean">
+							<xs:annotation>
+								<xs:documentation>Only allowed, if start is present; =true: fixed initial value =false: guess value</xs:documentation>
+							</xs:annotation>
+						</xs:attribute>
+						<xs:attribute name="free" type="xs:boolean"/>
+						<xs:attribute name="initialGuess" type="xs:int"/>
+					</xs:complexType>
+				</xs:element>
+				<xs:element name="Boolean">
+					<xs:complexType>
+						<xs:attribute name="declaredType" type="xs:string">
+							<xs:annotation>
+								<xs:documentation>If present, name of type defined with TypeDefinitions (fmiType)</xs:documentation>
+							</xs:annotation>
+						</xs:attribute>
+						<xs:attribute name="start" type="xs:boolean"/>
+						<xs:attribute name="fixed" type="xs:boolean">
+							<xs:annotation>
+								<xs:documentation>Only allowed, if start is present; =true: fixed initial value =false: guess value</xs:documentation>
+							</xs:annotation>
+						</xs:attribute>
+						<xs:attribute name="free" type="xs:boolean"/>
+						<xs:attribute name="initialGuess" type="xs:boolean"/>
+					</xs:complexType>
+				</xs:element>
+				<xs:element name="String">
+					<xs:complexType>
+						<xs:attribute name="declaredType" type="xs:string">
+							<xs:annotation>
+								<xs:documentation>If present, name of type defined with TypeDefinitions (fmiType).</xs:documentation>
+							</xs:annotation>
+						</xs:attribute>
+						<xs:attribute name="start" type="xs:string"/>
+						<xs:attribute name="fixed" type="xs:boolean">
+							<xs:annotation>
+								<xs:documentation>Only allowed, if start is present; =true: fixed initial value =false: guess value</xs:documentation>
+							</xs:annotation>
+						</xs:attribute>
+					</xs:complexType>
+				</xs:element>
+				<xs:element name="Enumeration">
+					<xs:complexType>
+						<xs:attribute name="declaredType" type="xs:string" use="required">
+							<xs:annotation>
+								<xs:documentation>Name of type defined with TypeDefinitions (fmiType) that provides the items of the enumeration as well as defaults.</xs:documentation>
+							</xs:annotation>
+						</xs:attribute>
+						<xs:attribute name="quantity" type="xs:normalizedString"/>
+						<xs:attribute name="min" type="xs:int"/>
+						<xs:attribute name="max" type="xs:int"/>
+						<xs:attribute name="start" type="xs:int"/>
+						<xs:attribute name="fixed" type="xs:boolean">
+							<xs:annotation>
+								<xs:documentation>Only allowed, if start is present; =true: fixed initial value =false: guess value</xs:documentation>
+							</xs:annotation>
+						</xs:attribute>
+					</xs:complexType>
+				</xs:element>
+			</xs:choice>
+			<xs:element name="DirectDependency" minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Only allowed, if causality = output. If not present, the output depends on all inputs.</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:sequence minOccurs="0" maxOccurs="unbounded">
+						<xs:element name="Name" type="xs:string" minOccurs="0">
+							<xs:annotation>
+								<xs:documentation>The names of the input variables that are needed to compute this output</xs:documentation>
+							</xs:annotation>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="QualifiedName" type="exp:QualifiedName" minOccurs="0"/>
+			<xs:element name="isLinear" type="xs:boolean" minOccurs="0"/>
+			<xs:element name="isLinearTimedVariables" minOccurs="0">
+				<xs:complexType>
+					<xs:sequence maxOccurs="unbounded">
+						<xs:element name="TimePoint">
+							<xs:complexType>
+								<xs:attribute name="index" type="xs:int" use="required"/>
+								<xs:attribute name="isLinear" type="xs:boolean" use="required"/>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="VariableCategory" default="algebraic" minOccurs="0">
+				<xs:simpleType>
+					<xs:restriction base="xs:normalizedString">
+						<xs:enumeration value="derivative"/>
+						<xs:enumeration value="state"/>
+						<xs:enumeration value="dependentConstant"/>
+						<xs:enumeration value="independentConstant"/>
+						<xs:enumeration value="dependentParameter"/>
+						<xs:enumeration value="independentParameter"/>
+						<xs:enumeration value="algebraic"/>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:element>
+		</xs:sequence>
+		<xs:attribute name="name" type="xs:string" use="required">
+			<xs:annotation>
+				<xs:documentation>Unique identifier of variable, e.g. a.b.mod[3,4].'#123'</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="valueReference" type="xs:unsignedInt" use="required">
+			<xs:annotation>
+				<xs:documentation>Identifier for variable value in function calls (not necessarily unique with respect to all variables)</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="description" type="xs:string"/>
+		<xs:attribute name="variability" default="continuous">
+			<xs:simpleType>
+				<xs:restriction base="xs:normalizedString">
+					<xs:enumeration value="constant"/>
+					<xs:enumeration value="parameter"/>
+					<xs:enumeration value="discrete"/>
+					<xs:enumeration value="continuous"/>
+				</xs:restriction>
+			</xs:simpleType>
+		</xs:attribute>
+		<xs:attribute name="causality" default="internal">
+			<xs:simpleType>
+				<xs:restriction base="xs:normalizedString">
+					<xs:enumeration value="input"/>
+					<xs:enumeration value="output"/>
+					<xs:enumeration value="internal"/>
+					<xs:enumeration value="none"/>
+				</xs:restriction>
+			</xs:simpleType>
+		</xs:attribute>
+		<xs:attribute name="alias" default="noAlias">
+			<xs:annotation>
+				<xs:documentation>If negatedAlias, the value referenced by valueReference must be negated</xs:documentation>
+			</xs:annotation>
+			<xs:simpleType>
+				<xs:restriction base="xs:normalizedString">
+					<xs:enumeration value="noAlias"/>
+					<xs:enumeration value="alias"/>
+					<xs:enumeration value="negatedAlias"/>
+				</xs:restriction>
+			</xs:simpleType>
+		</xs:attribute>
+	</xs:complexType>
+</xs:schema>

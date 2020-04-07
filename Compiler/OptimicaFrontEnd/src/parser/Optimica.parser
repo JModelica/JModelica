@@ -1,0 +1,89 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+SrcBaseClassDecl base_class_decl
+    = has_encapsulated
+      has_partial 
+      optimization_restriction
+      id_decl.start 
+      class_modification?
+      string_comment? 
+      clause_star
+      class_annotation?
+      end_decl
+    {:
+        adjustStart(has_encapsulated, has_partial, optimization_restriction);
+        return new SrcOptClassDecl(
+                start,
+                has_encapsulated.value,
+                has_partial.value,
+                optimization_restriction,
+                false, false, false, false, false,
+                new Opt(), new Opt(),
+                string_comment,
+                clause_star,
+                new Opt(),
+                class_annotation,
+                end_decl,
+                class_modification);
+    :}
+    ;
+
+SrcClause clause
+    = CONSTRAINT
+      oconstraint*
+    {:
+        return new SrcConstraintClause(oconstraint);
+    :}
+    ;
+
+SrcOptimizationClass optimization_restriction
+    = OPTIMIZATION   {: return new SrcOptimizationClass(); :}
+    ;
+
+SrcConstraint oconstraint
+    = artm_exp.a
+      EQUALS
+      artm_exp.b
+      SEMICOLON
+    {:
+        return new SrcConstraintEq(a, b);
+    :}
+    | artm_exp.a
+      LEQ
+      artm_exp.b
+      SEMICOLON
+    {:
+        return new SrcConstraintLeq(a,b);
+    :}
+    | artm_exp.a
+      GEQ
+      artm_exp.b
+      SEMICOLON
+    {:
+        return new SrcConstraintGeq(a, b);
+    :}
+    | FOR
+      for_indices
+      LOOP
+      oconstraint*
+      END_FOR SEMICOLON
+    {:
+        return new SrcForClauseC(for_indices, oconstraint);
+    :}
+    ;
+
+  

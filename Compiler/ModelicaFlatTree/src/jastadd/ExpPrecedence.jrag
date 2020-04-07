@@ -1,0 +1,98 @@
+import org.jmodelica.util.Precedence;
+
+aspect ExpPrecedence {
+    syn Precedence FExp.precedence() = Precedence.HIGHEST;
+    syn Precedence SrcExp.precedence()  = Precedence.HIGHEST;
+    eq FDotAddExp.precedence()       = Precedence.ADDITIVE;
+    eq SrcDotAddExp.precedence()        = Precedence.ADDITIVE;
+    eq FDotDivExp.precedence()       = Precedence.MULTIPLICATIVE;
+    eq SrcDotDivExp.precedence()        = Precedence.MULTIPLICATIVE;
+    eq FDotMulExp.precedence()       = Precedence.MULTIPLICATIVE;
+    eq SrcDotMulExp.precedence()        = Precedence.MULTIPLICATIVE;
+    eq FDotPowExp.precedence()       = Precedence.EXPONENTIATION;
+    eq SrcDotPowExp.precedence()        = Precedence.EXPONENTIATION;
+    eq FDotSubExp.precedence()       = Precedence.ADDITIVE;
+    eq SrcDotSubExp.precedence()        = Precedence.ADDITIVE;
+    eq FAndExp.precedence()          = Precedence.LOGICAL_AND;
+    eq SrcAndExp.precedence()           = Precedence.LOGICAL_AND;
+    eq FOrExp.precedence()           = Precedence.LOGICAL_OR;
+    eq SrcOrExp.precedence()            = Precedence.LOGICAL_OR;
+    eq FRelExp.precedence()          = Precedence.RELATIONAL;
+    eq SrcEqExp.precedence()            = Precedence.RELATIONAL;
+    eq SrcGeqExp.precedence()           = Precedence.RELATIONAL;
+    eq SrcGtExp.precedence()            = Precedence.RELATIONAL;
+    eq SrcLeqExp.precedence()           = Precedence.RELATIONAL;
+    eq SrcLtExp.precedence()            = Precedence.RELATIONAL;
+    eq SrcNeqExp.precedence()           = Precedence.RELATIONAL;
+    eq FIfExp.precedence()           = Precedence.CONDITIONAL;
+    eq SrcIfExp.precedence()            = Precedence.CONDITIONAL;
+    eq FRangeExp.precedence()        = Precedence.ARRAY_RANGE;
+    eq SrcRangeExp.precedence()         = Precedence.ARRAY_RANGE;
+    eq FNegExp.precedence()          = Precedence.ADDITIVE;
+    eq SrcNegExp.precedence()           = Precedence.ADDITIVE;
+    eq FNotExp.precedence()          = Precedence.UNARY;
+    eq SrcNotExp.precedence()           = Precedence.UNARY;
+
+    /**
+     * The reason for using parent here is that this attribute is intended to be used by 
+     * prettyPrint(), that is in turn used by toString(). Checking if our parent is null lets   
+     * us use toString() on expressions that are not yet in the AST without getting a 
+     * NullPointerException. This is useful e.g. when debugging. */
+    syn Precedence FExp.parentPrecedence() = parent != null ? retrieveParentPrecedence() : Precedence.LOWEST;
+    syn Precedence SrcExp.parentPrecedence()  = parent != null ? retrieveParentPrecedence() : Precedence.LOWEST;
+    syn Precedence List.parentPrecedence() = parent != null ? retrieveParentPrecedence() : Precedence.LOWEST;
+    syn Precedence Opt.parentPrecedence()  = parent != null ? retrieveParentPrecedence() : Precedence.LOWEST;
+    
+    inh Precedence FExp.retrieveParentPrecedence();
+    inh Precedence SrcExp.retrieveParentPrecedence();
+    inh Precedence List.retrieveParentPrecedence();
+    inh Precedence Opt.retrieveParentPrecedence();
+    eq FExp.getChild().retrieveParentPrecedence() {
+        Precedence precedence = precedence();
+        if (precedence == Precedence.HIGHEST)
+            return Precedence.LOWEST;
+        else
+            return precedence;
+    }
+    eq SrcExp.getChild().retrieveParentPrecedence() {
+        Precedence precedence = precedence();
+        if (precedence == Precedence.HIGHEST)
+            return Precedence.LOWEST;
+        else
+            return precedence;
+    }
+    eq List.getChild().retrieveParentPrecedence()    = parentPrecedence();
+    eq Opt.getChild().retrieveParentPrecedence()     = parentPrecedence();
+    eq ASTNode.getChild().retrieveParentPrecedence() = Precedence.LOWEST;
+    
+    /**
+     * Used if precedence is equal for node and its parent.
+     */
+    syn boolean FExp.shouldHaveParenthesis() = parent != null ? retrieveShouldHaveParenthesis() : false;
+    /**
+     * Used if precedence is equal for node and its parent.
+     */
+    syn boolean SrcExp.shouldHaveParenthesis() = parent != null ? retrieveShouldHaveParenthesis() : false;
+
+    inh boolean FExp.retrieveShouldHaveParenthesis();
+    inh boolean SrcExp.retrieveShouldHaveParenthesis();
+    eq BaseNode.getChild().retrieveShouldHaveParenthesis()  = false;
+    eq FBinExp.getRight().retrieveShouldHaveParenthesis()   = true;
+    eq SrcBinExp.getRight().retrieveShouldHaveParenthesis()    = true;
+    eq FDotPowExp.getLeft().retrieveShouldHaveParenthesis() = true;
+    eq SrcDotPowExp.getLeft().retrieveShouldHaveParenthesis()  = true;
+    eq FNegExp.getFExp().retrieveShouldHaveParenthesis()    = true;
+    eq SrcNegExp.getSrcExp().retrieveShouldHaveParenthesis()      = true;
+
+    /**
+     * Returns true if this exp should add parenthesis given a certain precedence.
+     */
+    syn boolean FExp.addParenthesis(Precedence parentPrecedence) =
+            precedence().needParenthesis(parentPrecedence, shouldHaveParenthesis());
+
+    /**
+     * Returns true if this exp should add parenthesis given a certain precedence.
+     */
+    syn boolean SrcExp.addParenthesis(Precedence parentPrecedence) =
+            precedence().needParenthesis(parentPrecedence, shouldHaveParenthesis());
+}

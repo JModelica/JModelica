@@ -1,0 +1,445 @@
+/*
+    Copyright (C) 2009-2017 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+/**
+ * Constant evaluation of statements 
+ */
+
+aspect ConstantEvaluationStatements {
+
+    // Return values for FStatement.evaluate()
+    public static final int FStatement.EVAL_CONT   = 1;
+    public static final int FStatement.EVAL_RETURN = 2;
+    public static final int FStatement.EVAL_BREAK  = 3;
+    public static final int FStatement.EVAL_MASK   = 3;  // Bitmask for normal values
+    public static final int FStatement.EVAL_IFHIT  = 4;  // Flag that can be added to normal value
+
+    /**
+     * Evaluate a list of statements or if-else clauses in a function.
+     * 
+     * This must be a list of nodes implementing FunctionEvalNode, or an exception will be thrown.
+     * 
+     * @param values  constant values for the variables.
+     */
+    public int List.evaluateList(AlgorithmEvaluator evaluator) {
+        int res = FStatement.EVAL_CONT;
+        Iterator<? extends FunctionEvalNode> it = (Iterator<? extends FunctionEvalNode>) iterator();
+        while (it.hasNext() && res == FStatement.EVAL_CONT) {
+            res = it.next().evaluate(evaluator);
+        }
+        return res;
+    }
+
+    /**
+     * General contract for nodes that can be evaluated during a function evaluation.
+     */
+    public interface FunctionEvalNode {
+        public int evaluate(AlgorithmEvaluator evaluator);
+    }
+    FStatement implements FunctionEvalNode;
+    FIfWhenClause implements FunctionEvalNode;
+
+    /**
+     * Evaluate statement during function evaluation.
+     * 
+     * @param evaluator the evaluator used to evaluate the algorithm
+     */
+    public abstract int FStatement.evaluate(AlgorithmEvaluator evaluator);
+    
+    /**
+     * Evaluate statement during function evaluation.
+     * 
+     * @param evaluator the evaluator used to evaluate the algorithm
+     */
+    @Override
+    public int FAssignStmt.evaluate(AlgorithmEvaluator evaluator) {
+        getLeft().assignToInFuncEval(evaluator, evaluator.ceval(getRight()), getRight().type());
+        return EVAL_CONT;
+    }
+    
+    /**
+     * Evaluate an assignment with this as the left side during function evaluation.
+     * 
+     * @param evaluator the evaluator used to evaluate the algorithm
+     * @param right     the CValue to assign
+     */
+    public void FFunctionCallLeft.assignToInFuncEval(AlgorithmEvaluator evaluator, CValue right, FType rightType) {
+        if (hasFExp()) {
+            getFExp().assignToInFuncEval(evaluator, right, rightType);
+        }
+    }
+    
+    /**
+     * Evaluate an assignment with this as the left side during function evaluation.
+     * 
+     * @param evaluator the evaluator used to evaluate the algorithm
+     * @param right     the CValue to assign
+     */
+    public void FExp.assignToInFuncEval(AlgorithmEvaluator evaluator, CValue right, FType rightType) {
+        throw new ConstantEvaluationException();
+    }
+    
+    @Override
+    public abstract void FAssignableExp.assignToInFuncEval(AlgorithmEvaluator evaluator, CValue right, FType rightType);
+    
+    /**
+     * Evaluate an assignment with this as the left side during function evaluation.
+     * 
+     * @param evaluator the evaluator used to evaluate the algorithm
+     * @param right     the CValue to assign
+     */
+    @Override
+    public void CommonAccessExp.assignToInFuncEval(AlgorithmEvaluator evaluator, CValue right, FType rightType) {
+        CValue ceval = ceval(evaluator);
+        if (!ceval.isPartlyUnknown() && !right.isPartlyUnknown() && !ceval.typeMatches(right)) {
+            throw new ConstantEvaluationException(null, "Mismatching types when evaluating assignment,"
+                    + " type of left-hand side is "+type().printStructure()+", and type of right-hand side is "+rightType.printStructure()+" " + errorLocation());
+        }
+        getAccess().assignToInFuncEval(evaluator, right);
+    }
+    
+    @Override
+    public void FSubscriptedExp.assignToInFuncEval(AlgorithmEvaluator evaluator, CValue right, FType rightType) {
+        ((FAssignableExp)select()).assignToInFuncEval(evaluator, right, rightType);
+    }
+    
+    syn FExp FSubscriptedExp.select() = getFExp().getArray().get(getFArraySubscripts().createIndex());
+    
+    /**
+     * Evaluate an assignment with this as the left side during function evaluation.
+     * 
+     * @param evaluator the evaluator used to evaluate the algorithm
+     * @param right     the CValue to assign
+     */
+    public abstract void CommonAccess.assignToInFuncEval(AlgorithmEvaluator evaluator, CValue right);
+
+    /**
+     * Evaluate an assignment with this as the left side during function evaluation.
+     * 
+     * @param values   constant values for the variables
+     * @param right    the right hand side
+     * @param context  the use to look up names from
+     */
+    public void FAccess.assignToInFuncEval(AlgorithmEvaluator evaluator, CValue right) {
+        throw new UnsupportedOperationException();
+    }
+
+    public void FAccessString.assignToInFuncEval(AlgorithmEvaluator evaluator, CValue right) {
+        myTopFV().setEvaluationValue(evaluator, right);
+    }
+
+    public void FAccessFull.assignToInFuncEval(AlgorithmEvaluator evaluator, CValue right) {
+        FAbstractVariable var = myTopFV();
+        FAccessPart firstPart = getFAccessPart(0);
+        CValue val = var.type().assignToPartInFuncEval(firstPart, var.evaluationValue(evaluator), right);
+        evaluator.setEvaluationValue(var, val);
+    }
+
+    /**
+     * Evaluate an assignment with this as the left side during function evaluation.
+     * 
+     * @param evaluator the evaluator used to evaluate the algorithm
+     * @param right     the CValue to assign
+     */
+    public void InstAccess.assignToInFuncEval(AlgorithmEvaluator evaluator, CValue right) {
+        InstAccess firstPart = getFirstInstAccess();
+        InstComponentDecl comp = firstPart.myInstComponentDecl();
+        if (comp instanceof InstAssignable) {
+            InstAssignable var = (InstAssignable) comp;
+            CValue val = var.type().assignToPartInFuncEval(firstPart, var.evaluationValue(evaluator), right);
+            evaluator.setEvaluationValue(var, val);
+        } else if (comp.isUnknown()) {
+            // Do nothing
+        } else {
+            throw new ConstantEvaluationException(null, "Assigning to non-assignable");
+        }
+    }
+
+    /**
+     * Common interface for parts of qualified names.
+     */
+    public interface CommonNamePart {
+        public String name();
+        public Indices indices();
+        public boolean hasFArraySubscripts();
+        public FArraySubscripts getFArraySubscripts();
+        public boolean isArray();
+        public CommonNamePart nextNamePart();
+    }
+    InstAccess implements CommonNamePart;
+    FAccessPart implements CommonNamePart;
+
+    public Indices FAccessPart.indices() {
+        return Indices.createFromFas(getFArraySubscripts());
+    }
+
+    /**
+     * Check if this name part accesses an array.
+     * 
+     * Note that the check is based only on the array subscripts, and a name part 
+     * without array subscripts is assumed to be scalar. Thus this method should 
+     * only be used for name parts with array subscripts.
+     */
+    syn boolean FAccessPart.isArray() {
+        if (hasFArraySubscripts()) {
+            for (Subscript s : getFArraySubscripts().subscripts()) {
+                if (s.ndims() > 0) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Get the next part in the name this is a part of, or null if this is the last part. 
+     */
+    syn CommonNamePart InstAccess.nextNamePart() = getNextInstAccess();
+    inh CommonNamePart FAccessPart.nextNamePart();
+    eq FAccessFull.getFAccessPart(int i).nextNamePart() = 
+            getNumFAccessPart() > i + 1 ? getFAccessPart(i + 1) : null;
+
+    /**
+     * Handle one part of the left access of an assignment during function evaluation.
+     */
+    public CValue FType.assignToPartInFuncEval(CommonNamePart name, CValue left, CValue right) {
+        return assignToLastInFuncEval(name, left, right);
+    }
+
+    public CValue FRecordType.assignToPartInFuncEval(CommonNamePart name, CValue left, CValue right) {
+        CommonNamePart next = name.nextNamePart();
+        if (next == null) {
+            return assignToLastInFuncEval(name, left, right);
+        }
+        
+        FType nextType = componentType(next.name(), getComponents());
+        if (isArray()) {
+            if (left.isUnknown()) {
+                left = new CValueArray(size()).markAsCached();
+            }
+            CValueArray arr = left.array();
+            if (name.isArray()) {
+                Indices ind = name.indices();
+                int rdims = right.size().ndims();
+                Size ns = right.size().promote(rdims - ind.ndims());
+                Indices nind = Indices.create(ns);
+                CValueArray ra = right.array();
+                for (Index i : ind) {
+                    if (ns != Size.SCALAR) {
+                        CValueArray ra2 = new CValueArray(ns);
+                        for (Index j : nind) {
+                            ra2.setCell(j, ra.getCell(i.expand(j)));
+                        }
+                        right = ra2;
+                    } else {
+                        right = ra.getCell(i);
+                    }
+                    Index j = ind.translate(i);
+                    arr.setCell(j, assignToRecPartInFuncEval(next, nextType, arr.getCell(j), right));
+                }
+            } else {
+                Index i = name.getFArraySubscripts().createIndex();
+                arr.setCell(i, assignToRecPartInFuncEval(next, nextType, arr.getCell(i), right));
+            }
+        } else {
+            left = assignToRecPartInFuncEval(next, nextType, left, right);
+        }
+        return left;
+    }
+
+    /**
+     * Handle one part of the left access of an assignment during function evaluation.
+     */
+    public CValue FRecordType.assignToRecPartInFuncEval(CommonNamePart next, FType nextType, CValue left,
+            CValue right) {
+        if (left.isUnknown()) {
+            left = new CValueRecord(this).markAsCached();
+        }
+        CValue val = left.record().getMember(next.name());
+        val = nextType.assignToPartInFuncEval(next, val, right);
+        left.record().setMember(next.name(), val);
+        return left;
+    }
+
+    /**
+     * \brief Get the type of a specific component.
+     */
+    public FType FType.componentType(String name, List<FRecordComponentType> comps) {
+        for (FRecordComponentType comp : comps)
+            if (comp.getName().equals(name))
+                return comp.getFType();
+        return fUnknownType();
+    }
+
+    /**
+     * Handle the last part of the left access of an assignment during function evaluation.
+     */
+    public CValue FType.assignToLastInFuncEval(CommonNamePart name, CValue left, CValue right) {
+        if (!isArray() || !name.hasFArraySubscripts()) {
+            return right.cached();
+        }
+        
+        if (left.isUnknown()) {
+            left = new CValueArray(size().ceval()).markAsCached();
+        }
+        
+        if (name.isArray()) {
+            CValueArray al = left.array();
+            CValueArray ar = right.array();
+            Indices ind = name.indices();
+            for (Index i : ind) {
+                al.setCell(ind.translate(i), ar.getCell(i));
+            }
+        } else {
+            left.array().setCell(name.getFArraySubscripts().createIndex(), right);
+        }
+        return left;
+    }
+
+    @Override
+    public int FExternalStmt.evaluate(AlgorithmEvaluator evaluator) {
+        return evaluateExternal(evaluator);
+    }
+
+    @Override
+    public int FInitArrayStmt.evaluate(AlgorithmEvaluator evaluator) {
+        getFAccessExp().assignToInFuncEval(evaluator, type().zeroCValue(), type());
+        return EVAL_CONT;
+    }
+
+    @Override
+    public int FFunctionCallStmt.evaluate(AlgorithmEvaluator evaluator) {
+        CValue[] vals = getCall().evaluate(evaluator);
+        ArrayList<? extends CommonVariableDecl> outputs = getCall().myCallOutputs();
+        for (int i = 0, n = getNumLeft(); i < n; i++) {
+            getLeft(i).assignToInFuncEval(evaluator, vals[i], outputs.get(i).type());
+        }
+        return EVAL_CONT;
+    }
+
+    @Override
+    public int FBreakStmt.evaluate(AlgorithmEvaluator evaluator) {
+        return EVAL_BREAK;
+    }
+
+    @Override
+    public int FReturnStmt.evaluate(AlgorithmEvaluator evaluator) {
+        return EVAL_RETURN;
+    }
+
+    @Override
+    public int FIfWhenStmt.evaluate(AlgorithmEvaluator evaluator) {
+        evaluator.startIf();
+        int res = getFIfWhenClauses().evaluateList(evaluator);
+        if (res == EVAL_CONT) {
+            res = evaluateElse(evaluator);
+            evaluator.branchIf(res);
+        }
+        evaluator.endIf();
+        return res & EVAL_MASK;
+    }
+
+    public int FIfWhenStmt.evaluateElse(AlgorithmEvaluator evaluator) {
+        return EVAL_CONT;
+    }
+
+    @Override
+    public int FIfStmt.evaluateElse(AlgorithmEvaluator evaluator) {
+        return getElseStmts().evaluateList(evaluator);
+    }
+
+    @Override
+    public int FIfWhenClause.evaluate(AlgorithmEvaluator evaluator) {
+        CValue test = getTest().ceval(evaluator);
+        boolean unknown = test.isPartlyUnknown();
+        if (unknown || test.reduceBooleanOr()) {
+            int res = getFStatements().evaluateList(evaluator);
+            evaluator.branchIf(res);
+            if (!unknown) {
+                return res | FStatement.EVAL_IFHIT;
+            }
+        }
+        return FStatement.EVAL_CONT;
+    }
+
+    @Override
+    public int FForStmt.evaluate(AlgorithmEvaluator evaluator) {
+        CValue oldVal = getIndex().evaluationValue(evaluator);
+        CValueArray ivals = getIndex().getFExp().ceval().array();
+        int res = EVAL_CONT;
+        for (Index i : ivals.indices()) {
+            getIndex().setEvaluationValue(defaultVariableEvaluator(), ivals.getCell(i));
+            res = getForStmts().evaluateList(evaluator);
+            getForStmts().resetAfterCeval();
+            if (res != EVAL_CONT) {
+                break;
+            }
+        }
+        getIndex().setEvaluationValue(defaultVariableEvaluator(), oldVal);
+        return (res == EVAL_BREAK) ? EVAL_CONT : res;
+    }
+
+    @Override
+    public int InstForStmt.evaluate(AlgorithmEvaluator evaluator) {
+        return getInstForIndex(0).evaluateInFunc(evaluator, getInstForIndexList(), 0, getForStmts());
+    }
+
+    /**
+     * Evaluate statement list over this for index during function evaluation.
+     * 
+     * @param values  constant values for the variables. 
+     */
+    public int InstForIndex.evaluateInFunc(AlgorithmEvaluator evaluator, 
+            List<InstForIndex> indices, int i, List<FStatement> stmts) {
+        InstComponentDecl var = getInstPrimitive();
+        CValue oldVal = var.evaluationValue(evaluator);
+        boolean last = i == indices.getNumChild() - 1;
+        CValueArray ivals = getFExp().ceval(evaluator).array();
+        for (Index j : ivals.indices()) {
+            var.setEvaluationValue(evaluator, ivals.getCell(j));
+            int res = last ? stmts.evaluateList(evaluator) : 
+                    indices.getChild(i + 1).evaluateInFunc(evaluator, indices, i + 1, stmts);
+              stmts.resetAfterCeval();
+            if (res != FStatement.EVAL_CONT) {
+                var.setEvaluationValue(evaluator, oldVal);
+                return (res == FStatement.EVAL_BREAK) ? FStatement.EVAL_CONT : res;
+            }
+        }
+        var.setEvaluationValue(evaluator, oldVal);
+        return FStatement.EVAL_CONT;
+    }
+
+    @Override
+    public int InstForIndexNoExp.evaluateInFunc(AlgorithmEvaluator evaluator, 
+            List<InstForIndex> indices, int i, List<FStatement> stmts) {
+        if (hasFExp()) {
+            return super.evaluateInFunc(evaluator, indices, i, stmts);
+        } else {
+            throw new ConstantEvaluationException();
+        }
+    }
+
+    @Override
+    public int FWhileStmt.evaluate(AlgorithmEvaluator evaluator) {
+        int res = EVAL_CONT;
+        while (res == EVAL_CONT && getTest().ceval(evaluator).booleanValue()) {
+            res = getWhileStmts().evaluateList(evaluator);
+            resetAfterCeval();
+        }
+        return (res == EVAL_BREAK) ? EVAL_CONT : res;
+    }
+
+}

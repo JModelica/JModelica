@@ -1,0 +1,49 @@
+/*
+    Copyright (C) 2009-2017 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect StateInitialEquations {
+
+    public class FClass {
+        public class addStateInitialEquationsIfSet extends Transformation {
+            // Constraints: after alias elimination (see #), before BLT
+            
+            public addStateInitialEquationsIfSet() {
+                super("state_initial_equations");
+            }
+            
+            public void perform() {
+                addStateInitialEquations();
+            }
+        }
+    }
+
+    public void FClass.addStateInitialEquations() {
+        setFInitialEquationList(new List());
+        
+        for (FVariable fv : differentiatedRealVariables()) {
+            FAccess nameToAdd = fv.getFAccess().copyAndAddPrefix("_start_");
+            FRealVariable fvToAdd = new FRealVariable(VisibilityType.PUBLIC, Variability.FIXEDPARAMETER, nameToAdd);
+            if (fv.startAttributeSet())
+                fvToAdd.setBindingExp(fv.startAttributeExp().ceval().buildLiteral());
+            else
+                fvToAdd.setBindingExp(fv.type().zeroLiteral());
+            addFVariable(fvToAdd);
+            FEquation eqnToAdd = new FEquation(fv.createAccessExp(), fvToAdd.createAccessExp());
+            addFInitialEquation(eqnToAdd);
+            flushAllRecursive();
+        }
+    }
+}

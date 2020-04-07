@@ -1,0 +1,30 @@
+OS=linux
+PLATFORM=centos
+DIST_VERSION=7.4.1708
+PYTHON_VERSION=2.7
+TARGET=pyfmi
+BITNESS=64
+
+
+# PATH_TO_MOUNT is the path needed to mount JModelica into the Docker.
+# Note you need to have double slash in the beginning.
+# Set to your local checkout of JModelica
+#PATH_TO_MOUNT=# does not need to be set on jenkins, is set in groovy
+
+
+# Set JM_HOME to your local checkout of JModelica
+#JM_HOME=# does not need to be set on jenkins, is set in groovy
+
+#   for CentOS set to lib64/python${PYTHON_VERSION}/site-packages
+#   for Ubuntu set to lib/python${PYTHON_VERSION}/site-packages
+PLATFORM_SITE_PACKAGES=lib64/python${PYTHON_VERSION}/site-packages
+
+#   for CentOS set to /usr/lib64/python${PYTHON_VERSION}/site-packages/pyfmi
+#   for Ubuntu set to /usr/local/lib/python${PYTHON_VERSION}/dist-packages/pyfmi
+WHEEL_INSTALL_DIR=/usr/lib64/python${PYTHON_VERSION}/site-packages/pyfmi
+
+
+# Dont modify the variables below
+DISTRO=${PLATFORM}_${DIST_VERSION}_${PYTHON_VERSION}
+PYFMI_FOLDER_INSTALL_DIR=${JM_HOME}/${DISTRO}/pyfmi${BITNESS}/folder/pyfmi
+FMIL_INSTALL=${JM_HOME}/${DISTRO}/${TARGET}${BITNESS}/fmil_install

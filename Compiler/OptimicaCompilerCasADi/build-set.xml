@@ -1,0 +1,26 @@
+<!--
+    Copyright (C) 2014 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+-->
+
+<project name="oc_casadi_set">
+	<include file="../ModelicaCompilerCasADi/build-set.xml"/>
+	<include file="../OptimicaCompiler/build-set.xml"/>
+	
+    <dirname property="oc_casadi_set.dir" file="${ant.file.oc_casadi_set}"/>
+    
+    <property name="oc_casadi_set.sets" value="${mc_casadi_set.sets},${oc_set.sets},oc_casadi_set"/>
+    <dirname property="oc_casadi_set.base" file="${oc_casadi_set.dir}"/>
+    <property name="oc_casadi_set.modules" value="OptimicaCompilerCasADi"/>
+</project>

@@ -1,0 +1,7 @@
+            <walls>
+                <package name="modA"
+                    package="biz.xsoftware.*"
+                    depends="modB" />
+                <package name="modB"
+                    package="biz.xsoftware.something.*" />
+            </walls>

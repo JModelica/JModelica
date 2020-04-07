@@ -1,0 +1,107 @@
+/*
+    Copyright (C) 2009-2017 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect RuntimeOptions {
+
+    public class FClass {
+        /**
+         * Add parameters for all defined runtime options.
+         */
+        public class addRuntimeOptionParameters extends Transformation {
+            public boolean active() {
+                OptionRegistry opt = myOptions();
+                return opt.getBooleanOption("generate_runtime_option_parameters") && opt.getBooleanOption("generate_ode");
+            }
+            
+            public void perform() {
+                OptionRegistry opt = myOptions();
+                for (String key : opt.getRuntimeOptionKeys()) {
+                    FVariable v = null;
+                    String name = OptionRegistry.getFMUXMLName(key);
+                    if (opt.isBooleanOption(key))
+                        v = createBooleanRuntimeOptionParameter(name, opt.getBooleanOption(key));
+                    else if (opt.isStringOption(key))
+                        v = createStringRuntimeOptionParameter(name, opt.getStringOption(key));
+                    else if (opt.isIntegerOption(key))
+                        v = createIntegerRuntimeOptionParameter(name, opt.getIntegerOption(key));
+                    else if (opt.isRealOption(key))
+                        v = createRealRuntimeOptionParameter(name, opt.getRealOption(key));
+                    addFVariable(v);
+                }
+            }
+        }
+    }
+
+    /**
+     * Create a parameter for a boolean runtime option. 
+     */
+    public FVariable FClass.createBooleanRuntimeOptionParameter(String name, boolean val) {
+        return commonCreateRuntimeOptionParameter(new FBooleanVariable(), name, FBooleanLitExp.create(val));
+    }
+
+    /**
+     * Create a parameter for a string runtime option. 
+     */
+    public FVariable FClass.createStringRuntimeOptionParameter(String name, String val) {
+        return commonCreateRuntimeOptionParameter(new FStringVariable(), name, new FStringLitExp(val));
+    }
+
+    /**
+     * Create a parameter for a integer runtime option. 
+     */
+    public FVariable FClass.createIntegerRuntimeOptionParameter(String name, int val) {
+        return commonCreateRuntimeOptionParameter(new FIntegerVariable(), name, new FIntegerLitExp(val));
+    }
+
+    /**
+     * Create a parameter for a real runtime option. 
+     */
+    public FVariable FClass.createRealRuntimeOptionParameter(String name, double val) {
+        return commonCreateRuntimeOptionParameter(new FRealVariable(), name, new FRealLitExp(val));
+    }
+
+    /**
+     * Set the children of a runtime option parameter.
+     * 
+     * @param v     the variable to set fields on
+     * @param name  the name of the variable
+     * @param bExp  the burrent value of the option
+     * @return  <code>v</code>, for convenience
+     */
+    public FVariable FClass.commonCreateRuntimeOptionParameter(FVariable v, String name, FExp bExp) {
+        v.setVisibilityType(VisibilityType.RUNTIME_OPTION);
+        v.setTypePrefixVariability(Variability.FIXEDPARAMETER);
+        v.setTypePrefixInputOutput(TypePrefixInputOutput.NONE);
+        v.setBindingExp(bExp);
+        v.setFAccess(new FAccessString(name));
+        return v;
+    }
+
+    syn int FClass.numRuntimeOptionParameters() = runtimeOptionParameters().size();
+    syn lazy SortedSet<FVariable> FClass.runtimeOptionParameters() {
+        SortedSet<FVariable> res = new TreeSet<FVariable>(new VariableNameComparator());
+        for (FVariable fv : independentParameters()) {
+            if (fv.isRuntimeOption()) {
+                res.add(fv);
+            }
+        }
+        return res;
+    }
+
+    syn boolean FVariable.isRuntimeOption() = getVisibilityType().isRuntimeOptionVisibility();
+
+}
+

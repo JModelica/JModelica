@@ -1,0 +1,6 @@
+<design>
+
+<package package="mod.dummy"/>
+<package name="client" package="mod.arraydepend"/>
+
+</design>

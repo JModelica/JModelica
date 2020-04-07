@@ -1,0 +1,93 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+public class TimeTestCase extends TestCase {
+
+    private long maxTime = 0;
+    private String failMsg = null;
+
+	/**
+	 * @return the maximum time
+	 */
+	public double getMaxTime() {
+		return maxTime / 1000.0;
+	}
+
+	/**
+	 * @param errorMessage the errorMessage to set
+	 */
+	public void setMaxTime(double maxTime) {
+		this.maxTime = (long) (maxTime * 1000.0);
+	}
+
+	protected void fail(String msg) {
+		failMsg = msg;
+		throw new UnsupportedOperationException(); // Dummy exception to stop execution
+	}
+	
+	public void performTest() throws ParserException, beaver.Parser.Exception, 
+			IOException, ModelicaClassNotFoundException {
+		TimedTester tt = new TimedTester();
+		tt.start();
+		try {
+			tt.join(maxTime);
+		} catch (InterruptedException e) {
+		}
+		if (tt.isAlive()) {
+			tt.stop();
+			super.fail("Test exceeded time limit.");
+		} else {
+			if (failMsg != null)
+				super.fail(failMsg);
+			else if (tt.caught != null)
+				reThrow(tt.caught);
+		}
+	}
+	
+	private void reThrow(Throwable t) throws ParserException, beaver.Parser.Exception, 
+			IOException, ModelicaClassNotFoundException {
+		if (t instanceof ParserException)
+			throw (ParserException) t;
+		if (t instanceof beaver.Parser.Exception)
+			throw (beaver.Parser.Exception) t;
+		if (t instanceof IOException)
+			throw (IOException) t;
+		if (t instanceof ModelicaClassNotFoundException)
+			throw (ModelicaClassNotFoundException) t;
+		if (t instanceof RuntimeException)
+			throw (RuntimeException) t;
+		throw new RuntimeException(t);
+	}
+	
+	private Throwable doPerformTest() {
+		try {
+			super.performTest();
+			return null;
+		} catch (Throwable t) {
+			return t;
+		}
+	}
+	
+	private class TimedTester extends Thread {
+		
+		public Throwable caught;
+		
+		public void run() {
+			caught = doPerformTest();
+		}
+		
+	}
+}

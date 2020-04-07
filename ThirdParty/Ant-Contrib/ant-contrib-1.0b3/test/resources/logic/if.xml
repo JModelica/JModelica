@@ -1,0 +1,146 @@
+<project default="invalid">
+  <target name="invalid">
+    <fail>Don't call this file directly.</fail>
+  </target>
+
+  <target name="setup">
+    <taskdef resource="net/sf/antcontrib/antcontrib.properties">
+      <classpath location="${antcontrib.jar}"/>
+    </taskdef>
+  </target>
+
+  <target name="noCondition" depends="setup">
+    <if>
+      <then>
+        <echo>Foo</echo>
+      </then>
+    </if>
+  </target>
+
+  <target name="twoConditions" depends="setup">
+    <if>
+      <isset property="1"/>
+      <isset property="2"/>
+      <then>
+        <echo>Foo</echo>
+      </then>
+    </if>
+  </target>
+
+  <target name="nothingToDo" depends="setup">
+    <if>
+      <isset property="antcontrib.jar"/>
+    </if>
+  </target>
+
+  <target name="twoThens" depends="setup">
+    <if>
+      <isset property="antcontrib.jar"/>
+      <then/>
+      <then/>
+    </if>
+  </target>
+
+  <target name="twoElses" depends="setup">
+    <if>
+      <isset property="antcontrib.jar"/>
+      <else/>
+      <else/>
+    </if>
+  </target>
+
+  <target name="normalOperation" depends="setup">
+    <if>
+      <isset property="antcontrib.jar"/>
+      <then>
+        <echo>In then</echo>
+        <property name="inner" value="some value"/>
+        <echo>${inner}</echo>
+      </then>
+      <else>
+        <echo>In else</echo>
+      </else>
+    </if>
+  </target>
+
+  <target name="normalOperation2" depends="setup">
+    <if>
+      <not>
+        <isset property="antcontrib.jar"/>
+      </not>
+      <then>
+        <echo>In then</echo>
+      </then>
+      <else>
+        <echo>In else</echo>
+      </else>
+    </if>
+  </target>
+
+  <target name="noConditionInElseif" depends="setup">
+    <if>
+      <isset property="1"/>
+      <elseif>
+        <then>
+          <echo>Foo</echo>
+        </then>
+      </elseif>
+    </if>
+  </target>
+
+  <target name="twoConditionsInElseif" depends="setup">
+    <if>
+      <isset property="1"/>
+      <elseif>
+        <isset property="1"/>
+        <isset property="2"/>
+        <then>
+          <echo>Foo</echo>
+        </then>
+      </elseif>
+    </if>
+  </target>
+
+  <target name="normalOperationElseif" depends="setup">
+    <if>
+      <not>
+        <isset property="antcontrib.jar"/>
+      </not>
+      <then>
+        <echo>In then</echo>
+      </then>
+      <elseif>
+        <isset property="antcontrib.jar"/>
+        <then>
+          <echo>In elseif</echo>
+        </then>
+      </elseif>
+      <else>
+        <echo>In else-branch</echo>
+      </else>
+    </if>
+  </target>
+
+  <target name="normalOperationElseif2" depends="setup">
+    <if>
+      <not>
+        <isset property="antcontrib.jar"/>
+      </not>
+      <then>
+        <echo>In then</echo>
+      </then>
+      <elseif>
+        <not>
+          <isset property="antcontrib.jar"/>
+        </not>
+        <then>
+          <echo>In elseif</echo>
+        </then>
+      </elseif>
+      <else>
+        <echo>In else-branch</echo>
+      </else>
+    </if>
+  </target>
+
+</project>

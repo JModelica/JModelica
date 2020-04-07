@@ -1,0 +1,240 @@
+
+/*
+Copyright (C) 2009 Modelon AB
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, version 3 of the License.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+/** \file XMLGenerator.java
+*  XMLGenerator class.
+*/
+
+import java.io.PrintStream;
+
+/**
+ * A generator class for XML code generation which takes an Optimica model described by
+ * <FClass> and provides an XML document for the meta-data in the model. Uses a
+ * template for the static general structure of tags and an internal class
+ * <TagGenerator> for the parts of the XML that are dynamic, that is, may vary
+ * depending on the contents of the underlying model.
+ * 
+ * This class extends XMLVariableGenerator.
+ * 
+ * @see AbstractGenerator
+ * @see XMLVariableGenerator
+ * @see TagGenerator
+ * 
+ */
+public class OptimicaXMLGenerator extends XMLGenerator {
+		
+
+	/**
+	 * Constructor.
+	 * 
+	 * @param expPrinter Printer object used to generate code for expressions.
+	 * @param escapeCharacter Escape characters used to decode tags.
+	 * @param fclass An FClass object used as a basis for the code generation.
+	 */
+	public OptimicaXMLGenerator(Printer expPrinter, char escapeCharacter,
+			FClass fclass) {
+		super(expPrinter,escapeCharacter, fclass);
+
+	}
+	
+    /** 
+     * This method and the other addRealAttributes, addIntegerAttributes has
+     * rather bad smell. I know, but the return type of startAttribute() and
+     * initialGuessAttribute() has different types... :(
+     */
+    @Override
+    public void addRealAttributes(CodeStream str, FRealVariable var) {
+        super.addRealAttributes(str, var);
+        if(!var.myOptions().getBooleanOption("generate_fmi_me_xml")) {
+            generateAttribute("free", var.isFreeParameter(), str);
+            double ig_val = 0;
+            // If initialGuess attribute is not specified, use start attribute
+            if (var.initialGuessAttributeSet()) {
+                ig_val = var.initialGuessAttribute();
+            } else {
+                ig_val = var.startAttribute();
+            }
+            generateAttribute("initialGuess", ig_val, str);
+        }
+    }
+
+    @Override
+    public void addIntegerAttributes(CodeStream str, FIntegerVariable var) {
+        super.addIntegerAttributes(str, var);
+        if(!var.myOptions().getBooleanOption("generate_fmi_me_xml")) {
+            generateAttribute("free", var.isFreeParameter(), str);
+            int ig_val = 0;
+            // If initialGuess attribute is not specified, use start attribute
+            if (var.initialGuessAttributeSet()) {
+                ig_val = var.initialGuessAttribute();
+            } else {
+                ig_val = var.startAttribute();
+            }
+            generateAttribute("initialGuess", ig_val, str);
+        }
+    }
+
+    @Override
+    public void addBooleanAttributes(CodeStream str, FBooleanVariable var) {
+        super.addBooleanAttributes(str, var);
+        if(!var.myOptions().getBooleanOption("generate_fmi_me_xml")) {
+            generateAttribute("free", var.isFreeParameter(), str);
+            boolean ig_val = false;
+            // If initialGuess attribute is not specified, use start attribute
+            if (var.initialGuessAttributeSet()) {
+                ig_val = var.initialGuessAttribute();
+            } else {
+                ig_val = var.startAttribute();
+            }
+            generateAttribute("initialGuess", ig_val, str);
+        }
+	}
+	
+	@Override
+	protected void addLinearInfo(CodeStream genPrinter, FVariable variable) {
+		super.addLinearInfo(genPrinter, variable);
+		boolean[] linearTimedVariables = variable.isLinearTimedVariables();
+		Boolean generateFMI = variable.myOptions().getBooleanOption("generate_fmi_me_xml");
+		if(!generateFMI) {
+			if(linearTimedVariables.length > 0) {
+				genPrinter.print("\n\t\t\t <isLinearTimedVariables>");
+				for(int i=0;i<linearTimedVariables.length;i++) {
+					genPrinter.print("\n\t\t\t\t <TimePoint ");
+					genPrinter.print("index=\""+i+"\" isLinear=\""+linearTimedVariables[i]+"\"");
+					genPrinter.print("/>");
+				}
+				genPrinter.print("\n\t\t\t </isLinearTimedVariables>");
+			}
+		}
+	}
+	
+	class DAETag_XML_Optimization extends XMLGenerator.DAETag_XML_Optimization {
+		
+		public DAETag_XML_Optimization(AbstractGenerator myGenerator, FClass fclass) {
+			super(myGenerator, fclass);
+//			super("XML_Optimization","Optimization problem's representation",
+//			  myGenerator,fclass);
+		}
+		
+		/*
+		 * (non-Javadoc)
+		 * @see org.jmodelica.codegen.AbstractTag#generate(java.io.PrintStream)
+		 */
+		@Override
+		public void generate(CodeStream genPrinter) {
+			Boolean generateEqu = fclass.myOptions().getBooleanOption("generate_xml_equations");
+			
+			String indent="\t\t";
+			FOptClass optClass = (FOptClass) fclass;
+			
+			genPrinter.println("<opt:Optimization static=\""+optClass.staticAttribute()+"\" >");
+
+			if(generateEqu){
+				//Objective function
+				genPrinter.println(indent+"<opt:ObjectiveFunction>");
+				objectiveFunction_XML(genPrinter,optClass,indent+"\t");
+				genPrinter.println(indent+"</opt:ObjectiveFunction>");
+				
+				//Integrand objective function
+				genPrinter.println(indent+"<opt:IntegrandObjectiveFunction>");
+				integrandObjectiveFunction_XML(genPrinter, optClass, indent+"\t");
+				genPrinter.println(indent+"</opt:IntegrandObjectiveFunction>");
+			}			
+			//Interval start time
+			genPrinter.println(indent+"<opt:IntervalStartTime>");	
+			intervalStartTime_XML(genPrinter,optClass,indent+"\t");
+			genPrinter.println(indent+"</opt:IntervalStartTime>");
+			
+			//Interval final time
+			genPrinter.println(indent+"<opt:IntervalFinalTime>");	
+			intervalFinalTime_XML(genPrinter,optClass,indent+"\t");
+			genPrinter.println(indent+"</opt:IntervalFinalTime>");
+			
+			//Time points
+			genPrinter.println(indent+"<opt:TimePoints>");	
+			timePoints_XML(genPrinter,optClass,indent+"\t");
+			genPrinter.println(indent+"</opt:TimePoints>");
+			
+			if(generateEqu){
+				//Constraints
+				genPrinter.println(indent+"<opt:PathConstraints>");
+				for(FConstraint c : optClass.pathConstraints())
+					c.prettyPrint_XML(genPrinter,indent+"\t");	
+				genPrinter.println(indent+"</opt:PathConstraints>");
+				genPrinter.println(indent+"<opt:PointConstraints>");
+				for(FConstraint c : optClass.pointConstraints())
+					c.prettyPrint_XML(genPrinter,indent+"\t");	
+				genPrinter.println(indent+"</opt:PointConstraints>");
+			}
+			genPrinter.println("\t</opt:Optimization>");
+		}
+	}
+	
+	
+	//XML code generation for the objective function
+	private void objectiveFunction_XML(CodeStream genPrinter, FOptClass optClass, String indent){
+		if(optClass.objectiveExp()!=null){
+			FExp objFunct = (FExp)optClass.objectiveExp();
+			objFunct.prettyPrint_XML(genPrinter,indent);
+		}else{
+			FStringLitExp strLit = new FStringLitExp();
+			genPrinter.println(indent+"<exp:" + strLit.xmlTag() + ">No objective function</exp:"+strLit.xmlTag()+">");
+		}	
+	}
+
+	//XML code generation for the integrand objective function
+	private void integrandObjectiveFunction_XML(CodeStream genPrinter, FOptClass optClass, String indent){
+		if(optClass.objectiveIntegrandExp()!=null){
+			FExp integrandObjFunct = (FExp)optClass.objectiveIntegrandExp();
+			integrandObjFunct.prettyPrint_XML(genPrinter,indent);
+		}else{
+			FStringLitExp strLit = new FStringLitExp();
+			genPrinter.println(indent+"<exp:" + strLit.xmlTag() + ">No integrand objective function</exp:"+strLit.xmlTag()+">");
+		}	
+	}
+	
+	//XML code generation for interval start time
+	private void intervalStartTime_XML(CodeStream genPrinter, FOptClass optClass, String indent){
+		genPrinter.println(indent + "<opt:Value>" + optClass.startTimeAttribute() + "</opt:Value>");
+		genPrinter.println(indent + "<opt:Free>" + optClass.startTimeFreeAttribute() + "</opt:Free>");
+		genPrinter.println(indent + "<opt:InitialGuess>" + optClass.startTimeInitialGuessAttribute() + "</opt:InitialGuess>");
+	}
+	
+	//XML code generation for interval final time
+	private void intervalFinalTime_XML(CodeStream genPrinter, FOptClass optClass, String indent){
+		genPrinter.println(indent + "<opt:Value>" + optClass.finalTimeAttribute() + "</opt:Value>");
+		genPrinter.println(indent + "<opt:Free>" + optClass.finalTimeFreeAttribute() + "</opt:Free>");
+		genPrinter.println(indent + "<opt:InitialGuess>" + optClass.finalTimeInitialGuessAttribute() + "</opt:InitialGuess>");
+	}
+	
+	//XML code generatorio for the time points
+	private void timePoints_XML(CodeStream genPrinter, FOptClass optClass, String indent){
+		
+		double[] points = optClass.timePoints();
+		
+		for(int i=0;i<points.length;i++) {
+			genPrinter.println(indent + "<opt:TimePoint index = \"" + optClass.timePointIndex(points[i]) + 
+			                 "\" value = \"" + points[i] + "\">");
+			for (FVariable fv : optClass.timePointFVariables(points[i])) {
+                                genPrinter.println(indent + "\t" + "<opt:QualifiedName>");
+					fv.getFAccess().prettyPrint_XML(genPrinter,indent+"\t\t");
+                                genPrinter.println(indent + "\t" + "</opt:QualifiedName>");
+			}                 
+			genPrinter.println(indent + "</opt:TimePoint>");              
+		}
+	}
+}

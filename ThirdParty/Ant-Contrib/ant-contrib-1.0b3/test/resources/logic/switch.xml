@@ -1,0 +1,87 @@
+<project default="invalid">
+  <target name="invalid">
+    <fail>Don't call this file directly.</fail>
+  </target>
+
+  <target name="setup">
+    <taskdef resource="net/sf/antcontrib/antcontrib.properties">
+      <classpath location="${antcontrib.jar}"/>
+    </taskdef>
+  </target>
+
+  <target name="noValue" depends="setup">
+    <switch/>
+  </target>
+
+  <target name="noChildren" depends="setup">
+    <switch value="foo"/>
+  </target>
+
+  <target name="twoDefaults" depends="setup">
+    <switch value="foo">
+      <default/>
+      <default/>
+    </switch>
+  </target>
+
+  <target name="noMatch" depends="setup">
+    <switch value="foo">
+      <case value="bar"/>
+    </switch>
+  </target>
+
+  <target name="caseNoValue" depends="setup">
+    <switch value="foo">
+      <case/>
+    </switch>
+  </target>
+
+  <target name="testDefault" depends="setup">
+    <switch value="foo">
+      <case value="bar">
+        <echo>In case</echo>
+      </case>
+      <default>
+        <echo>In default</echo>
+        <property name="inner" value="baz"/>
+        <echo>${inner}</echo>
+      </default>
+    </switch>
+  </target>
+
+  <target name="testCase" depends="setup">
+    <switch value="foo">
+      <case value="foo">
+        <echo>In case</echo>
+        <property name="inner" value="baz"/>
+        <echo>${inner}</echo>
+      </case>
+      <default>
+        <echo>In default</echo>
+      </default>
+    </switch>
+  </target>
+
+  <target name="testCaseSensitive" depends="setup">
+    <switch value="FOO">
+      <case value="foo">
+        <echo>In case</echo>
+      </case>
+      <default>
+        <echo>In default</echo>
+      </default>
+    </switch>
+  </target>
+
+  <target name="testCaseInSensitive" depends="setup">
+    <switch value="FOO" caseinsensitive="true">
+      <case value="foo">
+        <echo>In case</echo>
+      </case>
+      <default>
+        <echo>In default</echo>
+      </default>
+    </switch>
+  </target>
+
+</project>

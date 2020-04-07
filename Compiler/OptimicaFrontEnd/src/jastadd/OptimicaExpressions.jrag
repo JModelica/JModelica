@@ -1,0 +1,208 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect OptimicaExpressions {
+
+	rewrite InstFunctionCall {
+		when (//((getName() instanceof InstDot)? 
+				//	((InstDot)getName()).getLeft()!=null: true) && 
+				(getName().getLastInstAccess() instanceof InstComponentAccess ||
+				getName().getLastInstAccess() instanceof InstComponentArrayAccess) &&
+				getNumArg()==1 && !getName().myInstComponentDecl().isPartialFunction())
+		 to InstTimedVariable {
+		 	InstTimedVariable iv = new InstTimedVariable(getName(), getArg(0).getFExp());
+		 	iv.setLocation(this);
+		 	return iv;
+		 }
+	}
+	/*
+	rewrite CommonAccessExp {
+		when (name().equals("startTime") && !rewritten) to FStartTimeExp {
+			return new FStartTimeExp();
+		}
+	}
+
+	rewrite CommonAccessExp {
+		when (name().equals("finalTime") && !rewritten) to FFinalTimeExp {
+			return new FFinalTimeExp();
+		}
+	}
+	*/
+
+    eq InstTimedVariable.getName().kind() = Kind.COMPONENT_ACCESS;
+
+	refine InstNameClassification eq InstFunctionCall.getName().kind() = Kind.AMBIGUOUS_ACCESS;
+	
+	eq FStartTimeExp.cevalCalc(VariableEvaluator evaluator) {
+		if (myFOptClass().startTimeAttributeSet()) {
+			return myFOptClass().startTimeAttributeCValue();
+		} else if (myFOptClass().startTimeInitialGuessAttributeSet()) {
+			return myFOptClass().startTimeInitialGuessAttributeCValue();
+		} else {
+			return myFOptClass().startTimeAttributeCValue();
+		}
+	}
+
+	eq FFinalTimeExp.cevalCalc(VariableEvaluator evaluator) {
+		if (myFOptClass().finalTimeAttributeSet()) {
+			return myFOptClass().finalTimeAttributeCValue();
+		} else if (myFOptClass().finalTimeInitialGuessAttributeSet()) {
+			return myFOptClass().finalTimeInitialGuessAttributeCValue();
+		} else {
+			return myFOptClass().finalTimeAttributeCValue();
+		}
+	}
+	
+	// TODO: Can the argument affect the constant value of a timed variable? Should only be constant if the variable is. 
+	eq FTimedVariable.cevalCalc(VariableEvaluator evaluator)    = getName().ceval(evaluator);
+	eq InstTimedVariable.cevalCalc(VariableEvaluator evaluator) = getName().ceval(evaluator);
+	
+	public void FTimedVariable.enableAliasRewrite() {
+		super.enableAliasRewrite();
+		rewriteAlias = true;
+		is$Final = false;
+	}
+		
+	boolean FTimedVariable.rewriteAlias = false;
+	
+	/**
+	 * FTimedVariables referring to alias variables need to be changed to 
+	 * FTimedVariables referring to their alias targets. 
+	 * 
+	 * This is done by rewrites which are activated once enableAliasRewrite() has been 
+	 * called. Notice that in order for the rewrite to be enable, the is$final
+	 * field of FTimedVariables needs to be set to false: this is done by the recursive
+	 * method ASTNode.flushAllRecursiveClearFinal. 
+	 */
+	rewrite FTimedVariable {
+		when (rewriteAlias && !getName().myFV().isUnknown() && getName().myFV().isAlias()) to FExp {
+			FAccess new_name = ((FVariable)getName().myFV()).alias().getFAccess().treeCopy();
+			FExp new_exp = new FTimedVariable(new_name, getArg());
+			if (getName().myFV().isNegated()) 
+				new_exp = new FNegExp(new_exp);
+			return new_exp;
+		}
+	}
+	
+	public void FTimedVariable.flushAllRecursiveClearFinal() {
+		flushAll();
+		is$Final = false;
+		for (int i=0;i<getNumChild();i++) {
+			getChild(i).flushAllRecursiveClearFinal();
+		}
+	}
+	
+}
+
+aspect OptimicaInheritedFactoryMethods {
+
+	public FTimedVariable    FTimedVariable.createEmptyNode()    { return new FTimedVariable(); }
+	public InstTimedVariable InstTimedVariable.createEmptyNode() { return new InstTimedVariable(); }
+	
+	public FStartTimeExp FStartTimeExp.createEmptyNode() { return new FStartTimeExp(); }
+	public FFinalTimeExp FFinalTimeExp.createEmptyNode() { return new FFinalTimeExp(); }
+
+	public abstract FRelationConstraint FRelationConstraint.createEmptyNode();
+	public FConstraintEq  FConstraintEq.createEmptyNode()  { return new FConstraintEq(); }
+	public FConstraintGeq FConstraintGeq.createEmptyNode() { return new FConstraintGeq(); }
+	public FConstraintLeq FConstraintLeq.createEmptyNode() { return new FConstraintLeq(); }
+	
+	/**
+	 * Create new node of same class as this, with the specified 
+	 *        children.
+	 */
+	public FRelationConstraint FRelationConstraint.createNode(FExp left, FExp right) {
+		FRelationConstraint node = createEmptyNode();
+		node.setLeft(left);
+		node.setRight(right);
+		return node;
+	}
+	
+}
+
+aspect OptimicaArrays {
+	
+	/**
+	 * Get array dimensions.
+	 * 
+	 * A value > 0 indicates an array, 0 indicates a scalar and -1 indicates
+	 * an error in computation of the array dimensions.
+	 * 
+	 * @return Array dimension.
+	 */	
+	syn int FRelationConstraint.ndims() {
+		if (getLeft().ndims() == getRight().ndims()) 
+			return getLeft().ndims();
+		return -1;
+	}	
+	
+	/**
+	 * Get the array sizes. 
+	 * 
+	 * @return An array of integers of length ndims(). Each entry holds the
+	 * corresponding array dimension size.
+	 * 
+	 */
+	syn Size FRelationConstraint.size() {
+		Size left = getLeft().size();
+		Size right = getRight().size();
+		return left.equals(right) ? left : Size.SCALAR;
+	}
+
+	
+	/**
+	 * Get the set of all array indices of an array access. 
+	 * 
+	 * @return An Indices object containing all indices in each array dimension.
+	 */
+	syn Indices FConstraint.indices()      = null;
+	eq FRelationConstraint.indices()       = getLeft().indices();
+	
+	eq InstTimedVariable.ndims() = getName().ndims();
+	eq FTimedVariable.ndims() = getName().ndims();
+	eq FStartTimeExp.ndims() = 0;
+	eq FFinalTimeExp.ndims() = 0;
+
+	eq InstTimedVariable.size() = getName().size();
+	eq FTimedVariable.size() = getName().size();
+	eq FStartTimeExp.size() = Size.SCALAR;
+	eq FFinalTimeExp.size() = Size.SCALAR;
+
+    eq InstTimedVariable.getArray() = isArray() ? getArrayExp() : this;
+    eq FTimedVariable.getArray() = isArray() ? getArrayExp() : this;
+
+	syn lazy ArrayExp InstTimedVariable.getArrayExp() {
+		ArrayExp array = new ArrayExp(indices());
+		for (Index i : array.indices()) {
+			InstAccess name = getName().specify(i);
+			FExp arg = getArg().fullCopy();
+			array.set(i, new InstTimedVariable(name, arg));
+		}
+		return array;
+	}
+
+	syn lazy ArrayExp FTimedVariable.getArrayExp() {
+		ArrayExp array = new ArrayExp(indices());
+		for (Index i : array.indices()) {
+			FAccess name = getName().specify(i, true);
+			FExp arg = getArg().treeCopy();
+			array.set(i, new FTimedVariable(name, arg));
+		}
+		return array;
+	}
+	
+}
+

@@ -1,0 +1,470 @@
+/*
+    Copyright (C) 2016 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import org.jmodelica.util.tarjan.SimpleTarjan;
+import org.jmodelica.util.tarjan.TarjanComponent;
+
+/**
+ * This aspect contains all method related to merging blocks which contains
+ * references to pre of a variable. As of right now we do two things:
+ * - Merge blocks that contain pre references with the block that assigns that
+ *   variable.
+ * - Merge blocks that contain pre reference with upstream blocks that contains
+ *   event generating expressions, e.g. x > 2, etc.
+ * 
+ * Each one of the tasks above needs to be done in two steps with sorting using
+ * tarjan after each step.
+ * 
+ */
+aspect PreBlockHandling {
+
+    public class EquationBlockFactory {
+
+        private static <E extends AbstractEq<E, V>, V extends AbstractVar<E, V>, C extends SCCBlock<E, V>, T extends BLT>
+        T computeBLTWithPreMerge(StepUtil stepUtil, BlockProducer producer, T blt,
+                Collection<C> components) {
+            Collection<TarjanComponent<C>> tarjanRes = computePreBlocks(components);
+            for (TarjanComponent<C> block : tarjanRes) {
+                if (block.getMembers().size() == 1) {
+                    blt.add(block.iterator().next().createEquationBlock(producer, stepUtil, false));
+                } else {
+                    SCCBlock<E, V> aggr  = new SCCBlock<E, V>();
+                    for (C subBlock : block) {
+                        for (E eqn : subBlock) {
+                            aggr.addMember(eqn);
+                        }
+                        aggr.addPredecessors(subBlock.getPredecessors());
+                    }
+                    BiPGraph g = new BiPGraph(aggr.getMembers(), false);
+                    Collection<SCCBlock<Eq, Var>> sortedBlocks = g.tarjan(stepUtil, false);
+                    blt.add(new PrePropagationEquationBlock(producer, aggr.computeBlockDependency(), computeInnerBLT(stepUtil, producer, new BLT(), false, false, false, sortedBlocks)));
+                }
+            }
+            return blt;
+        }
+
+        /**
+         * The goal of this method is to merge blocks so that the block
+         * sequence fulfil the following:
+         * - That discrete variables are in the same block as their pre
+         *   variable uses.
+         * - All equations which contains an event generating expression are
+         *   in the same block as all downstream equations which have a
+         *   reference pre(x) where x is assigned by any of the equations on 
+         *   the downstream path.
+         * 
+         * This is done in two steps, first merge pre and variable uses and
+         * secondly merge event generating expressions with downstream pre.
+         * This can not be done in one step!
+         */
+        public static <E extends AbstractEq<E, V>, V extends AbstractVar<E, V>, C extends SCCBlock<E, V>>
+        Collection<TarjanComponent<C>> computePreBlocks(Collection<C> blocks) {
+            // Compute variable to block map
+            Map<FAbstractVariable, C> varToBlockMap = computeVarToBlockMap(blocks);
+            // Find blocks which needs to be together due to decl and pre use
+            Collection<TarjanComponent<C>> varDeclPreUseBlocks = mergeDeclAndPre(blocks, varToBlockMap);
+            // Find blocks which needs to be together due to event and pre use
+            Collection<TarjanComponent<TarjanComponent<C>>> eventPreBlocks =
+                    mergeEventAndPre(varDeclPreUseBlocks, varToBlockMap.keySet());
+            // Finally merge
+            return mergeSubComponents(eventPreBlocks);
+        }
+
+        /**
+         * Computes a map beteen variable and its defining block
+         */
+        private static <E extends AbstractEq<E, V>, V extends AbstractVar<E, V>, C extends SCCBlock<E, V>>
+        Map<FAbstractVariable, C> computeVarToBlockMap(Collection<C> components) {
+            Map<FAbstractVariable, C> res = new HashMap<FAbstractVariable, C>();
+            for (C component : components) {
+                for (E eqn : component) {
+                    if (eqn.isMeta()) {
+                        continue;
+                    }
+                    res.put(eqn.getMatching().getVariable(), component);
+                }
+            }
+            return res;
+        }
+
+        /**
+         * Computes a ordered set of block containing sub-blocks which must be
+         * together due to var decl and pre use.
+         */
+        public static <E extends AbstractEq<E, V>, V extends AbstractVar<E, V>, C extends SCCBlock<E, V>>
+        Collection<TarjanComponent<C>> mergeDeclAndPre(Collection<C> blocks,
+                Map<FAbstractVariable, C> varToBlockMap) {
+            // Add link between discrete variables and their pre usages
+            Map<C, Collection<C>> linkedDeclAndPres = linkVarDeclAndPreUse(blocks, varToBlockMap);
+            // Compute predecessors for pre-var blocks
+            Map<C, Collection<C>> predecessors = TarjanComponent.computePredecessorsMap(blocks);
+            // And sort using tarjan
+            PreTarjan<C> tarjan = new PreTarjan<C>(predecessors, linkedDeclAndPres);
+            return tarjan.tarjan(blocks);
+        }
+
+        /**
+         * Fins all blocks which must be together since they contain a variable
+         * declaration and usage of pre of the variable.
+         */
+        private static <E extends AbstractEq<E, V>, V extends AbstractVar<E, V>, C extends SCCBlock<E, V>>
+        Map<C, Collection<C>> linkVarDeclAndPreUse(Collection<C> components,
+                Map<FAbstractVariable, C> varToBlockMap) {
+            Map<C, Collection<C>> blocksToMerge = new HashMap<C, Collection<C>>();
+            for (C component : components) {
+                Collection<C> res = blocksToMerge.get(component);
+                for (E eqn : component) {
+                    for (FVariable var : eqn.getEquation().discretePreVariables()) {
+                        FAbstractVariable nonPre = var.myNonPreVariable();
+                        C other = varToBlockMap.get(nonPre);
+                        Collection<C> otherRes = blocksToMerge.get(other);
+                        if (res == null && otherRes == null) {
+                            res = new ArrayList<C>();
+                            res.add(component);
+                            blocksToMerge.put(component, res);
+                            res.add(other);
+                            blocksToMerge.put(other, res);
+                        } else if (res == null) {
+                            res = otherRes;
+                            res.add(component);
+                            blocksToMerge.put(component, res);
+                        } else if (otherRes == null) {
+                            res.add(other);
+                            blocksToMerge.put(other, res);
+                        } else if (res != otherRes) {
+                            // We need to merge the two! We do this by repointing
+                            // all to current res
+                            res.addAll(otherRes);
+                            for (C c : otherRes) {
+                                blocksToMerge.put(c, res);
+                            }
+                        } else {
+                            // Do nothing, both are in res already!
+                        }
+                    }
+                }
+            }
+            return blocksToMerge;
+        }
+
+        /**
+         * Merges event generating blocks with all downstream blocks that has
+         * pre variable references.
+         */
+        public static <E extends AbstractEq<E, V>, V extends AbstractVar<E, V>, C extends SCCBlock<E, V>>
+        Collection<TarjanComponent<TarjanComponent<C>>> mergeEventAndPre(
+                Collection<TarjanComponent<C>> varDeclPreUseBlocks, Set<FAbstractVariable> activeVars) {
+            // Compute predecessors for the pre-var blocks
+            Map<TarjanComponent<C>, Collection<TarjanComponent<C>>> predecessors =
+                    TarjanComponent.computePredecessorsMap(varDeclPreUseBlocks);
+            // Propagate event info
+            Map<TarjanComponent<C>, Boolean> containsOrSucceedsEvents = 
+                    computeContainsOrSucceedsEvents(varDeclPreUseBlocks, predecessors);
+            // Find blocks which needs to be merged since pre is downstream of event gen exp
+            Map<TarjanComponent<C>, Collection<TarjanComponent<C>>> blocksToMerge = 
+                    computeEventAndPreBlocks(varDeclPreUseBlocks, predecessors, containsOrSucceedsEvents, activeVars);
+            // And sort
+            PreTarjan<TarjanComponent<C>> tarjan = new PreTarjan<TarjanComponent<C>>(predecessors, blocksToMerge);
+            return tarjan.tarjan(varDeclPreUseBlocks);
+        }
+
+        /**
+         * For each component, this method determines if it is event
+         * generating of depends on event generating equations. 
+         */
+        private static <E extends AbstractEq<E, V>, V extends AbstractVar<E, V>, C extends SCCBlock<E, V>>
+        Map<TarjanComponent<C>, Boolean> computeContainsOrSucceedsEvents(Collection<TarjanComponent<C>> components,
+                Map<TarjanComponent<C>, Collection<TarjanComponent<C>>> predecessors) {
+            Map<TarjanComponent<C>, Boolean> containsOrSucceedsEvents = new HashMap<TarjanComponent<C>, Boolean>();
+            for (TarjanComponent<C> component : components) {
+                checkComponentForEventEqs(component, containsOrSucceedsEvents, predecessors);
+            }
+            return containsOrSucceedsEvents;
+        }
+
+        /**
+         * Helper, checks if the component contains event generating expressions
+         */
+        private static <E extends AbstractEq<E, V>, V extends AbstractVar<E, V>, C extends SCCBlock<E, V>>
+        boolean checkComponentForEventEqs(TarjanComponent<C> component, Map<TarjanComponent<C>, Boolean> containsOrSucceedsEventEq,
+                Map<TarjanComponent<C>, Collection<TarjanComponent<C>>> predecessors) {
+            Boolean res = containsOrSucceedsEventEq.get(component);
+            if (res != null) {
+                return res;
+            }
+            res = false;
+            for (TarjanComponent<C> predecessor : predecessors.get(component)) {
+                if (checkComponentForEventEqs(predecessor, containsOrSucceedsEventEq, predecessors)) {
+                    res = true;
+                    break;
+                }
+            }
+            if (!res) {
+                for (C block : component) {
+                    for (E eqn : block.getMembers()) {
+                        if (eqn.getEquation().eventGenExps().size() > 0 || eqn.getEquation().isSampleEquation()) {
+                            res = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            containsOrSucceedsEventEq.put(component, res);
+            return res;
+        }
+
+        /**
+         * Computes which components needs to be merged. The result
+         * contains a map with an entry for each component that needs to be
+         * merged. It maps to the collection of components thatn needs to
+         * be merged.
+         */
+        private static <E extends AbstractEq<E, V>, V extends AbstractVar<E, V>, C extends SCCBlock<E, V>>
+        Map<TarjanComponent<C>, Collection<TarjanComponent<C>>> computeEventAndPreBlocks (
+                Collection<TarjanComponent<C>> components, Map<TarjanComponent<C>,
+                Collection<TarjanComponent<C>>> predecessors,
+                Map<TarjanComponent<C>, Boolean> containsOrSucceedsEventEq, Set<FAbstractVariable> inBlockSet) {
+            Map<TarjanComponent<C>, Collection<TarjanComponent<C>>> blocksToMerge = new HashMap<TarjanComponent<C>, Collection<TarjanComponent<C>>>();
+            for (TarjanComponent<C> component : components) {
+                computeBlocksToMerge(component, false, blocksToMerge, containsOrSucceedsEventEq, predecessors,
+                        inBlockSet);
+            }
+            Iterator<Map.Entry<TarjanComponent<C>, Collection<TarjanComponent<C>>>> it = blocksToMerge.entrySet().iterator();
+            ASTNode.log.debug(new LinkedHashSet<Collection<TarjanComponent<C>>>(blocksToMerge.values()));
+            while (it.hasNext()) {
+                Map.Entry<TarjanComponent<C>, Collection<TarjanComponent<C>>> entry = it.next();
+                if (entry.getValue().size() <= 1) {
+                    it.remove();
+                }
+            }
+            return blocksToMerge;
+        }
+
+        /**
+         * Helper, recursive method used in above method.
+         */
+        private static <E extends AbstractEq<E, V>, V extends AbstractVar<E, V>, C extends SCCBlock<E, V>>
+        Collection<TarjanComponent<C>> computeBlocksToMerge(TarjanComponent<C> component, boolean force,
+                Map<TarjanComponent<C>, Collection<TarjanComponent<C>>> blocksToMerge,
+                Map<TarjanComponent<C>, Boolean> containsOrSucceedsEvents, Map<TarjanComponent<C>,
+                Collection<TarjanComponent<C>>> predecessors,
+                Set<FAbstractVariable> inBlockSet) {
+            if (!containsOrSucceedsEvents.get(component)) {
+                return Collections.<TarjanComponent<C>>emptyList();
+            }
+            Collection<TarjanComponent<C>> res = blocksToMerge.get(component);
+            if (res != null && (res.size() > 0 || !force)) {
+                return res;
+            }
+            res = null;
+            boolean containsPre = containsActivePre(component, inBlockSet);
+            if (containsPre || force) {
+                for (TarjanComponent<C> predecessor : predecessors.get(component)) {
+                    Collection<TarjanComponent<C>> predecessorRes = computeBlocksToMerge(predecessor, true, blocksToMerge,
+                            containsOrSucceedsEvents, predecessors, inBlockSet);
+                    if (predecessorRes.isEmpty()) {
+                        continue;
+                    } else if (res == null) {
+                        res = predecessorRes;
+                    } else if (predecessorRes != res) {
+                        // We need to merge the two! We do this by repointing
+                        // all to current res
+                        res.addAll(predecessorRes);
+                        for (TarjanComponent<C> c : predecessorRes) {
+                            blocksToMerge.put(c, res);
+                        }
+                    }
+                }
+                if (res == null) {
+                    // If no predecessor had any event generating equation,
+                    // then res is null and we need to create a new list
+                    res = new ArrayList<TarjanComponent<C>>();
+                }
+                res.add(component);
+            } else {
+                res = Collections.emptyList();
+            }
+            blocksToMerge.put(component, res);
+            return res;
+        }
+
+        /**
+         * Helper which determines if an equation contains an active pre
+         * reference. It's active if the discrete variable is in the graph.
+         */
+        private static <E extends AbstractEq<E, V>, V extends AbstractVar<E, V>, C extends SCCBlock<E, V>>
+        boolean containsActivePre(TarjanComponent<C> component, Set<FAbstractVariable> inBlockSet) {
+            for (C block : component) {
+                for (E eqn : block) {
+                    for (FVariable var : eqn.getEquation().discretePreVariables()) {
+                        FAbstractVariable nonPre = var.myNonPreVariable();
+                        if (inBlockSet.contains(nonPre)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        /**
+         * Merges components which needs to be in the same block.
+         */
+        private static <E extends AbstractEq<E, V>, V extends AbstractVar<E, V>, C extends SCCBlock<E, V>>
+        Collection<TarjanComponent<C>> mergeSubComponents(Collection<TarjanComponent<TarjanComponent<C>>> preBlocks2) {
+            Collection<TarjanComponent<C>> components = mergeTarjanComponents(preBlocks2);
+            Set<FVariable> assigned = assigned(components);
+            Collection<TarjanComponent<C>> newComponents = new ArrayList<TarjanComponent<C>>();
+            for (TarjanComponent<C> component : components) {
+                if (containsNestedDiscrete(component, assigned)) {
+                    component = mergeSubComponents(component);
+                }
+                newComponents.add(component);
+            }
+            return newComponents;
+        }
+
+        /**
+         * Helper for mergeSubComponents. Merges TarjanComponents in a collection.
+         */
+        private static <E extends AbstractEq<E, V>, V extends AbstractVar<E, V>, C extends SCCBlock<E, V>>
+                Collection<TarjanComponent<C>> mergeTarjanComponents(Collection<TarjanComponent<TarjanComponent<C>>> preBlocks2) {
+            Collection<TarjanComponent<C>> components = new ArrayList<TarjanComponent<C>>();
+            for (TarjanComponent<TarjanComponent<C>> preBlock2 : preBlocks2) {
+                Iterator<TarjanComponent<C>> it = preBlock2.iterator();
+                TarjanComponent<C> newComponent = it.next();
+                while (it.hasNext()) {
+                    TarjanComponent<C> component = it.next();
+                    newComponent.mergeWith(component);
+                }
+                components.add(newComponent);
+            }
+            return components;
+        }
+
+        /**
+         * Helper for mergeSubComponents. Collects all matched variables in <code>components</code>.
+         */
+        private static <E extends AbstractEq<E, V>, V extends AbstractVar<E, V>, C extends SCCBlock<E, V>>
+                Set<FVariable> assigned(Collection<TarjanComponent<C>> components) {
+            Set<FVariable> assigned = new HashSet<>();
+            for (TarjanComponent<C> component : components) {
+                for (C subComponent : component) {
+                    for (E eqn : subComponent) {
+                        if (!eqn.isMeta()) {
+                            assigned.add(eqn.getMatching().getVariable());
+                        }
+                    }
+                }
+            }
+            return assigned;
+        }
+
+        /**
+         * Helper for mergeSubComponents. Returns true if there are more than one FAbstractEquation and
+         * there is a matching to a discrete variable.
+         */
+        private static <E extends AbstractEq<E, V>, V extends AbstractVar<E, V>, C extends SCCBlock<E, V>>
+                boolean containsNestedDiscrete(TarjanComponent<C> component, Set<FVariable> assigned) {
+            if (component.getMembers().size() > 1) {
+                for (C subComponent : component) {
+                    if (isMultipleEquations(subComponent)) {
+                        for (E eqn : subComponent) {
+                            if ((!eqn.isMeta() && !eqn.getMatching().getVariable().isContinuous()) || 
+                                    hasSwitch(eqn.getEquation(), assigned)) {
+                                // If the matched variable and in effect the
+                                // equation is discrete, then we need to
+                                // extract all sub-blocks into one block.
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+        
+        /**
+         * Helper for containsNestedDiscrete. Returns true if there are more than one FAbstractEquation.
+         */
+        private static <E extends AbstractEq<E, V>, V extends AbstractVar<E, V>, C extends SCCBlock<E, V>>
+                boolean isMultipleEquations(C subComponent) {
+            Set<FAbstractEquation> eqns = new HashSet<>();
+            for (E eqn : subComponent) {
+                eqns.add(eqn.getEquation());
+            }
+            return eqns.size() > 1;
+        }
+        
+        /**
+         * Helper for containsNestedDiscrete. Returns true if there is a relational expression 
+         * depending on variables in the assigned set in the equation.
+         */
+        private static boolean hasSwitch(FAbstractEquation equation, Set<FVariable> assigned) {
+            for (FRelExp exp : equation.relExpInEquation()) {
+                if (exp.dependsOn(assigned)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        /**
+         * Helper for mergeSubComponents. Returns a new TarjanComponent containing a single member 
+         * merged from the members of <code>component</code>.
+         */
+        private static <E extends AbstractEq<E, V>, V extends AbstractVar<E, V>, C extends SCCBlock<E, V>>
+                TarjanComponent<C> mergeSubComponents(TarjanComponent<C> component) {
+            Iterator<C> it = component.iterator();
+            C newSubComponent = it.next();
+            while (it.hasNext()) {
+                C mergeComponent = it.next();
+                newSubComponent.mergeWith(mergeComponent);
+            }
+            TarjanComponent<C> res = new TarjanComponent<C>();
+            res.addPredecessors(component.getPredecessors());
+            res.addMember(newSubComponent);
+            return res;
+        }
+
+        private static class PreTarjan<C extends TarjanComponent<?>> extends SimpleTarjan<C> {
+
+            private final Map<C, Collection<C>> predecessors;
+            private final Map<C, Collection<C>> blocksToMerge;
+
+            public PreTarjan(Map<C, Collection<C>> predecessors, Map<C, Collection<C>> blocksToMerge) {
+                this.predecessors = predecessors;
+                this.blocksToMerge = blocksToMerge;
+            }
+
+            @Override
+            protected void addPredecessors(C n, Collection<C> predecessors) {
+                predecessors.addAll(this.predecessors.get(n));
+            }
+
+            @Override
+            protected void forceIntoSame(C n, Set<C> members) {
+                Collection<C> mergeList = blocksToMerge.get(n);
+                if (mergeList != null) {
+                    members.addAll(mergeList);
+                }
+            }
+        }
+
+    }
+
+
+}

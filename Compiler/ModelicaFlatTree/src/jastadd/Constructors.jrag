@@ -1,0 +1,1419 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import java.util.ArrayList;
+import java.util.Collection;
+import org.jmodelica.common.ast.prefixes.EquationType;
+import org.jmodelica.common.ast.prefixes.TypePrefixInputOutput;
+import org.jmodelica.common.ast.prefixes.VisibilityType;
+
+aspect Constructors {
+
+	/*
+	public InstComposite.InstComposite(InstAccess a,
+			                                   SrcComponentDecl cd,
+			                                   Opt<InstModification> inst_mod_opt,
+			                                   Opt<InstConstraining> inst_constr_opt) {
+		this(a,new Opt<FArraySubscripts>(),cd,inst_mod_opt,inst_constr_opt);
+	}
+	*/
+	
+	/**
+	 * Construct a List containing the same nodes as the given Collection.
+	 */
+	public List.List(Collection<T> nodes) {
+		if (!nodes.isEmpty())
+			setChild(null, nodes.size() - 1); // Ensure we won't need to increase size later
+		int i = 0;
+		for (T n : nodes)
+			setChild(n, i++);
+	}
+	
+	/**
+	 * Constructs a real literal expression from a double.
+	 */
+	public SrcRealLitExp.SrcRealLitExp(double val) {
+		this(String.valueOf(val));
+	}
+	
+	/**
+	 * Constructs an integer literal expression from an integer.
+	 */
+	public SrcIntegerLitExp.SrcIntegerLitExp(int val) {
+		this(String.valueOf(val));
+	}
+
+	/**
+	 * Constructs a component modification from an access and modification.
+	 */
+	public SrcComponentModification.SrcComponentModification(SrcAccess name, SrcModification mod) {
+		this();
+		setName(name);
+		setSrcModification(mod);
+	}
+	
+	/**
+	 * Constructs a complete modification from a class modification.
+	 */
+	public SrcCompleteModification.SrcCompleteModification(SrcClassModification cm) {
+		this();
+		setSrcClassModification(cm);
+	}
+
+    /**
+     * Construcs a connect clause without any residual.
+     */
+    public FConnectClause.FConnectClause(EquationType type, SrcConnectClause connectClause,
+            InstAccess left, InstAccess right) {
+        this(type, new List<FAttribute>(), new Opt<FStringComment>(), connectClause, left, right);
+    }
+
+    /**
+     * Construcs a else equation without any residual.
+     */
+    public FElseEquation.FElseEquation(EquationType type, List<FAbstractEquation> eqns) {
+        this(type, new List<FAttribute>(), new Opt<FStringComment>(), eqns);
+    }
+
+    /**
+     * Constructs an equation that is not initial and is not marked as
+     * residual.
+     */
+    public FEquation.FEquation(FExp left, FExp right) {
+        this(EquationType.NORMAL, new List<FAttribute>(), new Opt<FStringComment>(), left, right);
+    }
+
+    /**
+     * Constructs an equation that is not marked as residual.
+     */
+    public FEquation.FEquation(EquationType type, FExp left, FExp right) {
+        this(type, new List<FAttribute>(), new Opt<FStringComment>(), left, right);
+    }
+
+    /**
+     * Constructs an equation that is not initial
+     */
+    public FEquation.FEquation(List<FAttribute> attrs, FExp left, FExp right) {
+        this(EquationType.NORMAL, attrs, new Opt<FStringComment>(), left, right);
+    }
+
+    /**
+     * Constructs a function call equation that is not initial.
+     */
+    public FFunctionCallEquation.FFunctionCallEquation(List<FFunctionCallLeft> left, FAbstractFunctionCall call) {
+        this(EquationType.NORMAL, new List<FAttribute>(), new Opt<FStringComment>(), left, call);
+    }
+
+    /**
+     * Constructs a function call equation.
+     */
+    public FFunctionCallEquation.FFunctionCallEquation(EquationType type, List<FFunctionCallLeft> left, FAbstractFunctionCall call) {
+        this(type, new List<FAttribute>(), new Opt<FStringComment>(), left, call);
+    }
+
+    /**
+     * Constructs a for clause equation that is not initial.
+     */
+    public FForClauseE.FForClauseE(List<FForIndex> indices, List<FAbstractEquation> eqns) {
+        this(EquationType.NORMAL, new List<FAttribute>(), new Opt<FStringComment>(), indices, eqns);
+    }
+
+    /**
+     * Constructs a for clause equation that is not initial.
+     */
+    public InstForClauseE.InstForClauseE(List<InstForIndex> indices, List<FAbstractEquation> eqns) {
+        this(EquationType.NORMAL, new List<FAttribute>(), new Opt<FStringComment>(), indices, eqns);
+    }
+
+    /**
+     * Constructs a for clause equation.
+     */
+    public InstForClauseE.InstForClauseE(EquationType type, List<InstForIndex> indices, List<FAbstractEquation> eqns) {
+        this(type, new List<FAttribute>(), new Opt<FStringComment>(), indices, eqns);
+    }
+
+    /**
+     * Constructor with only necessary args. 
+     */
+    public InstCreateComponentDecl.InstCreateComponentDecl(SrcComponentDecl cd, InstLookupRedirectNode ln) {
+        this(cd.name(), cd.getClassName().newInstAccess(), new Opt(), cd, new Opt(), new Opt(), new Opt(), ln);
+    }
+
+    /**
+     * Constructor with only necessary args. 
+     */
+    public InstCreateForIndexPrimitive.InstCreateForIndexPrimitive(SrcComponentDecl cd) {
+        // This maneuver is pretty ugly, but we need to find an InstClassDecl
+        // in the instance tree from the source tree...
+        this(cd.name(), cd.getClassName().newInstAccess(), new Opt(), cd, new Opt(), new Opt(), 
+                new Opt(), ((SourceRoot) cd.root()).getProgram().getInstProgramRoot());
+    }
+
+    /**
+     * Constructor with only necessary args. 
+     */
+    public InstCreateReplacingComponentDecl.InstCreateReplacingComponentDecl(
+            SrcComponentDecl cd, InstLookupRedirectNode ln, SrcComponentDecl ocd, 
+            InstComponentRedeclare icr, InstComponentRedeclare cicr) {
+        this(cd.name(), cd.getClassName().newInstAccess(), new Opt(), cd, new Opt(), 
+                new Opt(), new Opt(), ln, ocd, icr, cicr);
+    }
+
+    /**
+     * Constructs an algorithm block that is not initial.
+     */
+    public FAlgorithm.FAlgorithm(List<FStatement> stmts) {
+        this(EquationType.NORMAL, new List<FAttribute>(), new Opt<FStringComment>(), stmts);
+    }
+
+    /**
+     * Constructs an algorithm block.
+     */
+    public FAlgorithm.FAlgorithm(EquationType type, List<FStatement> stmts) {
+        this(type, new List<FAttribute>(), new Opt<FStringComment>(), stmts);
+    }
+
+    /**
+     * Constructs a derivative algorithm block that is not initial.
+     */
+    public FDerivativeAlgorithm.FDerivativeAlgorithm(List<FStatement> stmts, int order) {
+        this(EquationType.NORMAL, new List<FAttribute>(), new Opt<FStringComment>(), stmts, order);
+    }
+
+	/**
+	 * Constructs a boolean literal expression from a boolean.
+	 */
+	public static FBooleanLitExp FBooleanLitExp.create(boolean val) {
+		return val ? new FBooleanLitExpTrue() : new FBooleanLitExpFalse();
+	}
+	
+	/**
+	 * Constructs a enumeration literal expression from a type and an ordinal.
+	 */
+	public FEnumLitExp.FEnumLitExp(FEnumType type, int val) {
+		this(type.getName(), type.getFEnumLiteralType(val - 1).getName(), new Opt(type.unboundCopy()));
+	}
+	
+	/**
+	 * Constructs a enumeration literal expression from a type and a literal name.
+	 */
+	public FEnumLitExp.FEnumLitExp(FEnumType type, String val) {
+		this(type.getName(), val, new Opt(type.unboundCopy()));
+	}
+	
+	/**
+	 * Constructs a enumeration literal expression from an enum name and a value name.
+	 */
+	public FEnumLitExp.FEnumLitExp(String name, String val) {
+		this(name, val, new Opt());
+	}
+    
+    /**
+     * Constructs an FIdDecl with the given name.
+     */
+    public FIdDecl.FIdDecl(String name) {
+        this(new FAccessString(name));
+    }
+
+    /**
+     * Constructs an if equation.
+     */
+    public FIfEquation.FIfEquation(EquationType type, List<FAbstractEquation> eqns, FExp guard, Opt<FIfWhenElseEquation> elseClause) {
+        this(type, new List<FAttribute>(), new Opt<FStringComment>(), eqns, guard, elseClause);
+    }
+
+	/**
+	 * Constructs an FAccess with the given name parts (without any subscripts).
+	 * 
+	 * Does <em>not</em> parse array subscripts.
+	 */
+    public FAccessFull.FAccessFull(String... name) {
+        this(new List());
+        for (String part : name)
+            addFAccessPart(part);
+    }
+    
+    /**
+     * Creates and adds a new FAccessPart without array subscripts.
+     */
+    public void FAccessFull.addFAccessPart(String name) {
+    	addFAccessPart(new FAccessPart(name));
+    }
+	
+	/**
+	 * Constructs an FAccess by splitting the given name into name parts and adding array subscripts.
+	 * 
+	 * Does <em>not</em> parse array subscripts.
+	 *
+	 * @param fas  the array subscripts to set for the last name part
+	 */
+	public FAccessFull.FAccessFull(String name, FArraySubscripts fas) {
+		this(name);
+		addFArraySubscripts(fas);
+	}
+	
+	/**
+	 * Constructs an FAccessExp that refers to the variable with the given FAccess.
+	 */
+	public FAccessExp.FAccessExp(FAccess name) {
+		this(name, (String)null);
+	}
+	
+	/**
+	 * Constructs an FAccessExp that refers to the variable with the given name.
+	 */
+	public FAccessExp.FAccessExp(String name) {
+		this(new FAccessString(name));
+	}
+	
+	/**
+	 * Constructs an FAccessExp that refers to a cell of the variable with the given name.
+	 *
+	 * @param fas  the array subscripts to set for the last name part
+	 */
+	public FAccessExp.FAccessExp(String name, FArraySubscripts fas) {
+		this(new FAccessFull(name, fas));
+	}
+
+    /**
+     * Constructs an FDerExp that refers to the variable with the given FAccess and order.
+     */
+    public FDerExp.FDerExp(FAccess name, int order) {
+        this(name, (String)null, order);
+    }
+
+    /**
+     * Constructs an FDerExp of order one that refers to the variable with the given name.
+     */
+    public FDerExp.FDerExp(FAccess name) {
+        this(name, 1);
+    }
+
+    /**
+     * Constructs an FPreExp that refers to the variable with the given FAccess.
+     */
+    public FPreExp.FPreExp(FAccess name) {
+        this(name, (String)null);
+    }
+    
+    /**
+     * Constructs an FTempAccessExp that refers to the variable with the given FAccess.
+     */
+    public FTempAccessExp.FTempAccessExp(FAccess name) {
+        this(name, (String)null);
+    }
+
+    /**
+     * Constructs an unsuported equation.
+     */
+    public FUnsupportedEquation.FUnsupportedEquation(EquationType type) {
+        this(type, new List<FAttribute>(), new Opt<FStringComment>());
+    }
+
+    /**
+     * Constructs a when equation.
+     */
+    public FWhenEquation.FWhenEquation(EquationType type, List<FAbstractEquation> eqns, FExp guard, Opt<FIfWhenElseEquation> elseClause) {
+        this(type, new List<FAttribute>(), new Opt<FStringComment>(), eqns, guard, elseClause);
+    }
+
+    /**
+     * Create an access from a class name.
+     */
+    public static InstAccess InstAccess.fromName(String... names) {
+        ArrayList<InstAccess> l = new ArrayList<>();
+        for (String name : names) {
+            String[] parts = name.split("\\.");
+            if (parts.length == 1) {
+                l.add(new InstParseAccess(parts[0]));
+            } else {
+                for (String part : parts) {
+                    l.add(new InstParseAccess(part));
+                }
+            }
+        }
+        if (l.size() == 1) {
+            return l.get(0);
+        } else {
+            return new InstDot(new List<InstAccess>(l));
+        }
+    }
+
+	/**
+	 * Constructs an FForIndex with a temporary index variable and a 
+	 *        range expression starting at 1 as the in expression.
+	 * 
+	 * @param name  the name of the index
+	 * @param end   the upper limit for the range expression
+	 */
+	public FForIndex.FForIndex(String name, FExp end) {
+		this();
+		setFExp(new FRangeExp(new FIntegerLitExp(1), end));
+		setFVariable(new FIntegerVariable(VisibilityType.TEMPORARY, 
+				Variability.FIXEDPARAMETER, new FAccessString(name)));
+	}
+	
+	/**
+	 * Constructs an FForIndex with a temporary index variable and loops 
+	 *        over the given variable.        
+	 * 
+	 * @param name  the name of the index
+	 * @param var   the name of the variable to loop over
+	 * @param dim   the dimension to loop over
+	 */
+	public FForIndex.FForIndex(String name, FAccess var, int dim) {
+		this(name, new FSizeExp(var, dim));
+	}
+	
+	/**
+	 * Constructs an FSizeExp giving the size in the given dimension for the given variable.
+	 */
+	public FSizeExp.FSizeExp(FAccess var, int dim) {
+		this(new FAccessExp(var), dim);
+	}
+	
+	/**
+	 * Constructs an FSizeExp giving the size in the given dimension for the given expression.
+	 */
+	public FSizeExp.FSizeExp(FExp exp, int dim) {
+		this(exp, new Opt(new FIntegerLitExp(dim + 1)));
+	}
+    
+    public FUnknownSizeExp.FUnknownSizeExp(FExp exp, int dim) {
+        super(exp, dim);
+    }
+    
+	/**
+	 * Constructs an FRangeExp with the given start and stop expressions.
+	 */
+	public FRangeExp.FRangeExp(FExp start, FExp stop) {
+		this(new List().add(start).add(stop));
+	}
+	
+	/**
+	 * Constructs an FRangeExp with the given start and stop literal values.
+	 */
+	public FRangeExp.FRangeExp(int start, int stop) {
+		this(new FIntegerLitExp(start), new FIntegerLitExp(stop));
+	}
+	
+	/**
+	 * Constructs an FRangeExp with the given start, step and and stop expressions.
+	 */
+	public FRangeExp.FRangeExp(FExp start, FExp step, FExp stop) {
+		this(new List().add(start).add(step).add(stop));
+	}
+    public FSmoothExp.FSmoothExp(int order, FExp exp) {
+        this(new FIntegerLitExp(order), exp);
+    }
+
+    /**
+     * Constructs an FSmoothExp with a literal Integer order.
+     */
+
+    /**
+     * Add this expression to another.
+     * 
+     * Used to gradually builf up a sum, and handles special case for first term. 
+     * The so far accumulated expession is then passed as exp, and this node will be 
+     * the right child of the created expression. May return <code>this</code>, 
+     * if exp is <code>null</code>.
+     * 
+     * @param exp   the first term, may be null
+     * @param neg   if <code>true</code>, then this will be subtracted instead of added
+     * @param type  the type of this expression (can't be calculated locally, since this 
+     *              is generally not in tree at this point). The result is calculated with 
+     *              the assumption that <code>exp</code> is of the same type. When one is 
+     *              Integer and the other Real, this assumption gives the correct result.
+     */
+    public FExp FExp.appendSum(Flattener f, FExp exp, boolean neg, FType type) {
+        if (exp == null)
+            return neg ? type.createFNegExp(f, this) : this;
+        else
+            return neg ? type.createFSubExp(f, exp, this) : type.createFAddExp(f, exp, this);
+    }
+
+    /**
+     * Create a negation expression for the flat tree for an expression of this type.
+     */
+    public FExp FType.createFNegExp(Flattener f, FExp a) {
+        return new FNegExp(a);
+    }
+
+    @Override
+    public FExp FOperatorRecordType.createFNegExp(Flattener f, FExp a) {
+        return matchOverloadedOperator(null, FExp.OP_NEG).flattenOverloadedFunctionCall(f, arr(a), arr(this));
+    }
+
+    /**
+     * Create a subtraction expression for the flat tree for two expressions of this type.
+     */
+    public FExp FType.createFSubExp(Flattener f, FExp a, FExp b) {
+        return new FSubExp(a, b);
+    }
+
+    @Override
+    public FExp FOperatorRecordType.createFSubExp(Flattener f, FExp a, FExp b) {
+        return matchOverloadedOperator(this, FExp.OP_SUB).flattenOverloadedFunctionCall(f, arr(a, b), arr(this, this));
+    }
+
+    /**
+     * Create an addition expression for the flat tree for two expressions of this type.
+     */
+    public FExp FType.createFAddExp(Flattener f, FExp a, FExp b) {
+        return new FAddExp(a, b);
+    }
+
+    @Override
+    public FExp FOperatorRecordType.createFAddExp(Flattener f, FExp a, FExp b) {
+        return matchOverloadedOperator(this, FExp.OP_ADD).flattenOverloadedFunctionCall(f, arr(a, b), arr(this, this));
+    }
+
+    public class ASTNode {
+        public static <T> T[] arr(T... args) { 
+            return args;
+        }
+    }
+
+    /**
+     * Constructs an FRecordConstructor for a record with the given name and no arguments.
+     */
+    public FRecordConstructor.FRecordConstructor(String name) {
+        this(new FRecordAccess(name), new List<FExp>());
+    }
+    
+    public FRecordConstructor.FRecordConstructor(FRecordAccess name, List<FExp> args) {
+        this(new List<InstFunctionArgument>(), name, args);
+    }
+
+	/**
+	 * Create a real variable with only the required children.
+	 */
+	public FRealVariable.FRealVariable(VisibilityType vt, 
+			TypePrefixVariability variability, FAccess name) {
+		this(vt, variability, TypePrefixInputOutput.NONE, new List(), (String) null, new Opt(), new Opt(), name);
+	}
+	
+    /**
+     * Create a derivative variable with only the required children.
+     */
+    public FDerivativeVariable.FDerivativeVariable(VisibilityType vt, 
+            TypePrefixVariability variability, FAccess name, int order) {
+        this(vt, variability, TypePrefixInputOutput.NONE, new List(), (String) null, new Opt(), new Opt(), name, order);
+    }
+
+    /**
+     * Create a derivative variable with only the required children.
+     */
+    public FDummyDerivativeVariable.FDummyDerivativeVariable(VisibilityType vt, 
+            TypePrefixVariability variability, FAccess name, int order) {
+        this(vt, variability, TypePrefixInputOutput.NONE, new List(), (String) null, new Opt(), new Opt(), name, order);
+    }
+
+	/**
+	 * Create a pre variable for a discrete real variable.
+	 */
+	public FPreRealVariable.FPreRealVariable(FRealVariable fv) {
+		this(fv.getVisibilityType(), fv.getTypePrefixVariability(),
+				TypePrefixInputOutput.NONE, (List) fv.getFAttributeList().fullCopy(), fv.getDerivedType(), 
+				new Opt(), new Opt(), fv.getFAccess().fullCopy());
+	}
+	
+	/**
+	 * Create a integer variable with only the required children.
+	 */
+	public FIntegerVariable.FIntegerVariable(VisibilityType vt, 
+			TypePrefixVariability variability, FAccess name) {
+		this(vt, variability, TypePrefixInputOutput.NONE, new List(), (String) null, new Opt(), new Opt(), name);
+	}
+	
+	/**
+	 * Create a pre variable for an integer variable.
+	 */
+	public FPreIntegerVariable.FPreIntegerVariable(FIntegerVariable fv) {
+		this(fv.getVisibilityType(), fv.getTypePrefixVariability(),
+				TypePrefixInputOutput.NONE, (List) fv.getFAttributeList().fullCopy(), fv.getDerivedType(), 
+				new Opt(), new Opt(), fv.getFAccess().fullCopy());
+	}
+	
+	/**
+	 * Create a enum variable with only the required children.
+	 */
+	public FEnumVariable.FEnumVariable(VisibilityType vt, 
+			TypePrefixVariability variability, FAccess name, FAccess enumName) {
+		this(vt, variability, TypePrefixInputOutput.NONE, new List(), (String) null, new Opt(), new Opt(), name, enumName);
+	}
+	
+	/**
+	 * Create a pre variable for a enum variable.
+	 */
+	public FPreEnumVariable.FPreEnumVariable(FEnumVariable fv) {
+		this(fv.getVisibilityType(), fv.getTypePrefixVariability(),
+				TypePrefixInputOutput.NONE, (List) fv.getFAttributeList().fullCopy(), fv.getDerivedType(), 
+				new Opt(), new Opt(), fv.getFAccess().fullCopy(), fv.getEnum().fullCopy());
+	}
+	
+	/**
+	 * Create a boolean variable with only the required children.
+	 */
+	public FBooleanVariable.FBooleanVariable(VisibilityType vt, 
+			TypePrefixVariability variability, FAccess name) {
+		this(vt, variability, TypePrefixInputOutput.NONE, new List(), (String) null, new Opt(), new Opt(), name);
+	}
+	
+	/**
+	 * Create a pre variable for a boolean variable.
+	 */
+	public FPreBooleanVariable.FPreBooleanVariable(FBooleanVariable fv) {
+		this(fv.getVisibilityType(), fv.getTypePrefixVariability(),
+				TypePrefixInputOutput.NONE, (List) fv.getFAttributeList().fullCopy(), fv.getDerivedType(), 
+				new Opt(), new Opt(), fv.getFAccess().fullCopy());
+	}
+	
+	/**
+	 * Create a string variable with only the required children.
+	 */
+	public FStringVariable.FStringVariable(VisibilityType vt, 
+			TypePrefixVariability variability, FAccess name) {
+		this(vt, variability, TypePrefixInputOutput.NONE, new List(), (String) null, new Opt(), new Opt(), name);
+	}
+	
+	/**
+	 * Create a pre variable for a string variable.
+	 */
+	public FPreStringVariable.FPreStringVariable(FStringVariable fv) {
+		this(fv.getVisibilityType(), fv.getTypePrefixVariability(),
+				TypePrefixInputOutput.NONE, (List) fv.getFAttributeList().fullCopy(), fv.getDerivedType(), 
+				new Opt(), new Opt(), fv.getFAccess().fullCopy());
+	}
+	
+	/**
+	 * Create a record variable with only the required children.
+	 */
+	public FRecordVariable.FRecordVariable(VisibilityType vt, 
+			TypePrefixVariability variability, FAccess name, FRecordAccess record) {
+		this(vt, variability, TypePrefixInputOutput.NONE, new List(), (String) null, new Opt(), new Opt(), name, record);
+	}
+	
+    /**
+     * Create an external object variable with only the required children.
+     */
+    public FExternalObjectVariable.FExternalObjectVariable(VisibilityType vt, 
+            TypePrefixVariability variability, FAccess name, CommonAccess constructorName) {
+        this(vt, variability, TypePrefixInputOutput.NONE, new List(), (String) null, new Opt(), new Opt(), name, constructorName);
+    }
+
+    /**
+     * Constructs a new dynamic state variable
+     */
+    public FDynamicStateVariable.FDynamicStateVariable(DynamicStateSet set, int number) {
+        this(VisibilityType.PUBLIC, Variability.CONTINUOUS, TypePrefixInputOutput.NONE, new List(), (String)null, new Opt(), new Opt(), new FAccessFull("_ds." + set.id() + ".s" + number), set, number);
+    }
+
+    /**
+     * Constructs a new dynamic state variable
+     */
+    public FDynamicAlgebraicVariable.FDynamicAlgebraicVariable(DynamicStateSet set, int number) {
+        this(VisibilityType.PUBLIC, Variability.CONTINUOUS, TypePrefixInputOutput.NONE, new List(), (String)null, new Opt(), new Opt(), new FAccessFull("_ds." + set.id() + ".a" + number), set, number);
+    }
+    
+	/**
+	 * Create an FInternalAttribute with only the children that are 
+	 *        valid for them.
+	 */
+	public FInternalAttribute.FInternalAttribute(String name) {
+	    this(new FAccessEmpty(), new FIdDecl(new FAccessString(name)), new Opt<FExp>(), 
+	            true, Integer.MAX_VALUE, new Opt<FEach>(), new Opt<FFinal>(), new List<FAttribute>());
+	}
+	
+    /**
+     * Create an FInternalAttribute with only the children that are 
+     *        valid for them.
+     */
+    public FInternalAttribute.FInternalAttribute(String name, int level) {
+        this(new FAccessEmpty(), new FIdDecl(new FAccessString(name)), new Opt<FExp>(), 
+                true, level, new Opt<FEach>(), new Opt<FFinal>(), new List<FAttribute>());
+    }
+    
+	/**
+	 * Create an FInternalAttribute with only the children that are 
+	 *        valid for them.
+	 */
+	public FInternalAttribute.FInternalAttribute(String name, FExp value) {
+		this(new FAccessEmpty(), new FIdDecl(new FAccessString(name)), new Opt(value), 
+				true, 0, new Opt(), new Opt(), new List());
+	}
+	
+	/**
+	 * Create an FInternalAttribute with only the children that are 
+	 *        valid for them.
+	 */
+	public FInternalAttribute.FInternalAttribute(String name, FExp exp, boolean eachKey) {
+	    this(new FAccessEmpty(), new FIdDecl(new FAccessString(name)), new Opt<FExp>(exp), 
+	            true, Integer.MAX_VALUE, eachKey ? new Opt<FEach>(new FEach()) : new Opt<FEach>(), new Opt<FFinal>(), new List<FAttribute>());
+	}
+	
+	/**
+	 * Create an FInternalAttribute with only the children that are 
+	 *        valid for them.
+	 */
+	public FInternalAttribute.FInternalAttribute(String name, FExp exp, int level, boolean eachKey) {
+	    this(new FAccessEmpty(), new FIdDecl(new FAccessString(name)), new Opt<FExp>(exp), 
+	            true, level, eachKey ? new Opt<FEach>(new FEach()) : new Opt<FEach>(), new Opt<FFinal>(), new List<FAttribute>());
+	}
+	
+    /**
+     * Create an FInternalAttribute with only the children that are 
+     *        valid for them.
+     */
+    public FInternalAttribute.FInternalAttribute(String name, int level, boolean eachKey) {
+        this(new FAccessEmpty(), new FIdDecl(new FAccessString(name)), new Opt<FExp>(), 
+                true, level, eachKey ? new Opt<FEach>(new FEach()) : new Opt<FEach>(), new Opt<FFinal>(), new List<FAttribute>());
+    }
+    
+    /**
+     * Create an FInternalAttribute with only the children that are 
+     *        valid for them.
+     */
+    public FInternalAttribute.FInternalAttribute(String type, String name, FExp exp, int level) {
+        this(new FAccessString(type), new FIdDecl(new FAccessString(name)), new Opt<FExp>(exp), 
+                true, level, new Opt<FEach>(), new Opt<FFinal>(), new List<FAttribute>());
+    }
+    
+    /**
+     * Create an FInternalAttribute with only the children that are 
+     *        valid for them.
+     */
+    public FAnnotationAttribute.FAnnotationAttribute(String name) {
+        this(new FAccessEmpty(), new FIdDecl(new FAccessString(name)), new Opt<FExp>(), 
+                true, Integer.MAX_VALUE, new Opt<FEach>(), new Opt<FFinal>(), new List<FAttribute>());
+    }
+    
+    /**
+     * Create an FInternalAttribute with only the children that are 
+     *        valid for them.
+     */
+    public FAnnotationAttribute.FAnnotationAttribute(String name, FExp exp, int level, boolean eachKey) {
+        this(new FAccessEmpty(), new FIdDecl(new FAccessString(name)), new Opt<FExp>(exp), 
+                true, level, eachKey ? new Opt<FEach>(new FEach()) : new Opt<FEach>(), new Opt<FFinal>(), new List<FAttribute>());
+    }
+    
+	/**
+	 * Create an attribute with only the required children.
+	 */
+	public FAttribute.FAttribute(CommonAccess typeName, FIdDecl name, boolean isSet, int level) {
+		this(typeName, name, new Opt(), isSet, level, new Opt(), new Opt(), new List());
+	}
+    
+    /**
+     * Create an attribute with only the required children.
+     */
+    public FAttribute.FAttribute(String typeName, String name, boolean isSet, int level) {
+        this(new FAccessString(typeName), new FIdDecl(name), isSet, level);
+    }
+	
+	/**
+	 * Create an attribute with only the required children and a value.
+	 * 
+	 * The value may be <code>null</code>, then no value is set.
+	 */
+	public FAttribute.FAttribute(CommonAccess typeName, FIdDecl name, FExp value, boolean isSet, int level) {
+		this(typeName, name, 
+				(value == null ? new Opt() : new Opt(value)), 
+				isSet, level, new Opt(), new Opt(), new List());
+	}
+    
+    /**
+     * Create an attribute with only the required children and a value.
+     * 
+     * The value may be <code>null</code>, then no value is set.
+     */
+    public FAttribute.FAttribute(String typeName, String name, FExp value, boolean isSet, int level) {
+        this(new FAccessString(typeName), new FIdDecl(name), value, isSet, level);
+    }
+    
+    /**
+     * Create an FFunctionVariable with the given name and type. 
+     */
+    public FFunctionVariable.FFunctionVariable(VisibilityType vt, FType type, String name) {
+        this(vt, TypePrefixInputOutput.NONE, new List<FAttribute>(), type, new Opt(), new FAccessString(name), 0);
+    }
+    
+    /**
+     * Create an FFunctionVariable with the given name, type and input/output prefix. 
+     */
+    public FFunctionVariable.FFunctionVariable(VisibilityType vt, FType type, String name, TypePrefixInputOutput inputOutput) {
+        this(vt, inputOutput, new List<FAttribute>(), type, new Opt<FExp>(), new FAccessString(name), 0);
+    }
+    
+    /**
+     * Create an FFunctionVariable with everything but order and attributes given.
+     */
+    public FFunctionVariable.FFunctionVariable(VisibilityType vt, TypePrefixInputOutput inputOutput, FType type, Opt<FExp> bindingExp, FAccess name) {
+        this(vt, inputOutput, new List<FAttribute>(), type, bindingExp, name, 0);
+    }
+    
+	/**
+	 * Create a new FSubscriptedExp with a new FArraySubscripts, containing the 
+	 *        proper number of FSubscripts (according to <code>exp</code>).
+	 * 
+	 * All FSubscripts except the first will be FColonSubscripts.
+	 * 
+	 * @param exp    the expression this FSubscriptedExp should wrap
+	 * @param index  the index to use for the first FSubscript
+	 * @param ndims  the number of dimensions of exp (calling ndims() might cause name lookup)
+	 */
+	public FSubscriptedExp.FSubscriptedExp(FExp exp, int index, int ndims) {
+		this(exp, FArraySubscripts.createFColonSubscripts(ndims));
+		getFArraySubscripts().specifyNext(index);
+	}
+	
+	/**
+	 * Create a new FArraySubscripts <code>n</code> literal subscripts from 
+	 *        <code>i</code>, starting at <code>j</code>.
+	 */
+	public FArrayLitSubscripts.FArrayLitSubscripts(Index i, int j, int n) {
+		this();
+		subscripts = new int[n];
+		for (int k = 0; k < n; k++)
+			subscripts[k] = i.get(k+j);
+	}
+	
+    public FArrayLitSubscripts.FArrayLitSubscripts(int... subscripts) {
+        this();
+        this.subscripts = Arrays.copyOf(subscripts, subscripts.length);
+    }
+
+
+
+	/**
+	 * Add a new integer literal subscript to the list of FSubscripts.
+	 */
+    public abstract void FArraySubscripts.addFSubscript(int i);
+
+    public void FArrayExpSubscripts.addFSubscript(int i) {
+        addFSubscript(new FIntegerSubscript(i));
+    }
+
+    public void FArrayLitSubscripts.addFSubscript(int i) {
+        int length = subscripts.length;
+        subscripts = Arrays.copyOf(subscripts, length + 1);
+        subscripts[length] = i;
+    }
+	
+	/**
+	 * Add new integer literal subscripts for each index to the list of FSubscripts.
+	 */
+	public void FArraySubscripts.addFSubscripts(int[] index) {
+		for (int i : index)
+			addFSubscript(i);
+	}
+
+    public void FArrayLitSubscripts.addFSubscripts(int[] index) {
+        int length = subscripts.length;
+        subscripts = Arrays.copyOf(subscripts, length + index.length);
+        System.arraycopy(index, 0, subscripts, length, index.length);
+    }
+	
+	/**
+	 * Add new integer literal subscripts for each index to the list of FSubscripts.
+	 */
+	public void FArraySubscripts.addFSubscripts(Index i) {
+		addFSubscripts(i.index());
+	}
+	
+	/**
+	 * Create a new FArraySubscripts containing <code>n</code> {@link FColonSubscript}s.
+	 */
+	public static FArraySubscripts FArraySubscripts.createFColonSubscripts(int n) {
+		List<FSubscript> l = new List<FSubscript>();
+		for (int i = 0; i < n; i++)
+			l.add(new FColonSubscript());
+		return new FArrayExpSubscripts(l);
+	}
+
+    public static FArraySubscripts FArraySubscripts.createFArraySubscripts(List<FSubscript> list) {
+        for (FSubscript fs : list) {
+            if (!fs.isIntegerSubscript()) {
+                return new FArrayExpSubscripts(list);
+            }
+        }
+        int[] subscripts = new int[list.getNumChildNoTransform()];
+        for (int i = 0; i < subscripts.length; i++) {
+            subscripts[i] = list.getChildNoTransform(i).value();
+        }
+        return new FArrayLitSubscripts(subscripts);
+    }
+
+    public FSubscript FExp.createFSubscript() {
+        return new FExpSubscript(this);
+    }
+
+    public FIntegerSubscript FIntegerLitExp.createFSubscript() {
+        return new FIntegerSubscript(getValue());
+    }
+
+
+    public FFunctionDecl.FFunctionDecl(String name, List<FFunctionVariable> vars, FStatement ... statements) {
+        this(new FAccessString(name), vars, new FAlgorithm(new List<FStatement>(statements)), new List<FAttribute>());
+    }
+
+}
+
+/*
+ * Some algorithms are the same for many node types, but require a new node 
+ * to be created of the same type as the node being processed. These methods allow 
+ * those algorithms to be generalized.
+ */
+aspect InheritedFactoryMethods {
+	
+	/**
+	 * Create a new empty node.
+	 * 
+	 * Abstract method needed for abstract node classes with declared 
+	 * (i.e. not inherited) children.
+	 */
+	public abstract FExp                      FExp.createEmptyNode();
+	public abstract FBinExp                   FBinExp.createEmptyNode();
+	public abstract FUnaryExp                 FUnaryExp.createEmptyNode();
+	public abstract FBooleanLitExp            FBooleanLitExp.createEmptyNode();   // No children, but can be useful
+	public abstract FBuiltInFunctionCall      FBuiltInFunctionCall.createEmptyNode();  // Used in BuiltInTranslator 
+	public abstract FUnaryBuiltIn             FUnaryBuiltIn.createEmptyNode();
+	public abstract FEventGenExp              FEventGenExp.createEmptyNode();
+	public abstract FBinEventGenExp           FBinEventGenExp.createEmptyNode();
+    public abstract FDelayIndicator           FDelayIndicator.createEmptyNode();
+	public abstract FMathematicalFunctionCall FMathematicalFunctionCall.createEmptyNode();
+	public abstract FInfArgsFunctionCall      FInfArgsFunctionCall.createEmptyNode();
+	public abstract FMinMaxExp      		  FMinMaxExp.createEmptyNode();
+	public abstract FConnBoolOp      	      FConnBoolOp.createEmptyNode();
+	
+    // Misc expressions
+    public FComponentExp FComponentExp.createEmptyNode() { return new FComponentExp(); }
+
+	// Unsupported expressions
+	public FUnsupportedExp     FUnsupportedExp.createEmptyNode()     { return new FUnsupportedExp();     }
+	public FUnsupportedBuiltIn FUnsupportedBuiltIn.createEmptyNode() { return new FUnsupportedBuiltIn(); }
+	public FIgnoredBuiltIn     FIgnoredBuiltIn.createEmptyNode()     { return new FIgnoredBuiltIn();     }
+	
+	// Arithmetic oprerators
+	public FAddExp       FAddExp.createEmptyNode()       { return new FAddExp();       }
+	public FSubExp       FSubExp.createEmptyNode()       { return new FSubExp();       }
+	public FMulExp       FMulExp.createEmptyNode()       { return new FMulExp();       }
+	public FDivExp       FDivExp.createEmptyNode()       { return new FDivExp();       }
+	public FPowExp       FPowExp.createEmptyNode()       { return new FPowExp();       }
+	public FDotAddExp    FDotAddExp.createEmptyNode()    { return new FDotAddExp();    }
+	public FDotSubExp    FDotSubExp.createEmptyNode()    { return new FDotSubExp();    }
+	public FDotMulExp    FDotMulExp.createEmptyNode()    { return new FDotMulExp();    }
+	public FDotDivExp    FDotDivExp.createEmptyNode()    { return new FDotDivExp();    }
+	public FDotPowExp    FDotPowExp.createEmptyNode()    { return new FDotPowExp();    }
+	public FNegExp       FNegExp.createEmptyNode()       { return new FNegExp();       }
+	public FStringAddExp FStringAddExp.createEmptyNode() { return new FStringAddExp(); }
+	
+	// Logical operators
+	public FLtExp  FLtExp.createEmptyNode()  { return new FLtExp();  }
+	public FLeqExp FLeqExp.createEmptyNode() { return new FLeqExp(); }
+	public FGtExp  FGtExp.createEmptyNode()  { return new FGtExp();  }
+	public FGeqExp FGeqExp.createEmptyNode() { return new FGeqExp(); }
+	public FEqExp  FEqExp.createEmptyNode()  { return new FEqExp();  }
+	public FNeqExp FNeqExp.createEmptyNode() { return new FNeqExp(); }
+	public FNotExp FNotExp.createEmptyNode() { return new FNotExp(); }
+	public FOrExp  FOrExp.createEmptyNode()  { return new FOrExp();  }
+	public FAndExp FAndExp.createEmptyNode() { return new FAndExp(); }
+
+	// Literal expressions (all have different children, so mostly here for completeness)
+	public FRealLitExp         FRealLitExp.createEmptyNode()         { return new FRealLitExp();         }
+	public FIntegerLitExp      FIntegerLitExp.createEmptyNode()      { return new FIntegerLitExp();      }
+	public FBooleanLitExpTrue  FBooleanLitExpTrue.createEmptyNode()  { return new FBooleanLitExpTrue();  }
+	public FBooleanLitExpFalse FBooleanLitExpFalse.createEmptyNode() { return new FBooleanLitExpFalse(); }
+	public FStringLitExp       FStringLitExp.createEmptyNode()       { return new FStringLitExp();       }
+	public FEnumLitExp         FEnumLitExp.createEmptyNode()         { return new FEnumLitExp();         }
+	
+	// Misc expressions
+	public FIfExp          FIfExp.createEmptyNode()          { return new FIfExp();          }
+    public InstIfExp       InstIfExp.createEmptyNode()       { return new InstIfExp();       }
+	public FTimeExp        FTimeExp.createEmptyNode()        { return new FTimeExp();        }
+	public FNoEventExp     FNoEventExp.createEmptyNode()     { return new FNoEventExp();     }
+	public FSmoothExp      FSmoothExp.createEmptyNode()      { return new FSmoothExp();      }
+	public FEdgeExp        FEdgeExp.createEmptyNode()        { return new FEdgeExp();        }
+    public FChangeExp      FChangeExp.createEmptyNode()      { return new FChangeExp();      }
+    public FLoadResource   FLoadResource.createEmptyNode()   { return new FLoadResource();   }
+    public FReinit         FReinit.createEmptyNode()         { return new FReinit();         }
+    public FDelayExp       FDelayExp.createEmptyNode()       { return new FDelayExp();       }
+    public FSpatialDistExp FSpatialDistExp.createEmptyNode() { return new FSpatialDistExp(); }
+	public FSampleExp      FSampleExp.createEmptyNode()      { return new FSampleExp();      }
+	public FInitialExp     FInitialExp.createEmptyNode()     { return new FInitialExp();     }
+	public FTerminalExp    FTerminalExp.createEmptyNode()    { return new FTerminalExp();    }
+	public FTerminate      FTerminate.createEmptyNode()      { return new FTerminate();      }
+	public FAssert         FAssert.createEmptyNode()         { return new FAssert();         }
+	public FNoExp          FNoExp.createEmptyNode()          { return new FNoExp();          }
+    public FColonSizeExp   FColonSizeExp.createEmptyNode()   { return new FColonSizeExp();   }
+    public FInStreamEpsExp FInStreamEpsExp.createEmptyNode() { return new FInStreamEpsExp(); }
+    
+    // Event indicator expressions
+    public FFirstDelayIndicator  FFirstDelayIndicator.createEmptyNode()  { return new FFirstDelayIndicator(); }
+    public FSecondDelayIndicator FSecondDelayIndicator.createEmptyNode() { return new FSecondDelayIndicator(); }
+    public FSpatialDistIndicator FSpatialDistIndicator.createEmptyNode() { return new FSpatialDistIndicator(); }
+
+    // Identifier expressions
+    public abstract CommonAccessExp CommonAccessExp.createEmptyNode();
+    public InstAccessExp  InstAccessExp.createEmptyNode()  { return new InstAccessExp();  }
+    public FGlobalAccessExp FGlobalAccessExp.createEmptyNode() { return new FGlobalAccessExp(); }
+    public InstDerExp     InstDerExp.createEmptyNode()     { return new InstDerExp();     }
+    public FAccessExp     FAccessExp.createEmptyNode()     { return new FAccessExp();     }
+    public FDerExp        FDerExp.createEmptyNode()        { return new FDerExp();        }
+    public FDummyDerExp   FDummyDerExp.createEmptyNode()   { return new FDummyDerExp();   }
+    public FDynamicDerExp FDynamicDerExp.createEmptyNode() { return new FDynamicDerExp(); }
+    public InstHDerExp    InstHDerExp.createEmptyNode()    { return new InstHDerExp();    }
+    public FPreExp        FPreExp.createEmptyNode()        { return new FPreExp();        }
+    public InstPreExp     InstPreExp.createEmptyNode()     { return new InstPreExp();     }
+    public FTempAccessExp FTempAccessExp.createEmptyNode() { return new FTempAccessExp(); }
+    public FDSRefExp      FDSRefExp.createEmptyNode()      { return new FDSRefExp();      }
+    public FDSDerExp      FDSDerExp.createEmptyNode()      { return new FDSDerExp();      }
+    public abstract FAbstractDerExp FAbstractDerExp.createEmptyNode();
+
+	// Array expressions
+	public FArray          FArray.createEmptyNode()          { return new FArray();          }
+	public FLongArray      FLongArray.createEmptyNode()      { return new FLongArray();      }
+	public FParseArray     FParseArray.createEmptyNode()     { return new FParseArray();     }
+	public FCatExp         FCatExp.createEmptyNode()         { return new FCatExp();         }
+	public FMatrix         FMatrix.createEmptyNode()         { return new FMatrix();         }
+	public FMatrixRow      FMatrixRow.createEmptyNode()      { return new FMatrixRow();      }
+	public FSubscriptedExp FSubscriptedExp.createEmptyNode() { return new FSubscriptedExp(); }
+    public FDeferExp       FDeferExp.createEmptyNode()       { return new FDeferExp();       }
+	public FRangeExp       FRangeExp.createEmptyNode()       { return new FRangeExp();       }
+	public FLinspace       FLinspace.createEmptyNode()       { return new FLinspace();       }
+	public FEndExp         FEndExp.createEmptyNode()         { return new FEndExp();         }
+	public FIterExp        FIterExp.createEmptyNode()        { return new FIterExp();        }
+    
+    // Function calls
+    public FFunctionCall         FFunctionCall.createEmptyNode()           { return new FFunctionCall();           }
+    public InstFunctionCall      InstFunctionCall.createEmptyNode()        { return new InstFunctionCall();        }
+    public InstFunctionCall      InstPartialFunctionCall.createEmptyNode() { return new InstPartialFunctionCall(); }
+    public FRecordConstructor    FRecordConstructor.createEmptyNode()      { return new FRecordConstructor();      }
+    public InstRecordConstructor InstRecordConstructor.createEmptyNode()   { return new InstRecordConstructor();   }
+    
+	// Calls to built-in mathematical functions
+	public FSinExp   FSinExp.createEmptyNode()   { return new FSinExp();   }
+	public FCosExp   FCosExp.createEmptyNode()   { return new FCosExp();   }
+	public FTanExp   FTanExp.createEmptyNode()   { return new FTanExp();   }
+	public FAsinExp  FAsinExp.createEmptyNode()  { return new FAsinExp();  }
+	public FAcosExp  FAcosExp.createEmptyNode()  { return new FAcosExp();  }
+	public FAtanExp  FAtanExp.createEmptyNode()  { return new FAtanExp();  }
+	public FAtan2Exp FAtan2Exp.createEmptyNode() { return new FAtan2Exp(); }
+	public FSinhExp  FSinhExp.createEmptyNode()  { return new FSinhExp();  }
+	public FCoshExp  FCoshExp.createEmptyNode()  { return new FCoshExp();  }
+	public FTanhExp  FTanhExp.createEmptyNode()  { return new FTanhExp();  }
+	public FExpExp   FExpExp.createEmptyNode()   { return new FExpExp();   }
+	public FLogExp   FLogExp.createEmptyNode()   { return new FLogExp();   }
+	public FLog10Exp FLog10Exp.createEmptyNode() { return new FLog10Exp(); }
+
+    // Built-in function calls and function call-like operators
+    public FNdimsExp        FNdimsExp.createEmptyNode()        { return new FNdimsExp();        }
+    public FSizeExp         FSizeExp.createEmptyNode()         { return new FSizeExp();         }
+    public FAbsExp          FAbsExp.createEmptyNode()          { return new FAbsExp();          }
+    public FSignExp         FSignExp.createEmptyNode()         { return new FSignExp();         }
+    public FSqrtExp         FSqrtExp.createEmptyNode()         { return new FSqrtExp();         }
+    public FEnumIntegerExp  FEnumIntegerExp.createEmptyNode()  { return new FEnumIntegerExp();  }
+    public FStringExp       FStringExp.createEmptyNode()       { return new FStringExp();       }
+    public FDivFuncExp      FDivFuncExp.createEmptyNode()      { return new FDivFuncExp();      }
+    public FModFuncExp      FModFuncExp.createEmptyNode()      { return new FModFuncExp();      }
+    public FRemFuncExp      FRemFuncExp.createEmptyNode()      { return new FRemFuncExp();      }
+    public FCeilFuncExp     FCeilFuncExp.createEmptyNode()     { return new FCeilFuncExp();     }
+    public FFloorFuncExp    FFloorFuncExp.createEmptyNode()    { return new FFloorFuncExp();    }
+    public FIntegerFuncExp  FIntegerFuncExp.createEmptyNode()  { return new FIntegerFuncExp();  }
+    public FScalarExp       FScalarExp.createEmptyNode()       { return new FScalarExp();       }
+    public FVectorExp       FVectorExp.createEmptyNode()       { return new FVectorExp();       }
+    public FMatrixExp       FMatrixExp.createEmptyNode()       { return new FMatrixExp();       }
+    public FTranspose       FTranspose.createEmptyNode()       { return new FTranspose();       }
+    public FSymmetric       FSymmetric.createEmptyNode()       { return new FSymmetric();       }
+    public FCross           FCross.createEmptyNode()           { return new FCross();           }
+    public FSkew            FSkew.createEmptyNode()            { return new FSkew();            }
+    public FOuterProduct    FOuterProduct.createEmptyNode()    { return new FOuterProduct();    }
+    public FIdentity        FIdentity.createEmptyNode()        { return new FIdentity();        }
+    public FDiagonal        FDiagonal.createEmptyNode()        { return new FDiagonal();        }
+    public FOnes            FOnes.createEmptyNode()            { return new FOnes();            }
+    public FZeros           FZeros.createEmptyNode()           { return new FZeros();           }
+    public FFillExp         FFillExp.createEmptyNode()         { return new FFillExp();         }
+    public FMinExp          FMinExp.createEmptyNode()          { return new FMinExp();          }
+    public FMaxExp          FMaxExp.createEmptyNode()          { return new FMaxExp();          }
+    public FSumExp          FSumExp.createEmptyNode()          { return new FSumExp();          }
+    public FProductExp      FProductExp.createEmptyNode()      { return new FProductExp();      }
+    public FHomotopyExp     FHomotopyExp.createEmptyNode()     { return new FHomotopyExp();     }
+    public FSemiLinearExp   FSemiLinearExp.createEmptyNode()   { return new FSemiLinearExp();   }
+    public FInStream        FInStream.createEmptyNode()        { return new FInStream();        }
+    public FDerStream       FDerStream.createEmptyNode()       { return new FDerStream();       }
+    public FActualStream    FActualStream.createEmptyNode()    { return new FActualStream();    }
+    public FExInStream      FExInStream.createEmptyNode()      { return new FExInStream();      }
+    public FGetInstanceName FGetInstanceName.createEmptyNode() { return new FGetInstanceName(); }
+
+    // Operators for overconstrained connection graphs
+    public FConnBranch        FConnBranch.createEmptyNode()        { return new FConnBranch();        }
+    public FConnRoot          FConnRoot.createEmptyNode()          { return new FConnRoot();          }
+    public FConnPotentialRoot FConnPotentialRoot.createEmptyNode() { return new FConnPotentialRoot(); }
+    public FConnIsRoot        FConnIsRoot.createEmptyNode()        { return new FConnIsRoot();        }
+    public FConnRooted        FConnRooted.createEmptyNode()        { return new FConnRooted();        }
+    public FConnRootedDep     FConnRootedDep.createEmptyNode()     { return new FConnRootedDep();     }
+    public FCardinality       FCardinality.createEmptyNode()       { return new FCardinality();       }
+    public FDecouple          FDecouple.createEmptyNode()          { return new FDecouple();          }
+    
+    
+	/**
+	 * Create new node of same class as this, with the specified children.
+	 */
+	public FBinExp FBinExp.createNode(FExp left, FExp right) {
+		FBinExp node = createEmptyNode();
+		node.setLeft(left);
+		node.setRight(right);
+		node.setLocationNoTree(this);
+		return node;
+	}
+
+    public FIfExp FIfExp.createNode(FExp ifExp, FExp thenExp, FExp elseExp) {
+        FIfExp node = createEmptyNode();
+        node.setIfExp(ifExp);
+        node.setThenExp(thenExp);
+        node.setElseExp(elseExp);
+        return node;
+    }
+
+	/**
+	 * Create new node of same class as this, with the specified children.
+	 */
+	public FUnaryExp FUnaryExp.createNode(FExp exp) {
+		FUnaryExp node = createEmptyNode();
+		node.setFExp(exp);
+		node.setLocationNoTree(this);
+		return node;
+	}
+	
+	/**
+	 * Create new node of same class as this, with the specified children.
+	 */
+	public InstAccessExp InstAccessExp.createNode(InstAccess use) {
+		InstAccessExp node = createEmptyNode();
+		node.setInstAccess(use);
+		node.setLocationNoTree(this);
+		return node;
+	}
+
+    public FAccessExp FAccessExp.createNode(FAccess use) {
+        FAccessExp node = createEmptyNode();
+        node.setFAccess(use);
+        node.setLocationNoTree(this);
+        return node;
+    }
+
+    /**
+     * Create new node of same class as this, with the specified children.
+     */
+    public FAbstractDerExp FAbstractDerExp.createNode(FAccess use) {
+        FAbstractDerExp node = createEmptyNode();
+        node.setFAccess(use);
+        node.setOrder(order());
+        node.setLocationNoTree(this);
+        return node;
+    }
+
+	/**
+	 * Create new node of same class as this, with the specified children.
+	 */
+	public FUnaryBuiltIn FUnaryBuiltIn.createNode(FExp exp) {
+		FUnaryBuiltIn node = createEmptyNode();
+		node.setFExp(exp);
+		return node;
+	}
+	
+	/**
+	 * Create new node of same class as this, with the specified children.
+	 */
+	public FEventGenExp FEventGenExp.createNode(FExp exp) {
+		FEventGenExp node = createEmptyNode();
+		node.setX(exp);
+		return node;
+	}
+	
+	/**
+	 * Create new node of same class as this, with the specified children.
+	 */
+	public FEventGenExp FBinEventGenExp.createNode(FExp exp) {
+		throw new UnsupportedOperationException();
+	}
+	
+	/**
+	 * Create new node of same class as this, with the specified children.
+	 */
+	public FBinEventGenExp FBinEventGenExp.createNode(FExp x, FExp y) {
+		FBinEventGenExp node = createEmptyNode();
+		node.setX(x);
+		node.setY(y);
+		return node;
+	}
+	
+	/**
+	 * Create new node of same class as this, with the specified children.
+	 */
+	public FMathematicalFunctionCall FMathematicalFunctionCall.createNode(FExp exp) {
+		FMathematicalFunctionCall node = createEmptyNode();
+		node.setFExp(exp);
+		node.setLocation(this);
+		return node;
+	}
+	
+	/**
+	 * Create new node of same class as this, with the specified children.
+	 */
+	public FMathematicalFunctionCall FAtan2Exp.createNode(FExp exp) {
+		throw new UnsupportedOperationException();
+	}
+	
+	/**
+	 * Create new node of same class as this, with the specified children.
+	 */
+	public FMathematicalFunctionCall FAtan2Exp.createNode(FExp x, FExp y) {
+		FAtan2Exp node = createEmptyNode();
+		node.setFExp(x);
+		node.setY(y);
+		return node;
+	}
+	
+	/**
+	 * Create new node of same class as this, with the specified children.
+	 */
+	public FHomotopyExp FHomotopyExp.createNode(FExp x, FExp y) {
+		FHomotopyExp node = createEmptyNode();
+		node.setActual(x);
+		node.setSimplified(y);
+		return node;
+	}
+	
+	/**
+	 * Create new node of same class as this, with the specified children.
+	 */
+	public FSemiLinearExp FSemiLinearExp.createNode(FExp x, FExp y, FExp z) {
+		FSemiLinearExp node = createEmptyNode();
+		node.setX(x);
+		node.setPosSlope(y);
+		node.setNegSlope(z);
+		return node;
+	}
+	
+	/**
+	 * Create new node of same class as this, with the specified 
+	 * children. For missing y, use null.
+	 */
+	public FMinMaxExp FMinMaxExp.createNode(FExp x, FExp y) {
+		FMinMaxExp node = createEmptyNode();
+		node.setX(x);
+		if (y != null)
+			node.setY(y);
+		return node;
+	}
+	
+	/**
+	 * Create new node of same class as this, with the specified children.
+	 */
+	public FInfArgsFunctionCall FInfArgsFunctionCall.createNode(List<FExp> exps) {
+		FInfArgsFunctionCall node = createEmptyNode();
+		node.setFExpList(exps);
+		return node;
+	}
+	
+	/**
+	 * Create new node of same class as this, with the specified children.
+	 */
+	public FConnBoolOp FConnBoolOp.createNode(FExp exps) {
+		FConnBoolOp node = createEmptyNode();
+		node.setA(exps);
+		return node;
+	}
+	
+	/**
+	 * Create new node of same class as this, with the specified 
+	 *        children.
+	 */
+	public FInfArgsFunctionCall FInfArgsFunctionCall.createNode(ArrayList<FExp> exps) {
+		FInfArgsFunctionCall node = createEmptyNode();
+		for (FExp e : exps)
+			node.addFExp(e);
+		return node;
+	}
+	
+	/**
+	 * Create new node of same class as this, with the specified 
+	 *        children.
+	 */
+	public FArray FArray.createNode(List<FExp> exps) {
+		FArray node = createEmptyNode();
+		node.setFExpList(exps);
+		return node;
+	}
+	
+	/**
+	 * Create new node of same class as this, with the specified 
+	 *        children.
+	 */
+	public FArray FArray.createNode(ArrayList<FExp> exps) {
+		FArray node = createEmptyNode();
+		for (FExp e : exps)
+			node.addFExp(e);
+		return node;
+	}
+	
+	/**
+	 * Create new node of same class as this, with the specified 
+	 *        children. Used to allow common algorithms to handle unrelated types.
+	 */
+	public FExp FExp.createNodeBinary(FExp a, FExp b) {
+		throw new UnsupportedOperationException();
+	}
+	
+	/**
+	 * Create new node of same class as this, with the specified 
+	 *        child. Used to allow common algorithms to handle unrelated types.
+	 */
+	public FExp FExp.createNodeUnary(FExp a) {
+		throw new UnsupportedOperationException();
+	}
+	
+	// Add support to new types as needed.
+	public FExp FBinExp.createNodeBinary(FExp a, FExp b)    { return createNode(a, b); }
+	public FExp FMinMaxExp.createNodeBinary(FExp a, FExp b) { return createNode(a, b); }
+	public FExp FUnaryExp.createNodeUnary(FExp a)           { return createNode(a); }
+
+	
+	// The createNode() structure applied to various other nodes that requre common handling
+	public abstract FIfWhenClause FIfWhenClause.createEmptyNode();
+	public FIfClause   FIfClause.createEmptyNode()   { return new FIfClause(); }
+	public FWhenClause FWhenClause.createEmptyNode() { return new FWhenClause(); }
+	
+	public abstract FIfWhenElseEquation FIfWhenElseEquation.createEmptyNode();
+	public FIfEquation   FIfEquation.createEmptyNode()   { return new FIfEquation(); }
+	public FWhenEquation FWhenEquation.createEmptyNode() { return new FWhenEquation(); }
+	public FElseEquation FElseEquation.createEmptyNode() { return new FElseEquation(); }
+
+    public FEquation FEquation.createNode(List<FAttribute> attrs, FExp left, FExp right) {
+        return new FEquation(attrs, left, right);
+    }
+
+	public abstract FIfWhenStmt FIfWhenStmt.createEmptyNode();
+	public FIfStmt   FIfStmt.createEmptyNode()   { return new FIfStmt(); }
+	public FWhenStmt FWhenStmt.createEmptyNode() { return new FWhenStmt(); }
+	
+	public abstract FVariable FVariable.createEmptyNode();
+    public FGlobalVariable  FGlobalVariable.createEmptyNode()                   { return new FGlobalVariable(); }
+	public FRealVariable    FRealVariable.createEmptyNode()    					{ return new FRealVariable(); }
+	public FIntegerVariable FIntegerVariable.createEmptyNode() 					{ return new FIntegerVariable(); }
+	public FBooleanVariable FBooleanVariable.createEmptyNode() 					{ return new FBooleanVariable(); }
+	public FStringVariable  FStringVariable.createEmptyNode()  					{ return new FStringVariable(); }
+	public FEnumVariable    FEnumVariable.createEmptyNode()    					{ return new FEnumVariable(); }
+	public FRecordVariable  FRecordVariable.createEmptyNode()  					{ return new FRecordVariable(); }
+	public FExternalObjectVariable FExternalObjectVariable.createEmptyNode()	{ return new FExternalObjectVariable(); }
+
+	public FAttribute           FAttribute.createEmptyNode()         { return new FAttribute(); }
+	public FInternalAttribute   FInternalAttribute.createEmptyNode() { return new FInternalAttribute(); }
+    public FAnnotationAttribute FAnnotationAttribute.createEmptyNode() { return new FAnnotationAttribute(); }
+
+	/**
+	 * Create new node of same class as this, with the specified 
+	 *        children.
+	 */
+	public FIfWhenClause FIfWhenClause.createNode(FExp test, List<FStatement> stmts) {
+		FIfWhenClause node = createEmptyNode();
+		node.setTest(test);
+		node.setFStatementList(stmts);
+		return node;
+	}
+		
+	syn boolean FArtmBinExp.isDotOp() = true;
+	eq FAddExp.isDotOp()              = false;
+	eq FSubExp.isDotOp()              = false;
+	eq FMulExp.isDotOp()              = false;
+	eq FDivExp.isDotOp()              = false;
+	eq FPowExp.isDotOp()              = false;
+	
+	syn FDotAddExp FArtmBinExp.newFAddExp(FExp l, FExp r) = isDotOp() ? new FDotAddExp(l, r) : new FAddExp(l, r);
+	syn FDotSubExp FArtmBinExp.newFSubExp(FExp l, FExp r) = isDotOp() ? new FDotSubExp(l, r) : new FSubExp(l, r);
+	syn FDotMulExp FArtmBinExp.newFMulExp(FExp l, FExp r) = isDotOp() ? new FDotMulExp(l, r) : new FMulExp(l, r);
+	syn FDotDivExp FArtmBinExp.newFDivExp(FExp l, FExp r) = isDotOp() ? new FDotDivExp(l, r) : new FDivExp(l, r);
+	syn FDotPowExp FArtmBinExp.newFPowExp(FExp l, FExp r) = isDotOp() ? new FDotPowExp(l, r) : new FPowExp(l, r);
+	
+	syn FRelExp FMinMaxExp.createCompareNode(FExp x, FExp y);
+	eq FMinExp.createCompareNode(FExp x, FExp y) = new FLtExp(x, y);
+	eq FMaxExp.createCompareNode(FExp x, FExp y) = new FGtExp(x, y);
+	
+    public static FFunctionType FFunctionType.create(String name, Iterable<FVariable> fvs, FClass fclass) {
+        List<FRecordComponentType> in = new List<FRecordComponentType>();
+        List<FRecordComponentType> out = new List<FRecordComponentType>();
+        for (FVariable fv : fvs) {
+            out.add(new FRecordComponentType(fv.name(), fv.type().treeCopy()));
+        }
+        return new FFunctionType(Size.SCALAR, name, in, out, fclass);
+    }
+    
+    
+    public static List<InstFunctionArgument> FBuiltInFunctionCall.emptyArgs() { return new List<InstFunctionArgument>(); }
+    
+    public FDelayExp  FDelayExp.createNode(FExp exp, FExp delay, Opt<FExp> max)    { return new FDelayExp(exp, delay, max); }
+    public FAssert    FAssert.createNode(FExp test, FExp flatten, Opt<FExp> level) { return new FAssert(test, flatten, level); }
+    
+    
+    
+    public FAbsExp.FAbsExp(FExp a1)                      { this(emptyArgs(), a1); }
+    public FSqrtExp.FSqrtExp(FExp a1)                    { this(emptyArgs(), a1); }
+    public FDerStream.FDerStream(FExp a1)                { this(emptyArgs(), a1); }
+    public FInStream.FInStream(FExp a1)                  { this(emptyArgs(), a1); }
+    public FNoEventExp.FNoEventExp(FExp a1)              { this(emptyArgs(), a1); }
+    public FLogExp.FLogExp(FExp a1)                      { this(emptyArgs(), a1); }
+    public FEnumIntegerExp.FEnumIntegerExp(FExp a1)      { this(emptyArgs(), a1); }
+    public FSinExp.FSinExp(FExp a1)                      { this(emptyArgs(), a1); }
+    public FSinhExp.FSinhExp(FExp a1)                    { this(emptyArgs(), a1); }
+    public FCosExp.FCosExp(FExp a1)                      { this(emptyArgs(), a1); }
+    public FCoshExp.FCoshExp(FExp a1)                    { this(emptyArgs(), a1); }
+    public FIntegerFuncExp.FIntegerFuncExp(FExp a1)      { this(emptyArgs(), a1); }
+    public FFloorFuncExp.FFloorFuncExp(FExp a1)          { this(emptyArgs(), a1); }
+    public FIdentity.FIdentity(FExp a1)                  { this(emptyArgs(), a1); }
+    
+    public FReinit.FReinit(FExp a1, FExp a2)             { this(emptyArgs(), a1, a2); }
+    public FCross.FCross(FExp a1, FExp a2)               { this(emptyArgs(), a1, a2); }
+    public FSampleExp.FSampleExp(FExp a1, FExp a2)       { this(emptyArgs(), a1, a2); }
+    public FDivFuncExp.FDivFuncExp(FExp a1, FExp a2)     { this(emptyArgs(), a1, a2); }
+    public FOuterProduct.FOuterProduct(FExp a1, FExp a2) { this(emptyArgs(), a1, a2); }
+    public FSmoothExp.FSmoothExp(FExp a1, FExp a2)       { this(emptyArgs(), a1, a2); }
+    public FHomotopyExp.FHomotopyExp(FExp a1, FExp a2)   { this(emptyArgs(), a1, a2); }
+    
+    public FMaxExp.FMaxExp(FExp a1,   Opt<FExp> a2)      { this(emptyArgs(), a1, a2); }
+    public FSizeExp.FSizeExp(FExp a1, Opt<FExp> a2)      { this(emptyArgs(), a1, a2); }
+    
+    public FSemiLinearExp.FSemiLinearExp(FExp a1, FExp a2, FExp a3) { this(emptyArgs(), a1, a2, a3); }
+    public FLinspace.FLinspace(FExp a1, FExp a2, FExp a3)           { this(emptyArgs(), a1, a2, a3); }
+    
+    public FDelayExp.FDelayExp(FExp a1, FExp a2, Opt<FExp> a3) { this(emptyArgs(), a1, a2, a3, List.EMPTY); }
+    public FAssert.FAssert(FExp a1, FExp a2, Opt<FExp> a3)     { this(emptyArgs(), a1, a2, a3); }
+    
+    public FFillExp.FFillExp(List<FExp> dims, FExp exp)              { this(emptyArgs(), dims, exp); }
+    public FSpatialDistExp.FSpatialDistExp(FExp a1, FExp a2, FExp a3, FExp a4, FExp a5, FExp a6) { 
+        this(emptyArgs(), a1, a2, a3, a4, a5, a6, Opt.EMPTY);
+    }
+    public FExInStream.FExInStream(FExp a1, FExp a2, List<FExp> a3) { this(emptyArgs(), a1, a2, a3); }
+    
+    public FLtExp.FLtExp(FExp e1, FExp e2)   { this(e1, e2, new Opt<FAccessExp>()); }
+    public FLeqExp.FLeqExp(FExp e1, FExp e2) { this(e1, e2, new Opt<FAccessExp>()); }
+    public FGtExp.FGtExp(FExp e1, FExp e2)   { this(e1, e2, new Opt<FAccessExp>()); }
+    public FGeqExp.FGeqExp(FExp e1, FExp e2) { this(e1, e2, new Opt<FAccessExp>()); }
+    public FEqExp.FEqExp(FExp e1, FExp e2)   { this(e1, e2, new Opt<FAccessExp>()); }
+    public FNeqExp.FNeqExp(FExp e1, FExp e2) { this(e1, e2, new Opt<FAccessExp>()); }
+
+}

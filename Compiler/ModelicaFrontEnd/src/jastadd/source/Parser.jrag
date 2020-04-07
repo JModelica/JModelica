@@ -1,0 +1,419 @@
+/*
+    Copyright (C) 2017 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+import org.jmodelica.util.AdjustableSymbol;
+
+aspect Parsers {
+
+    ASTNode implements AdjustableSymbol;
+
+    /* NB: This method is (mostly) duplicated in:
+     * org.jmodelica.util.AbstractAdjustableSymbol */
+    public int ASTNode.adjustStartOfEmptySymbols(AdjustableSymbol[] syms, int i, int last) {
+        int value = last;
+        if (i < syms.length) {
+            value = syms[i].adjustStartOfEmptySymbols(syms, i + 1, last);
+        }
+        if (start == end && value != 0) {
+            start = end = value;
+        }
+        return start;
+    }
+
+    public int BaseNode.adjustStartOfEmptySymbols(AdjustableSymbol[] syms, int i, int last) {
+        return start;
+    }
+
+    public interface ParseListener {
+        /**
+         * Called when a model is about to be parsed.
+         * @param loadInfo the information about the model source file
+         */
+        void fileParsed(LoadInfo loadInfo);
+    }
+
+    /**
+     * Handles all parsing of Modelica code.
+     */
+    public final class ParserHandler {
+        public static final ParseListener DEFAULT_PARSE_LISTENER = new ParseListener() {
+            @Override
+            public void fileParsed(LoadInfo loadInfo) {
+                ModelicaCompiler.log.info("Parsing " + loadInfo.getPath() + "...");
+            }
+        };
+
+        public static ParseListener parseListener = DEFAULT_PARSE_LISTENER;
+
+        public static final FormattingRecorder<ASTNode<?>> DEFAULT_FORMATTING_RECORDER =
+                new DefaultFormattingRecorder<ASTNode<?>>();
+        
+        private final FormattingRecorder<ASTNode<?>> formattingRecorder;
+
+        public ParserHandler() {
+            this(DEFAULT_FORMATTING_RECORDER);
+        }
+
+        public ParserHandler(FormattingRecorder<ASTNode<?>> formattingRecorder) {
+            this.formattingRecorder = formattingRecorder;
+        }
+    }
+
+    public SourceRoot ParserHandler.parseModel(UtilInterface uif, LoadInfo loadInfo) 
+      throws FileNotFoundException, IOException, beaver.Parser.Exception, CompilerException{
+        SourceRoot sr;
+        try {
+            sr = parseFile(uif, loadInfo);
+        } catch (ParserException e) {
+            CompilerException ce = new CompilerException();
+            ce.addProblem(e.getProblem());
+            throw ce;
+        }
+        //loadOptions(sr);
+        for (SrcStoredDefinition sd : sr.getProgram().getUnstructuredEntitys()) {
+            sd.setFileName(loadInfo.getPath());
+        }
+        return sr;
+    }
+    
+    public SourceRoot ParserHandler.parseModel(UtilInterface uif, Collection<LoadInfo> loadInfos) 
+            throws FileNotFoundException, IOException, beaver.Parser.Exception, CompilerException{
+        SourceRoot sr = new SourceRoot(new Program());
+        uif.transferRoot(sr);
+        for (LoadInfo loadInfo : loadInfos) {
+            Path f = loadInfo.getPathAsPath();
+            LoadInfo tmpInfo = loadInfo;
+            if (Files.isDirectory(f)) {
+                tmpInfo = loadInfo.withPath(SrcLibNode.packageFile(f));
+            }
+            SourceRoot sr_tmp = (tmpInfo.getPathAsPath() != null) ? parseModel(uif, tmpInfo) : null;
+            if (!uif.getOptionRegistry().getBooleanOption("ignore_within")) {
+                Path lib = null;
+                if (sr_tmp != null && sr_tmp.isFileInLibrary()) { 
+                    lib = sr_tmp.findOutermostLibraryDir();
+                }
+                else if (SrcLibNode.isPackageFile(f)) {
+                    lib = f.getParent();
+                }
+                if (lib != null) {
+                    String type = Files.isDirectory(f) ? "Directory" : "File";
+                    ModelicaCompiler.log.warning("%s '%s' is part of library at '%s', using library instead.", type, loadInfo.getPath(), lib.toString());
+                    loadInfo = loadInfo.withPath(lib);
+                    f = lib;
+                }
+            }
+            if (Files.isDirectory(f)) {
+                if (!sr.getProgram().getLibraryList().addLibrary(loadInfo, SrcLibNode.LoadReason.COMMANDLINE)) 
+                    ModelicaCompiler.log.error(String.format("Error: The directory '%s' is not a Modelica library.", loadInfo.getPath()));
+            } else {
+                for (SrcStoredDefinition sd : sr_tmp.getProgram().getUnstructuredEntitys()) 
+                    sr.getProgram().addUnstructuredEntity(sd);
+            }
+        }
+        return sr;
+    }
+
+
+    /*
+     * These five methods are the only with references to the package containing 
+     * the parser. Refine when needed.
+     */
+    public beaver.Parser ParserHandler.createModelicaParser(AbstractModelicaScanner<ASTNode<?>> scanner, LoadInfo loadInfo) {
+        org.jmodelica.modelica.parser.ModelicaParser parser = 
+            new org.jmodelica.modelica.parser.ModelicaParser();
+        parser.setLineBreakMap(scanner.getLineBreakMap());
+        parser.setFormattingRecorder(scanner.getFormattingRecorder());
+        parser.setFileName(loadInfo.getPath());
+        parser.setLoadInfo(loadInfo);
+        return parser;
+    }
+
+    public AbstractModelicaScanner<ASTNode<?>> ParserHandler.createModelicaScanner(Reader in) {
+        AbstractModelicaScanner<ASTNode<?>> scanner = new org.jmodelica.modelica.parser.ModelicaScanner(in);
+        scanner.setFormattingRecorder(formattingRecorder);
+        return scanner;
+    }
+
+    public AbstractFlatModelicaScanner ParserHandler.createModelicaFlatScanner(Reader in) {
+        return new org.jmodelica.modelica.parser.FlatModelicaScanner(in);
+    }
+
+    public short ParserHandler.expModelicaGoal() {
+        return org.jmodelica.modelica.parser.ModelicaParser.AltGoals.exp;
+    }
+
+    public short ParserHandler.anonymousClassModelicaGoal() {
+        return org.jmodelica.modelica.parser.ModelicaParser.AltGoals.anonymous_short_class;
+    }
+
+    public short ParserHandler.elementGoal() {
+        return org.jmodelica.modelica.parser.ModelicaParser.AltGoals.element;
+    }
+
+    public short ParserHandler.abstractEquationGoal() {
+        return org.jmodelica.modelica.parser.ModelicaParser.AltGoals.abstract_equation;
+    }
+
+    public short ParserHandler.modifierGoal() {
+        return org.jmodelica.modelica.parser.ModelicaParser.AltGoals.argument;
+    }
+
+    public short ParserHandler.accessScalarGoal() {
+        return org.jmodelica.modelica.parser.ModelicaParser.AltGoals.access_scalar;
+    }
+
+    public SourceRoot ParserHandler.parseFile(UtilInterface uif, LoadInfo loadInfo) 
+            throws ParserException, beaver.Parser.Exception, FileNotFoundException, IOException {
+        parseListener.fileParsed(loadInfo);
+        return parseModelicaFile(uif, loadInfo);
+    }
+
+    public SourceRoot ParserHandler.parseString(UtilInterface uif, String str, LoadInfo loadInfo) 
+            throws CompilerException, beaver.Parser.Exception, IOException {
+        try {
+            return parseStringNoCatch(uif, str, loadInfo);
+        } catch (ParserException e) {
+            CompilerException ce = new CompilerException();
+            ce.addProblem(e.getProblem());
+            throw ce;
+        }
+    }
+
+    public SourceRoot ParserHandler.parseStringNoCatch(UtilInterface uif, String str, LoadInfo loadInfo) 
+            throws CompilerException, beaver.Parser.Exception, IOException {
+        return parseModelicaString(uif, str, loadInfo);
+    }
+
+    public SrcExp ParserHandler.parseExpString(String str)
+            throws ParserException, beaver.Parser.Exception, IOException {
+        return parseModelicaExpString(str);
+    }
+
+    public SrcBaseClassDecl ParserHandler.parseAnonymousClassString(String code, SrcRestriction restriction, String targetName)
+            throws ParserException, beaver.Parser.Exception, IOException {
+        return parseModelicaAnonymousClassString(code, restriction, targetName);
+    }
+
+    public SourceRoot ParserHandler.parseModelicaFile(UtilInterface uif, LoadInfo loadInfo) 
+            throws ParserException, beaver.Parser.Exception, IOException {
+        Reader reader = fileReader(uif, loadInfo.getPath());
+        try {
+            return parseModelicaResource(uif, reader, loadInfo);
+        } finally {
+            reader.close();
+        }
+    }
+
+    public SourceRoot ParserHandler.parseModelicaString(UtilInterface uif, String str, LoadInfo loadInfo) 
+            throws ParserException, beaver.Parser.Exception, IOException {
+        return parseModelicaResource(uif, new StringReader(str), loadInfo);
+    }
+
+    public SourceRoot ParserHandler.parseModelicaResource(UtilInterface uif, Reader resource, LoadInfo loadInfo) 
+            throws ParserException, beaver.Parser.Exception, IOException {
+        AbstractModelicaScanner<ASTNode<?>> scanner = createModelicaScanner(resource);
+        beaver.Parser parser = createModelicaParser(scanner, loadInfo);
+        SourceRoot sr = (SourceRoot) parser.parse(scanner);
+        sr.setUtilInterface(uif);
+        sr.setFileName(loadInfo.getPath());
+        return sr;
+    }
+    
+    public static final LoadInfo ParserHandler.EXP_FILENAME = LoadInfo.create("<predefined string>");
+
+    public SrcExp ParserHandler.parseModelicaExpString(String str)
+            throws ParserException, beaver.Parser.Exception, IOException {
+        return parseModelicaExpString(str, false);
+    }
+
+    public SrcExp ParserHandler.parseModelicaExpString(String str, boolean preserveFormatting)
+            throws ParserException, beaver.Parser.Exception, IOException {
+        AbstractModelicaScanner<ASTNode<?>> scanner = createModelicaScanner(new StringReader(str));
+        beaver.Parser parser = createModelicaParser(scanner, EXP_FILENAME);
+        SrcExp exp = (SrcExp) parser.parse(scanner, expModelicaGoal());
+        if (preserveFormatting) {
+            scanner.getFormattingRecorder().postParsing(exp);
+        }
+        return exp;
+    }
+
+    public static final LoadInfo ParserHandler.ANONYMOUS_CLASS_FILENAME = LoadInfo.create("<command line argument>");
+
+    public SrcBaseClassDecl ParserHandler.parseModelicaAnonymousClassString(String code, SrcRestriction restriction, String targetName)
+            throws ParserException, beaver.Parser.Exception, IOException {
+        AbstractModelicaScanner scanner = createModelicaScanner(new StringReader(code));
+        beaver.Parser parser = createModelicaParser(scanner, ANONYMOUS_CLASS_FILENAME);
+        SrcBaseClassDecl cl = (SrcBaseClassDecl) parser.parse(scanner, anonymousClassModelicaGoal());
+        cl.setSrcRestriction(restriction);
+        cl.setName(new SrcIdDecl(targetName));
+        return cl;
+    }
+
+    public SrcElement ParserHandler.parseElement(String code, LoadInfo parentLoadInfo)
+            throws ParserException, beaver.Parser.Exception, IOException {
+        return parseElement(code, parentLoadInfo, false);
+    }
+
+    public SrcElement ParserHandler.parseElement(String code, LoadInfo parentLoadInfo, boolean preserveFormatting)
+            throws ParserException, beaver.Parser.Exception, IOException {
+        AbstractModelicaScanner<ASTNode<?>> scanner = createModelicaScanner(new StringReader(code));
+        beaver.Parser parser = createModelicaParser(scanner, parentLoadInfo);
+        SrcElement elem = (SrcElement) parser.parse(scanner, elementGoal());
+        if (preserveFormatting) {
+            scanner.getFormattingRecorder().postParsing(elem);
+        }
+        return elem;
+    }
+
+    public SrcAbstractEquation ParserHandler.parseAbstractEquation(String code, LoadInfo parentLoadInfo)
+            throws ParserException, beaver.Parser.Exception, IOException {
+        return parseAbstractEquation(code, parentLoadInfo, false);
+    }
+    public SrcAbstractEquation ParserHandler.parseAbstractEquation(String code, LoadInfo parentLoadInfo,
+            boolean preserveFormatting) throws ParserException, beaver.Parser.Exception, IOException {
+        AbstractModelicaScanner scanner = createModelicaScanner(new StringReader(code));
+        beaver.Parser parser = createModelicaParser(scanner, parentLoadInfo);
+        SrcAbstractEquation eqn = (SrcAbstractEquation) parser.parse(scanner, abstractEquationGoal());
+        if (preserveFormatting) {
+            scanner.getFormattingRecorder().postParsing(eqn);
+        }
+        return eqn;
+    }
+
+    public SrcArgument ParserHandler.parseModifier(String code, LoadInfo parentLoadInfo)
+            throws ParserException, beaver.Parser.Exception, IOException {
+        return parseModifier(code, parentLoadInfo, false);
+    }
+    public SrcArgument ParserHandler.parseModifier(String code, LoadInfo parentLoadInfo,
+            boolean preserveFormatting) throws ParserException, beaver.Parser.Exception, IOException {
+        AbstractModelicaScanner scanner = createModelicaScanner(new StringReader(code));
+        beaver.Parser parser = createModelicaParser(scanner, parentLoadInfo);
+        SrcArgument eqn = (SrcArgument) parser.parse(scanner, modifierGoal());
+        if (preserveFormatting) {
+            scanner.getFormattingRecorder().postParsing(eqn);
+        }
+        return eqn;
+    }
+
+    public SrcAccess ParserHandler.parseAccessScalar(String code, LoadInfo parentLoadInfo) 
+            throws ParserException, beaver.Parser.Exception, IOException {
+        return parseAccessScalar(code, parentLoadInfo, false);
+    }
+
+    public SrcAccess ParserHandler.parseAccessScalar(String code, LoadInfo parentLoadInfo, boolean preserveFormatting) 
+            throws ParserException, beaver.Parser.Exception, IOException {
+        final AbstractModelicaScanner<ASTNode<?>> scanner = createModelicaScanner(new StringReader(code));
+        final beaver.Parser parser = createModelicaParser(scanner, parentLoadInfo);
+        final SrcAccess srcAccess = (SrcAccess) parser.parse(scanner, accessScalarGoal());
+
+        if (preserveFormatting) {
+            scanner.getFormattingRecorder().postParsing(srcAccess);
+        }
+
+        return srcAccess;
+    }
+
+    public Reader ParserHandler.fileReader(UtilInterface uif, File file) throws FileNotFoundException {
+        return new InputStreamReader(new FileInputStream(file), ASTNode.UTF8);
+    }
+
+    public Reader ParserHandler.fileReader(UtilInterface uif, String path) throws FileNotFoundException {
+        return fileReader(uif, new File(path));
+    }
+
+    public static final Charset ASTNode.UTF8 = Charset.forName("UTF-8");
+
+    /**
+     * This one is used in the cases where mc is null, e.g. unit testing.
+     */
+    private static final ParserHandler UtilInterface.FALLBACK_PARSER_HANDLER = new ParserHandler();
+
+    public ParserHandler UtilInterface.getParserHandler() {
+        if (mc == null) {
+            return FALLBACK_PARSER_HANDLER;
+        } else {
+            return mc.getParserHandler();
+        }
+    }
+
+    private ParserHandler ModelicaCompiler.parserHandler = buildParserHandler();
+
+    protected static ParserHandler ModelicaCompiler.buildParserHandler() {
+        return new ParserHandler();
+    }
+
+    public ParserHandler ModelicaCompiler.getParserHandler() {
+        return parserHandler;
+    }
+
+    public void ModelicaCompiler.setParserHandler(ParserHandler parserHandler) {
+        this.parserHandler = parserHandler;
+    }
+
+}
+
+
+aspect ParserHelpers {
+
+    /**
+     * An exception for parser errors.
+     */
+    public class ParserException extends java.lang.RuntimeException {
+        private Problem p;
+        
+        /**
+         * Default constructor.
+         */
+        public ParserException(Problem p) {
+            this.p = p;
+        }
+        
+        /**
+         * Getter for problem.
+         */
+         public Problem getProblem() {
+             return p;
+         }
+         
+         /**
+          * Return String representation.
+          */
+         public String toString() {
+            return getClass().getName() + ":\n" + p;
+         }
+        
+    }
+
+    /**
+     * Generate SrcAccess node for SrcComponentRedeclare nodes during parsing.
+     */
+    public SrcAccess SrcComponentClause.createAccessForRedeclareNode() {
+        SrcComponentDecl cd = getSrcComponentDeclNoTransform(0);
+        SrcIdDecl name = cd.getNameNoTransform();
+        Opt<SrcArraySubscripts> arr = cd.getVarArraySubscriptsOptNoTransform();
+        SrcAccess a;
+        if (arr.hasChild()) {
+            a = new SrcArrayAccess(name.getID(), arr.getChild().treeCopyNoTransform());
+            a.setLocationNoTree(name, arr);
+        } else {
+            a = new SrcNamedAccess(name.getID());
+            a.setLocationNoTree(name);
+        }
+        return a;
+    }
+
+}

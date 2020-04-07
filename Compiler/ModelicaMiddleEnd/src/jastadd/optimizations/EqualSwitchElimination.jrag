@@ -1,0 +1,94 @@
+/*
+    Copyright (C) 2017 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect EqualSwitchElimination {
+
+    public class FClass {
+        /**
+         * Reduce the number of event indicators by eliminating relative
+         * operators that are equal. This is done by traversing the normal
+         * equation system and the initial equation system and storing all
+         * relative operations in a map that translate toString() to a list
+         * of relative operators that are equal.
+         * Operators are then eliminating by setting the originalFRelExp
+         * field in the redundant operators.
+         * The normal operator should be used if equal operators exists in
+         * both the normal and initial blocks. This is achieved by inserting all
+         * normal equations into the map before the initial equations and then
+         * selecting the first in the list as the original operator.
+         * Note that we can't eliminate if we have any switch in the normal
+         * equation section but the selected switch is in the initial system!
+         */
+        public class eliminateEqualSwitches extends Transformation {
+            public void perform() {
+                Map<String, Collection<FRelExp>> candidates = new HashMap<String, Collection<FRelExp>>();
+                for (FRelExp exp : relExpsWithEvent()) {
+                    exp.collectEqualSwitches(candidates);
+                    exp.setOriginalFExp(exp);
+                } 
+                for (FRelExp exp : eventExpInInitialEquations()) {
+                    exp.collectEqualSwitches(candidates);
+                    exp.setOriginalFExp(exp);
+                }
+                for (Map.Entry<String, Collection<FRelExp>> entry : candidates.entrySet()) {
+                    if (entry.getValue().size() < 2)
+                        continue;
+                    boolean anyInDAE = false;
+                    FRelExp original = null;
+                    for (FRelExp exp : entry.getValue()) {
+                        anyInDAE |= exp.inEquationSection();
+                        if (!exp.hasBrancher() && !(exp.inFArray() && exp.inFunctionCall())) {
+                            original = exp;
+                            break;
+                        }
+                    }
+                    if (original == null) {
+                        // Found no switch that meet our requirements
+                        continue;
+                    }
+                    if (original.inInitialEquationSection() && anyInDAE) {
+                        // If the "original" exp is in the initial DAE and we have other exps in the DAE, then we can't
+                        // eliminate! Cause the others in the DAE have guards (or other reason) for not getting picked
+                        // before the one in initial!
+                        continue;
+                    }
+                    log.verbose("Eliminated %d equal switches: %s", entry.getValue().size() - 1, entry.getKey());
+                    for (FRelExp exp : entry.getValue()) {
+                        exp.setOriginalFExp(original);
+                    }
+                }
+                root().flushAllRecursive();
+            }
+        }
+    }
+
+    public void FExp.collectEqualSwitches(Map<String, Collection<FRelExp>> candidates) {
+    }
+
+    public void FRelExp.collectEqualSwitches(Map<String, Collection<FRelExp>> candidates) {
+        FAlgorithm alg = myFAlgorithm();
+        if (alg != null && dependsOn(alg.referencedFVariablesInLHS())) {
+            return;
+        }
+        String key = toString();
+        Collection<FRelExp> list = candidates.get(key);
+        if (list == null) {
+            list = new ArrayList<FRelExp>();
+            candidates.put(key, list);
+        }
+        list.add(this);
+    }
+}

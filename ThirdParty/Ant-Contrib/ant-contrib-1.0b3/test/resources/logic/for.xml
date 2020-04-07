@@ -1,0 +1,24 @@
+<project>
+  <target name="init">
+    <taskdef resource="net/sf/antcontrib/antlib.xml">
+      <classpath location="${antcontrib.jar}"/>
+    </taskdef>
+  </target>
+
+  <target name="loop" depends="init">
+    <for param="i" end="10">
+      <sequential>
+        <echo>i is @{i}</echo>
+      </sequential>
+    </for>
+  </target>
+
+  <target name="step" depends="init">
+    <for param="i" end="0" begin="10" step="-2">
+      <sequential>
+        <echo>i is @{i}</echo>
+      </sequential>
+    </for>
+  </target>
+
+</project>

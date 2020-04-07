@@ -1,0 +1,48 @@
+// This loads the Jenkins pipeline library found in the ci folder.
+def url = scm.getLocations()[0].remote
+library identifier: 'JModelica@ci', retriever: modernSCM([$class: 'SubversionSCMSource', remoteBase: url, credentialsId: ''])
+
+// Extract branch info from url variable (this assumes that this Jenkinsfile
+// has been checked out directly by Jenkins as part of pipeline build).
+(JM_SVN_PATH, JM_SVN_TYPE, JM_SVN_NAME) = extractBranchInfo("https://svn.jmodelica.org", url)
+
+// Temporarily cannot upload to server 
+boolean SHOULD_UPLOAD_INSTALL = false // JM_SVN_PATH.equals("trunk")
+
+// Set build name:
+currentBuild.displayName += " (" + (env.TRIGGER_CAUSE == null ? "MANUAL" : env.TRIGGER_CAUSE) + ")"
+
+// Set discard policy
+properties([buildDiscarder(logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '5', daysToKeepStr: '', numToKeepStr: ''))])
+
+    node ("linux") {
+        stage("Checkout JModelica.org") {
+            checkout([
+                $class: 'SubversionSCM',
+                locations: [
+                    [local: 'JModelica', remote: "https://svn.jmodelica.org/${JM_SVN_PATH}"],
+                ],
+                workspaceUpdater: [$class: 'UpdateWithCleanUpdater'],
+                quietOperation: true,
+            ])
+        }
+        stage("Build, test and archive") {
+            sh """
+echo "exporting 1"
+export USER=jenkins
+echo "exporting 2"
+export SCRIPT_PATH="${P510_PATH}/Jenkins/scripts"
+echo "exporting 3"
+export IPOPT_HOME="/home/jenkins/Ipopt-3.10.2/install"
+echo "exporting 4"
+export TEST_TAGS="-a stddist_base -a stddist_full -a fmi -a ipopt -a assimulo -a casadi_base -a casadi_full -a slow -a noncompliantfmi "
+echo "chmod 5"
+chmod u+x "${SCRIPT_PATH}/jm-buildAndTest.sh"
+echo "running jm-buildAndTest.sh"
+"${SCRIPT_PATH}/jm-buildAndTest.sh"
+echo "shellscript done"
+"""
+            archive '*.tar.gz'
+            junit testResults: "results/*.xml, src/Compiler/OptimicaCompiler/doc/junit-reports/TEST-org.jmodelica.test.optimica.junitgenerated.*.xml", allowEmptyResults: true
+        }
+    }

@@ -1,0 +1,20 @@
+<project default="invalid">
+  <target name="invalid">
+    <fail>Don't call this file directly.</fail>
+  </target>
+
+  <taskdef resource="net/sf/antcontrib/antcontrib.properties">
+    <classpath location="${antcontrib.jar}"/>
+  </taskdef>
+
+  <target name="consistency">
+    <osfamily property="foo"/>
+    <condition property="consistent">
+      <os family="${foo}"/>
+    </condition>
+  </target>
+
+  <target name="missingProperty">
+    <osfamily/>
+  </target>
+</project>

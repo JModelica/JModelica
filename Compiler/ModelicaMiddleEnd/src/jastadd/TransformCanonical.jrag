@@ -1,0 +1,500 @@
+/*
+    Copyright (C) 2009-2017 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+//import java.util.ArrayDeque;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.PrintStream;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.EnumSet;
+import java.util.Queue;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Collections;
+import java.util.Iterator;
+
+import org.jmodelica.util.collections.ListMap;
+import org.jmodelica.util.collections.LinkedHashListMap;
+import org.jmodelica.util.ErrorCheckType;
+
+
+/* This causes conflicts
+import org.jmodelica.graphs.EquationSystem;
+import org.jmodelica.graphs.Equation;
+import org.jmodelica.graphs.Variable;
+*/
+
+/**
+ * Contains transformations on the flattened model which converts
+ * it into a canonical form.
+ */
+aspect TransformCanonical {
+
+    /**
+     * Transform the raw flattened model into a structured form.
+     * 
+     * Currently, the following operations are performed:
+     *  <ul>
+     *    <li> Binding equations for variables are converted into regular
+     *         equations by calling genBindingEquations().
+     *    <li> For each non-function algorithm:
+     *         <ul>
+     *                any assigned variables as outputs and any used 
+     *                variables as inputs.
+     *           <li> The original algorithm is replaced with a call to 
+     *                the generated function.
+     *         </ul>
+     *    <li> The model is scalarized, i.e., all array declarations and
+     *         equations are replaced by scalar declarations and equations
+     *    <li> Alias variables are eliminated from the model.
+     *    <li> Derivative variables are generated and inserted in the
+     *         list of FVariables by calling setFDerivativeVariables().
+     *    <li> Generate initial equations based on start attribute.
+     *    <li> Sort dependent parameters.
+     *  </ul>
+     */
+
+    /**
+     *  transformCanonicalBase contains all transformation that should be
+     *  done by both the Modelica and the Optimica compilers.
+     */
+    public void FClass.transformCanonicalBase() {
+        for (Transformation t : getTransformations()) {
+            t.apply();
+        }
+    }
+
+    public void FClass.transformCanonicalCleanup() {
+        removeUnusedGlobals();
+        root().flushAllRecursive();
+    }
+    
+    public class FClass {
+        
+        /**
+         * List that contains all transformations that has been registered.
+         * This list is initialized by setupTransformations()
+         */
+        private java.util.List<Transformation> transformations;
+        
+        /**
+         * Method that initializes the transformations list. This method should
+         * called before each operation on the list. Internal check prevents
+         * multiple initializations.
+         */
+        private void setupTransformations() {
+            if (transformations != null)
+                return;
+            transformations = new ArrayList<Transformation>();
+            transformations.add(new enableIfEquationElimination());
+            transformations.add(new genAlgorithmFunctionsIfSet());
+            transformations.add(new genInitArrayStatements());
+            transformations.add(new scalarize());
+            transformations.add(new MakeReinitedVarsStates());
+            transformations.add(new enableIfEquationElimination());
+            transformations.add(new enableStreamsRewrite());
+            transformations.add(new ExtractEventGeneratingExpressions());
+            transformations.add(new GenerateEventIndicators());
+            transformations.add(new convertWhenToIf());
+            transformations.add(new FunctionInliningIfSet());
+            transformations.add(new setFDerivativeVariables());
+            transformations.add(new addFPreVariables());
+            transformations.add(new enableIfEquationRewrite());
+            transformations.add(new aliasEliminationIfSet());
+            transformations.add(new variabilityPropagationIfSet());
+            transformations.add(new aliasEliminationIfSet());
+            transformations.add(new eliminateLinearEquations());
+            transformations.add(new aliasEliminationIfSet());
+            transformations.add(new enableExpandedInStreamRewrite());
+            transformations.add(new evaluateAsserts());
+            transformations.add(new enableSemiLinearRewrite());
+            transformations.add(new eliminateEqualSwitches());
+            transformations.add(new genInitialEquations());
+            transformations.add(new addStateInitialEquationsIfSet());
+            transformations.add(new setFDerivativeVariablesPreBLT());
+            transformations.add(new indexReduction());
+            transformations.add(new LateFunctionInliningIfSet());
+            transformations.add(new commonSubexpressionEliminationIfSet());
+            transformations.add(new addFPreVariables());
+            transformations.add(new aliasEliminationIfSet());
+            transformations.add(new eliminateLinearEquations());
+            transformations.add(new sortDependentParameters());
+            transformations.add(new addRuntimeOptionParameters());
+            transformations.add(new computeMatchingsAndBLT());
+        }
+
+        /**
+         * This method returns the list of transformations. This method should
+         * be used when retreiving the list of transformations since it ensures
+         * that the list is initialized.
+         */
+        private Collection<Transformation> getTransformations() {
+            setupTransformations();
+            return transformations;
+        }
+
+        /**
+         * Adds a transformation to the list of transformations. The
+         * transformation is added after each occurance of <code>after<code>.
+         * The transformation is not added if no occurances of 
+         * <code>after<code> is found.
+         */
+        private <T extends Transformation> T addTransformationAfter(T transformation, String after) {
+            setupTransformations();
+            ListIterator<Transformation> it = transformations.listIterator();
+            while (it.hasNext()) {
+                Transformation other = it.next();
+                if (other.name().equals(after))
+                    it.add(transformation);
+            }
+            return transformation;
+        }
+
+        /**
+         * Base class for transformations on the flat tree.
+         */
+        public abstract class Transformation {
+
+            private String option;
+
+            /**
+             * Create a transformation with default settings:
+             * <ul>
+             * <li>Not coupled to a compiler option.</li>
+             * </ul>
+             */
+            public Transformation() {
+                this(null);
+            }
+
+            /**
+             * Create a transformation with specific settings.
+             * 
+             * @param option  boolean option the transformation depends on (null for none)
+             */
+            public Transformation(String option) {
+                this.option = option;
+            }
+
+            /**
+             * Perform the transformation.
+             */
+            public abstract void perform();
+
+            /**
+             * Determine if this transformation should be perfomed.
+             * 
+             * Defaults to true if this transformation does not depend on an option or the option is true.
+             */
+            public boolean active() {
+                return (option == null) || myOptions().getBooleanOption(option);
+            }
+
+            /**
+             * The name of this transformation.
+             * 
+             * Defaults to the name of the class.
+             */
+            public String name() {
+                return getClass().getSimpleName();
+            }
+
+            /**
+             * Apply this transformation, if active.
+             * 
+             * Subclasses should not override this method.
+             */
+            public void apply() {
+                if (active()) {
+                    try {
+                        beginStep(name());
+                        log.info("Applying transformation: " + name() + "...");
+                        perform();
+                    } finally {
+                        completedTransformationSteps++;
+                        lastCompletedTransformationStep = name();
+                        endStep(name());
+                    }
+                    transformationStepDebug();
+                }
+            }
+
+            /**
+             * Flushes tree and discards calculated information.
+             * 
+             * Call this method at the end of perform() if it changed the tree.
+             */
+            void change() {
+                setDAEBLT(BLT.EMPTY_BLT, createBLTInput());
+                setDAEInitBLT(BLT.EMPTY_BLT);
+                DAEBiPGraph = null;
+                root().flushAllRecursiveClearFinal();
+            }
+            
+            @Override
+            public String toString() {
+                return getClass().getSimpleName() + ", operating on:\n\n" + FClass.this;
+            }
+        }
+
+    }
+
+    /**
+     * Perform transformation step debug operations that are activated.
+     */
+    public void FClass.transformationStepDebug() {
+        generateStepMof();
+        sanityCheck();
+    }
+
+    /**
+     * Generate a .mof file with the current flat tree.
+     */
+    public void FClass.generateStepMof() {
+        String value = myOptions().getStringOption("debug_transformation_steps");
+        if ("full".equals(value)) {
+            TRANSFORMATION_STEP_DIR.mkdir();
+            TRANSFORMATION_STEP_HTML_DIR.mkdir();
+            String fileName = String.format("%02d_%s.mof", completedTransformationSteps, lastCompletedTransformationStep);
+            String htmlFileName = String.format("%02d_%s.html", completedTransformationSteps, lastCompletedTransformationStep);
+            File file = new File(TRANSFORMATION_STEP_DIR, fileName);
+            File htmlFile = new File(TRANSFORMATION_STEP_HTML_DIR, htmlFileName);
+            log.debug("Writing flat tree after step " + lastCompletedTransformationStep + " to " + fileName);
+            CodeStream out = new CodeStream(file);
+            CodeStream htmlOut = new CodeStream(htmlFile);
+            sourcePrettyPrint(out, "");
+            htmlSourcePrettyPrint(htmlOut, "");
+            out.close();
+            htmlOut.close();
+        }
+        if ("full".equals(value) || "diag".equals(value)) {
+            TRANSFORMATION_STEP_DIR.mkdir();
+            String fileName = String.format("%02d_%s.txt", completedTransformationSteps, lastCompletedTransformationStep);
+            File file = new File(TRANSFORMATION_STEP_DIR, fileName);
+            log.debug("Writing diag after step " + lastCompletedTransformationStep + " to " + fileName);
+            CodeStream out = new CodeStream(file);
+            out.print(modelDiagnostics());
+            out.close();
+        }
+    }
+    
+    private static final File FClass.TRANSFORMATION_STEP_DIR = new File("transformation_steps");
+    private static final File FClass.TRANSFORMATION_STEP_HTML_DIR = new File("transformation_steps_html");
+
+    private int FClass.completedTransformationSteps = 0;
+    private String FClass.lastCompletedTransformationStep = "flattening";
+
+	/**
+	 * After scalarization, binding expressions on members of record declarations are no longer needed. 
+	 */
+	public void FRecordDecl.clearBindingEquations() {
+		for (FVariable fv : getFVariables())
+		    if (fv.modifiableInRecord)
+		        fv.setBindingExpOpt(new Opt());
+	}
+
+    protected boolean FClass.doneTransformCanonical = false;
+    
+    public void FClass.transformCanonical() {
+        if (doneTransformCanonical)
+            return;
+        doneTransformCanonical = true;
+        beginStep("transformCanonical()");
+
+        transformCanonicalBase();
+        
+
+        root().flushAllRecursive();	
+        transformCanonicalCleanup();
+        getDAEBLT().errorCheck(this);
+        getDAEInitBLT().errorCheck(this);
+
+        endStep("transformCanonical()");
+    }
+}
+
+aspect DummyDerivatives {
+
+    rewrite FDerExp {
+        when (myFV().isDummyDerivativeVariable()) to FDummyDerExp {
+            return new FDummyDerExp(getFAccess(), getOriginalVariable(), order());
+        }
+    }
+
+    public void ASTNode.enableFHDerRewrite() {
+        for (ASTNode n : this)
+            n.enableFHDerRewrite();
+    }
+
+    public void FDerExp.enableFHDerRewrite() {
+        rewriteFHDer = true;
+        is$Final = false;
+    }
+
+    boolean FDerExp.rewriteFHDer = false;
+
+    public void FDerivativeVariable.enableFHDerRewrite() {
+        rewriteFHDer = true;
+        is$Final = false;
+    }
+
+    boolean FDerivativeVariable.rewriteFHDer = false;
+
+    rewrite FDerExp {
+        when (rewriteFHDer && order() > 1) to FDerExp 
+        new FDerExp(getFAccess().createDerPrefixedName(order() - 1));
+    }
+
+}
+
+aspect TransformCanonicalErrorCheck {
+	
+	/**
+	 * The number of DAE equations corresponds to the equivalent scalar number
+	 * of equations.
+	 */
+	syn int FClass.numDAEEquations() = numScalarEquations();
+	
+	/**
+	 * The number of equations in the DAE initialization system originating 
+	 * from the DAE should be the same as the equivalent scalar number of
+	 * equations. The equations may differ, however, due to inactive when
+	 * clauses.
+	 */
+	syn int FClass.numDAEEquationsAtInitialization() 
+		= numScalarEquationsAtInitialization();
+	
+	/**
+	 * The number of unknown variables in the DAE corresponds to the number
+	 * of real algebraic variables plus the number of derivative variables
+	 * plus the number of discrete variables.
+	 */
+	syn int FClass.numDAEVariables() = 
+        numNormalAlgebraicContinousRealVariables() + 
+		numDerivativeVariables() + numDiscreteVariables();
+	
+    /**
+     * This field is populated by computeMatchingsAndBLT, there are some models
+     * where the initial system is defined so that pre propgation equations
+     * such as x = pre(x) can't be inserted. These equations are then ignored
+     * which must be accounted for during balance computations.
+     */
+    private int FClass.numIgnoredPrePropagationEquations = 0;
+
+	/**
+	 * The number of equations in the DAE initialization system is the 
+	 * number of scalar DAE equations plus the number of scalar initial
+	 * equations.
+	 */	
+	syn int FClass.numDAEInitEquations() = numDAEEquationsAtInitialization() + 
+        numInitialScalarEquations() - numIgnoredPrePropagationEquations;
+	
+	/**
+	 * The number of unknowns in the DAE initialization system is the 
+	 * number of unknowns in the DAE system plus the number of differentiated
+        * variables plus the number of (pre) discrete variables.
+        */
+       syn int FClass.numDAEInitVariables() = numDAEVariables() +
+               numDifferentiatedRealVariables() + numDiscretePreVariables() +
+               numInitialParameters() + numDynamicStates() - numDynamicAlgebraicVariables();
+
+       public void FClass.checkFClassDimensions() {
+               // Check dimensions of DAE
+		int n_eq_F = numDAEEquations();
+		int n_vars_F = numDAEVariables();
+		if (n_eq_F != n_vars_F) 
+			error("The DAE system has " + n_eq_F + " equations and " + n_vars_F + " free variables.");
+		
+		// Check dimensions of DAE initialization system
+		int n_eq_F0 = numDAEInitEquations();
+		int n_vars_F0 = numDAEInitVariables();
+		if (n_eq_F0 > n_vars_F0) 
+			error("The DAE initialization system has " + n_eq_F0 + " equations and " + n_vars_F0 + " free variables.");
+		
+	}
+	
+	public void FClass.collectErrors(ErrorCheckType checkType) {
+		checkFClassDimensions();
+		checkStructure();
+		allChecks(checkType);
+	}
+}
+
+aspect FlushFClass {
+	/**
+	 * Flush all caches, including collection attributes.
+	 */
+	public void ASTNode.flushAll() {
+		flushCache();
+		flushCollectionCache();
+	}
+
+	/**
+	 * Flush all caches, including collection attributes, and also
+	 * flush all children. In addition, the is$final attribute is set to false
+	 * for FExps in order to enable rewrites of such nodes after elimination 
+	 * of alias variables and after function inlining.
+	 */
+	public void ASTNode.flushAllRecursiveClearFinal() {
+		flushAll();
+		//is$Final = false;
+		for (ASTNode n : noTransform()) {
+			n.flushAllRecursiveClearFinal();
+		}
+	}
+	
+	public void FExp.flushAllRecursiveClearFinal() {
+		super.flushAllRecursiveClearFinal();
+		is$Final = false;
+	}
+
+	/**
+	 * Flush all caches, including collection attributes, and also
+	 * flush all children. 
+	 */
+	public void ASTNode.flushAllRecursive() {
+		flushAll();
+		for (ASTNode n : noTransform()) {
+			n.flushAllRecursive();
+		}
+	}
+
+	/**
+	 * Flush model AST and enable rewrites of FAccessExps and FDerExps
+	 * after alias elimination.
+	 */
+	public void FClass.flush() {
+		flushAllRecursiveClearFinal();
+		//is$Final = true;
+	}
+	
+	/**
+	 * Traverse entire tree, forcing any pending rewrites to occur.
+	 */
+	public void ASTNode.forceRewrites() {
+        for (ASTNode n : this) 
+            n.forceRewrites();
+	}
+	
+}
+

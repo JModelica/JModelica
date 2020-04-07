@@ -1,0 +1,16 @@
+optimization DoubleIntegrator(objective=finalTime, startTime=0.0, finalTime(free=true, initialGuess=5, min=2.0))
+
+    Real x1(start=-1, fixed=true);
+    Real x2(start=2, fixed=true);
+    
+    input Real u(min=-1, max=1);
+    
+equation
+    der(x1) = x2;
+    der(x2) = u;
+
+constraint
+    x1(finalTime)=0.0;
+    x2(finalTime)=0.0;
+
+end DoubleIntegrator;

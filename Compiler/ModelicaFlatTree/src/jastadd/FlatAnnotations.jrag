@@ -1,0 +1,202 @@
+/*
+    Copyright (C) 2017 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect FlatAnnotations {
+
+    public FlatAnnotation FFunctionDecl.flatAnnotation(String ... path) {     return FlatAnnotation.createFor(this, path); }
+    public FlatAnnotation FVariable.flatAnnotation(String ... path) {         return FlatAnnotation.createFor(this, path); }
+    public FlatAnnotation FAbstractEquation.flatAnnotation(String ... path) { return FlatAnnotation.createFor(this, path); }
+    public FlatAnnotation FClass.flatAnnotation(String ... path) {            return FlatAnnotation.createFor(this, path); }
+
+    /*******************
+     *    Java Stuff    
+     ******************/
+
+    public class FlatAnnotation extends GenericAnnotationNode<FlatAnnotation, FlatAnnotationProvider, FExp> {
+
+        public static final FlatAnnotation AMBIGUOUS_ANNOTATION =  new FlatAnnotation(null, null, null);
+
+        protected FlatAnnotation(String name, FlatAnnotationProvider node, FlatAnnotation parent) {
+            super(name, node, parent);
+        }
+
+        @Override
+        protected FlatAnnotation self() {
+            return this;
+        }
+
+        @Override
+        protected FlatAnnotation createNode(String name, FlatAnnotationProvider node) {
+            return new FlatAnnotation(name, node, this);
+        }
+        
+        @Override
+        protected FlatAnnotation createNode(FlatAnnotationProvider node) {
+            return createNode(null, node);
+        }
+
+        @Override
+        protected FlatAnnotation ambiguousNode() {
+            return AMBIGUOUS_ANNOTATION;
+        }
+
+        public static FlatAnnotation createFor(FlatAnnotationProvider node, String[] path) {
+            return new FlatAnnotation(null, node, null).forPath(path);
+        }
+
+        @Override
+        protected ConstValue evaluatedValue() {
+            return value().evaluateValue();
+        }
+
+        @Override
+        protected FlatAnnotationProvider valueAsProvider() {
+            FExp value = value();
+            return value == null ? null : value.asAnnotationProvider();
+        }
+    }
+
+    /**
+     * AnnotationProvider for the attributes in the Flat tree. See overview on AnnotationProvider for more info.
+     */
+    public interface FlatAnnotationProvider extends AnnotationProvider<FlatAnnotationProvider, FExp> {
+    }
+
+    /*******************
+     *    FAttribute    
+     ******************/
+    FAttribute implements FlatAnnotationProvider;
+
+    @Override
+    public FExp FAttribute.annotationValue() {
+        return getValue();
+    }
+
+    @Override
+    public Iterable<SubAnnotationPair<FlatAnnotationProvider>> FAttribute.annotationSubNodes() {
+        return annotationSubNodes(getFAttributes());
+    }
+
+    @Override
+    public void FAttribute.setAnnotationValue(FExp newValue) throws FailedToSetAnnotationValueException {
+        setValue(newValue);
+    }
+
+    @Override
+    public boolean FAttribute.canChangeAnnotationValue() {
+        return true;
+    }
+
+    @Override
+    public FlatAnnotationProvider FAttribute.addAnnotationSubNode(String name) {
+        return addAnnotationSubNode(this, name);
+    }
+
+
+    @Override
+    public boolean FAttribute.isEach() {
+        return hasFEach();
+    }
+
+    @Override
+    public boolean FAttribute.isFinal() {
+        return hasFFinal();
+    }
+
+    /*******************
+     *       FExp       
+     ******************/
+    syn FlatAnnotationProvider FExp.asAnnotationProvider() = null;
+
+    /*******************
+     *     Helpers      
+     ******************/
+
+    public class FlatAnnotation {
+        private static class ListAnnotationProvider implements FlatAnnotationProvider {
+
+            private final FAttributeListAnnotationNode.FAttributeList attributes;
+
+            public ListAnnotationProvider(FAttributeListAnnotationNode.FAttributeList attributes) {
+                this.attributes = attributes;
+            }
+
+            @Override
+            public FExp annotationValue() {
+                return null;
+            }
+
+            @Override
+            public Iterable<SubAnnotationPair<FlatAnnotationProvider>> annotationSubNodes() {
+                return FAttribute.annotationSubNodes(attributes.getFAttributeList());
+            }
+
+            @Override
+            public void setAnnotationValue(FExp newValue) throws FailedToSetAnnotationValueException {
+                throw new FailedToSetAnnotationValueException();
+            }
+
+            @Override
+            public boolean canChangeAnnotationValue() {
+                return false;
+            }
+
+            @Override
+            public FlatAnnotationProvider addAnnotationSubNode(String name) {
+                return FAttribute.addAnnotationSubNode(attributes, name);
+            }
+
+            @Override
+            public boolean isEach() {
+                return false;
+            }
+
+            @Override
+            public boolean isFinal() {
+                return false;
+            }
+
+            @Override
+            public String resolveURI(String str) throws URIException {
+                return URIResolver.DEFAULT.resolveURIChecked(attributes.getFAttributeList(), str);
+            }
+
+        }
+
+        public static FlatAnnotation createFor(FAttributeListAnnotationNode.FAttributeList attrs, String[] path) {
+            return createFor(new ListAnnotationProvider(attrs), path);
+        }
+    }
+
+    public class FAttribute {
+        public static Iterable<SubAnnotationPair<FlatAnnotationProvider>> annotationSubNodes(List<FAttribute> list) {
+            return new TransformerIterable<FAttribute, SubAnnotationPair<FlatAnnotationProvider>>(list) {
+                @Override
+                protected SubAnnotationPair<FlatAnnotationProvider> transform(FAttribute a) {
+                    return new SubAnnotationPairImpl<FlatAnnotationProvider>(a.name(), a);
+                }
+            };
+        }
+
+        public static FlatAnnotationProvider addAnnotationSubNode(FAttributeListAnnotationNode.FAttributeList list, String name) {
+            FAttribute attr = new FAnnotationAttribute(name);
+            list.addFAttribute(attr);
+            return attr;
+        }
+    }
+
+
+}

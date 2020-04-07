@@ -1,0 +1,174 @@
+/*
+    Copyright (C) 2009-2017 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect GenAlgorithmFunctions {
+	
+    public class FClass {
+        public class genAlgorithmFunctionsIfSet extends Transformation {
+            public genAlgorithmFunctionsIfSet() {
+                super("algorithms_as_functions");
+            }
+            
+            public void perform() {
+                genAlgorithmFunctions();
+            }
+        }
+    }
+	
+	/**
+	 * Generate functions from algorithms.
+	 */
+	public void FClass.genAlgorithmFunctions() {
+		for (FAlgorithm alg : myAlgorithms()) {
+			// Create function declaration
+			List<FFunctionVariable> vars = new List<FFunctionVariable>();
+			FAccess funcName = new FAccessString(alg.generateFunctionName());
+			
+			// - Find inputs
+			ArrayList<FVariable> inVars = new ArrayList<FVariable>();
+			ArrayList<FFunctionVariable> bothInVars = new ArrayList<FFunctionVariable>();
+			for (FAccessExp use : alg.FAccessExpsInRHS()) {
+				FAbstractVariable fv = use.myFV();
+				if (!fv.isUnknown() && !inVars.contains(fv) && !fv.isForIndex()) {
+					inVars.add((FVariable) fv);
+					bothInVars.add(null);
+				}
+			}
+			
+			// - Create outputs, add to vars and locate those that are inputs as well
+			ArrayList<FVariable> outVars = new ArrayList<FVariable>();
+			for (FAccessExp use : alg.FAccessExpsInLHS()) {
+				if (!use.myFV().isUnknown() && !outVars.contains(use.myFV())) {
+					FVariable fv = (FVariable) use.myFV();
+					FFunctionVariable ffv = fv.createFFunctionOutput();
+					vars.add(ffv);
+					outVars.add(fv);
+					int i = inVars.indexOf(fv);
+					if (i >= 0) 
+						bothInVars.set(i, ffv);
+				}
+			}
+			
+			// - Create inputs, add to vars and update inputs and outputs that are the same
+			ArrayList<FVariable> allVars = new ArrayList<FVariable>();
+			allVars.addAll(inVars);
+			allVars.addAll(outVars);
+			
+            List<FStatement> stmts = new List<FStatement>();
+			for (int i = 0; i < inVars.size(); i++) {
+				FVariable fv = inVars.get(i);
+				FFunctionVariable ffv = fv.createFFunctionInput();
+				vars.add(ffv);
+				if (bothInVars.get(i) != null) {
+					
+					// Generate a new (unique) name for variable
+					boolean nameExists = true;
+					String name = null;
+					for (int j = 0; nameExists; j++) {
+						name = fv.name() + "_" + j;
+						nameExists = false;
+						for (FVariable fv2 : allVars)
+							if (fv2.name().equals(name))
+								nameExists = true;
+					}
+					
+					// Rename input
+                    ffv.setFAccess(new FAccessString(name));
+					
+					// Create and add binding expression for output
+                    stmts.add(new FAssignStmt(bothInVars.get(i).createAccessExp(), ffv.createAccessExp()));
+				}
+			}
+			
+            for (FStatement stmt : alg.getFStatements()) {
+                stmts.add(stmt);
+            }
+            alg.setFStatementList(stmts);
+			
+			// Create function call equation and replace algorithm
+			List<FExp> args = new List<FExp>();
+			for (int i = 0; i < inVars.size(); i++) 
+				args.add(inVars.get(i).createAlgorithmArgument(bothInVars.get(i) != null));
+			Size[] sizes = new Size[outVars.size()];
+			for (int i = 0; i < outVars.size(); i++)
+				sizes[i] = outVars.get(i).size();
+            FType type = FFunctionType.create(funcName.name(), outVars, this);
+            FFunctionCall call = new FFunctionCall(funcName, args, type);
+			List<FFunctionCallLeft> lefts = new List<FFunctionCallLeft>();
+			for (FVariable fv : outVars)
+				lefts.add(fv.getFAccess().createFFunctionCallLeft());
+			replaceEquation(alg, new FFunctionCallEquation(lefts, call));
+			
+			// Add return statement, create function declaration and add it to FClass 
+			alg.addFStatement(new FReturnStmt());
+			addFFunctionDecl(new FFunctionDecl(funcName, vars, alg, new List<FAttribute>()));
+		}
+	}
+
+	/**
+	 * Replace one equation with another.
+	 */
+	public void FClass.replaceEquation(FAbstractEquation oldEq, FAbstractEquation newEq) {
+		getFAbstractEquations().replaceChild(oldEq, newEq);
+	}
+	
+	/**
+	 * Create an FFunctionCallLeft using a copy of this name.
+	 */
+	public FFunctionCallLeft FAccess.createFFunctionCallLeft() {
+		FAccess access = fullCopy();
+		access.removeFArraySubscripts();
+		return new FFunctionCallLeft(new Opt(new FAccessExp(access)));
+	}
+
+	/**
+	 * Create an expression to serve as argument to a generated algorithm function.
+	 * 
+	 * @param init  <code>true</code> if the argument is to initialize an assigned variable
+	 */
+	public FExp FVariable.createAlgorithmArgument(boolean init) {
+		if (init) {
+			if (isDiscrete())
+				return createFPreExp();
+			if (isContinuous())
+				return createStartAttributeExp();
+		}
+		return createAccessExp();
+	}
+	
+	/**
+	 * Create an input representing this variable in a generated algorithm function.
+	 */
+	public FFunctionVariable FVariable.createFFunctionOutput() {
+		return createFFunctionVariable(TypePrefixInputOutput.OUTPUT);
+	}
+
+	/**
+	 * Create an output representing this variable in a generated algorithm function.
+	 */
+	public FFunctionVariable FVariable.createFFunctionInput() {
+		return createFFunctionVariable(TypePrefixInputOutput.INPUT);
+	}
+
+    /**
+     * Create an function variable representing this variable in a generated algorithm function.
+     */
+    public FFunctionVariable FVariable.createFFunctionVariable(TypePrefixInputOutput io) {
+        FType type = (FType) type().treeCopy();
+        return new FFunctionVariable(io.functionVisibility(), io, type, new Opt<FExp>(), getFAccess().treeCopy());
+    }
+
+}

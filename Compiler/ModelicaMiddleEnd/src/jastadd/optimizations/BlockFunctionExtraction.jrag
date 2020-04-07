@@ -1,0 +1,171 @@
+/*
+    Copyright (C) 2014 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+aspect BlockFunctionExtraction {
+    
+    public boolean FClass.blockFunctionExtraction(BLT blt, BiPGraph g) {
+        if (!myOptions().getBooleanOption("enable_block_function_extraction"))
+            return false;
+            
+        ArrayList<FFunctionCall> functions = new ArrayList<FFunctionCall>();
+        HashMap<String,FVariable> newVars = new HashMap<String, FVariable>();
+        
+        // Find functions to extract from current block
+        for (AbstractEquationBlock block: blt)
+            if (!block.isSimple())
+                for (FAbstractEquation equation: block.allEquations())
+                    equation.findBlockFunctionExtraction(block, functions);
+                    
+        // If no functions are found do not proceed
+        if (functions.isEmpty())
+            return false;
+        
+        // If functions are found replace them with new variables and add equations: new_var = func()
+        ArrayList<FAbstractEquation> newEqs = new ArrayList<FAbstractEquation>();
+        for (FFunctionCall fCall: functions) {
+            FVariable funcRepVariable = null;
+            if ((funcRepVariable = newVars.get(fCall.toString())) == null) { // If funcCall hasn't been processed before
+                // Create new temp. variable and add it to the variable list and the BiPGraph
+                String newTempName = fCall.calcTempVarName();
+                Collection<Eq> eqs = g.getEquations(fCall.myFEquation());
+                funcRepVariable = fCall.type().createTempFVariable(new FAccessFull(newTempName), fCall.variability());
+                addFVariable(funcRepVariable);
+                if (!fCall.variability().parameterOrLess()) {
+                    Var var = g.addVariable(newTempName, funcRepVariable);
+                    for (Eq eqn : eqs) {
+                        eqn.addVariable(var);
+                    }
+                }
+                newVars.put(fCall.toString(), funcRepVariable);
+                // Create new equation "temp = funcCall()" and add it to the equation list and list for BiPGraph
+                
+                FEquation newEq = new FEquation(funcRepVariable.createAccessExp(), fCall.fullCopy());
+                if (!fCall.variability().parameterOrLess()) {
+                    addFEquation(newEq);
+                    newEqs.add(newEq);
+                } else {
+                    addParameterEquation(newEq);
+                }
+            }
+            // Replace the functionCall with a use of the corresponding temp variable
+            fCall.replaceMe(funcRepVariable.createAccessExp());
+        }
+        // Add the equations to the BiPGraph and make new matchings
+        root().flushAllRecursive();
+        g.addEquations(newEqs, VAR_TYPES_ALL);
+        g.maximumMatching(true);
+            
+        return true;
+    }
+    
+    // Find non-dependant function
+    
+    public void FAbstractEquation.findBlockFunctionExtraction(AbstractEquationBlock block, ArrayList<FFunctionCall> functions) {
+
+    }
+     
+    public void FEquation.findBlockFunctionExtraction(AbstractEquationBlock block, ArrayList<FFunctionCall> functions) {  
+        getLeft().findBlockFunctionExtraction(block, functions); 
+        getRight().findBlockFunctionExtraction(block, functions);
+    }
+       
+    public void FExp.findBlockFunctionExtraction(AbstractEquationBlock block, ArrayList<FFunctionCall> functions) {
+
+    }
+   
+    public void FBinExp.findBlockFunctionExtraction(AbstractEquationBlock block, ArrayList<FFunctionCall> functions) {
+        getLeft().findBlockFunctionExtraction(block, functions);
+        getRight().findBlockFunctionExtraction(block, functions);
+    }
+    
+    public void FUnaryExp.findBlockFunctionExtraction(AbstractEquationBlock block, ArrayList<FFunctionCall> functions) {
+        getFExp().findBlockFunctionExtraction(block, functions);
+    }
+
+    public void FMathematicalFunctionCall.findBlockFunctionExtraction(AbstractEquationBlock block, ArrayList<FFunctionCall> functions) {
+        getFExp().findBlockFunctionExtraction(block, functions);
+    }
+    
+    public void FArray.findBlockFunctionExtraction(AbstractEquationBlock block, ArrayList<FFunctionCall> functions) {
+        for (FExp exp: getFExps()) {
+            exp.findBlockFunctionExtraction(block, functions);
+        }
+
+    }
+    
+    public void FFunctionCall.findBlockFunctionExtraction(AbstractEquationBlock block, ArrayList<FFunctionCall> functions) {
+        for (FExp exp: getArgs())
+            if (exp.dependsOnBlock(block)) {
+                for (FExp expr: getArgs()) 
+                    expr.findBlockFunctionExtraction(block, functions);
+                return;
+            }
+        functions.add(this);
+    }
+    
+    /* Depends on block */
+
+    public boolean FExp.dependsOnBlock(AbstractEquationBlock block) {
+        return true;
+    }
+    
+    public boolean FAbstractScalarExp.dependsOnBlock(AbstractEquationBlock block) {
+        return false;
+    }
+    
+    public boolean FLitExp.dependsOnBlock(AbstractEquationBlock block) {
+        return false;
+    }
+    
+    public boolean FBinExp.dependsOnBlock(AbstractEquationBlock block) {
+        boolean left = getLeft().dependsOnBlock(block);
+        boolean right = getRight().dependsOnBlock(block);
+        return left || right;
+    }
+    
+    public boolean FArray.dependsOnBlock(AbstractEquationBlock block) {
+        for (FExp exp: getFExps()) {
+            if (exp.dependsOnBlock(block)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    public boolean FUnaryExp.dependsOnBlock(AbstractEquationBlock block) {
+        return getFExp().dependsOnBlock(block);
+    }
+
+    public boolean FMathematicalFunctionCall.dependsOnBlock(AbstractEquationBlock block) {
+        return getFExp().dependsOnBlock(block);
+    }
+    
+    public boolean FFunctionCall.dependsOnBlock(AbstractEquationBlock block) {
+        for (FExp exp: getArgs()) {
+            if (exp.dependsOnBlock(block)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    public boolean FAccessExp.dependsOnBlock(AbstractEquationBlock block) {
+        return block.allVariables().contains(myFV());
+    }
+
+    
+}

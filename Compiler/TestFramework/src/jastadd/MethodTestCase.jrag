@@ -1,0 +1,194 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import java.util.Collection;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+
+public abstract class MethodTestCase extends TestCase {
+    private String output = null;
+    private String methodName = null;
+    private Object[] arguments = new Object[0];
+    private Object[] inputArray = null;
+
+    /**
+     * Obtain array of target classes from the string names in argumentTypes.
+     */
+    private Class<?>[] castedArgumentClasses(Object[] argumentTypes) throws ClassNotFoundException {
+        Class[] types = new Class[argumentTypes.length];
+        for (int i=0; i < argumentTypes.length; i++) {
+            types[i] = Class.forName(argumentTypes[0].toString());
+        }
+        return types;
+    }
+
+    /**
+     * Cast the arguments to the target types even for 
+     */
+    private <T> Object[] castArguments(Class[] types, Object[] arguments) { 
+        Object[] argumentsCasted = new Object[arguments.length];
+        for (int i = 0; i< arguments.length; i++) {
+            if (types[i].isArray()) {
+                T[] temp = (T[]) arguments[i];
+                Class<? extends Object[]> arrayType = types[i];
+                argumentsCasted[i] = Arrays.copyOf(temp, temp.length, arrayType);
+            } else {
+                argumentsCasted[i] = types[i].cast(arguments[i]);
+            }
+        }
+        return argumentsCasted; 
+    }
+
+    /**
+     * Invoke a method with specified arguments on the specified object
+     */
+    protected Object getMethodReturn(Object o, String methodName, Object[] arguments) {
+        try {
+            Class[] types = null;
+            if (inputArray == null) { 
+                types = unwrapClasses(arguments);
+            }else {
+                types = castedArgumentClasses(inputArray);
+                arguments = castArguments(types, arguments);
+            }
+            Method method = o.getClass().getMethod(methodName, types);
+            return method.invoke(o, arguments);
+        } catch (NoSuchMethodException e) {
+            fail(e);
+        } catch (IllegalAccessException e) {
+            fail(e);
+        } catch (InvocationTargetException e) {
+            Throwable t = e.getCause();
+            if (t instanceof RuntimeException) {
+                throw (RuntimeException) t;
+            } else {
+                fail(t);
+            }
+        } catch (ClassNotFoundException e) {
+            fail(e);
+        }
+        return null;
+    }
+
+    /**
+     * Invoke a method with no arguments on the specified object and compare 
+     * the result to the expected result.
+     */
+    protected void testMethod(Object o) {
+            String test = getMethodReturn(o, getMethodName(), arguments).toString();
+            String correct = filter(getOutput());
+            compareResult("Method result does not match expected.", correct, test);
+    }
+
+    /**
+     * @return the output.
+     */
+    public String getOutput() {
+        return output;
+    }
+
+    /**
+     * @param output the output to set.
+     */
+    public void setOutput(String output) {
+        this.output = output;
+    }
+
+    /**
+     * @param output the output to set.
+     */
+    public void setMethodResult(String output) {
+        setOutput(output);
+    }
+
+    /**
+     * @return the methodName.
+     */
+    public String getMethodName() {
+        return methodName;
+    }
+
+    /**
+     * @param methodName the methodName to set.
+     */
+    public void setMethodName(String methodName) {
+        this.methodName = methodName;
+    }
+
+    /**
+     * @return the arguments.
+     */
+    public Object[] getArguments() {
+        return arguments;
+    }
+
+    /**
+     * @param arguments the arguments to set.
+     */
+    public void setArguments(Object[] arguments) {
+        this.arguments = arguments;
+    }
+
+    /**
+     * @param inputArray if input should be interpreted as a String array.
+     */
+    public void setArgumentTypes(Object[] inputArray) {
+        this.inputArray = inputArray;
+    }
+
+    /**
+     * @return if this should be a string array.
+     */
+    public Object[] getArgumentTypes() {
+        return inputArray;
+    }
+}
+
+public class FClassMethodTestCase extends MethodTestCase {
+    /**
+     * Perform tests on flat class after transform canonical step.
+     * 
+     * @return  <code>true</code> if test case should stop after this method
+     */
+    protected boolean testTransformed(FClass fc) {
+        testMethod(fc);
+        return true;
+    }
+}
+
+public class SourceMethodTestCase extends MethodTestCase {
+    /**
+     * Perform tests on source tree.
+     *
+     * @return  <code>true</code> if test case should stop after this method
+     */
+    protected boolean testSource(SourceRoot sr) {
+        testMethod(sr);
+        return true;
+    }
+}
+
+public class InstClassMethodTestCase extends MethodTestCase {
+    /**
+     * Perform tests on instantiated class.
+     * 
+     * @return  <code>true</code> if test case should stop after this method
+     */
+    protected boolean testInstantiated(InstClassDecl icd) {
+        testMethod(icd);
+        return true;
+    }
+}

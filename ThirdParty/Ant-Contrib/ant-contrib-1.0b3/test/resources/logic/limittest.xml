@@ -1,0 +1,65 @@
+<?xml version="1.0"?>
+
+<project name="limittest" basedir="." default="test1">
+    <description>
+        test build file for the Limit task
+    </description>
+
+   <target name="init">
+      <taskdef resource="net/sf/antcontrib/antcontrib.properties">
+         <classpath location="${antcontrib.jar}"/>
+      </taskdef>   
+   </target>
+         
+  <target name="test1" depends="init">
+    <!-- should stop 'sleep' task, no failure message -->
+    <limit maxwait="1">
+        <sleep seconds="5"/>
+        <echo>_failed_</echo>
+        <fail/>
+    </limit>
+  </target>
+  
+  <property name="ant.enable.asserts" value="true"/> 
+  <target name="test2" depends="init">
+    <!-- should not stop 'sleep' task, should print out '_passed_' -->
+    <stopwatch name="limit"/>
+    <limit maxwait="5">
+        <sleep seconds="1"/>
+        <echo>_passed_</echo>
+    </limit>
+    <stopwatch name="limit" action="total"/>
+    <assert message="Too much time.">
+        <bool>
+            <islessthan arg1="${limit}" arg2="2"/>
+        </bool>
+    </assert>
+  </target>
+  
+  <target name="test3" depends="init">
+    <!-- test failonerror attribute, build should fail -->
+    <limit maxwait="3" failonerror="true">
+        <fail message="_failed_"/>
+    </limit>
+  </target>
+  
+  <target name="test4" depends="init">
+    <!-- test failonerror attribute, build should not fail -->
+    <limit maxwait="3">
+        <fail message="_failed_"/>
+    </limit>
+  </target>
+  
+    <target name="test5" depends="init">
+        <limit maxwait="1" unit="minute">
+            <sleep seconds="65"/>
+        </limit>
+    </target>
+    
+    <target name="test6" depends="init">
+        <limit seconds="6">
+            <sleep seconds="7"/>
+        </limit>
+    </target>
+    
+</project>

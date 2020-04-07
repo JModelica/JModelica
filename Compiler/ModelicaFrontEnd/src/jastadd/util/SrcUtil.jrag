@@ -1,0 +1,383 @@
+/*
+    Copyright (C) 2016 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+aspect SrcUtil {
+
+    syn boolean SrcExp.isLiteral()  = false;
+    eq SrcBooleanLitExp.isLiteral() = true;
+    eq SrcIntegerLitExp.isLiteral() = true;
+    eq SrcRealLitExp.isLiteral()    = true;
+    eq SrcStringLitExp.isLiteral()  = true;
+
+    syn boolean SrcExp.isBooleanLiteral()  = false;
+    eq SrcBooleanLitExp.isBooleanLiteral() = true;
+
+    inh boolean SrcExp.isBindingExpression();
+    eq SrcModification.getChild().isBindingExpression()   = true;
+    eq SrcNamedArgument.getSrcExp().isBindingExpression() = true;
+    eq BaseNode.getChild().isBindingExpression()          = false;
+
+    /**
+     * Returns the class declaration which surrounds this element. Null if no
+     * such declaration can be found.
+     */
+    inh SrcClassDecl SrcElement.myClassDecl();
+    eq SrcClassDecl.getChild().myClassDecl() = this;
+    eq SourceRoot.getChild().myClassDecl() = null;
+
+    /**
+     * Is this a redeclare class extends declaration?
+     */
+    syn boolean SrcClassDecl.isClassExtends() = false;
+    eq SrcExtendClassDecl   .isClassExtends() = true;
+
+    /**
+     * Returns true if this import is an unqualified import.
+     */
+    syn boolean SrcImportClause.isUnqualifiedImport()   = false;
+    eq SrcImportClauseUnqualified.isUnqualifiedImport() = true;
+
+    /**
+     * Return true if this import is a renaming import
+     */
+    syn boolean SrcImportClause.isRenamingImport() = false;
+    eq SrcImportClauseRename.isRenamingImport()    = true;
+
+    /**
+     * Returns the rename string for this import, or null if this import
+     * isn't a renaming import.
+     */
+    syn String SrcImportClause.renameStringOrNull() = null;
+    eq SrcImportClauseRename.renameStringOrNull() = getSrcIdDecl().name();
+
+    syn boolean SrcExp.isAccess() = false;
+    eq SrcAccessExp.isAccess() = true;
+    
+    syn SrcAccess SrcExp.asAccess() {
+        throw new UnsupportedOperationException();
+    }
+    eq SrcAccessExp.asAccess() = getSrcAccess();
+    
+    syn boolean SrcAccess.isNamed() = false;
+    eq SrcNamedAccess.isNamed() = true;
+    
+    syn String SrcAccess.asID() {
+        throw new UnsupportedOperationException();
+    }
+    eq SrcNamedAccess.asID() = getID();
+
+//    /**************************************************************************
+//     *    Is and as methods for SrcClauses
+//     **************************************************************************/
+//    /**
+//     * Is this clause an element list?
+//     */
+//    syn boolean SrcClause.isElementList() = false;
+//    eq SrcElementList    .isElementList() = true;
+//    /**
+//     * Is this clause a public element list?
+//     */
+//    syn boolean SrcClause  .isPublicElementList() = false;
+//    eq SrcPublicElementList.isPublicElementList() = true;
+//    /**
+//     * Is this clause a default element list?
+//     */
+//    syn boolean SrcClause   .isDefaultElementList() = false;
+//    eq SrcDefaultElementList.isDefaultElementList() = true;
+//    /**
+//     * Is this clause a protected element list?
+//     */
+//    syn boolean SrcClause     .isProtectedElementList() = false;
+//    eq SrcProtectedElementList.isProtectedElementList() = true;
+//    /**
+//     * Upcasts this clause to an element list, or class cast exception if of
+//     * different type!
+//     */
+//    syn SrcElementList SrcClause.asElementList() = (SrcElementList) this;
+//
+//    /**
+//     * Is this clause an equation clause?
+//     */
+//    syn boolean SrcClause.isEquationClause() = false;
+//    eq SrcEquationClause .isEquationClause() = true;
+//    /**
+//     * Is this clause an initial equation clause?
+//     */
+//    syn boolean SrcClause      .isInitialEquationClause() = false;
+//    eq SrcInitialEquationClause.isInitialEquationClause() = true;
+//    /**
+//     * Upcasts this clause to an equation clause, or class cast exception if of
+//     * different type!
+//     */
+//    syn SrcEquationClause SrcClause.asEquationClause() = (SrcEquationClause) this;
+//
+//    /**
+//     * Is this clause an algorithm?
+//     */
+//    syn boolean SrcClause.isAlgorithm() = false;
+//    eq SrcAlgorithm      .isAlgorithm() = true;
+//    /**
+//     * Is this clause an initial algorithm?
+//     */
+//    syn boolean SrcClause .isInitialAlgorithm() = false;
+//    eq SrcInitialAlgorithm.isInitialAlgorithm() = true;
+//    /**
+//     * Upcasts this clause to an algorithm, or class cast exception if of
+//     * different type!
+//     */
+//    syn SrcAlgorithm SrcClause.asAlgorithm() = (SrcAlgorithm) this;
+//
+//    /**************************************************************************
+//     *    Is and as methods for SrcElements
+//     **************************************************************************/
+//    /**
+//     * Is this element a class declaration?
+//     */
+//    syn boolean SrcElement.isClassDecl() = false;
+//    eq SrcClassDecl       .isClassDecl() = true;
+//    /**
+//     * Upcasts this element to an class decl, or class cast exception if of
+//     * different type!
+//     */
+//    syn SrcClassDecl SrcElement.asClassDecl() = (SrcClassDecl) this;
+//
+//    /**
+//     * Is this element a component clause declaration?
+//     */
+//    syn boolean SrcElement.isComponentClause() = false;
+//    eq SrcComponentClause .isComponentClause() = true;
+//    /**
+//     * Upcasts this element to an component clause, or class cast exception if
+//     * of different type!
+//     */
+//    syn SrcComponentClause SrcElement.asComponentClause() = (SrcComponentClause) this;
+//
+//    /**
+//     * Is this element an extends clause declaration?
+//     */
+//    syn boolean SrcElement.isExtendsClause() = false;
+//    eq SrcExtendsClause   .isExtendsClause() = true;
+//    /**
+//     * Upcasts this element to an extends clause, or class cast exception if of
+//     * different type!
+//     */
+//    syn SrcExtendsClause SrcElement.asExtendsClause() = (SrcExtendsClause) this;
+//
+//    /**
+//     * Is this element an import clause declaration?
+//     */
+//    syn boolean SrcElement.isImportClause() = false;
+//    eq SrcImportClause    .isImportClause() = true;
+//    /**
+//     * Upcasts this element to an import clause, or class cast exception if of
+//     * different type!
+//     */
+//    syn SrcImportClause SrcElement.asImportClause() = (SrcImportClause) this;
+//
+//    syn boolean SrcExp.isAccess() = false;
+//    eq SrcAccessExp.isAccess() = true;
+//    
+//    syn SrcAccess SrcExp.asAccess() {
+//        throw new UnsupportedOperationException();
+//    }
+//    eq SrcAccessExp.asAccess() = getSrcAccess();
+//    
+//    syn boolean SrcAccess.isNamed() = false;
+//    eq SrcNamedAccess.isNamed() = true;
+//    
+//    syn String SrcAccess.asID() {
+//        throw new UnsupportedOperationException();
+//    }
+//    eq SrcNamedAccess.asID() = getID();
+
+    /**************************************************************************
+     *    Is and as methods for Clauses
+     **************************************************************************/
+    /**
+     * Is this clause an element list?
+     */
+    syn boolean SrcClause.isElementList() = false;
+    eq SrcElementList    .isElementList() = true;
+    /**
+     * Is this clause a public element list?
+     */
+    syn boolean SrcClause  .isPublicElementList() = false;
+    eq SrcPublicElementList.isPublicElementList() = true;
+    /**
+     * Is this clause a default element list?
+     */
+    syn boolean SrcClause   .isDefaultElementList() = false;
+    eq SrcDefaultElementList.isDefaultElementList() = true;
+    /**
+     * Is this clause a protected element list?
+     */
+    syn boolean SrcClause     .isProtectedElementList() = false;
+    eq SrcProtectedElementList.isProtectedElementList() = true;
+    /**
+     * Upcasts this clause to an element list, or class cast exception if of
+     * different type!
+     */
+    syn SrcElementList SrcClause.asElementList() = (SrcElementList) this;
+
+    /**
+     * Is this clause an equation clause?
+     */
+    syn boolean SrcClause.isEquationClause() = false;
+    eq SrcEquationClause .isEquationClause() = true;
+    /**
+     * Is this clause an initial equation clause?
+     */
+    syn boolean SrcClause      .isInitialEquationClause() = false;
+    eq SrcInitialEquationClause.isInitialEquationClause() = true;
+    /**
+     * Upcasts this clause to an equation clause, or class cast exception if of
+     * different type!
+     */
+    syn SrcEquationClause SrcClause.asEquationClause() = (SrcEquationClause) this;
+
+    /**
+     * Is this clause an algorithm?
+     */
+    syn boolean SrcClause.isAlgorithm() = false;
+    eq SrcAlgorithm      .isAlgorithm() = true;
+    /**
+     * Is this clause an initial algorithm?
+     */
+    syn boolean SrcClause .isInitialAlgorithm() = false;
+    eq SrcInitialAlgorithm.isInitialAlgorithm() = true;
+    /**
+     * Upcasts this clause to an algorithm, or class cast exception if of
+     * different type!
+     */
+    syn SrcAlgorithm SrcClause.asAlgorithm() = (SrcAlgorithm) this;
+
+    /**************************************************************************
+     *    Is and as methods for Elements
+     **************************************************************************/
+    /**
+     * Is this element a class declaration?
+     */
+    syn boolean SrcElement.isClassDecl() = false;
+    eq SrcClassDecl       .isClassDecl() = true;
+    /**
+     * Upcasts this element to an class decl, or class cast exception if of
+     * different type!
+     */
+    syn SrcClassDecl SrcElement.asClassDecl() = (SrcClassDecl) this;
+
+    /**
+     * Is this element a component clause declaration?
+     */
+    syn boolean SrcElement.isComponentClause() = false;
+    eq SrcComponentClause .isComponentClause() = true;
+    /**
+     * Upcasts this element to an component clause, or class cast exception if
+     * of different type!
+     */
+    syn SrcComponentClause SrcElement.asComponentClause() = (SrcComponentClause) this;
+
+    /**
+     * Is this element an extends clause declaration?
+     */
+    syn boolean SrcElement.isExtendsClause() = false;
+    eq SrcExtendsClause   .isExtendsClause() = true;
+    /**
+     * Upcasts this element to an extends clause, or class cast exception if of
+     * different type!
+     */
+    syn SrcExtendsClause SrcElement.asExtendsClause() = (SrcExtendsClause) this;
+
+    /**
+     * Is this element an import clause declaration?
+     */
+    syn boolean SrcElement.isImportClause() = false;
+    eq SrcImportClause    .isImportClause() = true;
+    /**
+     * Upcasts this element to an import clause, or class cast exception if of
+     * different type!
+     */
+    syn SrcImportClause SrcElement.asImportClause() = (SrcImportClause) this;
+
+
+    inh SrcClassDecl InstExternal.myTopSrcClassDecl();
+    inh SrcClassDecl SrcBaseNode.myTopSrcClassDecl();
+    eq Program.getChild().myTopSrcClassDecl()                         = null;
+    eq Program.getSrcLibNode(int i).myTopSrcClassDecl()               = getSrcLibNode(i);
+    eq InstClassDecl.getChild().myTopSrcClassDecl()                   = getSrcClassDecl().myTopSrcClassDecl();
+    eq SrcStoredDefinition.getSrcClassDecl(int i).myTopSrcClassDecl() {
+        SrcClassDecl res = myTopSrcClassDecl();
+        if (res == null) {
+            res = getSrcClassDecl(i);
+        }
+        return res;
+    }
+
+    /**
+     * Provides the file path to the root of the library for which this source
+     * AST node is part of. The root path for a structured library is the
+     * folder for which the root package.mo is located. The root path for an
+     * unstructured library is the modelica file it self.
+     */
+    syn Path SrcBaseNode.myLibRootPath() {
+        SrcClassDecl topClass = myTopSrcClassDecl();
+        Path fileRoot = Paths.get(topClass.fileName());
+        return topClass.isLibNode() ?  fileRoot.getParent() : fileRoot;
+    }
+}
+
+
+aspect ComponentClauseFields {
+
+    syn boolean SrcComponentDecl.hasRedeclare() = myComponentClause().getRedeclare();
+
+    syn boolean SrcComponentDecl.hasFinal() = myComponentClause().getFinal();
+
+    syn boolean SrcComponentDecl.hasInner() = myComponentClause().getInner();
+
+    syn boolean SrcComponentDecl.hasOuter() = myComponentClause().getOuter();
+
+    syn boolean SrcComponentDecl.hasReplaceable() = myComponentClause().getReplaceable();
+
+    syn boolean SrcComponentDecl.hasSrcTypePrefixFlow() = myComponentClause().hasSrcTypePrefixFlow();
+    syn SrcTypePrefixFlow SrcComponentDecl.getSrcTypePrefixFlow() = myComponentClause().getSrcTypePrefixFlow();
+
+    syn boolean SrcComponentDecl.hasSrcTypePrefixVariability() = 
+        myComponentClause().hasSrcTypePrefixVariability();
+    syn SrcTypePrefixVariability SrcComponentDecl.getSrcTypePrefixVariability() = 
+        myComponentClause().getSrcTypePrefixVariability();
+
+    syn boolean SrcComponentDecl.hasSrcTypePrefixInputOutput() = 
+        myComponentClause().hasSrcTypePrefixInputOutput();
+    syn SrcTypePrefixInputOutput SrcComponentDecl.getSrcTypePrefixInputOutput() = 
+        myComponentClause().getSrcTypePrefixInputOutput();
+
+    syn SrcAccess SrcComponentDecl.getClassName() = myComponentClause().getClassName();
+
+    syn boolean SrcComponentDecl.hasTypeArraySubscripts() = 
+        myComponentClause().hasTypeArraySubscripts();
+    syn SrcArraySubscripts SrcComponentDecl.getTypeArraySubscripts() = 
+        myComponentClause().getTypeArraySubscripts();
+
+    syn boolean SrcComponentDecl.hasSrcConstrainingClause() = 
+        myComponentClause().hasSrcConstrainingClause();
+    syn SrcConstrainingClause SrcComponentDecl.getSrcConstrainingClause() = 
+        myComponentClause().getSrcConstrainingClause();
+
+    syn boolean SrcComponentDecl.hasSrcArraySubscripts() = 
+        hasVarArraySubscripts() || hasTypeArraySubscripts();
+
+}

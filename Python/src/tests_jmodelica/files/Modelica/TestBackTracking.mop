@@ -1,0 +1,75 @@
+/*
+    Copyright (C) 2015 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+optimization TestVariableTypes(objectiveIntegrand = x^2 + u_cont^2 + u_bf^2) 
+    Real x(start=1, fixed=true);
+    Real x2(start=0, fixed=true);
+    Real w;
+    Real w2 = w+10;
+    input Real u_cont;
+    input Real u_bf;
+    parameter Real p(free=true, initialGuess=0);
+equation
+    der(x) = u_cont + w;
+    w = -x + u_bf + p;
+    der(x2) = x;
+end TestVariableTypes;
+
+optimization TestResiduals(startTime=0, finalTime=1)
+    Real x;
+    Real w;
+    input Real u;
+initial equation
+    1e3*(x - 1) = 0; // Scale up to rest equation scaling
+equation
+    2e4*(der(x) - u) = 0; 
+constraint
+    3e3*(w - x^2) = 0;
+    4e3*(x - u^2) <= 0;
+    5e3*(x(finalTime) - 2) = 0;
+    6e3*(x(startTime) - (-5)) >= 0;
+end TestResiduals;
+
+optimization TestEquations()
+    Real x;
+    Real w;
+    input Real u;
+initial equation
+    x = sin(u);
+equation
+    der(x) = u; 
+constraint
+    w = sqrt(x);
+    x <= cos(u);
+    x(finalTime) = tan(u(finalTime));
+    x(startTime) >= exp(u(finalTime));
+end TestEquations;
+
+optimization TestJacInf(objectiveIntegrand = u^2 + x2^2)
+    Real x1;
+    Real x2;
+    input Real u;
+equation
+    der(x1) = u - x1;
+    der(x2) = x1 - sqrt(x2);
+end TestJacInf;
+
+optimization TestDuals(objectiveIntegrand = time*x + (2-time)*y)
+    input Real x;
+    input Real y(min = -1, max = 1);
+constraint
+    x >= 2;
+end TestDuals;

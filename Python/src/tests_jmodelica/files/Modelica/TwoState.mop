@@ -1,0 +1,15 @@
+optimization TwoState(objective=y2(finalTime),startTime=0.0, finalTime=5.0)
+    Real y1(start=1.0, fixed=true);
+    Real y2(start=0.0, fixed=true);
+    
+    input Real u;
+    
+equation
+    
+    der(y1) = 0.5*y1+u;
+    der(y2) = y1^2+0.5*u^2;
+
+constraint
+    y1(finalTime)-0.5=0;
+    
+end TwoState;

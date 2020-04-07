@@ -1,0 +1,419 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import org.jmodelica.util.collections.ParallelIterable;
+
+aspect IfEquationRewrite {
+
+    public class FClass {
+
+        /**
+         * After we have eliminated if equations with constant (and possibly parameter) test expressions,
+         * then all if equations must be balanced, so we can rewrite to  a list of residual equations
+         * with if expressions.
+         */
+        public class enableIfEquationRewrite extends Transformation {
+
+            @Override
+            public void perform() {
+                rewriteIfEquations();
+                removeEmptyElse();
+                checkIfEquationCompliance();
+            }
+
+        }
+
+        private void rewriteIfEquations() {
+            List<FAbstractEquation> newEquations = new List<FAbstractEquation>();
+            List<FAbstractEquation> newInitialEquations = new List<FAbstractEquation>();
+            List<FAbstractEquation> newParameterEquations = new List<FAbstractEquation>();
+
+            for (FAbstractEquation equation : getFAbstractEquations()) {
+                equation.rewriteIfEquations(newEquations);
+            }
+
+            for (FAbstractEquation equation : getFInitialEquations()) {
+                equation.rewriteIfEquations(newInitialEquations);
+            }
+
+            for (FAbstractEquation equation : getParameterEquations()) {
+                equation.rewriteIfEquations(newParameterEquations);
+            }
+
+            setFAbstractEquationList(newEquations);
+            setFInitialEquationList(newInitialEquations);
+            setParameterEquationList(newParameterEquations);
+        }
+
+        /**
+         * Remove all empty else-clauses that have been generated.
+         */
+        private void removeEmptyElse() {
+            List<FAbstractEquation> newEquations = new List<FAbstractEquation>();
+            List<FAbstractEquation> newInitialEquations = new List<FAbstractEquation>();
+            List<FAbstractEquation> newParameterEquations = new List<FAbstractEquation>();
+
+            for (FAbstractEquation equation : getFAbstractEquations()) {
+                equation.removeEmptyElse(newEquations);
+            }
+
+            for (FAbstractEquation equation : getFInitialEquations()) {
+                equation.removeEmptyElse(newInitialEquations);
+            }
+
+            for (FAbstractEquation equation : getParameterEquations()) {
+                equation.removeEmptyElse(newParameterEquations);
+            }
+
+            setFAbstractEquationList(newEquations);
+            setFInitialEquationList(newInitialEquations);
+            setParameterEquationList(newParameterEquations);
+        }
+
+    }
+
+    /* ======================== *
+     *  If equation rewriting.  *
+     * ======================== */
+
+    public void ASTNode.checkIfEquationCompliance() {
+        for (ASTNode n : this) {
+            n.checkIfEquationCompliance();
+        }
+    }
+
+    public void FIfEquation.checkIfEquationCompliance() {
+        int numAssigned = referencedFVariablesInLHS().size();
+        int numEqs = numScalarEquations();
+
+        if (numAssigned != numEqs) {
+            compliance("If equations that has non-parameter tests and contains function calls using multiple outputs"
+                    + " must assign the same variables in all branches");
+        }
+    }
+
+    syn Map<FAbstractVariable,FEquation> FIfWhenElseEquation.assignmentEquationMap() {
+        calcAssignmentEquations();
+        return assignmentEquationMap;
+    }
+
+    syn Set<FEquation> FIfWhenElseEquation.nonAssignmentEquationSet() {
+        calcAssignmentEquations();
+        return nonAssignmentEquationSet;
+    }
+
+    syn Set<FAbstractEquation> FIfWhenElseEquation.nonFEquationSet() {
+        calcAssignmentEquations();
+        return nonFEquationSet;
+    }
+
+    private Map<FAbstractVariable,FEquation> FIfWhenElseEquation.assignmentEquationMap = null;
+    private Set<FEquation> FIfWhenElseEquation.nonAssignmentEquationSet = null;
+    private Set<FAbstractEquation> FIfWhenElseEquation.nonFEquationSet = null;
+
+    private void FIfWhenElseEquation.calcAssignmentEquations() {
+        if (assignmentEquationMap == null || nonAssignmentEquationSet == null || nonFEquationSet == null) {
+
+            assignmentEquationMap = new HashMap<FAbstractVariable,FEquation>();
+            nonAssignmentEquationSet = new HashSet<FEquation>();
+            nonFEquationSet = new HashSet<FAbstractEquation>();
+
+            for (FAbstractEquation absEqn : getFAbstractEquations()) {
+                if (absEqn instanceof FEquation) {
+                    FEquation eqn = (FEquation) absEqn;
+                    FAbstractVariable var = eqn.assignedFV();
+
+                    if (var != null && !assignmentEquationMap.containsKey(var)) {
+                        assignmentEquationMap.put(var, eqn);
+                    } else {
+                        nonAssignmentEquationSet.add(eqn);
+                    }
+                } else {
+                    nonFEquationSet.add(absEqn);
+                }
+            }
+        }
+    }
+
+    /* ======================= *
+     *  Rewrite if equations.  *
+     * ======================= */
+    
+    public void FAbstractEquation.rewriteIfEquations(List<FAbstractEquation> equations) {
+        equations.add(this);
+    }
+
+    public void FIfEquation.rewriteIfEquations(List<FAbstractEquation> equations) {
+        List<FAbstractEquation> myEquations = new List<FAbstractEquation>();
+        for (FAbstractEquation equation : getFAbstractEquationList()) {
+            equation.rewriteIfEquations(myEquations);
+        }
+
+        if (hasElse()) {
+            getElse().rewriteIfEquations(equations);
+        }
+
+        setFAbstractEquationList(myEquations);
+        if (isTopWhenIfEquation()) { 
+            equations.addAll(createIfExpEquationList());
+        } else {
+            replaceMe(new FElseEquation(getType(), createIfExpEquationList()));
+        }
+    }
+
+    public void FElseEquation.rewriteIfEquations(List<FAbstractEquation> equations) {
+        List<FAbstractEquation> myEquations = new List<FAbstractEquation>();
+        for (FAbstractEquation equation : getFAbstractEquationList()) {
+            equation.rewriteIfEquations(myEquations);
+        }
+        setFAbstractEquationList(myEquations);
+    }
+
+    public class ASTNode {
+
+        // Probably keep this here.
+        public static <K, V> Set<V> valuesOfUnNamedKeys(Map<K, V> map, Set<K> namedKeys) {
+            Set<V> res = new HashSet<V>();
+
+            for (Map.Entry<K,V> e : map.entrySet()) {
+                if (!namedKeys.contains(e.getKey())) {
+                    res.add(e.getValue());
+                }
+            }
+            return res;
+        }
+
+    }
+
+    protected static ArrayList<FEquation> FIfEquation.unmatchedEquations(
+            FIfWhenElseEquation ifEqn, Set<FAbstractVariable> varsInBoth) {
+        Set<FEquation> unMatchedAssign = 
+            valuesOfUnNamedKeys(ifEqn.assignmentEquationMap(), varsInBoth);
+        unMatchedAssign.addAll(ifEqn.nonAssignmentEquationSet());
+        return toSortedList(unMatchedAssign, CHILD_ORDER_COMPARATOR);
+    }
+
+    private int[][] FIfEquation.matchEquationsMinimizeIncidences(ArrayList<FEquation> left, ArrayList<FEquation> right) {
+        int nl = left.size();
+        int nr = right.size();
+        if (nl == 0 || nr == 0)
+            return new int[0][0];
+        int[][] weights = new int[nl][nr];
+        for (int i = 0; i < nl; i++) {
+            for (int j = 0; j < nr; j++) {
+                Set<String> rightVars = right.get(j).referencedVariablesAsStrings();
+                weights[i][j] = rightVars.size();
+                for (String var : left.get(i).referencedVariablesAsStrings()) 
+                    weights[i][j] += rightVars.contains(var) ? -1 : 1;
+            }
+        }
+        return new DenseMunkresProblem(IntegerCost.create(weights)).solve();
+    }
+
+    private void FIfEquation.sortOutMatchedEquations(ArrayList<FEquation> eqns, int[][] match, int col, 
+            ArrayList<FEquation> matched, List<FAbstractEquation> remaining) {
+        int n = eqns.size();
+        boolean used[] = new boolean[n];
+        for (int i = 0; i < match.length; i++) {
+            matched.add(eqns.get(match[i][col]));
+            used[match[i][col]] = true;
+        }
+        for (int i = 0; i < n; i++)
+            if (!used[i]) {
+                remaining.add(eqns.get(i));
+            }
+    }
+
+    syn FExp FAbstractEquation.assignmentExp()  = null;
+    eq FEquation.assignmentExp()                = isAssignmentEqn() ? getRight() : null;  
+
+    syn FExp FAbstractEquation.createResidualExp() = null;
+    eq FEquation.createResidualExp() {
+        FExp lhs = getLeft();
+        FExp rhs = getRight();
+        
+        if (lhs.isZeroLiteral()) {
+            return rhs.fullCopy();
+        }
+        if (rhs.isZeroLiteral()) {
+            return lhs.fullCopy();
+        }
+        return new FSubExp(lhs.fullCopy(), rhs.fullCopy());
+    }
+
+    syn List<FAbstractEquation> FIfEquation.createIfExpEquationList() {
+        List<FAbstractEquation> l = new List<FAbstractEquation>();
+
+        // Generate equations for assignment equations that can be matched.
+        Set<FAbstractVariable> varsInBoth = assignmentEquationMap().keySet();
+        if (hasElse()) {
+            varsInBoth = intersection(varsInBoth, getElse().assignmentEquationMap().keySet());
+        }
+        for (FAbstractVariable v : toSortedList(varsInBoth, FAbstractVariable.NAME_COMPARATOR)) {
+            FExp left = assignmentEquationMap().get(v).assignmentExp().fullCopy();
+            FExp right = getElse().assignmentEquationMap().get(v).assignmentExp().fullCopy();
+            FIfExp ifExp = new FIfExp(getTest().fullCopy(), left, right);
+            FEquation e = new FEquation(getType(), v.createAccessExp(), ifExp);
+            if (isWhen()) {
+                ifExp.setWhen();
+                e.setWhen();
+            }
+            l.add(e);
+        }
+
+        // Find equations to match up among remaining FEquations based on indices.
+        ArrayList<FEquation> unmatchedLeft = unmatchedEquations(this, varsInBoth);
+        ArrayList<FEquation> unmatchedRight;
+
+        if (hasElse()) {
+            unmatchedRight = unmatchedEquations(getElse(), varsInBoth);
+        } else {
+            unmatchedRight = new ArrayList<FEquation>();
+        }
+
+        int[][] match = matchEquationsMinimizeIncidences(unmatchedLeft, unmatchedRight);
+
+        /*
+         * Sort remaining equations into those that should remain in if equation
+         * and those that should become residual eqns left side.
+         */
+        ArrayList<FEquation> residualLeft = new ArrayList<FEquation>();
+        List<FAbstractEquation> keepLeft = new List<FAbstractEquation>();
+        sortOutMatchedEquations(unmatchedLeft, match, 0, residualLeft, keepLeft);
+        keepLeft.addAll(toSortedList(nonFEquationSet(), CHILD_ORDER_COMPARATOR));
+        // Right side
+        ArrayList<FEquation> residualRight = new ArrayList<FEquation>();
+        List<FAbstractEquation> keepRight = new List<FAbstractEquation>();
+        sortOutMatchedEquations(unmatchedRight, match, 1, residualRight, keepRight);
+        if (hasElse()) {
+            keepRight.addAll(toSortedList(getElse().nonFEquationSet(), CHILD_ORDER_COMPARATOR));
+        }
+
+        // Generate residual equations.
+        for (FEquation[] eqs : new ParallelIterable<FEquation>(new FEquation[2], true, residualLeft, residualRight)) {
+            FExp left = eqs[0].createResidualExp();
+            FExp right = eqs[1].createResidualExp();
+            FIfExp ifExp = new FIfExp(getTest().fullCopy(), left, right);
+            l.add(new FEquation(getType(), eqs[0].type().zeroLiteral(), ifExp));
+        }
+
+        // Generate new if equation with remaining equations.
+        FIfEquation e;
+        if (keepLeft.getNumChild() > 0) {
+            Opt<FIfWhenElseEquation> elseOpt = new Opt<FIfWhenElseEquation>();
+            if (keepRight.getNumChild() > 0) 
+                elseOpt.addChild(new FElseEquation(getType(), keepRight));
+            e = new FIfEquation(getType(), keepLeft, getTest(), elseOpt);
+            copyFlagsTo(e);
+            l.add(e);
+        } else if (keepRight.getNumChild() > 0) {
+            e = new FIfEquation(getType(), keepRight, new FNotExp(getTest()), new Opt());
+            copyFlagsTo(e);
+            l.add(e);
+        }
+
+        return l;
+    }
+
+    public void FIfEquation.copyFlagsTo(FIfEquation e) {
+        if (isTempAssign()) {
+            e.setIsTempAssign();
+        }
+
+        if (isWhen()) {
+            e.setWhen();
+        }
+    }
+
+    /* ======================== *
+     *  Else equation removal.  *
+     * ======================== */
+
+    /**
+     * Parent method for removal of empty else clauses.
+     * <p>
+     * Do nothing if the equation is not an {@link FIfWhenElseEquation}, {@link FForClauseE}, or {@link FElseEquation}.
+     * 
+     * @param equations
+     *          The equation list in which to put the resulting equations. In the default case,
+     *          an equation adds itself.
+     */
+    public void FAbstractEquation.removeEmptyElse(List<FAbstractEquation> equations) {
+        equations.add(this);
+    }
+
+    /**
+     * Remove empty else equations, i.e., {@link SrcElseEquation}s with more than one child.
+     * 
+     * @param equations
+     *          The equation list in which to put the resulting equations.
+     *          In this case, retain all equations in the equation list.
+     */
+    public void FIfWhenElseEquation.removeEmptyElse(List<FAbstractEquation> equations) {
+        List<FAbstractEquation> myEquations = new List<FAbstractEquation>();
+        for (FAbstractEquation equation : getFAbstractEquations()) {
+            if (equation instanceof FElseEquation) {
+                ((FElseEquation) equation).removeEmptyElse(myEquations);
+            } else {
+                equation.removeEmptyElse(myEquations);
+            }
+        }
+        setFAbstractEquationList(myEquations);
+        equations.add(this);
+    }
+
+    /**
+     * Remove empty else equations, i.e., {@link SrcElseEquation}s with more than one child.
+     * 
+     * @param equations
+     *          The equation list in which to put the resulting equations.
+     *          In this case, retain all equations in the equation list.
+     */
+    public void FForClauseE.removeEmptyElse(List<FAbstractEquation> equations) {
+        List<FAbstractEquation> myEquations = new List<FAbstractEquation>();
+        for (FAbstractEquation equation : getFAbstractEquations()) {
+            if (equation instanceof FElseEquation) {
+                ((FElseEquation) equation).removeEmptyElse(myEquations);
+            } else {
+                equation.removeEmptyElse(myEquations);
+            }
+        }
+        setFAbstractEquationList(myEquations);
+        equations.add(this);
+    }
+
+    /**
+     * Remove empty else equations, i.e., {@link SrcElseEquation}s with more than one child.
+     * 
+     * @param equations
+     *          The equation list in which to put the resulting equations.
+     *          In this case, if there is more than one equation, the else clause itself is not added but
+     *          instead its equation list.
+     */
+    public void FElseEquation.removeEmptyElse(List<FAbstractEquation> equations) {
+        List<FAbstractEquation> myEquations = new List<FAbstractEquation>();
+        for (FAbstractEquation equation : getFAbstractEquations()) {
+            equation.removeEmptyElse(myEquations);
+        }
+        if (myEquations.numChildren() > 0) {
+            equations.addAll(myEquations);
+        } else {
+            setFAbstractEquationList(myEquations);
+            equations.add(this);
+        }
+    }
+
+}

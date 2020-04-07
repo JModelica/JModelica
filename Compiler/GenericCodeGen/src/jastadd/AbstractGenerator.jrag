@@ -1,0 +1,383 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+/** \file AbstractGenerator.java
+ *  AbstractGenerator class.
+ */
+
+/**
+ * A package offering a basic code generation framework.
+ */
+
+import java.util.Map;
+import java.util.Set;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.io.*;
+import java.lang.reflect.Constructor;
+
+import org.jmodelica.util.streams.NotNullCodeStream;
+
+/**
+ * Abstract base class for code generation classes. 
+ * 
+ * The code generation framework is based on templates and tags. A template is
+ * a file containing the structure of the generated code, annotated with
+ * tags. During code generation, tags are then replaced by the generated code.
+ * As an example, consider the template code fragment:
+ * 
+ *  ...
+ *  #define numEquations = $n_equations$
+ *  ...
+ *  
+ * Here, the tag $n_equations$ corresponds to the number of equations in a 
+ * model. Accordingly, the generated code would then look like, e.g.,
+ * 
+ *  ...
+ *  #define numEquations = 22
+ *  ...
+ *  
+ * Tags are represented in the generator by Tag objects. Each Tag contains
+ * essentially its name (the string enclosed by an escape character, $ in the 
+ * example above), and a method for generating the corresponding code.
+ * 
+ * Tags in the template file that start with "HOOK__" are treated differently:
+ * <ul>
+ * <li>Their names are the part after "HOOK__".</li>
+ * <li>Their tag objects are added through {@link #addHookTag(AbstractTag)}. </li>
+ * <li>There can be several tag objects for a single hook tag, they are then 
+ *     executed in sequence. </li>
+ * <li>If there is no tag object for a hook tag found in the template, then it 
+ *     is simply ignored. </li>
+ * </ul>
+ * 
+ * A subclass need only define Tag classes as inner classes for them to be 
+ * instantiated and added to the list of Tags.
+ * 
+ * When the method generate is invoked, template file is loaded and an output
+ * file is written where all tags has been replaced with their corresponding
+ * generated code.
+ *
+ */
+
+public abstract class AbstractGenerator {
+    
+    /** The prefix for hook tags. */
+    public static final String HOOK_PREFIX = "HOOK__";
+    
+    /** The prefix for includes. */
+    public static final String INCLUDE_PREFIX = "INCLUDE:";
+    
+	/** A map containing all normal tags */
+	protected Map<String,AbstractTag> tagMap;
+	/** Map of the hook tags. */
+	protected Map<String,Set<AbstractTag>> hookTagMap;
+	/** A Printer object used to generated code for expressions */
+	protected Printer expPrinter;
+	/** A character used as escape character when decoding tags during
+	 * code generation. 
+	 */
+	protected int escapeCharacter;
+	
+	/**
+	 * Constructor for AbstractGenerator.
+	 * 
+	 * All inner classes inheriting {@link AbstractTag} in the subclass being instantited 
+	 * (and in any superclasses) are automatically instantiated and added to {@link #tagMap}.
+	 * 
+	 * @param expPrinter A Printer for code generation of expressions.
+	 * @param escapeCharacter Escape character used when decoding tags.
+	 * @param fclass An FClass object used as a basis for the code generation.
+	 */
+	public AbstractGenerator(Printer expPrinter, char escapeCharacter, FClass fclass) {
+		this.expPrinter = expPrinter;
+		this.escapeCharacter = (int)escapeCharacter;
+		tagMap = new HashMap<String,AbstractTag>();
+		hookTagMap = new HashMap<String,Set<AbstractTag>>();
+		instantiateTags(fclass);
+	}
+	
+	/**
+	 * Instantiates all inner classes inheriting AbstractTag and adds them to the tag map.
+	 * 
+	 * @param fclass An FClass object used as a basis for the code generation.
+	 */
+	private void instantiateTags(FClass fclass) {
+		AbstractTag.instantiateTags(getClass(), tagMap, this, this, fclass);
+	}
+	
+	/**
+	 * Get the escape character.
+	 */
+	public char escapeChar() {
+	    return (char) escapeCharacter;
+	}
+	
+	/**
+	 * Add a hook tag handler.
+	 * 
+	 * If it is already added, nothing happends.
+	 */
+	public void addHookTag(AbstractTag tag) {
+		String name = tag.getName();
+		Set<AbstractTag> set = hookTagMap.get(name);
+		if (set == null) {
+			set = new LinkedHashSet<AbstractTag>();
+			hookTagMap.put(name, set);
+		}
+		if (!set.contains(tag))
+			set.add(tag);
+	}
+	
+	/**
+	 * Remove a hook tag handler.
+	 * 
+	 * If it is not added, nothing happends.
+	 */
+	public void removeHookTag(AbstractTag tag) {
+		String name = tag.getName();
+		Set<AbstractTag> set = hookTagMap.get(name);
+		if (set != null) {
+			set.remove(tag);
+			if (set.isEmpty())
+                hookTagMap.remove(name);
+		}
+	}
+
+    /**
+     * Method for performing code generation. 
+     * 
+     * The method performs the following steps:
+     *  
+     *   1. Load the template file
+     *   2. If the file starts with the string returned by startOfBlurb(), 
+     *      skip all characters until the string returned by endOfBlurb() is 
+     *      encountered, and all whitespace immediately following it
+     *   3. Read a character, 'c', from the template
+     *   4. If 'c' is not the escape character 
+     *   4a.  Write 'c' to the output file
+     *   4b.  Else continue to read characters until the escape character is
+     *        encountered. Build the tag name from the read characters.
+     *   4c.  Retrieve the corresponding tag
+     *   4d.  Invoke the code generation method for the tag
+     *   5.   Repeat 3 until EOF 
+     *   
+     * 
+     * @param templateFile A file containing the code generation template
+     * @param outputFile The name of the output file
+     * @throws FileNotFoundException An exception is thrown if the template
+     * file is not found.
+     */
+    public void generate(String templateFile, CodeStream outStream, String header) {
+        try {
+            outStream.print(header);
+            if (templateFile == null) {
+                generate(null, outStream);
+            } else {
+                File tFile = new File(templateFile);
+                Reader template = openTemplate(tFile);
+                generate(template, outStream, tFile.getParentFile());
+                template.close();
+            }
+            outStream.close();
+        } catch (IOException e) { // TODO: introduce specific exception type
+            throw new RuntimeException("File I/O problem during code generation", e);
+        }
+    }
+
+	/**
+	 * Opens a new Reader for a template file.
+	 */
+	private Reader openTemplate(File file) throws FileNotFoundException {
+	    return new BufferedReader(new FileReader(file));
+	}
+	
+	/**
+	 * Returns the string denoting the beginning of the copyright blurb.
+	 * 
+	 * Must not contain the tag escape character.
+	 * 
+	 * Subclasses should override if their templates may contain copyright blurb.
+	 */
+	protected String startOfBlurb() { return null; }
+	
+	/**
+	 * Returns the string denoting the end of the copyright blurb.
+	 * 
+	 * Must not contain the tag escape character.
+	 * 
+	 * Default behavior is to return the same as startOfBlurb(), but in reverse order.
+	 */
+	protected String endOfBlurb() {
+		String end = startOfBlurb();
+		if (end == null)
+			return null;
+		StringBuilder buf = new StringBuilder(end);
+		buf.reverse();
+		return buf.toString();
+	}
+	
+	/**
+	 * Internal modes for {@see #generate(Reader, CodeStream)}.
+	 */
+	private enum Mode { NORMAL, TAG, START, BLURB, END, END_WS, BEFORE };
+
+    /**
+     * See generate(String templateFile, String outputFile).
+     * 
+     * @param templateReader A Reader object from which the template 
+     * file can be used.
+     * @param genPrinter A CodeStream object to which the generated code
+     * is written.
+     */
+    public void generate(Reader templateReader, CodeStream genPrinter) {
+        generate(templateReader, genPrinter, null);
+    }
+
+	/**
+	 * See generate(String templateFile, String outputFile).
+	 * 
+	 * @param templateReader  a Reader object from which the template file can be used.
+	 * @param genPrinter      a CodeStream object to which the generated code is written.
+	 * @param includeDir      directory to look for included files in. If null, includes are not supported
+	 */
+	public void generate(Reader templateReader, CodeStream genPrinter, File includeDir) {
+		Mode mode = Mode.BEFORE;
+
+		final String startStr = startOfBlurb();
+		final String endStr = endOfBlurb();
+		if (startStr == null || endStr == null)
+			mode = Mode.NORMAL;
+		
+		StringBuilder tag_name = new StringBuilder();
+		int i = 0;
+		boolean read = true;
+		try {
+			int c = templateReader.read();
+			while (c != -1) {
+				switch (mode) {
+				case NORMAL:
+					if (c == escapeCharacter) {
+						mode = Mode.TAG;
+						tag_name.delete(0, tag_name.length());
+					} else {
+						genPrinter.print((char)c);
+					}
+					break;
+					
+				case TAG:
+					if (c == escapeCharacter) {
+					    mode = Mode.NORMAL;
+					    String name = tag_name.toString();
+					    if (name.startsWith(HOOK_PREFIX)) {
+					    	name = name.substring(HOOK_PREFIX.length());
+					    	Set<AbstractTag> set = hookTagMap.get(name);
+					    	if (set != null)
+					    		for (AbstractTag tag : set)
+					    			tag.generateTag(genPrinter);
+                        } else if (name.startsWith(INCLUDE_PREFIX)) {
+                            if (includeDir == null)
+                                throw new IllegalArgumentException("Can't include template file without include dir.");
+                            name = name.substring(INCLUDE_PREFIX.length()).trim();
+                            File subTemplateFile = new File(includeDir, name);
+                            generate(openTemplate(subTemplateFile), genPrinter, includeDir);
+					    } else {
+					        getTag(name).generateTag(genPrinter);
+					    }
+					} else {
+						tag_name.append((char) c);
+					}
+					break;
+					
+				case BEFORE:
+					if (c == startStr.charAt(0)) {
+						mode = Mode.START;
+						i = 1;
+					} else {
+						mode = Mode.NORMAL;
+						read = false;
+					}
+					break;
+					
+				case START:
+					if (c == startStr.charAt(i)) {
+						if (++i >= startStr.length())
+							mode = Mode.BLURB;
+					} else {
+						mode = Mode.NORMAL;
+						genPrinter.print(startStr.substring(0, i));
+						read = false;
+					}
+					break;
+					
+				case BLURB:
+					if (c == endStr.charAt(0)) {
+						mode = Mode.END;
+						i = 1;
+					}
+					break;
+					
+				case END:
+					// TODO: Does not handle the case endStr = "-->", blurb ends with "--->"
+					//       This can be solved with a pre-calculated prefix table
+					if (c == endStr.charAt(i)) {
+						if (++i >= endStr.length())
+							mode = Mode.END_WS;
+					} else {
+						mode = Mode.BLURB;
+					}
+					break;
+					
+				case END_WS:
+					if (!Character.isWhitespace((char) c)) {
+						mode = Mode.NORMAL;
+						read = false;
+					}
+					break;
+				}
+				
+				if (read)
+					c = templateReader.read();
+				else
+					read = true;
+			}
+		} catch (IOException e) { // TODO: introduce specific exception type
+			throw new RuntimeException("File I/O problem during code generation", e);
+		}
+	}
+	
+	/**
+	 * Fetch a tag from the map, and throw an exception if it was not found.
+	 */
+	protected AbstractTag getTag(String name) {
+        AbstractTag tag = tagMap.get(name);
+        if (tag != null)
+            return tag;
+        else // TODO: introduce specific exception type
+            throw new RuntimeException("Unknown tag: " + name);
+	}
+
+	/**
+	 * Prints out all registered tags in the generator.	
+	 */
+	public String toString() {
+		StringBuilder str = new StringBuilder();
+		for (AbstractTag t : tagMap.values()) {
+			str.append(t.toString()+"\n");
+		}
+		return str.toString();
+	}
+}

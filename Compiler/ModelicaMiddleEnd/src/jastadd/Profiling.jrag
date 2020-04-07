@@ -1,0 +1,944 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import java.io.PrintStream;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
+import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
+import org.jmodelica.util.Criteria;
+import org.jmodelica.util.streams.NullStream;
+
+aspect LightProfiling {
+	
+	private static StepInfo ASTNode.stepInfo = new StepInfo();
+	
+	public static StepInfo ASTNode.getStepInfo() {
+		return stepInfo;
+	}
+	
+	public static void ASTNode.beginStep(String name) {
+		stepInfo.begin(name);
+	}
+	
+	public static void ASTNode.endStep(String name) {
+		stepInfo.end(name);
+	}
+	
+	public class StepInfo {
+		
+		public static boolean GC_BEFORE_MEM = false;
+		
+		public static final Class<? extends InfoItem> TIME = TimeItem.class;
+		public static final Class<? extends InfoItem> MEMORY_CHANGE = MemoryChangeItem.class;
+		
+		private ArrayList<Class<? extends InfoItem>> itemClasses;
+		private ArrayList<InfoNode> open;
+		private InfoNode top;
+		
+		public StepInfo() {
+			itemClasses = new ArrayList<Class<? extends InfoItem>>();
+			itemClasses.add(TIME);
+			itemClasses.add(MEMORY_CHANGE);
+			reset();
+		}
+		
+		public void reset() {
+			open = new ArrayList<InfoNode>();
+			top = new InfoNode("Total", 0);
+			open.add(top);
+			top.begin();
+		}
+		
+		public void addItemType(Class<? extends InfoItem> item) {
+			itemClasses.add(item);
+		}
+		
+		public void clearItemTypes() {
+			itemClasses.clear();
+		}
+		
+		public void begin(String name) {
+			if (name == null)
+				throw new IllegalArgumentException("Must give a name");
+			InfoNode n = new InfoNode(name, top.depth + 1);
+			top.add(n);
+			top = n;
+			open.add(top);
+			top.begin();
+		}
+		
+		public void end(String name) {
+			if (name == null)
+				throw new IllegalArgumentException("Must give a name");
+			if (!top.name.equals(name))
+				throw new IllegalArgumentException("Name does not match last opened step: " + 
+						name + ", last: " + top.name);
+			top.end();
+			open.remove(open.size() - 1);
+			top = open.get(open.size() -1);
+		}
+		
+		public void logReport() {
+			logReport(Integer.MAX_VALUE);
+		}
+		
+		public void logReport(int maxDepth) {
+			while (top.depth > 0) 
+				end(top.name);
+			top.end();
+			
+			ArrayList<String[]> lines = new ArrayList<String[]>();
+			lines.add(top.toStrings());
+			for (InfoNode n : top)
+				if (n.depth <= maxDepth)
+					lines.add(n.toStrings());
+			
+			int n = lines.get(0).length;
+			int[] lengths = new int[n];
+			for (String[] line : lines)
+				for (int i = 0; i < n; i++)
+					if (line[i].length() > lengths[i])
+						lengths[i] = line[i].length();
+			
+			StringBuilder buf = new StringBuilder("%-");
+			buf.append(lengths[0]);
+			buf.append("s: ");
+			for (int i = 1; i < n; i++) {
+				buf.append("%");
+				buf.append(lengths[i]);
+				buf.append((i < n - 1) ? "s, " : "s");
+			}
+			String fmt = buf.toString();
+			
+			for (String[] line : lines) 
+				ASTNode.log.debug(String.format(fmt, (Object[]) line));
+		}
+		
+		public String[][] rawLog() {
+			while (top.depth > 0) 
+				end(top.name);
+			top.end();
+			
+			java.util.List<String[]> lines = new ArrayList<String[]>();
+			lines.add(top.toStringsRaw());
+			for (InfoNode n : top)
+				lines.add(n.toStringsRaw());
+			
+			return lines.toArray(new String[lines.size()][]);
+		}
+		private static final String[][] measurmentNames = new String[][] {new String[]{"type"}, new String[]{"time"}, new String[]{"memoryDiff", "memoryTotal"}};
+		
+		public void writeCSVFile(File file) throws FileNotFoundException {
+			String[][] rawMemLog = rawLog();
+			String[][][] memLog = new String[rawMemLog.length][][];
+			for (int i = 0; i < rawMemLog.length; i++) {
+				memLog[i] = new String[rawMemLog[i].length][];
+				for (int j = 0; j < rawMemLog[i].length; j++) {
+					if (j == 0)
+						memLog[i][j] = new String[] {rawMemLog[i][j]};
+					else
+						memLog[i][j] = rawMemLog[i][j].split(",");
+				}
+			}
+			PrintStream memOutFile = new PrintStream(file);
+			for (int j = 0; j < memLog[0].length; j++) {
+				for (int k = 0; k < memLog[0][j].length; k++) {
+					memOutFile.print("\"");
+					memOutFile.print(measurmentNames[j][k]);
+					memOutFile.print("\"");
+					for (int i = 0; i < memLog.length; i++) {
+						memOutFile.print(",\"");
+						memOutFile.print(memLog[i][j][k]);
+						memOutFile.print('"');
+					}
+					memOutFile.println();
+				}
+			}
+			memOutFile.close();
+		}
+		
+		private InfoItem[] createItems() {
+			InfoItem[] res = new InfoItem[itemClasses.size()];
+			Class x = null;
+			for (int i = 0; i < res.length; i++) {
+				try {
+					res[i] = itemClasses.get(i).newInstance();
+				} catch (Exception e) {
+					throw new IllegalArgumentException("Could not instantiate info item", e);
+				}
+			}
+			return res;
+		}
+		
+		private class InfoNode implements Iterable<InfoNode> {
+			
+			private static final char INDENT = ' ';
+			
+			private InfoItem[] items;
+			private ArrayList<InfoNode> children;
+			public String name;
+			public int depth;
+			
+			public InfoNode(String name, int depth) {
+				this.name = name;
+				this.depth = depth;
+				items = createItems();
+				children = null;
+			}
+			
+			public void begin() {
+				for (InfoItem it : items)
+					it.begin();
+			}
+			
+			public void end() {
+				for (InfoItem it : items)
+					it.end();
+			}
+			
+			public void add(InfoNode n) {
+				if (children == null)
+					children = new ArrayList<InfoNode>();
+				children.add(n);
+			}
+			
+			private String produceNameHead() {
+				StringBuilder buf = new StringBuilder();
+				for (int j = 0; j < depth; j++)
+					buf.append(INDENT);
+				buf.append(name);
+				return buf.toString();
+			}
+			
+			public String[] toStrings() {
+				String[] res = new String[items.length + 1];
+				res[0] = produceNameHead();
+				int i = 1;
+				for (InfoItem it : items)
+					res[i++] = it.toString();
+				return res;
+			}
+			
+			public String[] toStringsRaw() {
+				String[] res = new String[items.length + 1];
+				res[0] = produceNameHead();
+				int i = 1;
+				for (InfoItem it : items)
+					res[i++] = it.toStringRaw();
+				return res;
+			}
+			
+			public Iterator<InfoNode> iterator() {
+				return new NodeIterator();
+			}
+			
+			private class NodeIterator implements Iterator<InfoNode> {
+				
+				int i = 0;
+				Iterator<InfoNode> cur = null;
+				
+				public boolean hasNext() {
+					return children != null && i < children.size();
+				}
+				
+				public InfoNode next() {
+					InfoNode res;
+					if (cur != null) {
+						res = cur.next();
+					} else {
+						res = children.get(i);
+						cur = res.iterator();
+					}
+					if (!cur.hasNext()) {
+						cur = null;
+						i++;
+					}
+					return res;
+				}
+				
+				public void remove() {
+					throw new UnsupportedOperationException();
+				}
+				
+			}
+			
+		}
+		
+		public interface InfoItem {
+			public void begin();
+			public void end();
+			public String toString();
+			public String toStringRaw();
+		}
+		
+		public static abstract class StateDifferenceInfoItem implements InfoItem {
+			private long beginVal = 0;
+			private long endVal = 0;
+			
+			public void begin() {
+				beginVal = state();
+			}
+			
+			public void end() {
+				endVal = state();
+			}
+			
+			public String toString() {
+				return toString(endVal - beginVal, endVal);
+			}
+			
+			public String toStringRaw() {
+				return toStringRaw(endVal - beginVal, endVal);
+			}
+			
+			public abstract long state();
+			public abstract String toString(long diff, long endVal);
+			public abstract String toStringRaw(long diff, long endVal);
+		}
+		
+		public static class TimeItem extends StateDifferenceInfoItem {
+			public long state() {
+				return System.currentTimeMillis() - MemoryChangeItem.timeSpentInGC;
+			}
+			
+			public String toString(long diff, long endVal) {
+				return (Math.round(diff / 10.0) / 100.0) + " s";
+			}
+			
+			public String toStringRaw(long diff, long endVal) {
+				return Long.toString(diff);
+			}
+		}
+		
+		public static class MemoryChangeItem extends StateDifferenceInfoItem {
+			private static final Runtime RUNTIME = Runtime.getRuntime();
+			private static long timeSpentInGC = 0;
+			
+			public static long getTimeSpentInGC() {
+				return timeSpentInGC;
+			}
+
+			public long state() {
+				if (StepInfo.GC_BEFORE_MEM)
+					runGC();
+				return usedMemory();
+			}
+			
+			private static long usedMemory() {
+				return RUNTIME.totalMemory() - RUNTIME.freeMemory();
+			}
+			
+			private static void runGC() {
+				long start = System.currentTimeMillis();
+				try {
+					long usedMem1 = usedMemory(), usedMem2 = Long.MAX_VALUE;
+					for (int i = 0; (usedMem1 < usedMem2) && (i < 500); ++i) {
+						RUNTIME.runFinalization();
+						RUNTIME.gc();
+						Thread.yield();
+	
+						usedMem2 = usedMem1;
+						usedMem1 = usedMemory();
+					}
+				} catch (Exception e) {}
+				timeSpentInGC += System.currentTimeMillis() - start;
+			}
+			
+			public String toString(long diff, long endVal) {
+				return ASTNode.formatMem(diff) + " (" + ASTNode.formatMem(endVal) + " total)";
+			}
+			
+			public String toStringRaw(long diff, long endVal) {
+				return diff + "," + endVal;
+			}
+		}
+		
+	}
+	
+}
+
+aspect MemoryUse {
+
+    public Iterable<ASTNode> ASTNode.profilingChildren() {
+        LinkedHashSet<ASTNode> res = new LinkedHashSet<ASTNode>(children != null ? children.length * 2 : 4);
+        if (children != null)
+            for (ASTNode ch : children)
+                if (ch != null && ch.parent == this)
+                    res.add(ch);
+        for (Field f : Profiler.GET_FIELDS.perform(getClass())) {
+            if ((f.getModifiers() & Modifier.STATIC) == 0 && ASTNode.class.isAssignableFrom(f.getType())) {
+                try {
+                    ASTNode val = (ASTNode) Profiler.GET_VALUE.perform(f, this);
+                    if (val != null && val.parent == this)
+                        res.add(val);
+                } catch (Exception e) {}
+            }
+        }
+        return res;
+    }
+
+    private static Map<Class,Counter> ASTNode.buildNodeCountMap = null;
+
+    private static NodeCountExtra[] ASTNode.nodeCountExtra = new NodeCountExtra[] { };
+
+    public interface NodeCountExtra {
+        public void count(ASTNode n);
+        public void printResult(CodeStream out);
+    }
+
+    /**
+     * Output a list of the number of instances of each node class.
+     */
+    public static void ASTNode.dumpNodeCount(String file) 
+            throws IOException {
+        ArrayList<Counter> list = new ArrayList<Counter>();
+        list.addAll(buildNodeCountMap.values());
+        Collections.sort(list);
+        CodeStream out = new CodeStream(file);
+        for (Counter c : list)
+            out.println(c);
+        for (NodeCountExtra nce : nodeCountExtra)
+            nce.printResult(out);
+        out.close();
+    }
+
+    public void ASTNode.buildNodeCount() {
+        Profiler.clear();
+        if (buildNodeCountMap == null)
+            buildNodeCountMap = new HashMap<Class,Counter>();
+        buildNodeCount(buildNodeCountMap);
+        Profiler.clear();
+    }
+
+    private void ASTNode.buildNodeCount(Map<Class,Counter> map) {
+        addToNodeCount(map, getClass(), Profiler.getNodeSize(this, false), Profiler.getNodeSize(this, true));
+        for (NodeCountExtra nce : nodeCountExtra)
+            nce.count(this);
+        
+        for (ASTNode n : profilingChildren())
+            n.buildNodeCount(map);
+    }
+
+    private void ASTNode.addToNodeCount(Map<Class,Counter> map, Class cls, long local, long deep) {
+        if (map.containsKey(cls))
+            map.get(cls).inc(local, deep);
+        else
+            map.put(cls, new Counter(cls.getSimpleName(), local, deep));
+        if (cls != ASTNode.class)
+            addToNodeCount(map, cls.getSuperclass(), local, deep);
+    }
+
+    public class ASTNode {
+        public static class Counter implements Comparable<Counter> {
+            private int n;
+            private long sizeLocal;
+            private long sizeDeep;
+            private String s;
+            
+            private static int l = 0;
+            private static String fmt = null;
+            
+            public Counter(String name, long local, long deep) {
+                s = name;
+                sizeLocal = 0;
+                sizeDeep = 0;
+                n = 0;
+                if (s.length() > l)
+                    l = s.length();
+                inc(local, deep);
+            }
+            
+            public void inc(long local, long deep) {
+                n++;
+                sizeLocal += local;
+                sizeDeep += deep;
+            }
+            
+            public int compareTo(Counter c) {
+                return c.n - n;
+            }
+            
+            public String toString() {
+                if (fmt == null)
+                    fmt = "%-" + l + "s : %9d (%8s / %8s)";
+                return String.format(fmt, s, n, ASTNode.formatMem(sizeDeep), ASTNode.formatMem(sizeLocal));
+            }
+        }
+    }
+
+	/**
+	 * Output a view of an AST, showing the classname and approximate memory footprint 
+	 *        of the subtree.
+	 * 
+	 * As {@link #dumpMemoryUse(PrintStream, boolean, int, long)}, with <code>deep = false</code>, 
+	 * <code>maxDepth = -1</code>, <code>minSize = 0</code>, and saving the output to a file.
+	 * 
+	 * @param file     filename to save output as
+	 */
+	public void ASTNode.dumpMemoryUse(String file) throws FileNotFoundException {
+		dumpMemoryUse(file, false);
+	}
+	
+	/**
+	 * Output a view of an AST, showing the classname and approximate memory footprint 
+	 *        of the subtree.
+	 * 
+	 * As {@link #dumpMemoryUse(PrintStream, boolean, int, long)}, with <code>maxDepth = -1</code>, 
+	 * <code>minSize = 0</code>, and saving the output to a file.
+	 * 
+	 * @param file     filename to save output as
+	 * @param deep     if the memory calculation should include the contents of non-ASTNode members
+	 */
+	public void ASTNode.dumpMemoryUse(String file, boolean deep) throws FileNotFoundException {
+		dumpMemoryUse(file, deep, -1, 0);
+	}
+	
+	/**
+	 * Output a view of an AST, showing the classname and approximate memory footprint 
+	 *        of the subtree.
+	 * 
+	 * As {@link #dumpMemoryUse(PrintStream, boolean, int, long)}, but saving the output to a file.
+	 * 
+	 * @param file     filename to save output as
+	 * @param deep     if the memory calculation should include the contents of non-ASTNode members
+	 * @param maxDepth the maximum depth to display nodes from, -1 means infinite depth
+	 * @param minSize  the minimum memory size to display a node
+	 */
+	public void ASTNode.dumpMemoryUse(String file, boolean deep, int maxDepth, long minSize) 
+			throws FileNotFoundException {
+		dumpMemoryUse(new PrintStream(file), deep, maxDepth, minSize);
+	}
+	
+	
+	/**
+	 * Output a view of an AST, showing the classname and approximate memory footprint 
+	 *        of the subtree.
+	 * 
+	 * As {@link #dumpMemoryUse(PrintStream, boolean, int, long)}, with <code>deep = false</code>, 
+	 * <code>maxDepth = -1</code> and <code>minSize = 0</code>.
+	 * 
+	 * @param out      stream to use for output
+	 */
+	public void ASTNode.dumpMemoryUse(PrintStream out) {
+		dumpMemoryUse(out, false, -1, 0);
+	}
+	
+	/**
+	 * Output a view of an AST, showing the classname and approximate memory footprint 
+	 *        of the subtree.
+	 * 
+	 * As {@link #dumpMemoryUse(PrintStream, boolean, int, long)}, with <code>maxDepth = -1</code> and 
+	 * <code>minSize = 0</code>.
+	 * 
+	 * @param out      stream to use for output
+	 * @param deep     if the memory calculation should include the contents of non-ASTNode members
+	 */
+	public void ASTNode.dumpMemoryUse(PrintStream out, boolean deep) {
+		dumpMemoryUse(out, deep, -1, 0);
+	}
+	
+	/**
+	 * Output a view of an AST, showing the classname and approximate memory footprint 
+	 *        of the subtree.
+	 * 
+	 * @param out      stream to use for output
+	 * @param deep     if the memory calculation should include the contents of non-ASTNode members
+	 * @param maxDepth the maximum depth to display nodes from, -1 means infinite depth
+	 * @param minSize  the minimum memory size to display a node
+	 */
+	public void ASTNode.dumpMemoryUse(PrintStream out, boolean deep, int maxDepth, long minSize) {
+		Profiler.clear();   // Remove any stale data from profiler
+		gatherMemoryUse(out, "", deep, maxDepth, minSize, 0);
+		Profiler.clear();   // Free any memory used by the profiler's cache
+	}
+	
+	/**
+	 * Calculate the memory weight of a subtree.
+	 */
+	public long ASTNode.subTreeSize() {
+		Profiler.clear();   // Remove any stale data from profiler
+		long res = subTreeSizeNoClear();
+		Profiler.clear();   // Free any memory used by the profiler's cache
+		return res;
+	}
+	
+	/**
+	 * Calculate the memory weight of a subtree, without clearing cache.
+	 */
+	private long ASTNode.subTreeSizeNoClear() {
+		return gatherMemoryUse(NullStream.PRINT, "", true, 0, 0, 1);
+	}
+	
+	/**
+	 * Calclulate memory weight of all subtrees fulfilling a specific criteria.
+	 */
+	public long ASTNode.filteredTreeSize(Criteria<ASTNode> filter) {
+		Profiler.clear();   // Remove any stale data from profiler
+		long res = filteredTreeSizeNoClear(filter);
+		Profiler.clear();   // Free any memory used by the profiler's cache
+		return res;
+	}
+
+    /**
+     * Calclulate memory weight of all subtrees fulfilling a specific criteria, without clearing cache.
+     */
+    private long ASTNode.filteredTreeSizeNoClear(Criteria<ASTNode> filter) {
+        if (filter.test(this)) {
+            return subTreeSizeNoClear();
+        } else {
+            long res = 0;
+            for (ASTNode ch : profilingChildren()) 
+                res += ch.filteredTreeSizeNoClear(filter);
+            return res;
+        }
+    }
+
+	/**
+	 * Calculate total memory weight of all nodes (including subtrees) of a specific class.
+	 */
+	public long ASTNode.specificNodeClassTreeSize(String name) {
+		try {
+			final Class cls = Class.forName(ASTNode.class.getName().replace("ASTNode", name));
+			return filteredTreeSize(new ClassCriteria<ASTNode>(cls));
+		} catch (ClassNotFoundException e) {
+			return -1;
+		}
+	}
+
+    /**
+     * Traversal method for {@link #dumpMemoryUse(PrintStream, boolean, int, long)}.
+     * 
+     * @return approximation of the memory footprint for the subtree
+     */
+    protected long ASTNode.gatherMemoryUse(
+            PrintStream out, String indent, boolean deep, int maxDepth, long minSize, int depth) {
+        long local = Profiler.getNodeSize(this, deep);
+        long mem = local;
+        String nextInd = indent + " ";
+        for (ASTNode ch : profilingChildren())
+            mem += ch.gatherMemoryUse(out, nextInd, deep, maxDepth, minSize, depth+1);
+        if ((depth == 0 || mem >= minSize) && (maxDepth < 0 || depth < maxDepth))
+            addMemoryUseRow(out, indent, mem, local);
+        return mem;
+    }
+
+	protected long Opt.gatherMemoryUse(PrintStream out, String indent, boolean deep, int maxDepth, long minSize, int depth) {
+		return super.gatherMemoryUse(out, indent.substring(1), deep, maxDepth, minSize, depth);
+	}
+	
+	protected long InstExtends.gatherMemoryUse(PrintStream out, String indent, boolean deep, int maxDepth, long minSize, int depth) {
+		return super.gatherMemoryUse(out, indent, deep, maxDepth, minSize, depth);
+	}
+
+	/**
+	 * Output method for {@link #dumpMemoryUse(PrintStream, boolean, int, long)}.
+	 */
+	protected void ASTNode.addMemoryUseRow(PrintStream out, String indent, long mem, long local) {
+		out.println(indent + getClass().getSimpleName() + extraMemoryUseInfo() + ": " + 
+				formatMem(mem) + " (" + formatMem(local) + ")");
+	}
+	
+	protected void Opt.addMemoryUseRow(PrintStream out, String indent, long mem, long local) {}
+	
+	/**
+	 * Any extra info to add to the memory use output.
+	 */
+	syn String ASTNode.extraMemoryUseInfo()   = "";
+	eq InstClassDecl.extraMemoryUseInfo()     = " \"" + name() + "\"";
+	eq InstComponentDecl.extraMemoryUseInfo() = " \"" + name() + "\"";
+	eq SrcClassDecl.extraMemoryUseInfo()         = " \"" + name() + "\"";
+	eq SrcComponentDecl.extraMemoryUseInfo()     = " \"" + name() + "\"";
+	eq InstExtends.extraMemoryUseInfo()       = " extending \"" + getClassName().name() + "\"";
+
+    /**
+     * Visit each node in tree (depth-first).
+     */
+    public void ASTNode.visitAll(ASTVisitor v) {
+        for (ASTNode ch : profilingChildren())
+            ch.visitAll(v);
+        v.visit(this);
+    }
+
+	/**
+	 * Template for vistor object for tree.
+	 */
+	public interface ASTVisitor {
+		public void visit(ASTNode n);
+	}
+	
+	/**
+	 * Base class for ASTVisitor filtered by a criteria.
+	 */
+	public abstract class FilteredASTVisitor implements ASTVisitor {
+		private Criteria<ASTNode> crit;
+		
+		public FilteredASTVisitor(Criteria<ASTNode> crit) {
+			this.crit = crit;
+		}
+		
+		public void visit(ASTNode n) {
+			if (crit.test(n))
+				filteredVisit(n);
+		}
+		
+		public abstract void filteredVisit(ASTNode n);
+	}
+	
+	/**
+	 * A criteria that checks that the object is an instance of a specific class.
+	 */
+	public class ClassCriteria<T> implements Criteria<T> {
+		private Class cls;
+		
+		public ClassCriteria(Class cls) {
+			this.cls = cls;
+		}
+		
+		public boolean test(T elem) {
+			return cls.isInstance(elem);
+		}
+	}
+
+    /**
+     * Contains methods for calculating the size of AST nodes.
+     * 
+     * Uses minimum sizes stipulated by language standard, and ignores padding for memory alignment 
+     * used by many JVMs. Thus values should be treated as minimum values.
+     */
+    public abstract class Profiler {
+
+        /**
+         * Approximates the memory footprint of an AST node.
+         * 
+         * @param deep  if the approximation should include the contents of non-ASTNode members
+         */
+        public static long getNodeSize(ASTNode node, boolean deep) {
+            if (deep)
+                return getObjectSize(node);
+            else 
+                return getTotalShellSize(node.getClass());
+        }
+
+        /**
+         * Clear cached data.
+         */
+        public static void clear() {
+            visited.clear();
+        }
+
+        private static final long OBJECT_PAD_SIZE     = 8;
+        private static final long OBJECT_SHELL_SIZE   = 12;
+        private static final long OBJREF_SIZE         = 4;
+        private static final long LONG_FIELD_SIZE     = 8;
+        private static final long INT_FIELD_SIZE      = 4;
+        private static final long SHORT_FIELD_SIZE    = 2;
+        private static final long CHAR_FIELD_SIZE     = 2;
+        private static final long BYTE_FIELD_SIZE     = 1;
+        private static final long BOOLEAN_FIELD_SIZE  = 1;
+        private static final long DOUBLE_FIELD_SIZE   = 8;
+        private static final long FLOAT_FIELD_SIZE    = 4;
+
+        private static HashMap<Class, Long> totalFieldSize = new HashMap<Class, Long>();
+        private static IdentityHashMap<Object, Object> visited = new IdentityHashMap<Object, Object>();
+
+        public static class GetFieldsAction implements PrivilegedAction {
+            
+            private Class cls;
+            
+            public Field[] perform(Class cl) {
+                cls = cl;
+                return (Field[]) AccessController.doPrivileged(this);
+            }
+
+            public Object run() {
+                return cls.getDeclaredFields();
+            }
+            
+        }
+
+        public static class GetValueAction implements PrivilegedExceptionAction {
+            
+            private Field field;
+            
+            public Object perform(Field f, Object o) throws Exception {
+                if (!f.isAccessible()) {
+                    field = f;
+                    AccessController.doPrivileged(this);
+                }
+                return f.get(o);
+            }
+
+            public Object run() throws Exception {
+                field.setAccessible(true);
+                return null;
+            }
+            
+        }
+
+        public static final GetFieldsAction GET_FIELDS = new GetFieldsAction();
+        public static final GetValueAction  GET_VALUE  = new GetValueAction();
+
+        public static long getObjectSize(Object o) {
+            if (o == null || visited.containsKey(o))
+                return 0;
+            visited.put(o, null);
+            
+            Class type = o.getClass();
+            if (type.isArray())
+                return getArraySize(o, type);
+            if (o instanceof LinkedList)
+                return getLinkedListSize((LinkedList) o, type);
+            
+            long mem = getTotalShellSize(type);
+            for (; type != null; type = type.getSuperclass())
+                for (Field f : GET_FIELDS.perform(type)) 
+                    if ((f.getModifiers() & Modifier.STATIC) == 0) 
+                        mem += getObjectFieldSize(f, o);
+            return mem;
+        }
+
+        public static void printObjectParts(Object o) {
+            printObjectParts(o, o.getClass());
+        }
+
+        private static void printObjectParts(Object o, Class type) {
+            if (type != Object.class)
+                printObjectParts(o, type.getSuperclass());
+            
+            for (Field f : GET_FIELDS.perform(type)) {
+                if ((f.getModifiers() & Modifier.STATIC) == 0) {
+                    long mem = getFieldSize(f.getType()) + getObjectFieldSize(f, o);
+                    System.out.format("%6d : %s\n", mem, f.getName());
+                }
+            }
+        }
+
+        private static long getObjectFieldSize(Field f, Object o) {
+            Class type = f.getType();
+            if (type.isPrimitive())
+                return 0;
+            try {
+                Object val = GET_VALUE.perform(f, o);
+                return shouldCount(val) ? getObjectSize(val) : 0;
+            } catch (Exception e) {
+                System.err.println("Could not read member: " + o.getClass().getSimpleName() + "." + f.getName());
+                return OBJECT_SHELL_SIZE;
+            }
+        }
+
+        private static boolean shouldCount(Object o) {
+            if (o instanceof ASTNode) {
+                ASTNode n = (ASTNode) o;
+                for (; n.parent != null; n = n.parent)
+                    if (!n.recognizedByParent())
+                        return true;
+                return !(n instanceof Root);
+            } else {
+                return true;
+            }
+        }
+
+        // Special case for linked list to avoid stack overflow
+        private static long getLinkedListSize(LinkedList l, Class type) {
+            long sum = getTotalShellSize(type);
+            long entrySize;
+            try {
+                entrySize = getTotalShellSize(type.getField("header").getType());
+            } catch (Exception e) {
+                entrySize = 3 * OBJREF_SIZE + OBJECT_SHELL_SIZE; // From inspecting source
+            }
+            for (Object o : l)
+                sum += entrySize + getObjectSize(o);
+            return sum;
+        }
+
+        private static long getTotalFieldSize(Class type) {
+            if (totalFieldSize.containsKey(type))
+                return totalFieldSize.get(type);
+            
+            long mem = 0;
+            if (type != Object.class)
+                mem = getTotalFieldSize(type.getSuperclass());
+            
+            for (Field f : GET_FIELDS.perform(type)) 
+                if ((f.getModifiers() & Modifier.STATIC) == 0) 
+                    mem += getFieldSize(f.getType());
+            
+            totalFieldSize.put(type, mem);
+            return mem;
+        }
+
+        public static long getTotalShellSize(Class type) {
+            long mem = OBJECT_SHELL_SIZE + getTotalFieldSize(type);
+            return ((mem - 1) / OBJECT_PAD_SIZE + 1) * OBJECT_PAD_SIZE;
+        }
+
+        private static long getFieldSize(Class type) {
+            if (type == int.class)
+                return INT_FIELD_SIZE;
+            else if (type == long.class)
+                return LONG_FIELD_SIZE;
+            else if (type == short.class)
+                return SHORT_FIELD_SIZE;
+            else if (type == byte.class)
+                return BYTE_FIELD_SIZE;
+            else if (type == boolean.class)
+                return BOOLEAN_FIELD_SIZE;
+            else if (type == char.class)
+                return CHAR_FIELD_SIZE;
+            else if (type == double.class)
+                return DOUBLE_FIELD_SIZE;
+            else if (type == float.class)
+                return FLOAT_FIELD_SIZE;
+            return OBJREF_SIZE;
+        }
+
+        private static long getArraySize(Object o, Class type) {
+            int len = java.lang.reflect.Array.getLength(o);
+            Class comp = type.getComponentType();
+            long size = getFieldSize(comp);
+            long res = OBJECT_SHELL_SIZE + INT_FIELD_SIZE + len * size;
+            res = ((res - 1) / OBJECT_PAD_SIZE + 1) * OBJECT_PAD_SIZE;
+            if (!comp.isPrimitive()) { 
+                for (int i = 0; i < len; i++) {
+                    Object elem = java.lang.reflect.Array.get(o, i);
+                    if (shouldCount(elem))
+                        res += getObjectSize(elem);
+                }
+            }
+            return res;
+        }
+
+    }
+
+	public boolean ASTNode.recognizedByParent() {
+		return parent != null && 
+				parent.children != null && 
+				childIndex >= 0 && childIndex < parent.children.length &&
+				parent.children[childIndex] == this;
+	}
+
+}

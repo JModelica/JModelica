@@ -1,0 +1,61 @@
+optimization Englezos652
+    //From post http://www.jmodelica.org/1339 by Niklas
+    constant Real K1 = 0.242;
+    constant Real K2 = 0.428;
+    Real r1;
+    Real r2;
+    Real x1(start=1.0,fixed=true,nominal=2);
+    Real x2(start=0.0,fixed=true,nominal=2);
+
+    parameter Real k1(free=true,nominal=1e-6) = 3.5458883e-6;
+    parameter Real k2(free=true,nominal=1e-6) = 4.0034558e-6;
+
+equation
+    r1 = k1*(x1^2 - x2*(2 - 2*x1 - x2)/(3*K1));
+    r2 = k2*(x1*x2 - (1 - x1 -2*x2)*(2 - 2*x1 - x2)/(9*K2));
+    der(x1) = -r1 - r2;
+    der(x2) = r1/2 - r2;
+
+end Englezos652;
+
+
+optimization Englezos652_with_input
+  //From post http://www.jmodelica.org/1382 by Niklas
+  constant Real K1 = 0.242;
+  constant Real K2 = 0.428;
+  Real r1(nominal=30);
+  Real r2(nominal=4);
+  Real x1(start=1.0,fixed=true,nominal=40);
+  Real x2(start=0.0,fixed=true,nominal=100);
+
+  parameter Real k1(free=false,nominal=10) = 3.5458883e-6;
+  parameter Real k2(free=false,nominal=20) = 4.0034558e-6;
+  input Real u1;    //Different result for r1 if this is commented
+
+equation
+  r1 = k1*(x1^2 - x2*(2 - 2*x1 - x2)/(3*K1));
+  r2 = k2*(x1*x2 - (1 - x1 -2*x2)*(2 - 2*x1 - x2)/(9*K2));
+  der(x1) = -r1 - r2;
+  der(x2) = r1/2 - r2;
+
+end Englezos652_with_input;
+
+optimization Englezos652_without_input
+  //From post http://www.jmodelica.org/1382 by Niklas
+  constant Real K1 = 0.242;
+  constant Real K2 = 0.428;
+  Real r1(nominal=30);
+  Real r2(nominal=4);
+  Real x1(start=1.0,fixed=true,nominal=40);
+  Real x2(start=0.0,fixed=true,nominal=100);
+
+  parameter Real k1(free=false,nominal=10) = 3.5458883e-6;
+  parameter Real k2(free=false,nominal=20) = 4.0034558e-6;
+
+equation
+  r1 = k1*(x1^2 - x2*(2 - 2*x1 - x2)/(3*K1));
+  r2 = k2*(x1*x2 - (1 - x1 -2*x2)*(2 - 2*x1 - x2)/(9*K2));
+  der(x1) = -r1 - r2;
+  der(x2) = r1/2 - r2;
+
+end Englezos652_without_input;

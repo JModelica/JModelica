@@ -1,0 +1,43 @@
+<!--
+    Copyright (C) 2014 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+-->
+
+<!-- Targets for working from terminal window:
+       build (default) - generates java files and compiles them
+       test            - runs junit test cases
+       clean           - removes all generated files and class files
+     Targets for working from Eclipse:
+       gen             - generates java files
+       gen-test        - generates junit test cases from test files
+       clean-gen        - removes all generated files and their class files
+ -->
+
+<project name="ModelicaCompiler" basedir=".." default="build">
+    <include file="build-set.xml"/>
+
+    <property name="sets" value="${mc_set.sets}"/>
+    <property name="sub_package" value="modelica" />
+    
+    <property name="jars" value="ModelicaCompiler,util,separateProcess"/>
+    <property name="ModelicaCompiler.jar.packages" value="${base_package}"/>
+    <property name="ModelicaCompiler.jar.include_resources" value="true"/>
+    <property name="util.jar.packages" value="org.jmodelica.util,org.jmodelica.common,org.jmodelica.api"/>
+    <property name="separateProcess.jar.packages" value="org.jmodelica.util,org.jmodelica.common,org.jmodelica.api,org.jmodelica.separateProcess"/>
+    
+    <property name="javadoc.path" value="doc/javadoc"/>
+    <property name="javadoc.packages" value="org.jmodelica.*"/>
+    
+    <import file="../build-base.xml"/>
+</project>

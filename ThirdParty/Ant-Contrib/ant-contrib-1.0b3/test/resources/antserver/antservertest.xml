@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="Project" default="default" basedir=".">
+
+    <taskdef resource="net/sf/antcontrib/antcontrib.properties"/>
+
+    <property name="server.host" value="localhost" />
+    <property name="server.port" value="17000" />
+
+    <target name="default">
+    </target>
+
+    <!-- =============================================== -->
+    <!--                      TEST 1                     -->
+    <!-- =============================================== -->
+    <target name="test1_remote">
+        <echo message="Test1 Successfully Called" />
+    </target>
+
+    <target name="dotest1">
+        <remoteant machine="${server.host}" port="${server.port}">
+            <runtarget target="test1_remote">
+            </runtarget>
+        </remoteant>
+    </target>
+
+    <target name="test1">
+        <antcall target="run.test.with.server">
+            <param name="test.target" value="dotest1" />
+        </antcall>
+    </target>
+
+    <!-- =============================================== -->
+    <!--                      TEST 2                     -->
+    <!-- =============================================== -->
+    <target name="test2_remote">
+        <echo message="${message}" />
+    </target>
+
+    <target name="dotest2">
+        <remoteant machine="${server.host}" port="${server.port}">
+            <runtarget target="test2_remote">
+                <property name="message" value="Test2 Successfully Called" />
+            </runtarget>
+        </remoteant>
+    </target>
+
+    <target name="test2">
+        <antcall target="run.test.with.server">
+            <param name="test.target" value="dotest2" />
+        </antcall>
+    </target>
+
+    <!-- =============================================== -->
+    <!--                      TEST 3                     -->
+    <!-- =============================================== -->
+    <target name="test3_remote">
+        <touch file="E:/test3.txt" />
+        <echo message="Test3 Successfully Called" />
+    </target>
+
+    <target name="dotest3">
+        <remoteant machine="${server.host}" port="${server.port}">
+            <runant target="test3_remote" antfile="${ant.file}">
+            </runant>
+        </remoteant>
+    </target>
+
+    <target name="test3">
+        <antcall target="run.test.with.server">
+            <param name="test.target" value="dotest3" />
+        </antcall>
+    </target>
+
+    <!-- =============================================== -->
+    <!--                      TEST 4                     -->
+    <!-- =============================================== -->
+    <target name="test4_remote">
+        <echo message="${message}" />
+    </target>
+
+    <target name="dotest4">
+        <remoteant machine="${server.host}" port="${server.port}">
+            <runant target="test4_remote" antfile="${ant.file}">
+                <property name="message" value="Test4 Successfully Called" />
+            </runant>
+        </remoteant>
+    </target>
+
+    <target name="test4">
+        <antcall target="run.test.with.server">
+            <param name="test.target" value="dotest4" />
+        </antcall>
+    </target>
+
+    <target name="dotest5">
+        <mkdir dir="servertests" />
+        <remoteant machine="${server.host}" port="${server.port}">
+            <sendfile file="clientfile.txt" todir="servertests" />
+        </remoteant>
+        <available property="file.available"
+            file="servertests/clientfile.txt" />
+        <fail unless="file.available" />
+    </target>
+
+    <target name="cleanup">
+        <delete quiet="yes" dir="servertests"/>
+    </target>
+
+    <target name="test5">
+        <antcall target="run.test.with.server">
+            <param name="test.target" value="dotest5" />
+        </antcall>
+    </target>
+    <target name="run.test.with.server">
+        <parallel>
+            <antserver port="${server.port}" />
+
+            <sequential>
+                <waitfor checkevery="500" checkeveryunit="millisecond">
+                    <socket port="${server.port}" server="${server.host}" />
+                </waitfor>
+
+                <trycatch>
+                    <try>
+                        <antcall target="${test.target}" />
+                    </try>
+                    <finally>
+                        <remoteant machine="${server.host}" port="${server.port}">
+                            <shutdown />
+                        </remoteant>
+                    </finally>
+                </trycatch>
+            </sequential>
+        </parallel>
+    </target>
+
+
+</project>

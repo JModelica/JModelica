@@ -1,0 +1,728 @@
+/*
+    Copyright (C) 2011 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+import org.jmodelica.util.QualifiedName;
+aspect SimpleLookup {
+    /**
+      * Warning: This is only a prototype and is currently not well tested.
+      *          Use with care.
+      */
+
+     /**
+      * Interface implemented by nodes for which the SrcClassDecl can be resolved.
+      */
+    interface ClassLookupable {
+        /**
+         * Find the SrcClassDecl for this clause or component.
+         * An unknown class is obtained in the case the SrcClassDecl can't be found.
+         */
+        public SrcClassDecl findClassDecl();
+    }
+    SrcExtendsClause implements ClassLookupable;
+    SrcComponentDecl implements ClassLookupable;
+    SrcComponentClause implements ClassLookupable;
+    SrcImportClause implements ClassLookupable;
+
+    syn SrcClassDecl SrcExtendsClause.findClassDecl()   = getSuper().findClassDecl();
+    syn SrcClassDecl SrcComponentDecl.findClassDecl()   = myComponentClause().findClassDecl();
+    syn SrcClassDecl SrcComponentClause.findClassDecl() = getClassName().findClassDecl();
+    syn SrcClassDecl SrcImportClause.findClassDecl()    = getPackageName().findClassDecl();
+
+    // Used to prevent circular lookups without the repetitions imposed by declaring attributes circular.
+    protected boolean SrcAccess.duringFindClassDecl = false;
+    protected int SrcClassDecl.duringFindClassDeclRevisits = 0;
+    protected static final int SrcClassDecl.MAX_FIND_CLASS_DECL_REVISITS = 20;
+
+    /**
+    * Find the SrcClassDecl referenced by this access.
+    */
+    syn SrcClassDecl SrcAccess.findClassDecl() = resolveAccess().getClassDecl();
+    
+    syn ResolvedAccess SrcAccess.resolveAccess();
+    syn lazy ResolvedAccess SrcNamedAccess.resolveAccess() {
+        if (duringFindClassDecl) {
+            return unknownAccess();
+        }
+        duringFindClassDecl = true;
+        try {
+            return simpleLookupHelper(getID());
+        } finally {
+            duringFindClassDecl = false;
+        }
+    }
+    eq SrcDot.resolveAccess()          = getLastAccess().resolveAccess();
+    eq SrcGlobalAccess.resolveAccess() = getSrcAccess().resolveAccess();
+
+    /**
+     * Lookup SrcClassDecl indicated by the provided name. 
+     * Support lookup of both global and relative qualified names. 
+     * Returns null when the class isn't found.
+     */
+    public SrcClassDecl SrcClassDecl.simpleLookupClass(String name) {
+        return simpleLookupClass(new QualifiedName(name));
+    }
+
+    /**
+     * legacy support needed for old programs. Delegates to the new method which handles all the cases.
+     */
+    syn SrcClassDecl SrcClassDecl.simpleLookupClassDotted(String name) = simpleLookupClass(name);
+    /**
+     * legacy support needed for old programs. Delegates to the new method which handles all the cases.
+     */
+    syn SrcClassDecl Program.simpleLookupClassDotted(String name) = simpleLookupClass(name);
+
+    /**
+     * Lookup the class referenced by the QualifiedName. 
+     * Lookup is both uncached and only among the class members and imported.
+     * This method is intended as a entry point
+     */
+     public SrcClassDecl SrcClassDecl.LookupMyMembers(QualifiedName qName) {
+        SrcClassDecl cd = this;
+        cd = simpleLookupMemberScope(qName.next()).getClassDecl();
+
+        while (cd != null && qName.hasNext()) {
+            cd = cd.simpleLookupMemberScope(qName.next()).getClassDecl();
+            if (cd == null) {
+                return null;
+            }
+        }
+        return cd;
+    }
+
+    /**
+     * Lookup the class referenced by the QualifiedName. The QualifiedName
+     * determines if the lookup is in relative or global scope.
+     * This method is intended as a entry point
+     *
+     */
+    public SrcClassDecl SrcClassDecl.simpleLookupClass(QualifiedName qName) {
+        SrcClassDecl cd = this;
+        if (qName.isGlobal()) {
+            cd = simpleLookupGlobalScope(qName.next()).getClassDecl();
+        } else {
+            cd = simpleLookupDefaultScope(qName.next()).getClassDecl();
+        }
+
+        while (cd != null && qName.hasNext()) {
+            cd = cd.simpleLookupMemberScope(qName.next()).getClassDecl();
+            if (cd == null) {
+                return null;
+            }
+        }
+
+        if (cd.isUnknown() && !qName.isGlobal() &&
+                enclosingClassDecl() != null && !isEncapsulated()) {
+            return enclosingClassDecl().simpleLookupClass(qName.resetedCopy());
+        }
+        return cd;
+    }
+
+   /**
+    * Lookup SrcClassDecl indicated by the provided name.
+    * Support lookup of both global and relative qualified names.
+    * Returns null when the class isn't found.
+    * This method is intended as entry point.
+    */
+    public SrcClassDecl Program.simpleLookupClass(String name) {
+        QualifiedName qName = new QualifiedName(name);
+        SrcClassDecl cd = simpleLookupDefaultScope(qName.next()).getClassDecl();
+        while (cd != null && qName.hasNext()) {
+            cd = cd.simpleLookupMemberScope(qName.next()).getClassDecl();
+            if (cd == null) {
+                return null;
+            }
+        }
+        return cd;
+    }
+
+
+    syn ResolvedAccess ASTNode.unknownAccess()         = root().unknownAccess();
+    syn lazy ResolvedAccess SourceRoot.unknownAccess() = new UnknownAccess(unknownClassDecl(), unknownComponentDecl());
+    
+    public ResolvedAccess ASTNode.createResolvedAccess(SrcClassDecl decl, String context) {
+        return new ClassAccess(decl, unknownComponentDecl(), context, decl.isProtected());
+    }
+    public ResolvedAccess ASTNode.createResolvedAccess(SrcComponentDecl decl, String context) {
+        return new ComponentAccess(unknownClassDecl(), decl, context, decl.isProtected());
+    }
+
+    public abstract class ResolvedAccess {
+
+        private SrcClassDecl classDecl;
+        private SrcComponentDecl componentDecl;
+        private String context;
+        private boolean isProtected;
+        
+        public ResolvedAccess(SrcClassDecl classDecl, SrcComponentDecl componentDecl, String context, boolean isProtected) {
+            this.classDecl = classDecl;
+            this.componentDecl = componentDecl;
+            this.context = context;
+            this.isProtected = isProtected;
+        }
+        
+        public abstract String name();
+        public abstract boolean isUnknown();
+        public abstract ResolvedAccess fromContext(String context, boolean isProtected);
+        public abstract ResolvedAccess simpleLookupMemberScope(String name);
+        
+        public boolean isClassDecl() {
+            return false;
+        }
+        
+        public boolean isComponentDecl() {
+            return false;
+        }
+        
+        public SrcClassDecl getClassDecl() {
+            return classDecl;
+        }
+        public SrcComponentDecl getComponentDecl() {
+            return componentDecl;
+        }
+        public boolean isProtected() {
+            return isProtected;
+        }
+        public String qualifiedName() {
+            return context != null ? context + "." + name() : name();
+        }
+        public String globalAccess() {
+            return "." + qualifiedName();
+        }
+        public String toString() {
+            return qualifiedName();
+        }
+    }
+
+    public class UnknownAccess extends ResolvedAccess {
+        
+        public UnknownAccess(SrcClassDecl classDecl, SrcComponentDecl componentDecl) {
+            super(classDecl, componentDecl, null, false);
+        }
+
+        @Override
+        public String name() {
+            return "Unknown";
+        }
+        @Override
+        public boolean isUnknown() {
+            return true;
+        }
+        @Override
+        public ResolvedAccess fromContext(String context, boolean isProtected) {
+            return this;
+        }
+        @Override
+        public ResolvedAccess simpleLookupMemberScope(String name) {
+            return this;
+        }
+    }
+
+    public class ClassAccess extends ResolvedAccess {
+        
+        public ClassAccess(SrcClassDecl classDecl, SrcComponentDecl componentDecl, String context, boolean isProtected) {
+            super(classDecl, componentDecl, context, isProtected);
+        }
+        
+        @Override
+        public String name() {
+            return getClassDecl().name();
+        }
+        
+        @Override
+        public boolean isUnknown() {
+            return getClassDecl().isUnknown();
+        }
+        
+        @Override
+        public ResolvedAccess fromContext(String context, boolean isProtected) {
+            return new ClassAccess(getClassDecl(), getComponentDecl(), context, isProtected || isProtected());
+        }
+        
+        @Override
+        public ResolvedAccess simpleLookupMemberScope(String name) {
+            return getClassDecl().simpleLookupMemberScope(name);
+        }
+        
+        @Override
+        public boolean isClassDecl() {
+            return true;
+        }
+    }
+
+    public class ComponentAccess extends ResolvedAccess {
+        
+        public ComponentAccess(SrcClassDecl classDecl, SrcComponentDecl componentDecl, String context, boolean isProtected) {
+            super(classDecl, componentDecl, context, isProtected);
+        }
+        
+        @Override
+        public String name() {
+            return getComponentDecl().name();
+        }
+        
+        @Override
+        public boolean isUnknown() {
+            return getComponentDecl().isUnknown();
+        }
+
+        @Override
+        public ResolvedAccess fromContext(String context, boolean isProtected) {
+            return new ComponentAccess(getClassDecl(), getComponentDecl(), context, isProtected || isProtected());
+        }
+
+        @Override
+        public ResolvedAccess simpleLookupMemberScope(String name) {
+            return getComponentDecl().findClassDecl().simpleLookupMemberScope(name);
+        }
+        
+        @Override
+        public boolean isComponentDecl() {
+            return true;
+        }
+    }
+
+    /**
+    * Lookup helper method for SrcAccess and SrcClassDecl. Obtain the SrcClassDecl
+    * by looking after the target class one "name" piece at a time in the correct scope.
+    */
+    inh ResolvedAccess ASTNode.simpleLookupHelper(String name);
+    eq SrcDot.getSrcNamedAccess(int i).simpleLookupHelper(String name)        = simpleLookupDot(name, i);
+    eq SrcGlobalAccess.getSrcAccess().simpleLookupHelper(String name)         = simpleLookupGlobalScope(name);
+    eq SrcArrayAccess.getSrcArraySubscripts().simpleLookupHelper(String name) = simpleLookupBypassDot(name);
+    eq SrcImportClause.getPackageName().simpleLookupHelper(String name)       = simpleLookupGlobalScope(name);
+    eq SrcExtendsClause.getSuper().simpleLookupHelper(String name)            = simpleLookupFromExtends(name);
+    eq SrcFullClassDecl.getChild().simpleLookupHelper(String name)            = simpleLookupDefaultScope(name);
+    eq Program.getChild().simpleLookupHelper(String name)                     = simpleLookupDefaultScope(name);
+    eq SrcForStmt.getChild().simpleLookupHelper(String name)                  = simpleLookupInForStmt(name);
+    eq SrcComponentDecl.getSrcModification().simpleLookupHelper(String name)  = simpleLookupFromModification(name);
+    eq SrcValueModification.getSrcExp().simpleLookupHelper(String name)       = simpleLookupFromValue(name);
+    eq SrcComponentRedeclare.getSrcComponentClause().simpleLookupHelper(String name) = simpleLookupFromValue(name);
+    eq SrcClassRedeclare.getSrcBaseClassDecl().simpleLookupHelper(String name)       = simpleLookupFromValue(name);
+    eq SrcInlineExtendsClause.getChild().simpleLookupHelper(String name)       = enclosingClassDecl().asFullClassDecl().simpleLookupInExtends(name);
+    
+    inh ResolvedAccess SrcModification.simpleLookupFromValue(String name);
+    eq SrcComponentDecl.getChild().simpleLookupFromValue(String name)         = simpleLookupHelper(name);
+    eq SrcExtendsClause.getChild().simpleLookupFromValue(String name)         = simpleLookupHelper(name);
+    eq SrcConstrainingClause.getChild().simpleLookupFromValue(String name)    = simpleLookupHelper(name);
+    eq SrcFullClassDecl.getChild().simpleLookupFromValue(String name)         = simpleLookupDefaultScope(name);
+
+    /**
+    * Lookup helper method for SrcExtendsClause. Obtain the SrcClassDecl
+    * with the given name. Has to be an unqualified classname.
+    */
+    inh ResolvedAccess SrcExtendsClause.simpleLookupFromExtends(String name);
+    eq SrcFullClassDecl.getChild().simpleLookupFromExtends(String name) = simpleLookupLocalScope(name);
+    eq Program.getChild().simpleLookupFromExtends(String name)       = simpleLookupDefaultScope(name);
+
+    /**
+    * Lookup simple name in global scope. Has to be an unqualified classname.
+    */
+    inh ResolvedAccess SrcAccess.simpleLookupGlobalScope(String name);
+    inh ResolvedAccess SrcClassDecl.simpleLookupGlobalScope(String name);
+    inh ResolvedAccess SrcImportClause.simpleLookupGlobalScope(String name);
+    eq Program.getChild().simpleLookupGlobalScope(String name) = simpleLookupDefaultScope(name);
+
+    /**
+    * Lookup simple name in global scope. Has to be an simple (unqualified) classname.
+    */
+    syn lazy ResolvedAccess Program.simpleLookupDefaultScope(String name) {
+        for (SrcStoredDefinition sd : getUnstructuredEntitys()) {
+            for (SrcClassDecl cd : sd.getSrcClassDecls()) {
+                if (cd.matches(name)) {
+                    return createResolvedAccess(cd, null);
+                }
+            }
+        }
+        
+        ResolvedAccess res = simpleLookupPredefined(name);
+        if (!res.isUnknown()) {
+            return res;
+        }
+
+        return simpleLookupInLibNodeList(getSrcLibNodes(), name);
+    }
+
+    /**
+     * Lookup in contained elements, extended classes, imports and surrounding classes.
+     * Has to be a simple (unqualified) classname.
+     * Result is Cached.
+     */
+    syn lazy ResolvedAccess SrcFullClassDecl.simpleLookupDefaultScope(String name) {
+        ResolvedAccess res = simpleLookupIncludeImports(name);
+        if (res.isUnknown()) {
+            return isEncapsulated() ? simpleLookupPredefined(name) : simpleLookupHelper(name);
+        }
+        return res;
+    }
+    syn ResolvedAccess SrcClassDecl.simpleLookupDefaultScope(String name) = simpleLookupIncludeImports(name);
+
+    /**
+     * Lookup a predefined type, function or operator in global scope. Has to be an simple (unqualified) classname.
+     */
+    inh ResolvedAccess SrcClassDecl.simpleLookupPredefined(String name);
+    eq Program.getChild().simpleLookupPredefined(String name) = simpleLookupPredefined(name);
+
+    /**
+     * Lookup a predefined type, function or operator in global scope. Has to be an simple (unqualified) classname.
+     */
+    syn ResolvedAccess Program.simpleLookupPredefined(String name) {
+        ResolvedAccess res = simpleLookupInClassList(getPredefinedTypes(), name, null);
+        if (!res.isUnknown()) {
+            return res;
+        }
+
+        res = simpleLookupInClassList(getBuiltInTypes(), name, null);
+        if (!res.isUnknown()) {
+            return res;
+        }
+
+        return simpleLookupInClassList(getBuiltInFunctions(), name, null);
+    }
+
+    /**
+     * Lookup simple name in contained classes, extends and imports but not in surrounding classes.
+     * Has to be an simple (unqualified) classname.
+     * Result is Cached.
+     */
+    syn ResolvedAccess SrcClassDecl.simpleLookupIncludeImports(String name) = simpleLookupMemberScope(name);
+    eq SrcFullClassDecl.simpleLookupIncludeImports(String name) {
+        ResolvedAccess res = simpleLookupMemberScope(name);
+        if (res.isUnknown()) {
+            res = simpleLookupInImports(name);
+        }
+        return res;
+    }
+
+    /**
+     * Lookup in contained classes, components, imports and surrounding classes. 
+     * Has to be an simple (unqualified) name.
+     * Result is cached.
+     */
+    syn lazy ResolvedAccess SrcFullClassDecl.simpleLookupLocalScope(String name) {
+        if (duringFindClassDeclRevisits > MAX_FIND_CLASS_DECL_REVISITS) {
+            return unknownAccess();
+        }
+        duringFindClassDeclRevisits++;
+
+        ResolvedAccess res = simpleLookupInClassList(classes(), name, qualifiedName());
+        if (res.isUnknown()) {
+            res = simpleLookupInComponentList(components(), name, qualifiedName());
+            if (res.isUnknown()) {
+                res = simpleLookupInImports(name);
+            }
+        }
+        duringFindClassDeclRevisits--;
+        if (res.isUnknown()) {
+            return isEncapsulated() ? simpleLookupPredefined(name) : simpleLookupHelper(name);
+        }
+        return res;
+    }
+
+
+    /**
+     * Lookup in contained classes and extended classes. Has to be an unqualified classname.
+     * Internal helper method resolving a simple (unqualified) name. Result is Cached.
+     */
+    syn ResolvedAccess SrcClassDecl.simpleLookupMemberScope(String name);
+    eq SrcBadClassDecl.simpleLookupMemberScope(String name)      = unknownAccess();
+    eq SrcBuiltInClassDecl.simpleLookupMemberScope(String name)  = unknownAccess();
+    eq SrcUnknownClassDecl.simpleLookupMemberScope(String name)  = unknownAccess();
+
+    /**
+     * Lookup in contained classes, components and extended classes.
+     * Has to be an simple (unqualified) name.
+     * Method doesn't lookup in surrounding classes.
+     * This method returns the unknown class when the class isn't found.
+     * Result is Cached.
+     */
+    syn lazy ResolvedAccess SrcFullClassDecl.simpleLookupMemberScope(String name) {
+        if (duringFindClassDeclRevisits > MAX_FIND_CLASS_DECL_REVISITS) { 
+            return unknownAccess();
+        }
+        duringFindClassDeclRevisits++;
+
+        ResolvedAccess res = simpleLookupInClassList(classes(), name, qualifiedName());
+        if (res.isUnknown()) {
+            res = simpleLookupInComponentList(components(), name, qualifiedName());
+            if (res.isUnknown()) {
+                res = simpleLookupInExtends(name);
+            }
+        }
+        duringFindClassDeclRevisits--;
+        return res;
+	}
+    eq SrcLibClassDecl.simpleLookupMemberScope(String name) {
+        if (duringFindClassDeclRevisits > MAX_FIND_CLASS_DECL_REVISITS) {
+            return unknownAccess();
+        }
+        duringFindClassDeclRevisits++;
+
+
+        ResolvedAccess res = super.simpleLookupMemberScope(name);
+        if (res.isUnknown()) {
+            ResolvedAccess libRes = simpleLookupInLibNodeList(getSrcLibNodes(), name);
+            if (!libRes.isUnknown()) {
+                res = libRes;
+            }
+        }
+        duringFindClassDeclRevisits--;
+        return res;
+    }
+
+    eq SrcShortClassDecl.simpleLookupMemberScope(String name) = 
+        getSrcExtendsClauseShortClass().findClassDecl().simpleLookupMemberScope(name);
+    eq SrcLibNode.simpleLookupMemberScope(String name)        = 
+        myClass().simpleLookupMemberScope(name);
+
+    syn ResolvedAccess SrcForStmt.simpleLookupInForStmt(String name) {
+        for (SrcForIndex index : getSrcForIndexs()) {
+            SrcForIndexDecl indexDecl = index.getSrcForIndexDecl();
+            if (indexDecl.name().equals(name)) {
+                return createResolvedAccess(indexDecl, indexDecl.enclosingClassDecl().qualifiedName());
+            }
+        }
+        return simpleLookupHelper(name);
+    }
+
+    syn ResolvedAccess SrcDot.simpleLookupDot(String name, int i) {
+        if (i == 0) {
+            return simpleLookupHelper(name);
+        }
+        ResolvedAccess access = getSrcNamedAccess(i - 1).resolveAccess();
+        return access.simpleLookupMemberScope(name).fromContext(access.qualifiedName(), access.isProtected());
+    }
+
+    inh ResolvedAccess SrcAccess.simpleLookupBypassDot(String name);
+    eq BaseNode.getChild(int i).simpleLookupBypassDot(String name) = getChild(i).simpleLookupHelper(name);
+    eq SrcDot.getSrcNamedAccess().simpleLookupBypassDot(String name)    = simpleLookupHelper(name);
+
+
+    /**
+    * Internal helper method which search for the class in the imported class. 
+    * Has to be an simple (unqualified) classname.
+    * Result is Cached.
+    */
+    syn ResolvedAccess SrcImportClause.simpleLookupInImport(String name) = 
+        matches(name) ? getPackageName().resolveAccess() : unknownAccess();
+    eq SrcImportClauseUnqualified.simpleLookupInImport(String name) = 
+        getPackageName().resolveAccess().simpleLookupMemberScope(name);
+
+
+    /**
+     * Internal helper method which looks for the class with the given name among this class's imported classes.
+     * Has to be an simple (unqualified) classname.
+     * This method returns the unknown class when the class isn't found.
+     * Result is Cached.
+     */
+    protected ResolvedAccess SrcFullClassDecl.simpleLookupInImports(String name) {
+        ResolvedAccess res;
+        for (SrcImportClause imp : imports()) {
+            res = imp.simpleLookupInImport(name);
+            if (!res.isUnknown()) {
+                return res;
+            }
+        }
+        
+        return unknownAccess();
+    }
+
+    /**
+     * Internal helper method which looks for the class with the given name among this class's super classes.
+     * Has to be an simple (unqualified) classname.
+     * This method returns the unknown class when the class isn't found.
+     * Result is Cached.
+     */
+    protected ResolvedAccess SrcFullClassDecl.simpleLookupInExtends(String name) {
+        ResolvedAccess res;
+        for (SrcExtendsClause superClass : superClasses()) {
+            res = superClass.findClassDecl().simpleLookupMemberScope(name);
+            if (!res.isUnknown()) {
+                return res.fromContext(qualifiedName(), superClass.isProtected());
+            }
+        }
+        
+        return unknownAccess();
+    }
+    
+   /** 
+    *  Internal helper method resolving a simple (unqualified) name. Result is Cached.
+    */
+    protected ResolvedAccess SrcComponentDecl.simpleLookupFromModification(String name) {
+        ResolvedAccess res = findClassDecl().simpleLookupMemberScope(name);
+        if (!res.isUnknown()) {
+            return res.fromContext(enclosingClassDecl().qualifiedName() + "." + name(), isProtected());
+        }
+        return res;
+    }
+
+    /**
+     * Convenience method for looking up a class in a list of SrcClassDecls.
+     * Has to be an simple (unqualified) classname.
+     * This method returns null when the class isn't found.
+     */
+    public ResolvedAccess ASTNode.simpleLookupInClassList(Iterable<? extends SrcClassDecl> list, String name, String enclosingClass) {
+        for (SrcClassDecl cd : list) {
+            if (cd.matches(name)) {
+                return createResolvedAccess(cd, enclosingClass);
+            }
+        }
+        return unknownAccess();
+    }
+
+    /**
+     * Convenience method for looking up a component in a list of SrcComponentDecls.
+     * Has to be an simple (unqualified) name.
+     * This method returns null when the component isn't found.
+     */
+    public ResolvedAccess ASTNode.simpleLookupInComponentList(Iterable<? extends SrcComponentDecl> list,
+            String name, String enclosingElement) {
+        for (SrcComponentDecl cd : list) {
+            if (cd.matches(name)) {
+                return createResolvedAccess(cd, enclosingElement);
+            }
+        }
+        return unknownAccess();
+    }
+
+    /**
+     * Convenience method for looking up a class in the given list of SrcLibNodes.
+     * Has to be an simple (unqualified) classname.
+     * This method returns null when the class isn't found.
+     */
+    public ResolvedAccess ASTNode.simpleLookupInLibNodeList(List<SrcLibNode> list, String name) {
+        for (SrcLibNode ln : list) {
+            if (ln.matches(name)) {
+                return createResolvedAccess((SrcClassDecl) ln, null);
+            }
+        }
+        return unknownAccess();
+    }
+
+    /**
+     * Find if the name/identifier for this node matches the provided.
+     */
+    eq SrcIdDecl.matches(String str)                = getID().equals(str);
+    eq SrcBaseClassDecl.matches(String str)         = getName().matches(str);
+    eq SrcComponentDecl.matches(String str)         = getName().matches(str);
+    eq SrcImportClauseRename.matches(String str)    = getSrcIdDecl().matches(str);
+    eq SrcImportClauseQualified.matches(String str) = 
+        getPackageName().getLastAccess().matches(str);
+    eq SrcLibNode.matches(String str) {
+        if (name().equalsIgnoreCase(str)) {
+            myClass();
+        }
+        return name().equals(str);
+    }
+}
+
+aspect TestSimpleLookup {
+    /**
+    * Test the lookup of classes for classes in a model. 
+    * This method is only for use by JUnit tests testing the simpleLookupClass functionality.
+    *
+    * The required input is pairs of class to start from and the class which should be search for in an array. 
+    *
+    * The lookup result will be returned in a string with the start class and found class pairs.
+    * 
+    * The classes are identified with their qualified names.
+    */ 
+    public String SourceRoot.testSimpleClassLookup(String[] lookupPairs) {
+        Program prog = getProgram();
+        StringBuilder sb=new StringBuilder();
+        for (int i = 0; i < lookupPairs.length; i += 2) {
+            SrcClassDecl scd = prog.simpleLookupClass(lookupPairs[i]);
+            SrcClassDecl foundClass = scd.simpleLookupClass(lookupPairs[i+1]);
+            sb.append(scd.qualifiedName() + "\n->\n" + foundClass.qualifiedName() + "\n\n");
+        }
+        return sb.toString();
+    }
+
+    /**
+    * Test the lookup of all extends, imports and components which can be looked up in a given class.
+    * This method is only for use by JUnit tests testing the simpleLookupClass functionality.
+    */
+    public String SourceRoot.testFindMyClassDecl(String whichClass) {
+        StringBuilder sb = new StringBuilder();
+        SrcClassDecl scd = getProgram().simpleLookupClass(whichClass);
+        if (scd.isUnknown()) {
+            throw new AssertionError("The test class " + whichClass + "can't be found using simple lookup.");
+        }
+        testLookupAllClassDecls(sb, scd);
+        return sb.toString();
+    }
+
+    /**
+    * This method is only for use by JUnit tests testing the simpleLookupClass functionality.
+    */
+    private void SourceRoot.testLookupAllClassDecls(StringBuilder sb, ASTNode node) {
+        for (Object sub : node) {
+            if (sub instanceof ClassLookupable) {
+                sb.append(sub.toString() + " : " + ((ClassLookupable) sub).findClassDecl().qualifiedName()+ "\n\n");
+            }
+            testLookupAllClassDecls(sb, (ASTNode) sub);
+        }
+    }
+
+
+    public String InstClassDecl.testSimpleLookup() {
+        SrcClassDecl sourceClass = getSrcClassDecl();
+        StringBuilder sb = new StringBuilder();
+        sourceClass.testSimpleLookup(sb, new HashSet<String>() {
+            public boolean contains(Object key) {
+                return true;
+            }
+        });
+        return sb.toString();
+    }
+
+    public String InstClassDecl.testSimpleLookup(String args) {
+        SrcClassDecl sourceClass = getSrcClassDecl();
+        StringBuilder sb = new StringBuilder();
+        sourceClass.testSimpleLookup(sb, new HashSet<>(Arrays.asList(args.split(", "))));
+        return sb.toString();
+    }
+
+    /** 
+     * Returns the result of performing name lookup for all named accesses in the source tree with IDs contained in {@code arguments}.
+     * @param sb accumulates the result
+     * @param arguments the set of IDs of accesses we are looking for
+     */
+    protected void ASTNode.testSimpleLookup(StringBuilder sb, Set<String> arguments) {
+        for (ASTNode child : this) {
+            child.testSimpleLookup(sb, arguments);
+        }
+    }
+
+    @Override
+    protected void SrcNamedAccess.testSimpleLookup(StringBuilder sb, Set<String> arguments) {
+        if (arguments.contains(getID())) {
+            ResolvedAccess access = resolveAccess();
+            sb.append(getID());
+            sb.append("=");
+            sb.append(access);
+            sb.append('\n');
+        }
+    }
+
+    @Override
+    protected void SrcArrayAccess.testSimpleLookup(StringBuilder sb, Set<String> arguments) {
+        super.testSimpleLookup(sb, arguments);
+        getSrcArraySubscripts().testSimpleLookup(sb, arguments);
+    }
+
+    @Override
+    protected void SrcParseAnnotation.testSimpleLookup(StringBuilder sb, Set<String> arguments) {
+    }
+}

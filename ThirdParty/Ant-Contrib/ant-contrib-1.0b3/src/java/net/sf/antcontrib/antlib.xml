@@ -1,0 +1,48 @@
+<antlib>
+    <!-- typedef the tasks that work for ant less than 1.6 -->
+    <taskdef resource="net/sf/antcontrib/antcontrib.properties"/>
+
+    <taskdef
+        name="for"
+        classname="net.sf.antcontrib.logic.ForTask"
+        onerror="ignore"/>
+        
+    <typedef
+        name="httpState"
+        classname="net.sf.antcontrib.net.httpclient.HttpStateType"
+        onerror="ignore" />
+    <typedef
+        name="httpClient"
+        classname="net.sf.antcontrib.net.httpclient.HttpClientType"
+        onerror="ignore" />        
+    <taskdef name="getCookie"
+        classname="net.sf.antcontrib.net.httpclient.GetCookieTask"
+        onerror="ignore" />
+    <taskdef name="addCookie"
+        classname="net.sf.antcontrib.net.httpclient.AddCookieTask"
+        onerror="ignore" />
+    <taskdef name="clearCookies"
+        classname="net.sf.antcontrib.net.httpclient.ClearCookiesTask"
+        onerror="ignore" />
+    <taskdef name="addCredentials"
+        classname="net.sf.antcontrib.net.httpclient.AddCredentialsTask"
+        onerror="ignore" />
+    <taskdef name="clearCredentials"
+        classname="net.sf.antcontrib.net.httpclient.ClearCredentialsTask"
+        onerror="ignore" />
+    <taskdef name="purgeExpiredCookies"
+        classname="net.sf.antcontrib.net.httpclient.PurgeExpiredCookiesTask"
+        onerror="ignore" />
+    <taskdef name="postMethod"
+        classname="net.sf.antcontrib.net.httpclient.PostMethodTask"
+        onerror="ignore" />
+    <taskdef name="getMethod"
+        classname="net.sf.antcontrib.net.httpclient.GetMethodTask"
+        onerror="ignore" />
+    <taskdef name="headMethod"
+        classname="net.sf.antcontrib.net.httpclient.HeadMethodTask"
+        onerror="ignore" />
+    <taskdef name="importurl"
+             classname="net.sf.antcontrib.net.URLImportTask"
+             onerror="ignore"/>
+</antlib>

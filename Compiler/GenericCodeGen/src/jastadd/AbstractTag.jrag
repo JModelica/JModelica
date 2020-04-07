@@ -1,0 +1,144 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+/** \file AbstractTag.java
+ *  AbstractTag class.
+ */
+
+import java.io.*;
+
+/**
+ * A base class for tags used in the code generation framework.
+ * 
+ * Abstract tag contains the name of the tag, a description of the tag
+ * and a method to generate the code corresponding to the tag.
+ *
+ */
+public abstract class AbstractTag {
+	/**
+	 * Name of the tag
+	 */
+	protected String name;
+
+	/**
+	 * A reference to the tag's generator
+	 */
+	protected AbstractGenerator myGenerator;
+		
+	/**
+	 * Constructor.
+	 * 
+	 * @param name Name of the tag.
+	 * @param myGenerator The generator of the tag.
+	 */
+	public AbstractTag(String name, AbstractGenerator myGenerator) {
+		this.name = name;
+		this.myGenerator = myGenerator;
+	}
+	
+	/**
+	 * Generate the code for this tag if it is active.
+	 * 
+	 * @param printer A CodeStream object for output of the generated code.
+	 */
+    public void generateTag(CodeStream printer) {
+        if (isActive())
+            generate(printer);
+    }
+
+	/**
+	 * Method for implementing the code generation corresponding to the tag.
+	 * 
+	 * This method should not be called directly, 
+	 * see {@link #generateTag(org.jmodelica.util.streams.CodeStream))} instead.
+	 * 
+	 * @param printer A CodeStream object for output of the generated code.
+	 */
+	public abstract void generate(CodeStream printer);
+    
+    /**
+     * Check if this tag should be generated.
+     */
+    public boolean isActive() {
+        return true;
+    }
+	
+	/**
+	 * Get the name of the tag.
+	 * 
+	 * @return The name of the tag.
+	 */
+	public String getName() {
+		return name;
+	}
+
+	/**
+	 * Returns a string describing how this tag looks in the template file.
+	 */
+	public String toString() {
+	    char esc = myGenerator.escapeChar();
+		return esc + name + esc; 
+	}
+	
+	/**
+	 * Add this tag to tag map.
+	 * 
+	 * Also instantiates and adds any internal tag classes.
+	 */
+	public void addTo(Map<String,AbstractTag> map) {
+		if (!map.containsKey(getName())) {
+			map.put(getName(), this);
+			instantiateTags(map);
+		}
+	}
+	
+	/**
+	 * Instantiates all inner classes, of this tag, that inherits AbstractTag and adds them to the tag map.
+	 */
+	protected void instantiateTags(Map<String,AbstractTag> map) {
+		instantiateTags(getClass(), map, this, myGenerator, null);
+	}
+	
+	/**
+	 * Instantiates all inner classes, of the given class, that inherits AbstractTag and adds them to the tag map.
+	 * 
+	 * @param cl      the Class to search for tags in
+	 * @param map     the map to add them to
+	 * @param parent  the object that the tags are inner classes of
+	 * @param gen     the code generator instance
+	 * @param fclass  an FClass object used as a basis for the code generation
+	 */
+	public static void instantiateTags(Class cl, Map<String,AbstractTag> map, Object parent, AbstractGenerator gen, FClass fclass) {
+		Class<?> cur = cl;
+		while (!cur.equals(Object.class)) {
+			for (Class<?> inner : cur.getDeclaredClasses()) {
+			    if (!java.lang.reflect.Modifier.isAbstract(inner.getModifiers())) {
+    				for (Constructor<?> con : inner.getConstructors()) {
+    					try {
+    						AbstractTag tag = (AbstractTag) con.newInstance(parent, gen, fclass);
+    						tag.addTo(map);
+    						if (!map.containsKey(tag.getName()))
+    							map.put(tag.getName(), tag);
+    					} catch (Exception e) {
+    					}
+    				}
+			    }
+			}
+			cur = cur.getSuperclass();
+		}
+	}
+	
+}

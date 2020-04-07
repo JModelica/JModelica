@@ -1,0 +1,105 @@
+Index: src/cvode/cvode_direct.c
+===================================================================
+--- src/cvode/cvode_direct.c	(revision 9817)
++++ src/cvode/cvode_direct.c	(working copy)
+@@ -327,6 +327,7 @@
+   N_Vector ftemp, jthCol;
+   long int j;
+   int retval = 0;
++  int forward_diff = 1;
+ 
+   CVodeMem cv_mem;
+   CVDlsMem cvdls_mem;
+@@ -353,7 +354,7 @@
+            (MIN_INC_MULT * SUNRabs(h) * uround * N * fnorm) : ONE;
+ 
+   for (j = 0; j < N; j++) {
+-
++    forward_diff = 1;
+     /* Generate the jth col of J(tn,y) */
+ 
+     N_VSetArrayPointer(DENSE_COL(Jac,j), jthCol);
+@@ -364,13 +365,28 @@
+ 
+     retval = f(t, y, ftemp, user_data);
+     nfeDQ++;
+-    if (retval != 0) break;
++    if (retval != 0) { /* Forward difference failed, trying backward */
++        forward_diff = 0;
++        
++        y_data[j] = yjsaved;
++        y_data[j] -= inc;
++        
++        retval = f(t, y, ftemp, user_data);
++        nfeDQ++;
++        
++        if (retval != 0) {
++            break;
++        }
++    }
+     
+     y_data[j] = yjsaved;
+ 
+     inc_inv = ONE/inc;
+-    N_VLinearSum(inc_inv, ftemp, -inc_inv, fy, jthCol);
+-
++    if (forward_diff) {
++        N_VLinearSum(inc_inv, ftemp, -inc_inv, fy, jthCol);
++    } else {
++        N_VLinearSum(inc_inv, fy, -inc_inv, ftemp, jthCol);
++    }
+     DENSE_COL(Jac,j) = N_VGetArrayPointer(jthCol);
+   }
+ 
+Index: src/cvodes/cvodes_direct.c
+===================================================================
+--- src/cvodes/cvodes_direct.c	(revision 9817)
++++ src/cvodes/cvodes_direct.c	(working copy)
+@@ -357,6 +357,7 @@
+   N_Vector ftemp, jthCol;
+   long int j;
+   int retval = 0;
++  int forward_diff = 1;
+ 
+   CVodeMem cv_mem;
+   CVDlsMem cvdls_mem;
+@@ -383,7 +384,7 @@
+            (MIN_INC_MULT * SUNRabs(h) * uround * N * fnorm) : ONE;
+ 
+   for (j = 0; j < N; j++) {
+-
++    forward_diff = 1;
+     /* Generate the jth col of J(tn,y) */
+ 
+     N_VSetArrayPointer(DENSE_COL(Jac,j), jthCol);
+@@ -394,12 +395,28 @@
+ 
+     retval = f(t, y, ftemp, user_data);
+     nfeDQ++;
+-    if (retval != 0) break;
++    if (retval != 0) { /* Forward difference failed, trying backward */
++        forward_diff = 0;
++        
++        y_data[j] = yjsaved;
++        y_data[j] -= inc;
++        
++        retval = f(t, y, ftemp, user_data);
++        nfeDQ++;
++        
++        if (retval != 0) {
++            break;
++        }
++    }
+     
+     y_data[j] = yjsaved;
+ 
+     inc_inv = ONE/inc;
+-    N_VLinearSum(inc_inv, ftemp, -inc_inv, fy, jthCol);
++    if (forward_diff) {
++        N_VLinearSum(inc_inv, ftemp, -inc_inv, fy, jthCol);
++    } else {
++        N_VLinearSum(inc_inv, fy, -inc_inv, ftemp, jthCol);
++    }
+ 
+     DENSE_COL(Jac,j) = N_VGetArrayPointer(jthCol);
+   }

@@ -1,0 +1,124 @@
+div.wrapper {
+    display:inline-block;
+}
+
+div.fclass,
+div.bltBlock {
+    font-family:consolas, "courier new", courier, monospace;
+    white-space:nowrap;
+}
+
+div.bltBlock {
+    margin-bottom:10px;
+    border-left:5px solid lightgrey;
+    border-bottom:2px dashed lightgrey;
+    padding-left:5px;
+}
+
+span.varRef.CONSTANT,
+span.literal {
+    color:blue;
+    font-style:italic;
+}
+.varRef.STRUCTURAL_PARAMETER {
+    color:light;
+    font-style:italic;
+}
+.varRef.FINAL_PARAMETER {}
+.varRef.EVAL_PARAMETER {}
+.varRef.REGULAR_PARAMETER {
+    color:green;
+    font-style:italic;
+}
+.varRef.FREE_PARAMETER {}
+.varRef.INITIAL_PARAMETER {
+}
+.varRef.INPUT,
+.varRef.DISCRETE,
+.varRef.CONTINUOUS,
+.timeRef {
+#    font-weight:bold;
+#    color:darkred;
+}
+
+.varRef.DIFFERENTIATED,
+.varRef.DERIVATIVE {
+    font-weight:bold;
+    color:orange;
+}
+.varRef.localObject {
+    border-bottom:1px dashed darkred;
+}
+
+
+
+
+.collapsable,
+.collapsed,
+.nodeWithMenu,
+.highlightLink {
+    position: relative;
+}
+
+.collapsable .toggler,
+.collapsed .toggler,
+.nodeWithMenu .nodeMenu,
+#colorSelector {
+    background-color: #CCC;
+    color: #000;
+    border:1px solid #555;
+    text-align: center;
+    border-radius: 6px;
+    cursor:pointer;
+    position: absolute;
+    z-index: 1;
+}
+
+.collapsable .toggler,
+.nodeWithMenu .nodeMenu,
+#colorSelector {
+    visibility: hidden;
+    top: 100%;
+    left: 0%;
+
+    opacity: 0;
+    transition: visibility 0s linear 0.5s, opacity 0.5s;
+}
+
+.nodeMenu {
+    padding:2px;
+}
+
+.collapsable:hover .toggler,
+.nodeWithMenu:hover .nodeMenu,
+*:hover #colorSelector {
+    visibility: visible;
+    opacity:1;
+    transition-delay:0s;
+}
+
+.collapsed {
+    width:50px;
+    overflow-x:hidden;
+    display: inline-block;
+}
+
+.collapsed .toggler {
+    top: 0%;
+    right: 0%;
+    font-size:10px;
+}
+
+span.highlightLink {
+    color:blue;
+    cursor:pointer;
+    text-decoration:underline;
+}
+
+#colorSelector span {
+width:25px;
+height:25px;
+display:inline-block;
+border:1px solid #555;
+margin:5px;
+}

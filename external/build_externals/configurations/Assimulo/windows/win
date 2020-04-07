@@ -1,0 +1,33 @@
+#
+#	Copyright (C) 2018 Modelon AB
+#
+#	This program is free software: you can redistribute it and/or modify
+#	it under the terms of the GNU General Public License version 3 as published 
+#	by the Free Software Foundation, or optionally, under the terms of the 
+#	Common Public License version 1.0 as published by IBM.
+#
+#	This program is distributed in the hope that it will be useful,
+#	but WITHOUT ANY WARRANTY; without even the implied warranty of
+#	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#	GNU General Public License, or the Common Public License, for more details.
+#
+#	You should have received copies of the GNU General Public License
+#	and the Common Public License along with this program.  If not, 
+#	see <http://www.gnu.org/licenses/> or 
+#	<http://www.ibm.com/developerworks/library/os-cpl.html/> respectively.
+
+#SHELL := /bin/bash
+#rule:
+PLATFORM=windows
+DIST_VERSION=""
+PYTHON_VERSION=2.7.13
+BUILD_TARGET=PyFMI
+DOCKER_ENV="0"
+BUILD_DIR=${SDK_HOME}/build
+INSTALL_DIR_WHEEL=${SDK_HOME}/installPyFMI
+
+JM_HOME=${SDK_HOME}/src
+BUILD_ENVIRONMENT=${JM_HOME}/build_environment
+BUILD_EXTERNALS_DIR=${JM_HOME}/external/build_externals
+DOCKER_UTILS_DIR=${JM_HOME}/Docker
+PYFMI_SRC=${JM_HOME}/external/PyFMI

@@ -1,0 +1,14 @@
+Index: src/kinsol/kinsol.c
+===================================================================
+--- src/kinsol/kinsol.c	(revision 10850)
++++ src/kinsol/kinsol.c	(working copy)
+@@ -2007,6 +2007,9 @@
+     case KIN_SYSFUNC_FAIL:
+       sprintf(retstr, "KIN_SYSFUNC_FAIL");
+       break;
++    case KIN_REPTD_SYSFUNC_ERR:
++      sprintf(retstr, "KIN_REPTD_SYSFUNC_ERR");
++      break;
+     case KIN_STEP_LT_STPTOL:
+       sprintf(retstr, "KIN_STEP_LT_STPTOL");
+       break;

@@ -1,0 +1,222 @@
+/*
+    Copyright (C) 2015 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+aspect CommonSubexpressionElimination {
+
+    public class FClass {
+        public class commonSubexpressionEliminationIfSet extends Transformation {
+            
+            Map<String, CSESet> m;
+            
+            public commonSubexpressionEliminationIfSet() {
+                super("common_subexp_elim");
+            }
+            
+            public void perform() {
+                m = new LinkedHashMap<String, CSESet>();
+                
+                getFAbstractEquations().collectFunctionCalls(this);
+                
+                boolean changed = false;
+                for (CSESet s : m.values()) {
+                    boolean res = s.eliminate();
+                    changed = changed || res;
+                }
+                
+                m = null;
+                
+                if (changed) {
+                    List<FAbstractEquation> l = new List<FAbstractEquation>();
+                    for (FAbstractEquation fae : getFAbstractEquations()) {
+                        if (!fae.markedForRemoval) {
+                            l.add(fae);
+                        }
+                    }
+                    
+                    setFAbstractEquationList(l);
+                    
+                    change();
+                }
+            }
+            
+            public void add(FAbstractFunctionCall fc) {
+                String s = fc.prettyPrint("");
+                CSESet l = m.get(s);
+                if (l == null) {
+                    l = new CSESet();
+                    m.put(s,l);
+                }
+                l.add(fc);
+            }
+            
+            public class CSESet extends ArrayList<FAbstractFunctionCall> {
+                private FExp repl = null;
+                private List<FFunctionCallLeft> res = null;
+                
+                public boolean eliminate() {
+                    if (size() > 1) {
+                        FAbstractFunctionCall fc = get(0);
+                        FAbstractFunctionCall fcCopy = (FAbstractFunctionCall) fc.copySymbolic();
+                        res = new List<FFunctionCallLeft>();
+                        res.setParent(fc);
+                        
+                        merge();
+                        
+                        FAbstractEquation fae;
+                        if (res.getNumChild() != 1 || fc.isComposite()) {
+                            add(new FFunctionCallEquation(res, fcCopy));
+                        } else {
+                        	fae = get(0).setLocationOf(new FEquation(res.getChild(0).getFExp(), fcCopy));
+                        	fae.addLocation(get(1));
+                            add(fae);
+                        }
+                        return true;
+                    }
+                    return false;
+                }
+                
+                public void merge() {
+                    for (FAbstractFunctionCall ffc : this) {
+                        if (ffc.isFunctionCallClause()) {
+                            FFunctionCallEquation fce = (FFunctionCallEquation) ffc.myFEquation();
+                            for (int i = 0; i < fce.getNumLeft(); i++) {
+                                if (fce.getLeft(i).hasFExp()) {
+                                    merge(i, fce.getLeft(i).getFExp());
+                                }
+                            }
+                            ffc.myFEquation().markForRemoval();
+                        } else {
+                            ffc.replaceMe(getRepl().fullCopy());
+                        }
+                    }
+                }
+                
+                public void merge(int i, FExp other) {
+                    if (i >= res.getNumChild()) {
+                        res.add(new FFunctionCallLeft());
+                    }
+                    res.getChild(i).merge(this, other);
+                }
+                
+                public void add(FAbstractEquation fae) {
+                    fae.parent = getFAbstractEquationListNoTransform();
+                    if (fae.variability().parameterOrLess()) {
+                        addParameterEquationNoTransform(fae);
+                    } else {
+                        addFAbstractEquationNoTransform(fae);
+                    }
+                }
+
+                public FExp getRepl() {
+                    if (repl != null) {
+                        return repl;
+                    }
+
+                    FAbstractFunctionCall call = get(0);
+
+                    final TypePrefixVariability variability = call.variability().combine(
+                            Variability.FIXEDPARAMETER).combineDown(call.type().funcOutputVariability());
+
+                    FAbstractVariable var = variablesMap().lookup(call.tempVarName());
+                    if (var == null) {
+                        var = call.tempVar(variability, call.type());
+                        addFVariable(var.asFVariable());
+                        variablesMap().addVariable(var);
+                    }
+
+                    repl = var.createAccessExp();
+                    merge(0, repl);
+                    return repl;
+                }
+
+            }
+
+        }
+
+    }
+
+    /**
+     * Add function calls in this sub tree to <code>m</code>
+     */
+    public void ASTNode.collectFunctionCalls(FClass.commonSubexpressionEliminationIfSet m) {
+        for (ASTNode n : this) {
+            n.collectFunctionCalls(m);
+        }
+    }
+    
+    public void FAlgorithm.collectFunctionCalls(FClass.commonSubexpressionEliminationIfSet m) {
+        
+    }
+    
+    public void FIfWhenElseEquation.collectFunctionCalls(FClass.commonSubexpressionEliminationIfSet m) {
+        
+    }
+    
+    public void FIfExp.collectFunctionCalls(FClass.commonSubexpressionEliminationIfSet m) {
+        getIfExp().collectFunctionCalls(m);
+        /* In the branches we would have to consider the conditions (if expression) before we extract
+         * to a new equation. We also also have to consider the variability (is this a when-clause?). */
+    }
+    
+    public void FFunctionCall.collectFunctionCalls(FClass.commonSubexpressionEliminationIfSet m) {
+        /* We dont try to eliminate nested function call expressions to avoid some complicated cases */
+        m.add(this);
+    }
+    
+    public void FMathematicalFunctionCall.collectFunctionCalls(FClass.commonSubexpressionEliminationIfSet m) {
+        m.add(this);
+    }
+    
+    /**
+     * Merge copies of FExps found in <code>other</code> into their respective position in <code>this</code>.
+     * Add equation to <code>m</code> in case of collision.
+     */
+    public void FFunctionCallLeft.merge(FClass.commonSubexpressionEliminationIfSet.CSESet m, FExp other) {
+        if (hasFExp()) {
+            setFExp(getFExp().merge(m, other));
+        } else {
+            setFExp(other.fullCopy());
+        }
+    }
+    
+    public FExp FExp.merge(FClass.commonSubexpressionEliminationIfSet.CSESet m, FExp exp) {
+        if (!exp.isNoExp()) {
+            m.add(new FEquation(fullCopy(), exp.fullCopy()));
+        }
+        return this;
+    }
+    
+    public FExp FNoExp.merge(FClass.commonSubexpressionEliminationIfSet.CSESet m, FExp exp) {
+        return exp.fullCopy();
+    }
+    
+    public FExp FRecordConstructor.merge(FClass.commonSubexpressionEliminationIfSet.CSESet m, FExp exp) {
+        FRecordConstructor other = (FRecordConstructor) exp;
+        for (int i = 0; i < getNumArg(); i++) {
+            setArg(getArg(i).merge(m, other.getArg(i)), i);
+        }
+        return this;
+    }
+    
+    public FExp FArray.merge(FClass.commonSubexpressionEliminationIfSet.CSESet m, FExp exp) {
+        FArray other = (FArray) exp;
+        for (int i = 0; i < getNumFExp(); i++) {
+            setFExp(getFExp(i).merge(m, other.getFExp(i)), i);
+        }
+        return this;
+    }
+}

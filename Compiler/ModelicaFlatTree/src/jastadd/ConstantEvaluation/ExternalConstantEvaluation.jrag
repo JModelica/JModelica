@@ -1,0 +1,348 @@
+/*
+    Copyright (C) 2009-2017 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.FileNotFoundException;
+import java.io.InputStreamReader;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.util.Map;
+import java.util.Timer;
+import java.util.TimerTask;
+
+import org.jmodelica.common.evaluation.ExternalFunction;
+import org.jmodelica.common.evaluation.ExternalProcessCache;
+import org.jmodelica.common.evaluation.ExternalProcessCacheImpl;
+import org.jmodelica.common.evaluation.ExternalProcessMultiCache;
+import org.jmodelica.common.evaluation.ProcessCommunicator;
+
+aspect ExternalConstantEvaluation {
+    
+    public interface ExternalArgument {
+        CValue ceval();
+        FType type();
+        
+        String name_C();
+        boolean isOutput();
+    }
+    
+    public interface CommonVariableDecl extends ExternalArgument {}
+    FExp implements ExternalArgument;
+    
+    syn boolean FExp.isOutput() = false;
+    
+    class ModelicaCompiler {}
+    
+    ModelicaCompiler   implements ExternalProcessMultiCache.Compiler<ExternalArgument, FExternalStmt>;
+    FExternalStmt      implements ExternalProcessMultiCache.External<ExternalArgument>;
+    ExternalArgument   extends    ExternalProcessMultiCache.Variable<CValue,FType>;
+    CValue             implements ExternalProcessMultiCache.Value;
+    FType              implements ExternalProcessMultiCache.Type<CValue>;
+    
+    public class ExternalFunctionCache extends ExternalProcessMultiCache<ExternalArgument, CValue, FType, FExternalStmt> {
+        public ExternalFunctionCache(ModelicaCompiler mc) {
+            super(mc);
+        }
+    }
+    
+    /**
+     * Check if this external function can be evaluated. Throw ConstantEvaluationException otherwise
+     */
+    public void FExternalStmt.checkCanEvaluate(AlgorithmEvaluator evaluator, Map<ExternalArgument, CValue> values) throws ConstantEvaluationException {
+        if (evaluator.externalEvaluation() == 0) {
+            throw new ConstantEvaluationException(null, "Could not evaluate external function, external evaluation disabled");
+        }
+        for (FExp arg : getArgs()) {
+            if (!arg.type().externalValid()) {
+                throw new ConstantEvaluationException(null, "Could not evaluate external function, invalid argument type");
+            }
+        }
+        if (hasReturnVar() && !getReturnVar().type().externalValid()) {
+            throw new ConstantEvaluationException(null, "Could not evaluate external function, invalid return type");
+        }
+        Collection<ExternalArgument> outputs = varsToDeserialize();
+        for (ExternalArgument arg : values.keySet()) {
+            if (!outputs.contains(arg)) {
+                if (values.get(arg).isPartlyUnknown()) {
+                    throw new ConstantEvaluationException(null, "Could not evaluate external function, unknown values in arguments");
+                }
+            }
+        }
+    }
+
+    /**
+     * Check if this external function should be cached as a live process.
+     */
+    syn boolean FExternalStmt.shouldCacheProcess() {
+        return myOptions().getIntegerOption("external_constant_evaluation_max_proc") > 0;
+    }
+    
+    /**
+     * Returns a single scalar external object which can be cached. If there is not exactly
+     * one scalar external object, return null.
+     */
+    syn ExternalArgument FExternalStmt.cachedExternalObject() {
+        ExternalArgument eo = null;
+        for (ExternalArgument cvd : varsToSerialize()) {
+            if (cvd.type().isExternalObject() && cvd.type().isScalar()) {
+                if (eo != null) {
+                    return null;
+                } else {
+                    eo = cvd;
+                }
+            }
+        }
+        return eo;
+    }
+    
+    /**
+     * Mark external object CValue with name of external object. Used to track origin of CValue.
+     */
+    public void CValue.markExternalObject(String name) {
+        
+    }
+    
+    private String CValueExternalObject.marked = null;
+    public void CValueExternalObject.markExternalObject(String name) {
+        if (marked == null) {
+            marked = name;
+        }
+    }
+    
+    /**
+     * Get name of external object instance which this CValue represents.
+     */
+    public String CValue.getMarkedExternalObject() {
+        throw new ConstantEvaluationException();
+    }
+    
+    public String CValueExternalObject.getMarkedExternalObject() {
+        if (marked == null) {
+            return super.getMarkedExternalObject();
+        }
+        return marked;
+    }
+    
+    /**
+     * Evaluate this statement as an external function constructor call. Stores evaluated
+     * inputs in a CValueExternalObject.
+     */
+    public int FExternalStmt.evaluateConstructor(Map<CommonVariableDecl, CValue> values) {
+        ArrayList<FExp> args = myConstructorArgs();
+        CValue[] vals = new CValue[args.size()];
+        for (int i = 0; i < args.size(); i++)
+            vals[i] = args.get(i).ceval();
+        values.put(myConstructorOutput(), new CValueExternalObject(vals));
+        return EVAL_CONT;
+    }
+    
+    inh boolean FExternalStmt.isConstructorStmt();
+    eq Root.getChild().isConstructorStmt() = false;
+    eq FFunctionDecl.getChild().isConstructorStmt() = isConstructor();
+    eq InstClassDecl.getChild().isConstructorStmt() = isConstructor();
+    
+    inh boolean FExternalStmt.isDestructorStmt();
+    eq Root.getChild().isDestructorStmt() = false;
+    eq FFunctionDecl.getChild().isDestructorStmt() = isDestructor();
+    eq InstClassDecl.getChild().isDestructorStmt() = isDestructor();
+    
+    /**
+     * Retrieve {@link ExternalFunction} object which represents the external function
+     * this statement refers to.
+     */
+    public ExternalFunction<ExternalArgument, CValue> FExternalStmt.myExternalFunction() {
+        ExternalFunctionCache efc = root().getUtilInterface().getExternalFunctionCache();
+        if (efc == null) {
+            return new ExternalProcessCacheImpl<>(root().getUtilInterface().getModelicaCompiler())
+                .failedEval(this, "external function cache unavailable", false);
+        }
+        return efc.getExternalProcessCache(getLibTopPackagePath()).getExternalFunction(this);
+    }
+    
+    /**
+     * Evaluate this external statement.
+     */
+    public int FExternalStmt.evaluateExternal(AlgorithmEvaluator evaluator) {
+        
+        Map<ExternalArgument, CValue> values = new LinkedHashMap<>();
+        for (ExternalArgument arg : varsToSerialize()) {
+            values.put(arg, arg.ceval());
+        }
+        
+        checkCanEvaluate(evaluator, values);
+        
+        if (isConstructorStmt()) {
+            return evaluateConstructor(evaluator.getValues());
+        }
+        
+        int res = 0;
+        int timeout = evaluator.externalEvaluation();
+        ExternalFunction<ExternalArgument,CValue> ef = myExternalFunction();
+        String error = null;
+        try {
+            res = ef.evaluate(this, values, timeout);
+            if (res != 0) {
+                error = "process returned '" + res + "'";
+            }
+        } catch (IOException e) {
+            error = "error in process communication: '"+ e.getMessage() + "'";
+        }
+        
+        if (error != null) {
+            throw new ConstantEvaluationException(null, ExternalProcessCacheImpl.failedEvalMsg(getName(), error));
+        }
+        
+        for (ExternalArgument output : varsToDeserialize()) {
+            evaluator.getValues().put((CommonVariableDecl)output, values.get(output));
+        }
+        
+        return EVAL_CONT;
+    }
+    
+    public String ModelicaCompiler.compileExternal(FExternalStmt ext) throws FileNotFoundException, CcodeCompilationException {
+        String executable = null;
+        if (outDir == null)
+            setRandomOutDir();
+        String source = ext.getName().replace(".", "_");
+        TargetObject target = createTargetObject("ceval", "0.1");
+        Set<String> incDirs = new LinkedHashSet<String>();
+        Set<String> libs    = new LinkedHashSet<String>();
+        Set<String> libDirs = new LinkedHashSet<String>();
+        
+        ext.externalDependencies(null, incDirs, libs, libDirs);
+        
+        OptionRegistry options = ext.myOptions();
+        ModulesSettings modulesSettings = createModulesSettings(options);
+        
+        target.getTemplates(options).generateCFiles(ModelicaCompiler.this, null, createCGenerator(ext), sourceDir, source);
+        
+        CCompilerDelegator ccompiler = getCCompiler();
+        ccompiler.setModuleLibraryNames(modulesSettings.getLibraryNames());
+        
+        CCompilerArguments ccArgs = new CCompilerArguments(source, options, target,
+                libs, libDirs, incDirs);
+        executable = ccompiler.compileCCodeLocal(ModelicaCompiler.log, ccArgs, outDir);
+        new File(sourceDir, source + ".c").delete();
+        return executable;
+    }
+}
+
+aspect ExternalConstantEvaluationCaching {
+    
+    protected ExternalFunctionCache ModelicaCompiler.externalFunctionCache = new ExternalFunctionCache(this);
+    
+    public ExternalFunctionCache ModelicaCompiler.getExternalFunctionCache() {
+        return externalFunctionCache;
+    }
+}
+
+aspect ExternalProcessCommunication {
+    
+    /**
+     * Print this constant value to <code>buff</code>
+     */
+    public void CValue.serialize(BufferedWriter buff) throws IOException {
+        throw new IOException("Unsupported type to serialize '" + getClass().getSimpleName() + "'");
+    }
+    
+    public void CValueUnknown.serialize(BufferedWriter buff) throws IOException {
+        throw new IOException("Uninitialized value when expecting initialized");
+    }
+    public void CValueArray.serialize(BufferedWriter buff) throws IOException {
+        for (int s : size().size) {
+            buff.write("" + s + "\n");
+        }
+        for (Index i : indices()) {
+            getCell(i).serialize(buff);
+        }
+    }
+    public void CValueRecord.serialize(BufferedWriter buff) throws IOException {
+        for (CValue value : values) {
+            value.serialize(buff);
+        }
+    }
+    public void CValueReal.serialize(BufferedWriter buff) throws IOException {
+        buff.write(Double.toString(realValue()));
+        buff.write("\n");
+    }
+    public void CValueInteger.serialize(BufferedWriter buff) throws IOException {
+        buff.write(Integer.toString(intValue()));
+        buff.write("\n");
+    }
+    public void CValueBoolean.serialize(BufferedWriter buff) throws IOException {
+        buff.write(booleanValue() ? "1\n" : "0\n");
+    }
+    public void CValueString.serialize(BufferedWriter buff) throws IOException {
+        String s = stringValue();
+        buff.write("" + s.length() + " ");
+        buff.write(s);
+        buff.write("\n");
+    }
+    public void CValueEnum.serialize(BufferedWriter buff) throws IOException {
+        buff.write(Integer.toString(intValue()));
+        buff.write("\n");
+    }
+    public void CValueExternalObject.serialize(BufferedWriter buff) throws IOException {
+        for (CValue v : values) {
+            v.serialize(buff);
+        }
+    }
+    
+    
+    /**
+     * Read a constant value of <code>this</code> type from <code>buff</code>
+     */
+    public CValue FType.deserialize(ProcessCommunicator com) throws IOException {
+        if (isArray()) {
+            CValueArray a = new CValueArray(size().ceval());
+            for (Index i : a.indices()) {
+                a.setCell(i, deserializeScalar(com));
+            }
+            return a;
+        } else {
+            return deserializeScalar(com);
+        }
+    }
+    public CValue FType.deserializeScalar(ProcessCommunicator com) throws IOException {
+        throw new IOException("Unsupported type to deserialize '" + getClass().getSimpleName() + "'");
+    }
+    public CValue FRecordType.deserializeScalar(ProcessCommunicator com) throws IOException {
+        CValueRecord res = new CValueRecord(this);
+        for (FRecordComponentType frct : getComponents()) {
+            res.setMember(frct.getName(), frct.getFType().deserialize(com));
+        }
+        return res;
+    }
+    public CValue FRealType.deserializeScalar(ProcessCommunicator com) throws IOException {
+        return new CValueReal(com.deserializeReal());
+    }
+    public CValue FIntegerType.deserializeScalar(ProcessCommunicator com) throws IOException {
+        return new CValueInteger((int) com.deserializeReal());
+    }
+    public CValue FBooleanType.deserializeScalar(ProcessCommunicator com) throws IOException {
+        return new CValueBoolean(com.deserializeReal() != 0);
+    }
+    public CValue FStringType.deserializeScalar(ProcessCommunicator com) throws IOException {
+        return new CValueString(com.deserializeString());
+    }
+    public CValue FEnumType.deserializeScalar(ProcessCommunicator com) throws IOException {
+        return new CValueEnum(this, (int) com.deserializeReal());
+    }
+}
+
+

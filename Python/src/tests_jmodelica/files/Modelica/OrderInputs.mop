@@ -1,0 +1,37 @@
+//From post http://www.jmodelica.org/3287 by Niklas
+
+optimization OptimInputs        
+	extends Test.Model;
+end  OptimInputs;
+
+package Test
+
+  model Template
+    Modelica.Blocks.Interfaces.RealInput u1;
+    Modelica.Blocks.Interfaces.RealInput u_e2;
+    Modelica.Blocks.Interfaces.RealInput u_h3;
+    Modelica.Blocks.Interfaces.RealInput u_c4;
+    Modelica.Blocks.Interfaces.RealInput u_p5;
+    Modelica.Blocks.Interfaces.RealInput u_f00;
+    Real mass(start=1);
+  equation
+    der(mass) = -1;
+  end Template;
+
+  model Model
+      Template T;
+        input Real u1(start=1);
+        input Real u_e2(start=1);
+        input Real u_h3(start=1);
+        input Real u_c4(start=1);
+        input Real u_p5(start=1);
+        parameter Real u_f00=1;
+  equation
+      T.u1 = u1;
+      T.u_e2 = u_e2;
+      T.u_h3 = u_h3;
+      T.u_c4 = u_c4;
+      T.u_p5 = u_p5;
+      T.u_f00 = u_f00;
+  end Model;
+end Test;

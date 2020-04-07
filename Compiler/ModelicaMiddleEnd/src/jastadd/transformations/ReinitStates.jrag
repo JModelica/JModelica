@@ -1,0 +1,98 @@
+/*
+    Copyright (C) 2009-2017 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect ReinitStates {
+    
+    public class FClass {
+        /**
+         * Transformation for marking up variables that have reinit() applied on them as states
+         * (by setting stateSelect=always).
+         */
+        public class MakeReinitedVarsStates extends Transformation {
+            public void perform() {
+                for (FAbstractEquation eqn : getFAbstractEquations())
+                    eqn.makeReinitedVarsStates();
+            }
+        }
+    }
+    
+    /**
+     * Mark all variables reinited in this equation as states.
+     */
+    public void FAbstractEquation.makeReinitedVarsStates() {}
+    
+    public void FIfWhenElseEquation.makeReinitedVarsStates() {
+        for (FAbstractEquation e : getFAbstractEquations())
+            e.makeReinitedVarsStates();
+    }
+    
+    public void FIfWhenEquation.makeReinitedVarsStates() {
+        super.makeReinitedVarsStates();
+        if (hasElse())
+            getElse().makeReinitedVarsStates();
+    }
+    
+    public void FFunctionCallEquation.makeReinitedVarsStates() {
+        getCall().makeReinitedVarsStates();
+    }
+    
+    /**
+     * It this is a reinit(), mark reinited variable as state.
+     */
+    public void FAbstractFunctionCall.makeReinitedVarsStates() {}
+
+    /**
+     * Mark reinited variable as state.
+     */
+    public void FReinit.makeReinitedVarsStates() {
+        getVar().markReferencedVarAsState();
+    }
+    
+    /**
+     * Mark referenced variable as state.
+     * 
+     * Only valid for variable accesses, default implementation throws exception.
+     */
+    public void FExp.markReferencedVarAsState() {
+        throw new UnsupportedOperationException();
+    }
+    
+    /**
+     * Mark referenced variable as state.
+     */
+    public void FAccessExp.markReferencedVarAsState() {
+        myFV().markAsState();
+    }
+    
+    /**
+     * Mark this variable as a state, by setting stateSelect=always.
+     */
+    public void FAbstractVariable.markAsState() {
+        throw new UnsupportedOperationException();
+    }
+    
+    public void FVariable.markAsState() {
+        FAttribute newA = new FInternalAttribute(FAttribute.STATE_SELECT, new FEnumLitExp(FAttribute.STATE_SELECT_TYPE, "always"));
+        FAttribute oldA = findAttributeLocal(FAttribute.STATE_SELECT);
+        if (oldA != null) {
+            oldA.replaceMe(newA);
+            addFAttribute(oldA);
+        } else {
+            addFAttribute(newA);
+        }
+    }
+    
+}

@@ -1,0 +1,76 @@
+<project default="init">
+    <taskdef resource="net/sf/antcontrib/antcontrib.properties">
+        <classpath location="${antcontrib.jar}"/>
+    </taskdef>
+
+    <property name="test.dir" value="timestampselector"/>
+    <property name="test.file1" location="${test.dir}/file1.txt" />
+    <property name="test.file2" location="${test.dir}/file2.txt" />
+    <property name="test.dir1" location="${test.dir}/dir1" />
+    <property name="test.dir2" location="${test.dir}/dir2" />
+
+    <fileset id="test.files" dir="${test.dir}">
+        <include name="*.txt" />
+    </fileset>
+
+    <path id="test.files.path">
+        <fileset refid="test.files" />
+    </path>
+
+    <dirset id="test.dirs" dir="${test.dir}">
+        <include name="dir*" />
+    </dirset>
+
+    <path id="test.dirs.path">
+        <dirset refid="test.dirs" />
+    </path>
+
+    <target name="init">
+        <delete quiet ="yes" dir="${test.dir}"/>
+        <mkdir  dir="${test.dir}"/>
+        <touch  file="${test.dir}/file1.txt" />
+        <touch  file="${test.dir}/file2.txt" />
+        <mkdir  dir="${test.dir}/dir1"/>
+        <mkdir  dir="${test.dir}/dir2"/>
+    </target>
+
+    <target name="teardown">
+        <delete quiet="yes" dir="${test.dir}" />
+    </target>
+
+    <target name="filestamp.fl" depends="init">
+        <timestampselector property="latest.fl.tstamp">
+            <path>
+                <fileset refid="test.files" />
+            </path>
+        </timestampselector>
+
+        <echo message="${latest.fl.tstamp}" />
+    </target>
+
+    <target name="filestamp.pr" depends="init">
+        <timestampselector property="latest.pr.tstamp"
+            pathref="test.files.path" />
+
+        <echo message="${latest.pr.tstamp}" />
+    </target>
+
+    <target name="dirstamp.dl" depends="init">
+        <timestampselector property="latest.dl.tstamp">
+            <path>
+                <dirset refid="test.dirs" />
+            </path>
+        </timestampselector>
+
+        <echo message="${latest.dl.tstamp}" />
+
+    </target>
+
+    <target name="dirstamp.pr" depends="init">
+        <timestampselector property="latest.pr.tstamp"
+                         pathref="test.dirs.path" />
+
+        <echo message="${latest.pr.tstamp}" />
+    </target>
+
+</project>

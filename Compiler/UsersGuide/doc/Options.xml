@@ -1,0 +1,1478 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<appendix version="5.0" xml:id="app_compiler_options"
+          xmlns="http://docbook.org/ns/docbook"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xmlns:xs="http://www.w3.org/2001/XMLSchema"
+          xmlns:xlink="http://www.w3.org/1999/xlink"
+          xmlns:xi="http://www.w3.org/2001/XInclude"
+          xmlns:svg="http://www.w3.org/2000/svg"
+          xmlns:m="http://www.w3.org/1998/Math/MathML"
+          xmlns:html="http://www.w3.org/1999/xhtml"
+          xmlns:db="http://docbook.org/ns/docbook">
+  <title>Compiler options</title>
+
+  <section>
+    <title>List of options that can be set in compiler</title>
+
+        <table xml:id="models_tab_compiler_options">
+          <title>Compiler options</title>
+          <tgroup cols="3">
+            <colspec align="left" colname="col-para" colwidth="2.2*" />
+            <colspec align="left" colname="col-def" colwidth="1.2*" />
+            <colspec align="left" colname="col-descr" colwidth="3.6*" />
+            <thead>
+              <row>
+                <entry align="center">Option</entry>
+                <entry align="center">Option type / Default value</entry>
+                <entry align="center">Description</entry>
+              </row>
+            </thead>
+            <tbody>
+              <row>
+                <entry>
+                  <literal>allow_discrete_switches</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If enabled, then discrete switches are allowed in the model.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>allow_discrete_variables</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If enabled, then discrete variables such as Integers, Booleans Strings or Enumerations are allowed in the model.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>allow_when_clauses</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If enabled, then when clauses are allowed in the model.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>automatic_tearing</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If enabled, then automatic tearing of equation systems is performed.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>c_compiler</literal>
+                </entry>
+                <entry>
+                  <literal>string</literal>
+                  /
+                  <literal>&apos;msvs&apos;</literal>
+                </entry>
+                <entry>
+                The C compiler to use to compile generated C code.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>check_inactive_ contitionals</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, check for errors in inactive conditional components when compiling. When using check mode, this is always done.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>component_names_in_errors</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If enabled, the compiler will include the name of the component where the error was found, if applicable.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>convert_free_dependent_ parameters_to_algebraics</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If enabled, then free dependent parameters are converted to algebraic variables.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>divide_by_vars_in_tearing</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, a less restrictive strategy is used for solving equations in the tearing algorithm. Specifically, division by parameters and variables is permitted, by default no such divisions are made during tearing.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>enable_block_function_ extraction</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                Looks for function calls in blocks. If a function call in a block doesn&apos;t depend on the block in question, it is extracted from the block.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>enable_lazy_evaluation</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If this option is set to <literal>true</literal> (default is <literal>false</literal>), then the set of equation blocks that are evaluated with respect to the value of a dependent variable is limited to the minimal set.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>event_output_vars</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, output variables are generated for each generated event.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>expose_scalar_equation_ blocks_in_interactive_fmu</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, unsolved scalar equations will be exposed to the external solver when generating interactive fmu.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>external_constant_ evaluation</literal>
+                </entry>
+                <entry>
+                  <literal>integer</literal>
+                  /
+                  <literal>5000</literal>
+                </entry>
+                <entry>
+                Time limit (ms) when evaluating constant calls to external functions during compilation. 0 indicates no evaluation. -1 indicates no time limit.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>filter_warnings</literal>
+                </entry>
+                <entry>
+                  <literal>string</literal>
+                  /
+                  <literal>&apos;&apos;</literal>
+                </entry>
+                <entry>
+                A comma separated list of warning identifiers that should be omitted from the logs.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>generate_html_diagnostics</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, model diagnostics are generated in HTML format. This includes the flattened model, connection sets, alias sets and BLT form.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>generate_mof_files</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, then flat model before and after transformations will be generated.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>generate_only_initial_ system</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, then only the initial equation system will be generated.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>halt_on_warning</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, compilation warnings will cause compilation to abort.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>hand_guided_tearing</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, hand guided tearing of equation system is performed.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>index_reduction</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If enabled, then index reduction is performed for high-index systems.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>init_nonlinear_solver</literal>
+                </entry>
+                <entry>
+                  <literal>string</literal>
+                  /
+                  <literal>&apos;kinsol&apos;</literal>
+                </entry>
+                <entry>
+                Decides which nonlinear equation solver to use in the initial system. Alternatives are &apos;kinsol or <literal>&apos;minpack&apos;</literal>.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>interactive_fmu</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, the DAE system is converted into an interactive fmu where all residual equations and iteration variables have been changed into top level outputs and inputs.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>merge_blt_blocks</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If this option is set to <literal>true</literal> (default is <literal>false</literal>), BLT blocks will be constructed so that all level one HGT pairs and all unpaired HGT will reside inside the same BLT block.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>msvs_path</literal>
+                </entry>
+                <entry>
+                  <literal>string</literal>
+                  /
+                  <literal>&apos;&apos;</literal>
+                </entry>
+                <entry>
+                Path to the Microsoft Visual Studio Compiler to compile C code with.Will cause compilation to fail if no installation is found.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>msvs_version</literal>
+                </entry>
+                <entry>
+                  <literal>string</literal>
+                  /
+                  <literal>&apos;&apos;</literal>
+                </entry>
+                <entry>
+                Microsoft Visual Studio Compiler version to compile C code with.If the <literal>msvs_path</literal> option is not set, then this option will be used to find an installation among the default install locations. If the <literal>msvs_path</literal> option is set, then this option will be used to verify the compiler version. In both cases the compilation will fail if the installation found mismatches the version specified with this option.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>nonlinear_solver</literal>
+                </entry>
+                <entry>
+                  <literal>string</literal>
+                  /
+                  <literal>&apos;kinsol&apos;</literal>
+                </entry>
+                <entry>
+                Decides which nonlinear equation solver to use. Alternatives are &apos;kinsol or <literal>&apos;minpack&apos;</literal>.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>relational_time_events</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If enabled, then relational operators are allowed to generate time events.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>smoothness_check_as_ warnings</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, then smoothness check problems are given as warning instead of errors. Otherwise problems found are given as errors.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>state_initial_equations</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, the compiler ignores initial equations in the model and adds parameters for controlling intitial values of states.Default is <literal>false</literal>.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>state_start_values_fixed</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, then initial equations are generated automatically for differentiated variables even though the fixed attribute is equal to fixed. Setting this option to <literal>true</literal> is, however, often practical in optimization problems.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>system_continuity_order</literal>
+                </entry>
+                <entry>
+                  <literal>integer</literal>
+                  /
+                  <literal>-1</literal>
+                </entry>
+                <entry>
+                Require the model to be at least n times continuous differentiable where n is an integer given by this option. Default value is -1 which means that discontinuations are allowed.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>tearing_division_tolerance</literal>
+                </entry>
+                <entry>
+                  <literal>real</literal>
+                  /
+                  <literal>1.0E-10</literal>
+                </entry>
+                <entry>
+                The minimum allowed size for a divisior constant when performing tearing.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>allow_multiple_residuals_ in_hgt_blocks</literal>
+                </entry>
+                <entry>
+                  <literal>string</literal>
+                  /
+                  <literal>&apos;level1&apos;</literal>
+                </entry>
+                <entry>
+                Controls if HGT blocks are allowed to have more than one residual.<literal>&apos;false&apos;</literal> - All HGT blocks can only have one residual. An error is given if there are HGT blocks with more than one residual.&apos;level1&apos; - Only blocks with HGT level=1 are allowed to have more than one residual. An error is given if there are HGT blocks at level=2 (or higher) with more than one residual. As a consequence combining this option with <literal>merge_blt_blocks</literal>=<literal>true</literal> garantees a single unsolved block in the FMU.<literal>&apos;true&apos;</literal> - No error check is done, all HGT blocks may have multiple residuals.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>allow_non_scalar_nested_ blocks</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If disabled, an error is given if there are nested blocks which are non-scalar.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>automatic_add_initial_ equations</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If enabled, then additional initial equations are added to the model based equation matching. Initial equations are added for states that are not matched to an equation.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>cc_extra_flags</literal>
+                </entry>
+                <entry>
+                  <literal>string</literal>
+                  /
+                  <literal>&apos;:O1&apos;</literal>
+                </entry>
+                <entry>
+                Optimization level for c-code compilation
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>cc_extra_flags_applies_to</literal>
+                </entry>
+                <entry>
+                  <literal>string</literal>
+                  /
+                  <literal>&apos;functions&apos;</literal>
+                </entry>
+                <entry>
+                Parts of c-code to compile with extra compiler flags specified by <literal>ccompiler_extra_flags</literal>
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>cc_split_element_limit</literal>
+                </entry>
+                <entry>
+                  <literal>integer</literal>
+                  /
+                  <literal>1000</literal>
+                </entry>
+                <entry>
+                When generating code for large systems, the code is split into multiple functions and files for performance reasons. This option controls how many scalar elements can be evaluated by a function. Value less than 1 indicates no split.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>cc_split_function_limit</literal>
+                </entry>
+                <entry>
+                  <literal>integer</literal>
+                  /
+                  <literal>20</literal>
+                </entry>
+                <entry>
+                When generating code for large systems, the code is split into multiple functions and files for performance reasons. This option controls how many functions can be generated in a file. Value less than 1 indicates no split.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>common_subexp_elim</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If enabled, the compiler performs a global analysis on the equation system and extract identical function calls into common equations.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>constant_parameters</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                All parameters except external objects will be treated as constants
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>diagnostics_limit</literal>
+                </entry>
+                <entry>
+                  <literal>integer</literal>
+                  /
+                  <literal>500</literal>
+                </entry>
+                <entry>
+                This option specifies the equation system size at which the compiler will start to reduce model diagnostics. This option only affects diagnostic output that grows faster than linear with the number of equations.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>dynamic_states</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If enabled, dynamic states will be calculated and generated.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>eliminate_alias_constants</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If enabled, then alias constants are eliminated from the model.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>eliminate_alias_parameters</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, then alias parameters are eliminated from the model.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>eliminate_alias_variables</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If enabled, then alias variables are eliminated from the model.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>eliminate_linear_equations</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If enabled, then equations with linear sub expressions are substituted and eliminated.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>enable_structural_ diagnosis</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If enabled, structural error diagnosis based on matching of equations to variables is used.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>enable_variable_scaling</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, then the <literal>&apos;nominal&apos;</literal> attribute will be used to scale variables in the model.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>equation_sorting</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If enabled, then the equation system is separated into minimal blocks that can be solved sequentially.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>export_functions</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                Export used Modelica functions to generated C code in a manner that is compatible with the external C interface in the Modelica Language Specification.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>export_functions_vba</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                Create VBA-compatible wrappers for exported functions. Requires the option <literal>export_functions</literal>.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>expose_temp_vars_in_fmu</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, then all temporary variables are exposed in the FMU XML and accessable as ordinary variables
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>external_constant_ evaluation_max_proc</literal>
+                </entry>
+                <entry>
+                  <literal>integer</literal>
+                  /
+                  <literal>10</literal>
+                </entry>
+                <entry>
+                The maximum number of processes kept alive for evaluation of external functions during compilation. This speeds up evaluation of functions using external objects during compilation.If less than 1, no processes will be kept alive, i.e. this feature is turned off. 
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>function_incidence_ computation</literal>
+                </entry>
+                <entry>
+                  <literal>string</literal>
+                  /
+                  <literal>&apos;none&apos;</literal>
+                </entry>
+                <entry>
+                Controls how matching algorithm computes incidences for function call equations. Possible values: <literal>&apos;none&apos;</literal>, <literal>&apos;all&apos;</literal>. With <literal>&apos;none&apos;</literal> all outputs are assumed to depend on all inputs. With <literal>&apos;all&apos;</literal> the compiler analyses the function to determine dependencies.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>homotopy_type</literal>
+                </entry>
+                <entry>
+                  <literal>string</literal>
+                  /
+                  <literal>&apos;actual&apos;</literal>
+                </entry>
+                <entry>
+                Decides how homotopy expressions are interpreted during compilation. Can be set to either <literal>&apos;simplified&apos;</literal> or <literal>&apos;actual&apos;</literal> which will compile the model using only the simplified or actual expressions of the homotopy() operator.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>ignore_within</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, ignore within clauses both when reading input files and when error-checking.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>inline_functions</literal>
+                </entry>
+                <entry>
+                  <literal>string</literal>
+                  /
+                  <literal>&apos;trivial&apos;</literal>
+                </entry>
+                <entry>
+                Controlles what function calls are inlined. <literal>&apos;none&apos;</literal> - no function calls are inlined. <literal>&apos;trivial&apos;</literal> - inline function calls that will not increase the number of variables in the system. <literal>&apos;all&apos;</literal> - inline all function calls that are possible.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>local_iteration_in_tearing</literal>
+                </entry>
+                <entry>
+                  <literal>string</literal>
+                  /
+                  <literal>&apos;off&apos;</literal>
+                </entry>
+                <entry>
+                This option controls whether equations can be solved local in tearing. Possible options are: <literal>&apos;off&apos;</literal>, local iterations are not used (default). <literal>&apos;annotation&apos;</literal>, only equations that are annotated are candidates. <literal>&apos;all&apos;</literal>, all equations are candidates.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>max_n_proc</literal>
+                </entry>
+                <entry>
+                  <literal>integer</literal>
+                  /
+                  <literal>4</literal>
+                </entry>
+                <entry>
+                The maximum number of processes used during c-code compilation.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>normalize_minimum_time_ problems</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If enabled, then minimum time optimal control problems encoded in Optimica are converted to fixed interval problems by scaling of the derivative variables. Has no effect for Modelica models.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>propagate_derivatives</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If enabled, the compiler will try to replace ordinary variable references with derivative references. This is done by first finding equations on the form x = der(y). If possible, uses of x will then be replaced with der(x).
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>variability_propagation</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If enabled, the compiler performs a global analysis on the equation system and reduces variables to constants and parameters where applicable.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>write_iteration_variables_ to_file</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, two text files containing one iteration variable name per row is written to disk. The files contains the iteration variables for the DAE and the DAE initialization system respectively. The files are output to the resource directory of the FMU.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>write_tearing_pairs_to_ file</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, two text files containing tearing pairs is written to disk. The files contains the tearing pairs for the DAE and the DAE initialization system respectively. The files are output to the working directory.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>algorithms_as_functions</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, convert algorithm sections to function calls.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>delayed_scalarization</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If enabled, delays scalarization of parameter arrays until C-code generation. This reduces the memory used during transformation of the flattened tree.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>disable_smooth_events</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, no events will be generated for smooth operator if order equals to zero.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>event_indicator_scaling</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, event indicators will be scaled with nominal heuristics
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>fmi_ports</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, XML code for FMI ports is generated
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>generate_event_switches</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If enabled, event generating expressions generates switches in the c-code. Setting this option to <literal>false</literal> can give unexpected results.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>generate_sparse_block_ jacobian_threshold</literal>
+                </entry>
+                <entry>
+                  <literal>integer</literal>
+                  /
+                  <literal>100</literal>
+                </entry>
+                <entry>
+                Threshold for when a sparse Jacobian should be generated. If the number of torn variablesis less than the threshold a dense Jacobian is generated.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>source_code_fmu</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, external source code is packaged with the FMU.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>cs_rel_tol</literal>
+                </entry>
+                <entry>
+                  <literal>real</literal>
+                  /
+                  <literal>1.0E-6</literal>
+                </entry>
+                <entry>
+                Tolerance for the adaptive solvers in the Co-Simulation case.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>cs_solver</literal>
+                </entry>
+                <entry>
+                  <literal>integer</literal>
+                  /
+                  <literal>0</literal>
+                </entry>
+                <entry>
+                Specifies the internal solver used in Co-Simulation. 0 - CVode, 1 - Euler.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>cs_step_size</literal>
+                </entry>
+                <entry>
+                  <literal>real</literal>
+                  /
+                  <literal>0.001</literal>
+                </entry>
+                <entry>
+                Step-size for the fixed-step solvers in the Co-Simulation case.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>enforce_bounds</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If enabled, min / max bounds on variables are enforced in the equation blocks.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>iteration_variable_scaling</literal>
+                </entry>
+                <entry>
+                  <literal>integer</literal>
+                  /
+                  <literal>1</literal>
+                </entry>
+                <entry>
+                Scaling mode for the iteration variables in the equation block solvers: 0 - no scaling, 1 - scaling based on nominals, 2 - utilize heuristic to guess nominal based on min, max, start, etc.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>log_level</literal>
+                </entry>
+                <entry>
+                  <literal>integer</literal>
+                  /
+                  <literal>3</literal>
+                </entry>
+                <entry>
+                Log level for the runtime: 0 - none, 1 - fatal error, 2 - error, 3 - warning, 4 - info, 5 - verbose, 6 - debug.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>nle_active_bounds_mode</literal>
+                </entry>
+                <entry>
+                  <literal>integer</literal>
+                  /
+                  <literal>0</literal>
+                </entry>
+                <entry>
+                Mode for how to handle active bounds: 0 - project Newton step at active bounds, 1 - use projected steepest descent direction.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>nle_jacobian_calculation_ mode</literal>
+                </entry>
+                <entry>
+                  <literal>integer</literal>
+                  /
+                  <literal>0</literal>
+                </entry>
+                <entry>
+                Mode for how to calculate the Jacobian: 0 - onesided differences, 1 - central differences, 2 - central differences at bound, 3 - central differences at bound and 0, 4 - central differences in second Newton solve, 5 - central differences at bound in second Newton solve, 6 - central differences at bound and 0 in second Newton solve, 7 - central differences at small residual, 8- calculate Jacobian externally, 9 - Jacobian compresssion.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>nle_jacobian_finite_ difference_delta</literal>
+                </entry>
+                <entry>
+                  <literal>real</literal>
+                  /
+                  <literal>1.49E-08</literal>
+                </entry>
+                <entry>
+                Delta to use when calculating finite difference Jacobians.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>nle_jacobian_update_mode</literal>
+                </entry>
+                <entry>
+                  <literal>integer</literal>
+                  /
+                  <literal>2</literal>
+                </entry>
+                <entry>
+                Mode for how to update the Jacobian: 0 - full Jacobian, 1 - Broyden update, 2 - Reuse Jacobian.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>nle_solver_default_tol</literal>
+                </entry>
+                <entry>
+                  <literal>real</literal>
+                  /
+                  <literal>1.0E-10</literal>
+                </entry>
+                <entry>
+                Default tolerance for the equation block solver.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>nle_solver_exit_criterion</literal>
+                </entry>
+                <entry>
+                  <literal>integer</literal>
+                  /
+                  <literal>3</literal>
+                </entry>
+                <entry>
+                Exit criterion mode: 0 - step length and residual based, 1 - only step length based, 2 - only residual based, 3 - hybrid.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>nle_solver_max_residual_ scaling_factor</literal>
+                </entry>
+                <entry>
+                  <literal>real</literal>
+                  /
+                  <literal>1.0E10</literal>
+                </entry>
+                <entry>
+                Maximal scaling factor used by automatic and hybrid residual scaling algorithm.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>nle_solver_min_residual_ scaling_factor</literal>
+                </entry>
+                <entry>
+                  <literal>real</literal>
+                  /
+                  <literal>1.0E-10</literal>
+                </entry>
+                <entry>
+                Minimal scaling factor used by automatic and hybrid residual scaling algorithm.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>rescale_after_singular_jac</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If enabled, scaling will be updated after a singular jacobian was detected (only active if automatic scaling is used).
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>rescale_each_step</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, scaling will be updated at every step (only active if automatic scaling is used).
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>residual_equation_scaling</literal>
+                </entry>
+                <entry>
+                  <literal>integer</literal>
+                  /
+                  <literal>1</literal>
+                </entry>
+                <entry>
+                Equations scaling mode in equation block solvers: 0 - no scaling, 1 - automatic scaling, 2 - manual scaling, 3 - hybrid, 4- aggressive automatic scaling, 5 - automatic rescaling at full Jacobian update
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>runtime_log_to_file</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, log messages from the runtime are written directly to a file, besides passing it through the FMU interface. The log file name is generated based on the FMU name.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>use_Brent_in_1d</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If enabled, Brent search will be used to improve accuracy in solution of 1D non-linear equations.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>block_solver_profiling</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, methods involved in solving an equation block will be timed.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>events_default_tol</literal>
+                </entry>
+                <entry>
+                  <literal>real</literal>
+                  /
+                  <literal>1.0E-10</literal>
+                </entry>
+                <entry>
+                Default tolerance for the event iterations.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>events_tol_factor</literal>
+                </entry>
+                <entry>
+                  <literal>real</literal>
+                  /
+                  <literal>1.0E-4</literal>
+                </entry>
+                <entry>
+                Tolerance safety factor for the event indicators. Used when external solver specifies relative tolerance.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>nle_brent_ignore_error</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, the Brent solver will ignore convergence failures.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>nle_solver_check_jac_cond</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, the equation block solver computes and log the jacobian condition number.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>nle_solver_max_iter</literal>
+                </entry>
+                <entry>
+                  <literal>integer</literal>
+                  /
+                  <literal>100</literal>
+                </entry>
+                <entry>
+                Maximum number of iterations for the equation block solver.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>nle_solver_max_iter_no_ jacobian</literal>
+                </entry>
+                <entry>
+                  <literal>integer</literal>
+                  /
+                  <literal>10</literal>
+                </entry>
+                <entry>
+                Maximum number of iterations without jacobian update. Value 1 means an update in every iteration.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>nle_solver_min_tol</literal>
+                </entry>
+                <entry>
+                  <literal>real</literal>
+                  /
+                  <literal>1.0E-12</literal>
+                </entry>
+                <entry>
+                Minimum tolerance for the equation block solver. Note that, e.g. default Kinsol tolerance is machine precision pwr 1/3, i.e. 1e-6.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>nle_solver_regularization_ tolerance</literal>
+                </entry>
+                <entry>
+                  <literal>real</literal>
+                  /
+                  <literal>-1.0</literal>
+                </entry>
+                <entry>
+                Tolerance for deciding when regularization should be activated (i.e. when condition number &gt; reg tol).
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>nle_solver_step_limit_ factor</literal>
+                </entry>
+                <entry>
+                  <literal>real</literal>
+                  /
+                  <literal>10.0</literal>
+                </entry>
+                <entry>
+                Factor limiting the step-size taken by the nonlinear block solver.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>nle_solver_tol_factor</literal>
+                </entry>
+                <entry>
+                  <literal>real</literal>
+                  /
+                  <literal>1.0E-4</literal>
+                </entry>
+                <entry>
+                Tolerance safety factor for the equation block solver. Used when external solver specifies relative tolerance.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>nle_solver_use_last_ integrator_step</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If enabled, the intial guess for the iteration variables will be set to the iteration variables from the last integrator step.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>nle_solver_use_nominals_as_ fallback</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If enabled, the nominal values will be used as initial guess to the solver if initialization failed.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>time_events_default_tol</literal>
+                </entry>
+                <entry>
+                  <literal>real</literal>
+                  /
+                  <literal>2.22E-14</literal>
+                </entry>
+                <entry>
+                Default tolerance for the time event iterations.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>use_jacobian_equilibration</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>false</literal>
+                </entry>
+                <entry>
+                If enabled, jacobian equilibration will be utilized in the equation block solvers to improve linear solver accuracy.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>use_newton_for_brent</literal>
+                </entry>
+                <entry>
+                  <literal>boolean</literal>
+                  /
+                  <literal>true</literal>
+                </entry>
+                <entry>
+                If enabled, a few Newton steps are computed to get a better initial guess for Brent.
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>block_solver_experimental_ mode</literal>
+                </entry>
+                <entry>
+                  <literal>integer</literal>
+                  /
+                  <literal>0</literal>
+                </entry>
+                <entry>
+                Activates experimental features of equation block solvers
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>cs_experimental_mode</literal>
+                </entry>
+                <entry>
+                  <literal>integer</literal>
+                  /
+                  <literal>0</literal>
+                </entry>
+                <entry>
+                Activates experimental features of CS ode solvers
+                </entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </table>
+  </section>
+</appendix>

@@ -1,0 +1,252 @@
+0.9.6.1
+
+  o issue warnings when shift-reduce conflict is resolved by
+    default "prefer shift over reduce" rule
+
+0.9.6
+
+  o use ints for offsets in parsing tables to make really large
+    tables possible
+
+0.9.5.2
+
+  o fixed Ant task bug - it assumed that dest dir is always set
+
+0.9.5.1
+
+  o fixed a bug in ParsingTables constructor:
+    - prevented reading huge tables
+    
+  o added new heuristic to ParsingTable generator:
+    - tables are ~20% smaller now
+
+0.9.5
+
+  o added "destdir" Ant argument and -d CLI option 
+
+0.9.4:
+
+  o added support for alternative goals:
+    - first (in a grammar source) goal is designated a main goal
+      it runs as if grammar has it as the sole goal
+    - subsequent goals are alternatives to the main goal
+      to make parser match them an overloaded "parse" method is
+      called with an ID of a desired alternative
+  o added example for writing parsers with alternative goals
+
+0.9.3.7:
+
+  o fixed bug in semantic value type assignment to LHS nonterminals
+    of synthetic and shortcut productions
+
+0.9.3.6:
+
+  o fixed a bug in phrase recovery backtracker
+
+0.9.3.5:
+
+  o force AntTask to compile grammar even if it fails to lookup
+    a class name, so that compiler has a chance to print error
+    reports
+
+  o declare local variables (symbol and symbol value aliases) in
+    sematic action routines "final"
+
+  o when generating parser that invokes semantic action routines
+    via delegates eliminate creating multiple instances of a
+    synthetic action code that returns a symbol
+
+
+0.9.3.4:
+
+  o extended error recovery by adding several simple methods:
+    - unexpected token is removed from the stream first
+    - if parsing tables are uncompressed - complete list of
+      lookahead terminals can be derived for each state -
+      expected lookahead is inserted before or instead of a
+      misplaced token
+    - if simple recovery does not work parser continues with
+      phrase recovery
+
+  o error and successful recovery is reported via Events
+    monitor:
+    - previously overridable *Error methods are part of Events
+      "interface" now
+
+  o refactored row displacement implementation:
+    - removed all complexity, which, as it turned out, was totally
+      unnecessary and it was still missing some collisions
+    - new, much simpler, implementation simply assumes that any terminal
+      may become a lookahead in any state
+
+0.9.3.3:
+
+  o fixed an NPE bug in parser:
+    - if the very first token was erroneous a parser with compressed tables
+      executed a default reduce that raised NPE while trying to update
+      positioning information for returned nonterminal from an empty stack
+
+0.9.3.2:
+
+  o more routine actions can be generated automatically:
+    - added automatic action code generation for lists that can
+      be defined as:
+
+      list = elem
+           | list separator elem
+           ;
+
+0.9.3.1:
+
+  o changed specification format back to what is used to be (with some new
+    directives):
+    - to be more flexible in code generation compiler needs to know the
+      package name and to be able to add something to parser's import list
+
+  o added option to generate parsers that use "switch" instead of delegates:
+    - though switch-able parsers are slower (dummy Java 1.2 parser - action
+      routines do nothing but return symbols - is 25% faster), they are also
+      much smaller (delegates being inner classes add quite a bit of space
+      overhead)
+
+  o added option to dump Terminals "enum" class into Terminals.java
+
+0.9.3:
+
+  o Beaver bootstraps itself now
+
+  o changed specification grammar:
+    - new format reminds JLex/JFlex specification
+
+  o grammars now require "forward" declaration of all terminals:
+    - the feature seemed redundand, but it really helps to
+       i) document what is expected from a scanner, and
+      ii) get rid of "invalid" errors (like "unreducible production")
+          that were caused by mere typos
+
+  o altered EBNF lists handling:
+    - they collect elements in ArrayList and "return"
+      an array of collected elements
+
+  o each addressable RHS symbol now may have two associated
+    local variables: one references a symbol itself and another -
+    symbol's value
+
+  o unless precedence explictily (or via rightmost terminal) assigned
+    rules will have the lowest precedence automatically assigned:
+    - most conflicts can be now automatically resoved with an
+      intuitive assumption that parser would prefer shifting
+      terminals
+
+0.9.2.2:
+
+  o all rules without explicit (via @) or derived from
+    the rightmost terminal precedence are assigned the
+    lowest nonassociative precedence
+
+0.9.2.1:
+
+  o bugs fixed:
+    - in EBNF lists action code ?: was improperly generated
+    - source file reader forgot to resize array of lines
+
+  o added ZIPping run-time sources to build.xml
+
+  o included JARs into distribution (so you don't have to run
+    ant if you don't want to :-)
+
+0.9.2:
+
+  o licence changed:
+    - now it's BSD
+
+  o parsing stack keeps symbols (not values as 0.9.1 used to do)
+    - more natural expression of the parsing process
+    - parser is now able to maintain positioning information about
+      nonterminals
+
+  o action code "braces" changed to "{:" and ":}"
+    - makes a clear break from java code and in case of unbalanced
+      Java braces grammar does not suffer
+
+  o action code now "return"s LHS symbol
+    - as a result production's LHS cannot be aliased
+
+  o introduced new declaration %list-type, which needs a Java code
+    block with a class name
+    - EBNF collections created for '*' and '+' will be of this type
+    - can be any class that declares public default constructor and
+      public void add(Object) method
+
+  o introduced new standard action - RETURN
+    - automatically handles productions that do not declare their
+      own actions and which RHS has only one symbol:
+          type = primitive_type
+               | reference_type
+               ;
+
+  o updated examples; added examples that builds and manipulates an
+    AST
+
+0.9.1.4:
+
+  o fixed bug in the parsing tables builder:
+    - parsing tables builder bug-fix in 0.9.1.3 was incomplete as it did
+      not take into account states that terminate default actions when
+      unexpected lookahead is encontered.
+      Now Beaver check for collisions with any token in those states too.
+
+0.9.1.3:
+
+  o fixed bug in the parsing tables builder:
+    - lookaheads collision resolution failed to check all terminals in
+      states where some reduce actions where compressed to a single
+      default reduce action
+
+  o added default systax error reporting code to Parser.sytaxError()
+
+  o fixed bug in action tables report output:
+    - state number was not converted to String
+
+0.9.1.2:
+
+  o added switch "-n" and ant task option "anonymousActions"
+    - "-n" forces Beaver to create explicit reduce actions classes
+    - "anonymousActions", which is "yes" by default can be set to false
+      to emulate "-n" switch
+
+  o refactored abstract Parser interface with its implementations:
+    - class files with code of reduce actions are smaller now (~175 bytes
+      for "named" classes and ~210 bytes per action class for anonymous
+      classes)
+
+0.9.1.1:
+
+  o fixed bug in conflict reports:
+    - used to stop reporting before the last item in actions list
+
+  o fixed bug in grammar parser:
+    - was scanning wrong list for rule alternatives when they were
+      introduced with explicit LHS
+
+  o removed unnecessary imports in generated parser
+
+
+0.9.1:
+
+  o assigned rule precedece using _rightmost_ terminal
+    (this should simplify distinguishing rules like:
+     cond = if ... | if ... else ... ;
+     and this is what everyone else does anyway :-))
+
+  o generate detailed conflict reports
+
+  o improved grammar parsing error reports
+
+  o fixed actions code generation:
+    - actions should not be static
+    - always execute reduce action code, even if it does not return
+      LHS value
+
+  o fixed EBNF synthetic rules generation:
+    - it used to generate new rule instance for each use.

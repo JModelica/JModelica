@@ -1,0 +1,94 @@
+/*
+    Copyright (C) 2013-2017 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect ConstantFolding {
+
+    /**
+     * Performs constant folding
+     */
+    public void ASTNode.constantFolding(VariableEvaluator evaluator) {
+        for (ASTNode n : this) {
+            n.constantFolding(evaluator);
+        }
+    }
+
+    public void FFunctionDecl.constantFolding(VariableEvaluator evaluator) {
+        
+    }
+
+    public void FFunctionCallEquation.constantFolding(VariableEvaluator evaluator) {
+        if (getCall() instanceof FAssert) {
+            return;
+        }
+        for (FExp childExp : getCall().childFExps()) {
+            childExp.constantFolding(evaluator);
+        }
+    }
+
+    public void FAssignStmt.constantFolding(VariableEvaluator evaluator) {
+        getRight().constantFolding(evaluator);
+    }
+
+    public void FFunctionCallStmt.constantFolding(VariableEvaluator evaluator) {
+        for (FExp childExp : getCall().childFExps()) {
+            childExp.constantFolding(evaluator);
+        }
+    }
+
+    public void FPartialFunctionCall.constantFolding(VariableEvaluator evaluator) {
+        for (ASTNode n : this) {
+            n.constantFolding(evaluator);
+        }
+    }
+
+    public void FAbstractExp.constantFolding(VariableEvaluator evaluator) {
+        if (variability().knownParameterOrLess()) {
+            try {
+                CValue value = ceval(evaluator);
+                if (value.hasBuildLiteral() && !value.size().isEmpty()) {
+                    replaceMe(value.buildLiteral());
+                }
+            } catch (ConstantEvaluationException e) {}
+        } else {
+            super.constantFolding(evaluator);
+        }
+    }
+
+    public void FPreExp.constantFolding(VariableEvaluator evaluator) {
+        if (!variability().knownParameterOrLess() && variability().parameterOrLess()) {
+            replaceMe(new FAccessExp(getFAccess().fullCopy()));
+        } else {
+            super.constantFolding(evaluator);
+        }
+    }
+
+    public void FIfExp.constantFolding(VariableEvaluator evaluator) {
+        if (!variability().knownParameterOrLess() && getIfExp().variability().knownParameterOrLess()) {
+            super.constantFolding(evaluator);
+            try {
+                if (getIfExp().variability().knownParameterOrLess()) {
+                    CValue cval = getIfExp().ceval(evaluator);
+                    if (cval.hasBooleanValue()) {
+                        replaceMe(cval.booleanValue() ? getThenExp() : getElseExp());
+                    }
+                }
+            } catch (ConstantEvaluationException e) {}
+        } else {
+            super.constantFolding(evaluator);
+        }
+    }
+
+}

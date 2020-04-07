@@ -1,0 +1,13 @@
+optimization TerminalConstraintTest(objective = cost(finalTime),startTime = 0, finalTime = 3)
+  Real x(start=1,fixed=true,nominal=3);
+  Real v(start=2,fixed=true,nominal=5);
+  input Real u(nominal=3);
+  Real cost(start=0,fixed=true);
+equation
+  der(x) = v;
+  der(v) = u;
+  der(cost) = x^2 + v^2 + u^2;
+constraint
+  x(finalTime)=4;
+  v(finalTime)=-2;
+end TerminalConstraintTest;

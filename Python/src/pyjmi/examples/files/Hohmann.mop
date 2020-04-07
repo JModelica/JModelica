@@ -1,0 +1,52 @@
+
+model Orbital
+  Real x(fixed=true,start=x0);
+  Real y(fixed=true,start=y0);
+  Real vx(fixed=true,start=vx0);
+  Real vy(fixed=true,start=vy0);
+  
+  //"Initial values"
+  parameter Real x0=rStart;
+  parameter Real y0=0;
+  parameter Real vx0=0;
+  parameter Real vy0=vStart;
+  
+  constant Real G=6.67384e-11 "Gravitational Constant";
+  constant Real M=5.9742e24 "Earth Mass";
+  constant Real R=6.371e6 "Earth Radii";
+  
+  parameter Real my=G*M/R^3*T^2;
+  parameter Real T=5400; //Orbital time of rStart
+
+  parameter Real rFinal = rStart*2 "Radii of final orbit";
+  parameter Real rStart = (R+300e3)/R "Radii of start orbit";
+  parameter Real vStart = 7730/R*T "Velocity of start orbit";
+  
+equation //Equation of motion of a two-body problem
+  der(x)=vx;
+  der(y)=vy;
+  der(vx)=-x*my/(x^2+y^2)^(3/2);
+  der(vy)=-y*my/(x^2+y^2)^(3/2);
+end Orbital;
+
+
+ 
+optimization HohmannTransfer(objective=(dx1^2+dy1^2)^0.5+(dx2^2+dy2^2)^0.5, startTime=0, finalTime(free=true,min=0.5,max=10,initialGuess=0.8))
+  extends Orbital;
+
+  //"Rocket burns"
+  parameter Real dx1(free=true,min=-2,max=2,start=0.05);
+  parameter Real dy1(free=true,min=-2,max=2,start=0.05);
+  parameter Real dx2(free=true,min=-2,max=2,start=0.05);
+  parameter Real dy2(free=true,min=-2,max=2,start=0.05);
+  
+  //"Time for firing the first rockets"
+  parameter Real t1(free=true,min=0.001,max=0.01, start=0.005);
+
+constraint
+  (x(finalTime)^2+y(finalTime)^2)^0.5=rFinal; //"Final position constraint"
+  (vx(finalTime)+dx2)^2+(vy(finalTime)+dy2)^2=my/rFinal; //"Final velocity"
+  x(finalTime)*(vx(finalTime)+dx2)+y(finalTime)*(vy(finalTime)+dy2)=0; //"Final Radial velocity component"
+end HohmannTransfer;
+
+

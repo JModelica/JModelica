@@ -1,0 +1,204 @@
+/*
+    Copyright (C) 2009-2014 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import java.util.Collections;
+
+aspect OverdeterminedInitialSystem {
+    
+    /**
+     * Given a BiPGraph, this method remove all redundant unmatched initial
+     * equations.
+     * Returns a BiPGraph with no unmatched equations on success (might be the
+     * same as inputed to the method).
+     */
+    public BiPGraph FClass.overdeterminedInitialSystem(BiPGraph g) {
+        AbstractBiPGraph<Eq, Var, ?>.OISResult res = g.overdeterminedInitialSystem();
+        if (res == null)
+            return g;
+        
+        Set<FAbstractEquation> eqnsToRemove = new HashSet<FAbstractEquation>();
+        for (Eq e : res.redundentEquations) {
+            g.removeEquation(e);
+            eqnsToRemove.add(e.getEquation());
+        }
+        
+        List<FAbstractEquation> newInitList = new List<FAbstractEquation>();
+        for (FAbstractEquation eqn : getFInitialEquations()) {
+            if (!eqnsToRemove.contains(eqn))
+                newInitList.add(eqn);
+        }
+        setFInitialEquationList(newInitList);
+        
+        for (FVariable var : res.visitedParameters) {
+            if (!var.isParameter())
+                continue;
+            
+            AliasManager.AliasSet aliasSet = var.aliasSet();
+            if (aliasSet != null) {
+                for (AliasManager.AliasVariable alias : aliasSet) {
+                    alias.getFVariable().setTypePrefixVariability(Variability.STRUCTPARAMETER);
+                }
+            } else {
+                var.setTypePrefixVariability(Variability.STRUCTPARAMETER);
+            }
+        }
+        
+        return g;
+    }
+    
+    public abstract class AbstractBiPGraph{
+        /**
+         * Goes through the list of unmatched equations and tries to determine
+         * if it is redundant. Al list of equations that should be removed is
+         * returned if all unmatched equations are found to be redundent.
+         */
+        public OISResult overdeterminedInitialSystem() {
+            getStepLogger().logVerbose("Analysing initial system for redundant equations to remove.");
+            OISVariableEvaluator evaluator = new OISVariableEvaluator(getStepLogger());
+            boolean allIsGood = true;
+            for (E eqn : unmatchedEquationsIterable()) {
+                getStepLogger().logVerbose("Checking unmatched equation %s", eqn);
+                FAbstractEquation equation = eqn.getEquation();
+                if (!equation.isInitial()) {
+                    getStepLogger().logVerbose("  Not an initial equation");
+                    allIsGood = false;
+                } else if (equation.OIS_consistencyCheck(evaluator,stepLogger)) {
+                    getStepLogger().logVerbose("  Consistent");
+                } else {
+                    allIsGood = false;
+                    getStepLogger().logVerbose("  Unable to verify or different values were calculated");
+                }
+            }
+            if (!allIsGood) {
+                getStepLogger().logVerbose("Unable to verify all unmatched initial equations");
+                return null;
+            }
+            Collection<E> results = new ArrayList<E>();
+            getStepLogger().logVerbose("All seems to be ok!");
+            return new OISResult(getUnmatchedEquations(), evaluator.visitedParameters);
+        }
+        
+        public class OISResult{
+            public final Collection<E> redundentEquations;
+            public final Collection<FVariable> visitedParameters;
+            
+            private OISResult(Collection<E> redundentEquations, Collection<FVariable> visitedParameters) {
+                this.redundentEquations = redundentEquations;
+                this.visitedParameters = visitedParameters;
+            }
+        }
+        
+        /**
+         * Variable evaluator that is used during analyse of overdetermined
+         * initial system.
+         */
+        public class OISVariableEvaluator extends VariableEvaluator {
+            
+            private Set<CommonVariableDecl> evaluationStack = new HashSet<CommonVariableDecl>();
+            private Map<CommonVariableDecl, CValue> evaluationCache = new LinkedHashMap<CommonVariableDecl, CValue>();
+            private Set<FVariable> visitedParameters = new LinkedHashSet<FVariable>();
+            
+            private StepLogger stepLogger;
+            
+            public OISVariableEvaluator(StepLogger stepLogger) {
+                super(true);
+                this.stepLogger = stepLogger;
+            }
+            
+            public StepLogger getStepLogger() {
+                return stepLogger;
+            }
+            
+            @Override
+            public CValue ceval(CommonVariableDecl variable) {
+                getStepLogger().logVerbose("    %s", variable.name());
+                CValue val = evaluationCache.get(variable);
+                if (val != null)
+                    return val;
+                if (evaluationStack.contains(variable)) {
+                    val = CValue.UNKNOWN;
+                } else {
+                    try {
+                        evaluationStack.add(variable);
+                        V var = getVariable(variable.name());
+                        if (var == null) { // Parameter or constant
+                            visitedParameters.add(variable.asFAbstractVariable().asFVariable());
+                            val = variable.ceval(this);
+                        } else {
+                            val = var.OIS_ceval(this);
+                        }
+                    } catch (ConstantEvaluationException e) {
+                        val = CValue.UNKNOWN;
+                    } finally {
+                        evaluationStack.remove(variable);
+                    }
+                }
+                evaluationCache.put(variable, val);
+                return val;
+            }
+            
+            @Override
+            public CValue ceval(CommonVariableDecl variable, Index i) {
+                return ceval(variable).array().getCell(i);
+            }
+        }
+    }
+    
+    public abstract class AbstractVar {
+        /**
+         * Used for evaluation of variables during analyse of overdetermined
+         * initial system.
+         */
+        public CValue OIS_ceval(VariableEvaluator evaluator) {
+            if (getMatching() == null)
+                return CValue.UNKNOWN;
+            return getMatching().getEquation().OIS_ceval(evaluator, getVariable());
+        }
+    }
+    
+    /**
+     * Used for evaluation of equations during analyse of overdetermined
+     * initial system.
+     * Tries to solve and determine the value of the provided variable.
+     * Returns CValue.UNKNOWN or exception on failure.
+     */
+    syn CValue FAbstractEquation.OIS_ceval(VariableEvaluator evaluator, FVariable var) = CValue.UNKNOWN;
+    eq FEquation.OIS_ceval(VariableEvaluator evaluator, FVariable var) = solution(var).ceval(evaluator);
+    eq FFunctionCallEquation.OIS_ceval(VariableEvaluator evaluator, FVariable var) = cevalParameter(evaluator, var);
+    
+    /**
+     * Used for evaluation of equations during analyse of overdetermined
+     * initial system.
+     * Tries to validate the equation and ensuring that the left hand side is
+     * equal to the right hand side.
+     */
+    syn boolean FAbstractEquation.OIS_consistencyCheck(VariableEvaluator evaluator, StepLogger stepLogger) = false;
+    eq FEquation.OIS_consistencyCheck(VariableEvaluator evaluator, StepLogger stepLogger) {
+        try {
+            stepLogger.logVerbose("  Right:");
+            CValue right = getRight().ceval(evaluator);
+            stepLogger.logVerbose("    Calculated value: %s", right);
+            stepLogger.logVerbose("  Left:");
+            CValue left = getLeft().ceval(evaluator);
+            stepLogger.logVerbose("    Calculated value: %s", left);
+            CValue equ = type().equ(left, right);
+            return equ.hasBooleanValue() && equ.booleanValue();
+        } catch (ConstantEvaluationException e) {
+            return false;
+        }
+    }
+    
+}

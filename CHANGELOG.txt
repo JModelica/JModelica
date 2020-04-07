@@ -1,0 +1,516 @@
+================= Unreleased ==================
+# Change ; Minor ; Compiler ; #5815
+FilterableIterator now adheres to the contract of Iterator and properly supports "null" elements in the parent iterator.
+
+# Change ; Major ; Compiler ; #5809
+Generate one field per option in OptionRegistry.
+Renamed OptionRegistry to AbstractOptionRegistry, renamed OptionsAggregated to OptionRegistry.
+
+# Change ; Major ; Compiler ; #5804
+Switch to "java.nio.file.Path" instead of "File" or "String"s representing paths in most places.
+"Path" is more thought-through and more powerful, which will allow to implement advanced featuers in the future.
+Note that while java.nio allows to access non-File resources with the same API, the internal workings of JModelica
+currently make restrictions on only supporting file accesses.
+
+# Fixed ; Minor ; Compiler ; #5808
+Add ParseListener and CompilationStartListener for listening to
+parsed files and compilation start events.
+
+# Change ; Minor ; Compiler ; #5810
+Dependency to beaver-rt.jar is now recorded in the jar manifest
+which means it is no longer necessary to add it to the classpath
+when interfacing directly with the compiler jars.
+
+# Change ; Minor ; Compiler ; #5806
+Added compilation hook to run before FMU packing
+
+# Fixed ; Minor ; Compiler ; #5805
+Fixed ant clean failing with empty target directory
+
+# Fixed ; Minor ; Compiler ; #5793
+Fixed bug where reinit did not set value of aliased derivatives.
+
+# Fixed ; Minor ; Compiler ; #5793
+Improved detection of pre-propagation blocks to fix a case where 
+reinit did not update properly during event iteration.
+
+# Change ; Major; PyFMI ; #5802
+Updated JModelica external to PyFMI 2.5.3
+
+# Change ; Minor ; Compiler ; #5800
+SrcDot now has SrcNamedAccess instead of SrcAccess as children.
+
+# Fixed ; Minor ; Compiler ; #5791
+Fixed source-tree lookup for modifications: don't look up in normal scope if not found in member scope.
+
+# Fixed ; Minor ; Runtime; #5776
+Fixed bug with boolean inputs where the input was used in a pre() operator.
+
+# Fixed ; Minor ; Compiler ; #5771
+Fixed a bug regarding searching in surrounding classes
+in one of the simple (source) class lookup methods.
+
+# Fixed ; Minor ; Compiler ; #5735
+Fixed exception during code generation caused by bug in temporary removal after function inlining.
+
+# Fixed ; Minor ; Compiler ; #5772
+Fixed exception from negated alias in assign statement left hand side.
+
+# Fixed ; Minor ; Compiler ; #5756
+Fixed c-code generation bug for some array assignments which led to segfaults.
+
+# Feature ; Minor ; Compiler ; #5758
+Added new option time_events, allows time events to be generated, enabled by default.
+Deprecated option relational_time_events.
+
+# Fixed ; Minor ; Compiler ; #5763
+Improved scalarization of record arrays.
+
+# Fixed ; Minor ; Compiler ; #5756
+Improved array initialization for primitive arrays in global constants.
+
+# Fixed ; Minor ; Compiler ; #5753
+Added error check for variability of sample arguments.
+
+# Feature ; Minor ; Compiler ; #5735
+Loop unrolling is now an internal option.
+
+# Fixed ; Minor ; Compiler ; #5748
+Fixed NullPointerException from flattening global access used as subscript
+
+# Feature ; Minor ; Compiler ; #5735
+Turned off loop unrolling in functions to increase performance.
+
+# Feature ; Minor ; Compiler ; #5735
+Added option for controlling maximum allowed size of dynamic state
+sets. Changed default from 8 to 10.
+
+# Feature ; Minor ; Compiler ; #5726
+Orginal annotations should be preserved when components are redeclared
+ unless new annotations are added in the redeclaring declaration.
+
+; Feature ; Minor ; Compiler ; #5725
+Added splitting of generated C code for initialization of global constants (improves compilation time).
+
+; Fixed ; Minor ; Compiler ; #5721
+Fix c_compiler so it's case insensitive.
+
+; Feature ; Major ; Compiler ; #5515
+Turned on initial variability propagation by default.
+
+; Fixed ; Minor ; Runtime ; #5710
+Fixed so that the flag "enforce_bounds" is taken into account in Brent.
+
+; Fixed ; Minor ; PyFMI ; #5709
+Fixed issue with the absolute tolerance not being set when only the
+relative tolerance has been provided.
+
+; Fixed ; Minor ; Runtime ; #5708
+Updated the error message when Brent fails to backet a root.
+
+; Feature ; Minor ; Compiler ; #5696
+Enabled parameter alias elimination by default.
+
+; Fixed ; Minor ; PyFMI ; #5706
+Added checks on the nominal values.
+
+; Feature ; Minor ; Compiler ; #5515
+Expanded variability propagation to also work on initial system. 
+Controlled with experimental option, default off.
+
+; Change ; Minor ; Compiler ; #5694
+Reworked GUID generation to only depend on modelDescription.xml.
+
+; Fixed ; Minor ; Compiler ; #5663
+Fixed type checking of array sizes for elements in arrays of records.
+
+; Fixed ; Minor ; Compiler ; #5699
+Made sure to release the package.order file after reading.
+
+; Fixed ; Minor ; Documentation ; #5698
+Add more javadoc for how the AnnotationProvider framework works.
+
+; Fixed ; Minor ; Compiler ; #5689
+Enabled evaluation of non-literal expressions in annotations.
+
+; Fixed ; Minor ; Compiler ; #5692
+Fixed exception from specific combination of record with array of unknown 
+size in if expression in binding expression.
+
+; Fixed ; Major ; Compiler ; #5634
+Updated calculation order of start values and dependent parameters to reduce
+number of evaluations.
+
+; Fixed ; Minor ; Compiler ; #5688
+Fixed that binding expression splitting doesn't check bounds.
+
+; Fixed ; Minor ; Compiler ; #5687
+Don't allow any inlining of equations in when loops.
+
+; Fixed ; Minor ; Runtime ; #5684
+Fixed segfault when calling free directly after a reset on CS FMUs.
+
+; Fixed ; Minor ; Compiler ; #5676
+Fixed a problem causing incorrect annotation trees to be created in some cases.
+
+; Fixed ; Major ; Build system ; #5671
+Fixed an issue where gcc compiled FMUs did not work on Windows 10 together
+with a VS2017 compiled software.
+
+; Changed ; Minor ; Compiler ; #5670
+Update handling of constants, and accesses to package constants, in functions
+for improved compilation and simulation performance.
+
+; Fixed ; Minor ; PyFMI ; #5668
+Fixed issue with reusing the PyFMI computed FD Jacobian.
+
+; Fixed ; Minor ; Runtime ; #5665
+Updated the loglevel conversion between runtime and Kinsol which in some
+models has significant impact on the performance.
+
+; Change ; Minor ; Compiler ; #5659
+loadResource on directories now always leads to compile time evaluation of path.
+
+; Fixed ; Minor ; Compiler ; #5642
+Improved and added tests for SimpleLookup. Now supports Quoted names.
+
+; Fixed ; Minor ; Compiler ; #5640 
+Fixed a problem where functions had to restrictive visibility.
+Added header information for functions which needed greater visibility.
+
+; Fixed ; Minor ; Compiler ; #5632
+Fixed issue with FExp.dynamicFExp(FExp exp) for null input.
+
+; Fixed ; Minor ; PyFMI ; #5624
+Made binary result saving more robust.
+
+; Fixed ; Minor ; PyFMI ; #5623
+Fixed issue with using the result filter together with FMI1
+
+; Change ; Minor ; MSL ; #5619
+Patched MSL resources to work with VS2015.
+
+; Feature ; Minor ; Compiler ; #5605
+Support for initial parameter external objects.
+
+; Change ; Minor ; Compiler ; #5612 
+Changed error check of arguments when compiling from command line to allow empty library argument if a
+modelica path is supplied.
+
+; Fixed ; Minor ; PyFMI ; #5615
+Improved input handling for FMI2
+
+; Fixed ; Minor ; PyFMI ; #5613
+Fixed simulation logging when there are no states.
+
+; Fixed ; Minor ; Compiler ; #5569
+Fixed bug where generic annotation framework returned wrong value or threw
+exception (depended on underlying implementation) if the node was ambiguous,
+instead it now returns another ambiguous node.
+
+; Fixed ; Minor ; Runtime ; #5608
+Removed the -g flag when building FMUs
+
+; Fixed ; Minor ; Compiler ; #5606
+Improved ability to obtain annotation value and 
+remove modifications.
+
+; Fixed ; Minor ; Compiler ; #5594
+Added functionality to remove annotations/modifications.
+
+; Fixed ; Minor ; Compiler ; #5604
+Fixed bug where using an iterator expression to set the binding 
+expression of a member of a record array member in a record declaration 
+would cause a crash in certain circumstances.
+
+; Fixed ; Minor ; PyFMI ; #5597
+Fixed issue with getting time varying variables (sometimes wrong 
+variables was returned)
+
+; Fixed ; Minor ; Runtime ; #5590
+Fixed solver trace when beta condition failures occur.
+
+; Feature ; Minor ; PyFMI ; #5587
+Added functionality to set enumerations with strings
+
+; Fixed ; Minor ; Compiler ; #5579 
+Improved handling of event generating relational expressions
+with nested blocks.
+
+; Feature ; Minor ; Compiler ; #5584
+Added variable index comment before each variable in the FMI ModelVariables
+XML.
+
+; Fixed ; Minor ; Compiler ; #5490
+Fixed bug that caused some errors to be reported on the wrong line.
+
+; Feature ; Minor ; PyFMI ; #5089
+Added option to limit the maximum size of the log file.
+
+; Fixed ; Minor ; Compiler ; #5564
+Using absoluteValue annotation to generate relativeQuantity attribute
+
+; Fixed ; Minor ; Compiler ; #5563
+Fixed bugs for start attribute generation in xml
+
+; Fixed ; Minor ; Compiler ; #5560
+Improved temporary counting leading to smaller generated c-functions
+
+; Fixed ; Minor ; Compiler ; #5559
+Fixed a problem with vectorized functions where the 
+sizes of the dimensions where incorrectly handled.
+
+; Fixed ; Minor ; Compiler ; #5557
+Fixed dependency computation for dynamic derivatives, the FMU XML didn't list
+the corresponding dynamic states as dependencies for the dynamic derivatives.
+
+================= Stable-2018-02-09 ==================
+; Change ; Minor ; Runtime; #5555
+Added so that the internal solver is re-initialized if inputs are
+changed in a co-simulation FMU.
+
+; Change ; Minor ; Compiler ; #5549
+Moved static variable declarations for generated temporaries to
+generated struct in order to improve multithreading capabilities.
+
+================= Stable-2018-01-24 ==================
+; Change ; Minor ; PyFMI ; #5548
+Deprecated get_log_file_name in favour of get_log_filename
+
+; Change ; Minor ; MSL ; #5546
+Patched MSL resources to take into account the NO_MUTEX define.
+
+; Feature ; Minor ; PyFMI ; #5545
+Implemented support for injecting custom logging functionality
+
+; Change ; Minor ; Compiler ; #5542
+Changed license for code generation templates to CPL
+
+; Fixed ; Minor ; Compiler ; #5539
+Changed how qualifiedname works for multidimensional arrays by adding 
+ special case for InstArrayComponentDecl. 
+
+; Feature ; Minor ; PyFMI ; #5537
+Added the possibility to retrieve unit and display unit name for FMI2 
+and also its value in the display unit.
+
+================= Stable-2018-01-12 ==================
+; Feature ; Major ; Compiler; #4797 
+Full string support
+
+; Fixed ; Minor ; Compiler ; #5527
+Fixed representation of size expressions in function call types
+
+; Fixed ; Minor ; compiler ; #5530
+Fixed crash bug in FMI XML generator where alias eliminated high order
+temporary derivatives which were orphan caused problems.
+
+; Fixed ; Minor ; Compiler ; #5529
+Fixed bug in FMI XML generation where derivative attribute for second order
+derivatives (or higher) pointed to the wrong variable.
+
+================= Stable-2017-12-19 ==================
+; Fixed ; Minor ; Compiler; #5526 
+Fixed null pointer in evaluation of partial function
+
+; Feature ; Major ; Compiler; #4797 
+Support for string parameters
+
+; Change ; Major ; Python ; #5167
+Changed the default FMI version when compiling FMUs from Python to 2.0
+instead of 1.0.
+
+; Feature ; Minor ; PyFMI ; #5521
+Added the possibility to directly retrieve a Scalar Variable class instance.
+
+; Feature ; Minor ; Documentation; #5517 
+Added information on OPC to Users Guide.
+
+; Feature; Minor; Compiler ; #5516
+Index added to variables and equations in blocks in HTML diagnostics.
+
+; Fixed ; Minor ; Compiler ; #5514
+Fixed problem with temporary generation for for-loop ranges
+
+================= Stable-2017-11-29 ==================
+; Change ; Minor ; Compiler ; #5513
+Changed code generation to use hard coded values in the z-vector for 
+performance.
+
+; Fixed ; Minor ; Compiler ; #5487
+Fixed some issues with relational expressions in arrays in records
+
+; Feature ; Major ; Compiler, Runtime ; #5501
+Added a memory pool to be used for dynamic allocations during evaluation
+of the equations (significant speedup in cases with lots of dynamic
+allocations).
+
+; Change ; Minor ; Runtime ; #5505
+Added the compiler flags -msse2 -mfpmath=sse for runtime builds using GCC,
+the same are used for our FMUs.
+
+; Fixed ; Minor ; Compiler ; #5503
+Disabled automatic addition of derivatives for variables with state select set
+to prefer if index reduction is disabled.
+
+================= Stable-2017-11-10 ==================
+; Change ; Minor ; Compiler ; #5497
+Added option for disabling external evaluation during variability propagation
+
+================= Stable-2017-11-02 ==================
+; Fixed ; Minor ; Compiler ; #5326
+Fixed bug where certain combinations of Integer and enumeration parameters 
+gave wrong values of those parameters reported from the FMU.
+
+; Change ; Major ; Tests ; #5489
+Divided the test tags stddist, windows and casadi into stddist_base,
+stddist_full, windows_base, windows_full, casadi_base and casadi_full. 
+The _base indicates tests that should run on both 32 and 64 bit platform 
+whereas _full will only be run in one mode. Also the tests tagged with fmi
+are now tagged as stddist_base/full. 
+
+; Fixed ; Minor ; PyFMI ; #5494
+Fixed problem with binary files that includes spaces in the variable names.
+
+; Feature ; Minor ; Compiler ; #5492
+Added common subexpression elimination of builtin math operators.
+
+; Feature ; Major ; Build system ; #5489
+Adding posibility to run Python tests in both 32 and 64 bit modes.
+
+; Fixed ; Minor ; Compiler ; #5486
+Fixed circularity bug in variability calculation
+
+================= Stable-2017-10-18 ==================
+; Change ; Major ; Compiler; #5468
+Removed CAD generation
+
+; Fixed ; Minor ; Compiler ; #5478
+Fixed a bug where external constant evaluation of functions using external objects did not include all resource annotations
+
+; Fixed ; Minor ; Compiler ; #5482
+Fixed a bug where instance tree was kept 
+
+; Change ; Major ; PyFMI; #5479
+Changed default file storing method to binary format. 
+
+; Fixed ; Minor ; Build system ; #5459
+Fixed so that the Python_64 folder isn't created when there
+is no Python 64 bit distribution available.
+ 
+; Feature ; Minor ; PyFMI ; #5475
+Added support for getting the declared type when using FMI2.
+
+; Fixed ; Minor ; PyFMI ; #5476
+Fixed issue with results for parameters when using memory storing option.
+
+; Feature ; Major ; Build system; #5459
+Added support for building CasADi in 32 and 64 bit modes
+in parallel when 64 bit Python and Ipopt available.
+ 
+================= Stable-2017-10-05 ==================
+; Feature ; Minor ; PyFMI ; #5470
+Added support to store result files on binary format.
+
+================= Stable-2017-09-28 ==================
+; Change ; Minor ; Build system ; #5459
+Refactored configure.ac.
+
+; Change ; Minor ; Examples ; #5459
+Updated furuta example asserts to correspond to updated FMU.
+
+; Fixed ; Minor ; Compiler ; #5465
+Added derivative attribute to dummy derivatives in model description so it's FMI compliant.
+
+; Changed; Minor; Tests; #5459
+Updated more of tests_jmodelica FMUs to have 64 bit binaries as well.
+
+; Changed; Minor; Tests; #5459
+Updated tests_jmodelica FMUs to have 64 bit binaries as well.
+
+; Fixed ; Minor ; Documentation ; #5466
+Added information about limitation regarding Q-identifiers. 
+
+; Fixed ; Minor ; Compiler ; #5460
+Fixed bug where indices in for expressions got modifications intended for actual variables. 
+
+; Fixed ; Major ; Build system ; #5459
+Added support for building Assimulo, PyFMI, PyJMI, pymodelica  in
+both 32 and 64 bit modes on windows when corresponding Python distributions
+are available.
+
+; Fixed ; Minor ; Compiler ; #5346
+Fixed code generation error for expanded expressions of arrays in record arrays
+
+; Fixed ; Minor ; Compiler ; #5219
+Fixed bug in BLT computation for initial system where start value of variables
+could depend on variables which were computed after the variable it self.
+
+; Fixed ; Minor ; Python ; #5455
+Fixed build system to handle 64bit FMIL builds correctly.
+
+; Fixed ; Minor ; Python ; #5454
+Fixed build system to handle 64bit SuperLU builds correctly.
+
+; Feature ; Major ; Python ; #5344
+Added support for the sparse solver SuperLU when simulating FMI2 FMUs
+for ME.
+
+; Fixed ; Minor ; Compiler ; #5312
+Fixed branch selection when test expression was dependent on Evaluate=false.
+================= Stable-2017-08-24 ==================
+; Changed ; Minor ; Compiler ; #5214
+The temporary directory is always deleted, regardless of whether compilation fails or succeeds.
+
+; Changed ; Minor ; Compiler ; #5430
+Added option removers to the option registry. Also added a test case for options.
+
+================= Stable-2017-08-09 ==================
+; Fixed ; Minor ; Compiler ; #5416
+Fixed generation of VendorAnnotation tag in FMI XML file to correctly handle FMI 2.0.
+
+; Other ; Minor ; Compiler ; #5417 #5420
+Improved compiler performance in general. In some cases up to -10% compilation time and -20% memory peak when compiling
+
+; Fixed ; Minor ; Runtime ; #5421
+Improved performance in the sparse linear solver (about 30%).
+
+; Fixed ; Minor ; Compiler ; #5408
+Removed erreneous xml tag where several annotations were listed under the
+annotation tag in VendorAnnotatios.
+
+; Fixed ; Minor ; Compiler ; #5402
+Fixed c code generation bug when sparse Jacobians are generated with nonlinear
+blocks present in model.
+
+; Fixed ; Minor ; Compiler ; #5404
+Fixed missing include of the block solver in the FMI templates.
+
+; Changed ; Minor ; Compiler, Runtime ; #5402
+Generation of sparse Jacobian for linear systems is now controlled by a
+threshold and either the dense Jacobian is generated or the sparse, not both. 
+
+; Changed ; Minor ; Runtime ; #5401
+Added defines to handle missing CLOCKS_PER_SEC
+
+; Changed ; Minor ; Runtime ; #5400
+Reworked how we check if a directory exist.
+
+; Changed ; Minor ; Runtime ; #5399
+Delayed check of the resource location until it is asked for.
+
+; Fixed ; Minor ; Compiler ; #5394
+Fixed compiler crash when using function with several outputs where one is 
+a zero-size array.
+
+; Changed ; Minor ; Compiler ; #5398
+Removed the need to define fmu type in the make file
+
+; Feature ; Minor ; Compiler ; #5375
+Added compiler option "event_output_vars". When set, output variables are
+generated for each event indicator.
+
+; Other ; Minor ; General ; #5393
+Added a changelog to JModelica.org.
+
+==================== JM 2.0 ===================

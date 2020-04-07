@@ -1,0 +1,108 @@
+<project default="invalid">
+  <target name="invalid">
+    <fail>Don't call this file directly.</fail>
+  </target>
+
+  <taskdef resource="net/sf/antcontrib/antcontrib.properties">
+    <classpath location="${antcontrib.jar}"/>
+  </taskdef>
+
+  <!-- targets used to check if a shell exists -->
+  <target name="hassh"> <shellscript shell="sh"/> </target>
+  <target name="hasbash"> <shellscript shell="bash"/> </target>
+  <target name="hasperl"> <shellscript shell="perl"/> </target>
+  <target name="haspython"> <shellscript shell="python"/> </target>
+  <target name="hassed">
+      <!-- Temporary hack, since SED is hanging the tests on windows -->
+      <fail />
+      <shellscript shell="sed"/>
+  </target>
+  <target name="hascmd">
+      <shellscript shell="cmd.exe" tmpsuffix=".bat">
+          <arg value="/C" />
+          echo a
+      </shellscript>
+  </target>
+
+  <target name="sh.hello">
+    <shellscript shell="sh">
+      echo "hello world"
+    </shellscript>
+  </target>
+
+  <target name="bash.hello">
+    <shellscript shell="bash">
+      echo "hello world"
+    </shellscript>
+  </target>
+
+  <!-- python needs to start on the first col -->
+  <target name="python.hello">
+    <shellscript shell="python">
+print "hello world"
+    </shellscript>
+  </target>
+
+  <target name="perl.hello">
+    <shellscript shell="perl">
+      print STDOUT "hello world\n";
+    </shellscript>
+  </target>
+
+  <target name="noshell">
+    <shellscript shell="!!!!^^^a shell that should not exist^^^^^!!!!"/>
+  </target>
+
+  
+  <target name="sh.inputstring">
+    <shellscript shell="sh" inputstring="echo hello world"/>
+  </target>
+
+  <target name="sed.test">
+    <shellscript shell="sed" >
+      <arg value="-e"/>
+      <arg value="s/FOO/BAR/g"/>
+      FOO bar bar bar FOO bar bar
+    </shellscript>
+  </target>
+
+  <target name="sh.property">
+    <property name="my.sh.property" value="this is a property"/>
+    <shellscript executable="sh">
+      echo ${my.sh.property}
+    </shellscript>
+  </target>
+
+  <target name="sh.set.property">
+    <shellscript shell="sh" outputproperty="sh.set.property">
+      echo hello world
+    </shellscript>
+  </target>
+
+  <target name="sh.tmp.suffix">
+    <shellscript shell="sh" tmpsuffix=".bat">
+      echo $0
+    </shellscript>
+  </target>
+
+  <target name="cmd.test">
+    <shellscript shell="cmd.exe" tmpsuffix=".bat">
+      <arg value="/C"/>
+      <arg value="call"/>
+      echo hello world
+    </shellscript>
+  </target>
+
+  <target name="dir.test">
+    <mkdir dir="subdir"/>
+    <shellscript shell="sh" dir="subdir" outputproperty="dir.test.property">
+      current=`pwd`
+      echo "dir is $current"
+    </shellscript>
+    <delete dir="subdir"/>
+  </target>
+
+  <target name="command.test">
+    <shellscript command="this should not work"/>
+  </target>
+</project>

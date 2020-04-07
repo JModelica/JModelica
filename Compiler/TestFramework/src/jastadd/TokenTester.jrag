@@ -1,0 +1,98 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+/**
+ * 
+ */
+
+import org.jmodelica.util.AbstractFlatModelicaScanner;
+import java.io.StringReader;
+import java.io.FileReader;
+import java.io.Reader;
+import java.io.BufferedReader;
+
+/**
+ * @author jakesson
+ *
+ */
+public class TokenTester {
+	
+	private String diff;
+
+	public boolean test(String s1, String s2) {
+		boolean testSuccess = true;
+		boolean done = false;
+
+		AbstractFlatModelicaScanner fms1 = TestCase.PARSER_HANDLER.createModelicaFlatScanner(new StringReader(s1));
+		AbstractFlatModelicaScanner fms2 = TestCase.PARSER_HANDLER.createModelicaFlatScanner(new StringReader(s2));
+
+		try {
+			while (!done && testSuccess) {
+				String t1 = fms1.nextToken();
+				String t2 = fms2.nextToken();
+
+				boolean match;
+				if (t1 == null || t2 == null) {
+					done = true;
+					match = t1 == t2;
+				} else {
+					match = t1.equals(t2);
+				}
+
+				if (!match) {
+					testSuccess = false;
+					StringBuilder buf = new StringBuilder();
+					appendDiffLineTo(buf, s1, t1, fms1);
+					appendDiffLineTo(buf, s2, t2, fms2);
+					diff = buf.toString();
+				}
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+			return false;
+		}
+
+		return testSuccess;
+	}
+	
+	public String firstDiff() {
+		return diff;
+	}
+
+	private void appendDiffLineTo(StringBuilder buf, String s, String t, AbstractFlatModelicaScanner fms) {
+		if (t == null) {
+			char c = s.charAt(s.length() - 1);
+			if (isLineBreak(c))
+				buf.append("(EOF)\n");
+			else
+				buf.append(lineAround(s, s.length() - 1));
+		} else {
+			buf.append(lineAround(s, fms.lastTokenStart()));
+		}
+	}
+
+	private boolean isLineBreak(char c) {
+		return c == '\r' || c == '\n';
+	}
+
+	private String lineAround(String s, int i) {
+		int st, ln = s.length();
+		for (st = i; st > 0 && !isLineBreak(s.charAt(st - 1)); st--);
+		for (; i < ln && !isLineBreak(s.charAt(i)); i++);
+		return s.substring(st, i) + '\n';
+	}
+
+}

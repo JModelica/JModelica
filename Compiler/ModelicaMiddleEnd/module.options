@@ -1,0 +1,65 @@
+
+
+*******************************************************************************
+
+BOOLEAN variability_propagation compiler uncommon true
+
+"If enabled, the compiler performs a global analysis on the equation system 
+and reduces variables to constants and parameters where applicable."
+
+*******************************************************************************
+
+BOOLEAN variability_propagation_initial compiler uncommon true false
+
+"If enabled, the compiler performs a global analysis on the initial equation 
+system and reduces initial parameters to constants and parameters where 
+applicable."
+
+*******************************************************************************
+
+BOOLEAN variability_propagation_initial_partial compiler uncommon false
+
+"If enabled, the compiler allows partial constant evaluation of function 
+calls in initial equations during variability propagation."
+
+*******************************************************************************
+
+BOOLEAN variability_propagation_external compiler uncommon true
+
+"If enabled, the compiler allows external constant evaluation during 
+variability propagation."
+
+*******************************************************************************
+
+BOOLEAN variability_propagation_algorithms compiler uncommon false
+
+"If enabled, the compiler includes modelica algorithms in variability 
+propagation."
+
+*******************************************************************************
+
+BOOLEAN generate_runtime_option_parameters compiler uncommon true false
+
+"If enabled, generate parameters for runtime options. Should always be true 
+for normal compilation."
+
+*******************************************************************************
+
+BOOLEAN unroll_functions compiler experimental false false
+
+"Internal option used for casadi transfer. If true, loops in functions are 
+unrolled. All sizes in functions are assumed to be known. Will cause 
+compilation errors if not."
+
+*******************************************************************************
+BOOLEAN dynamic_states compiler uncommon true
+
+"If enabled, dynamic states will be calculated and generated."
+
+*******************************************************************************
+INTEGER dynamic_states_limit compiler uncommon 10
+
+"Limit for size of dynamic state sets. Value < 0 indicates infinite. 
+Value == 0 indicates disabled."
+
+*******************************************************************************

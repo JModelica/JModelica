@@ -1,0 +1,131 @@
+package PenicillinPlant
+
+     model PenicillinPlant1
+ 
+      import SI = Modelica.SIunits;
+
+	  //parameter
+      parameter Real miu_m = 0.02;
+      parameter Real Km = 0.05;
+      parameter Real Ki = 5;
+      parameter Real Yx = 0.5;
+      parameter Real Yp = 1.2;
+      parameter Real v = 0.004;
+      parameter Real Sin = 200;
+
+	  //state start values
+	  parameter Real X1_0=1;
+	  parameter Real S1_0=0.5;
+	  parameter Real P1_0=0;
+	  parameter Real V1_0=150;
+	  parameter Real u1_0=0.03;
+
+	  //states
+	  Real X1(start=X1_0,fixed=true);
+	  Real S1(start=S1_0,fixed=true);
+	  Real P1(start=P1_0,fixed=true);
+	  Real V1(start=V1_0,fixed=true);
+	  Real u1(start=u1_0,fixed=true);
+	  Real miu1;
+
+	  //control signal
+	  input Real du1; 
+
+	equation 
+	  der(X1) = miu1*X1-u1/V1*X1;
+	  der(S1) = -miu1*X1/Yx - v*X1/Yp + u1/V1*(Sin - S1);
+	  der(P1) = v*X1 - u1/V1*P1;
+	  der(V1) = u1;
+	  der(u1) = du1;
+	  miu1 = (miu_m*S1)/(Km+S1+S1^2/Ki);
+	end PenicillinPlant1;
+	
+   optimization PenicillinPlant_opt1 (objective = -P1(finalTime),
+                            startTime = 0,
+                            finalTime = 75)
+                            
+      extends PenicillinPlant1(X1(fixed=true),S1(fixed=true),P1(fixed=true),V1(fixed=true),miu1,u1);														
+	  //Real J(fixed=true);     
+														  
+   equation 
+	  //der(J) = 0.001*du1^2;
+		
+   constraint
+      0  <= X1;
+	  X1 <= 3.7;
+	  0  <= S1;
+	  S1 <= 100;
+	  0  <= P1;
+	  P1 <= 5;
+	  1  <= V1;
+	  V1 <= 300;
+	  0  <= u1;
+	  u1 <= 1;
+
+   end PenicillinPlant_opt1;
+   
+   model PenicillinPlant2
+      import SI = Modelica.SIunits;
+
+	  //parameter
+      parameter Real miu_m = 0.02;
+      parameter Real Km =   0.05;
+      parameter Real Ki = 5;
+      parameter Real Yx = 0.5;
+      parameter Real Yp = 1.2;
+      parameter Real v = 0.004;
+      parameter Real Sin = 200;
+
+	  //state start values, equal to final values of first phase
+	  parameter Real X2_0 = 3.7; 
+	  parameter Real S2_0 = 0;
+	  parameter Real P2_0 = 0.6;
+	  parameter Real V2_0 = 150;
+	  parameter Real u2_0 = 0.01;
+
+	  //state start values
+	  Real X2(start=X2_0,fixed=true);
+	  Real S2(start=S2_0,fixed=true);
+	  Real P2(start=P2_0,fixed=true);
+	  Real V2(start=V2_0,fixed=true);
+	  Real u2(start=u2_0,fixed=true);
+	  Real miu2;
+
+	  //control signal
+	  input Real du2; 
+
+	equation 
+	  miu2 = (miu_m*S2)/(Km+S2+S2^2/Ki);
+	  der(X2) = miu2*X2-u2/V2*X2;
+	  der(S2) = -miu2*X2/Yx - v*X2/Yp + u2/V2*(Sin - S2);
+	  der(P2) = v*X2 - u2/V2*P2;
+	  der(V2) = u2;
+	  der(u2) = du2;
+	end PenicillinPlant2;
+   
+   optimization PenicillinPlant_opt2 (objective = -P2(finalTime),
+                            startTime = 0,
+                            finalTime = 75)
+                            
+      extends PenicillinPlant2(X2(fixed=true),S2(fixed=true),P2(fixed=true),V2(fixed=true),miu2,u2);														
+	  //Real J(fixed=true);     
+														  
+   equation 
+	    //der(J) = 0.001*du2^2;
+	 
+   constraint
+      0  <= X2;
+	  X2 <= 3.7;
+	  0  <= S2;
+	  S2 <= 100;
+	  0  <= P2;
+	  P2 <= 5;
+	  1  <= V2;
+	  V2 <= 300;
+	  0  <= u2;
+	  u2 <= 0.03;
+
+   end PenicillinPlant_opt2;
+
+
+end PenicillinPlant;

@@ -1,0 +1,1306 @@
+/*
+Copyright (C) 2016 Modelon AB
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, version 3 of the License.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+/**
+ * This aspect contains all code that is related to C and CAD code-gen of
+ * blocks.
+ * 
+ * There are still methods related to blocks in CCodeGen.jrag nad
+ * CADCodeGen.jrag. These should be moved to this file when they are
+ * refactored!
+ */
+aspect CCodeGenBlocks {
+    
+    public CodePrinter AbstractEquationBlock.blockPrinter() {
+        return new CPrettyPrinter(this);
+    }
+
+    /**
+     * Generates variable declarations for a block, used both when printing the
+     * dae but also residual functions.
+     */
+    public void AbstractEquationBlock.genVarDecls(CodePrinter p, CodeStream str, String indent) {
+        if (isSolvable()) {
+            genVarDecls(p, str, indent, null);
+        } else {
+            for (FRelExp relExp : inactiveSwitches_C())
+                p.printVarDecls(relExp, str, indent);
+            for (FRelExp relExp : inactiveInitialSwitches_C())
+                p.printVarDecls(relExp, str, indent);
+        }
+    }
+
+    @Override
+    public void HomotopyBlock.genVarDecls(CodePrinter p, CodeStream str, String indent) {
+        subBLTs()[SIMPLIFIED_BLT_POS].genVarDecls(p, str, indent);
+    }
+
+    /**
+     * Used when generating temporaires in the residual functions. This
+     * delegates to the genVarDecls().
+     */
+    protected void AbstractEquationBlock.genVarDecls(CodePrinter p, CodeStream str, String indent, Set<ASTNode> visited) {
+        for (ASTNode n : blockResidualNodes())
+            if (visited == null || visited.add(n))
+                p.printVarDecls(n, str, indent);
+    }
+
+    @Override
+    protected void AlgorithmBlock.genVarDecls(CodePrinter p, CodeStream str, String indent, Set<ASTNode> visited) {
+        p.printDecl(equation(), str, indent, visited, activeVars, isSolvable());
+    }
+    
+    @Override
+    protected void EquationBlock.genVarDecls(CodePrinter p, CodeStream str, String indent, Set<ASTNode> visited) {
+        if (visited == null)
+            visited = new HashSet<ASTNode>();
+        for (SimpleEquationBlock seb : localSolvedBlocks())
+            seb.genVarDecls(p, str, indent, visited);
+        for (SimpleEquationBlock seb : unsolvedBlocks())
+            seb.genVarDecls(p, str, indent, visited);
+    }
+
+    protected Collection<AbstractEquationBlock> AbstractEquationBlock.blockResidualBlocks() {
+        Collection<AbstractEquationBlock> res = new LinkedHashSet<AbstractEquationBlock>();
+        blockResidualBlocks(res);
+        return res;
+    }
+
+    protected void AbstractEquationBlock.blockResidualBlocks(Collection<AbstractEquationBlock> res) {
+        res.add(this);
+    }
+
+    @Override
+    protected void AlgorithmBlock.blockResidualBlocks(Collection<AbstractEquationBlock> res) {
+        res.add(this);
+    }
+
+    @Override
+    protected void EquationBlock.blockResidualBlocks(Collection<AbstractEquationBlock> res) {
+        for (SimpleEquationBlock seb : localSolvedBlocks()) {
+            res.add(seb);
+        }
+        for (SimpleEquationBlock seb : unsolvedBlocks()) {
+            res.add(seb);
+        }
+    }
+
+    /**
+     * Returns a set of all nodes which needs to declare variables in the
+     * residual function.
+     * 
+     * TODO: It might be possible to remove this and implement in
+     * genVarDecls(..., visited) instead. The problem is probably that we need
+     * to include solution() below! 
+     */
+    public Set<ASTNode> AbstractEquationBlock.blockResidualNodes() {
+        Set<ASTNode> res = new LinkedHashSet<ASTNode>();
+        res.addAll(allLocalEquations());
+        return res;
+    }
+
+    @Override
+    public Set<ASTNode> SolvedScalarEquationBlock.blockResidualNodes() {
+        return Collections.<ASTNode>singleton(solution());
+    }
+
+    @Override
+    public Set<ASTNode> EquationBlock.blockResidualNodes() {
+        Set<ASTNode> res = super.blockResidualNodes();
+        res.addAll(localNonRealEquations());
+        return res;
+    }
+
+    @Override
+    public Set<ASTNode> TornEquationBlock.blockResidualNodes() {
+        Set<ASTNode> res = super.blockResidualNodes();
+        res.addAll(localSolvedEquations());
+        return res;
+    }
+
+    /**
+     * Generate code for this block in the context of a BLT.
+     */
+    public void AbstractEquationBlock.genSolvedInBLT(CodePrinter p, CodeStream str, String indent) {
+        genSolved(p, str, indent, false, new HashSet<FAbstractEquation>());
+    }
+
+    /**
+     * Generate code for this block in the context of a residual function.
+     */
+    public void AbstractEquationBlock.genSolvedInResFunc(CodePrinter p, CodeStream str, String indent,
+            Set<FAbstractEquation> visited) {
+        genSolved(p, str, indent, true, visited);
+    }
+
+    @Override
+    public void HomotopyBlock.genSolvedInResFunc(CodePrinter p, CodeStream str, String indent,
+            Set<FAbstractEquation> visited) {
+        throw new UnsupportedOperationException("Can not produce solved statements for " + getClass().getSimpleName() + " in a residual function! This block type is not ment to be present inside other blocks, something has gone horribly wrong here!");
+    }
+
+    /**
+     * Internal function which is used for generating code for this block in
+     * several contexts. E.g. BLT or residual function.
+     */
+    protected abstract void AbstractEquationBlock.genSolved(CodePrinter p, CodeStream str, String indent,
+            boolean inResFunc, Set<FAbstractEquation> visited);
+
+    @Override
+    protected void EquationBlock.genSolved(CodePrinter p, CodeStream str, String indent,
+            boolean inResFunc, Set<FAbstractEquation> visited) {
+        genBlockResidualCall(p, str, indent);
+    }
+
+    @Override
+    protected void SimpleEquationBlock.genSolved(CodePrinter p, CodeStream str, String indent,
+            boolean inResFunc, Set<FAbstractEquation> visited) {
+        if (hasResidualFunction()) {
+            genBlockResidualCall(p, str, indent);
+        } else if (genBlockEnabled()) {
+            Collection<FVariable> forVariables = allLocalVariables();
+            Collection<Integer> forIndices = assignedIndices();
+            if (inResFunc && !isReal()) {
+                // Non-reals needs to be handled specially in the residual functions
+                if (equation().isMixed()) {
+                    equation().genBlockEval_C(p, str, indent, visited, forVariables, forIndices);
+                }
+                if (equation().shouldProduceNonRealGuard_C(forVariables)) {
+                    str.format("%sif (evaluation_mode & JMI_BLOCK_EVALUATE_NON_REALS) {\n", indent);
+                    p.genSolved(equation(), str, p.indent(indent), visited, forVariables, forIndices);
+                    str.format("%s}\n", indent);
+                } else {
+                    p.genSolved(equation(), str, indent, visited, forVariables, forIndices);
+                }
+            } else {
+                p.genSolved(equation(), str, indent, visited, forVariables, forIndices);
+            }
+            if (!inResFunc && !p.inInitialSystem()) {
+                // Write back of pre variables is only done in the DAE BLT
+                for (FVariable var : allLocalVariables()) {
+                    if (var.isDiscrete() && !var.isPreVariable()) {
+                        p.printAssign(var.type(), str, indent, var.myPreVariable(), var);
+                    }
+                }
+            }
+        } else {
+            throw new UnsupportedOperationException("Unable to produce solving code for block of type " + getClass().getSimpleName());
+        }
+    }
+
+    /**
+     * Helper method which determines if a guard is needed for the non real
+     * equation.
+     */
+    syn boolean FAbstractEquation.shouldProduceNonRealGuard_C(Collection<FVariable> fvs) {
+        if (isSampleEquation()) {
+            return false;
+        }
+        for (FVariable fv : fvs) {
+            if (!fv.isTemporary()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Helper method which returns true if the right hand side is an sample
+     * operator.
+     */
+    syn boolean FAbstractEquation.isSampleEquation() = false;
+    eq FEquation.isSampleEquation()                  = getRight().isFSampleExp();
+
+    /**
+     * Helper method which returns true if this expression is of the type 
+     * FSampleExp.
+     */
+    syn boolean FExp.isFSampleExp() = false;
+    eq FSampleExp.isFSampleExp()    = true;
+
+
+
+    @Override
+    protected void MetaEquationBlock.genSolved(CodePrinter p, CodeStream str, String indent,
+            boolean inResFunc, Set<FAbstractEquation> visited) {
+        p.print(equation(), str, indent);
+    }
+    
+    @Override
+    protected void DynamicStateBlock.genSolved(CodePrinter p, CodeStream str, String indent,
+            boolean inResFunc, Set<FAbstractEquation> visited) {
+        String innerIndent = p.indent(indent);
+        for (DynamicStateSet set : sets) {
+            str.formatln("%sif (jmi->atInitial || jmi->atEvent) {", indent);
+            str.formatln("%sjmi_dynamic_state_update_states(jmi, %d);", innerIndent, set.id_C());
+            str.formatln("%s}", indent);
+        }
+        boolean first = true;
+        for (DynamicStateBLT blt : subBLTs()) {
+            if (first)
+                str.format("%sif (", indent);
+            else
+                str.format("%s} else if (", indent);
+            first = false;
+            blt.genSubBLTTest(p, str);
+            str.println(") {");
+            blt.genVarDecls(p, str, innerIndent);
+            blt.genOdeDerivativeBlocks(p, str, innerIndent);
+        }
+        str.formatln("%s}", indent);
+    }
+    
+    /**
+     * Helper method that print the if branch test that tests weather this 
+     * sub-BLT should be used given the current states.
+     */
+    public void DynamicStateBLT.genSubBLTTest(CodePrinter p, CodeStream str) {
+        DynamicStateSet previousSet = null;
+        for (FVariable var : states()) {
+            DynamicStateSet set = var.dynamicStateSet();
+            if (set != previousSet) {
+                if (previousSet != null)
+                    str.print(") && ");
+                previousSet = set;
+                str.format("jmi_dynamic_state_check_is_state(jmi, %d", set.id_C());
+            }
+            str.format(", %d", var.valueReference());
+        }
+        str.print(")");
+    }
+ 
+    @Override
+    protected void HomotopyBlock.genSolved(CodePrinter p, CodeStream str, String indent,
+            boolean inResFunc, Set<FAbstractEquation> visited) {
+        str.formatln("%s/* Start of section for simplified version of homotopy*/", indent);
+        CodePrinter simplifiedPrinter = p.homotopySimplifiedPrinter();
+        for (AbstractEquationBlock block : subBLTs()[SIMPLIFIED_BLT_POS]) {
+            block.genSolved(simplifiedPrinter, str, indent, inResFunc, visited); 
+        }
+        str.formatln("%s/* End of section for simplified version of homotopy*/", indent);
+        homotopySubBlock.genSolved(p, str, indent, inResFunc, visited);
+    }
+
+    @Override
+    protected void HomotopySubBlock.genSolved(CodePrinter p, CodeStream str, String indent,
+            boolean inResFunc, Set<FAbstractEquation> visited) {
+        String var = p.inInitialSystem() ? "dae_init_block_residuals" : "dae_block_residuals";
+        str.format("%sef |= jmi_solve_block_with_homotopy_residual(jmi->%s[%d]);\n", indent, var, getSequenceNumber());
+    }
+
+    /**
+     * Helper method which returns true if the block should be printed inline
+     * without an residual function call.
+     */
+    public boolean SimpleEquationBlock.genBlockEnabled()             { return false; }
+    @Override
+    public boolean SolvedScalarEquationBlock.genBlockEnabled()       { return true; }
+    @Override
+    public boolean SolvedAlgorithmBlock.genBlockEnabled()            { return true; }
+    @Override
+    public boolean SolvedFunctionCallEquationBlock.genBlockEnabled() { return true; }
+    @Override
+    public boolean SolvedIfEquationBlock.genBlockEnabled()           { return true; }
+
+    /**
+     * Generates a call to the residual function for this block.
+     */
+    public void AbstractEquationBlock.genBlockResidualCall(CodePrinter p, CodeStream str, String indent) {
+        for (FRelExp relExp : inactiveSwitches_C())
+            p.printPreSteps(relExp, str, indent);
+        for (FRelExp relExp : inactiveInitialSwitches_C())
+            p.printPreSteps(relExp, str, indent);
+        p.genBlockResidualCall(this, str, indent);
+        for (FRelExp relExp : inactiveSwitches_C())
+            p.printPostSteps(relExp, str, indent);
+        for (FRelExp relExp : inactiveInitialSwitches_C())
+            p.printPostSteps(relExp, str, indent);
+    }
+
+    /**
+     * C specific dispatch method for
+     * AbstractEquationBlock.genBlockResidualCall()
+     */
+    public void AbstractEquationBlock.genBlockResidualCall_C(CodePrinter p, CodeStream str, String indent) {
+        String var = p.inInitialSystem() ? "dae_init_block_residuals" : "dae_block_residuals";
+        genBlockResidualSetUpFunctionCall_C(p, str, indent);
+        str.formatln("%sef |= jmi_solve_block_residual(jmi->%s[%d]);", indent, var, getSequenceNumber());
+    }
+
+    /**
+     * Generates solution statements for all solved equations in this block. 
+     * This method is usually called when generating residual functions
+     */
+    public void AbstractEquationBlock.genSolvedPart(CodePrinter p, CodeStream str,
+            String indent, Set<FAbstractEquation> visited) {}
+
+    @Override
+    public void EquationBlock.genSolvedPart(CodePrinter p, CodeStream str,
+            String indent, Set<FAbstractEquation> visited) {
+        // Loop over all solved blocks and write the expressions
+        for (AbstractEquationBlock aeb : solvedBlocks())
+            aeb.genSolvedInResFunc(p, str, indent, visited);
+    }
+
+    /*=========================================================================
+     *   Code explicitly related to residual functions
+     =========================================================================*/
+
+    /**
+     * Helper method which return true if the block is solved by evaluation of
+     * an residual function and hence need to produce one.
+     */
+    public boolean AbstractEquationBlock.hasResidualFunction() {
+        return sequenceNumber >= 0;
+    }
+
+    /**
+     * Generates residual equations for all unsolved equations in this block.
+     * This method is usually called when generating residual functions
+     */
+    public abstract void AbstractEquationBlock.genResidualPart(CodePrinter p, CodeStream str, String indent,
+            Enumerator enumerator, Set<FAbstractEquation> visited);
+
+    @Override
+    public void EquationBlock.genResidualPart(CodePrinter p, CodeStream str, String indent,
+            Enumerator enumerator, Set<FAbstractEquation> visited) {
+        for (SimpleEquationBlock block : unsolvedBlocks())
+            block.genBlockResidual(p, str, indent, enumerator, visited);
+    }
+
+    @Override
+    public void AbstractSubBLTBlock.genResidualPart(CodePrinter p, CodeStream str, String indent,
+            Enumerator enumerator, Set<FAbstractEquation> visited) {
+        throw new UnsupportedOperationException("Can not produce residual statements for " + getClass().getSimpleName() + "! This block type does not have any residaul equations, something has gone horribly wrong here!");
+    }
+
+    @Override
+    public void SimpleEquationBlock.genResidualPart(CodePrinter p, CodeStream str, String indent,
+            Enumerator enumerator, Set<FAbstractEquation> visited) {
+        genBlockResidual(p, str, indent, enumerator, visited);
+    }
+
+    /**
+     * Generates a single residual equation for this block
+     */
+    public void AbstractEquationBlock.genBlockResidual(CodePrinter p, CodeStream str, String indent,
+            Enumerator enumerator, Set<FAbstractEquation> visited) {
+        throw new UnsupportedOperationException("Can not produce residual statement for " + getClass().getSimpleName() + "! This kind of block should not end up in the residual of another block, something has gone horribly wrong here!");
+    }
+
+    @Override
+    public void SimpleEquationBlock.genBlockResidual(CodePrinter p, CodeStream str, String indent,
+            Enumerator enumerator, Set<FAbstractEquation> visited) {
+        p.genResidual(equation(), str, indent, enumerator, visited,
+                assignedIndices() == null ? null : new LinkedHashSet<Integer>(assignedIndices()));
+    }
+
+    public String AbstractEquationBlock.genBlockResidualFunctionName_C(CodePrinter p) {
+        return "dae_" + (p.inInitialSystem() ? "init_": "") + "block_" + getSequenceNumber();
+    }
+
+    public void AbstractEquationBlock.genEvalModeValueReferences_C(CodePrinter p, CodeStream str, String indent, 
+            String mode, Collection<FVariable> fvs) {
+        if (fvs.size() > 0) {
+            String nextIndent = p.indent(indent);
+            int i = 0;
+            genOpenEvalMode_C(str, indent, mode);
+            for (FVariable fv : fvs) {
+                if (!fv.isPreVariable()) {
+                    str.format("%sx[%d] = %d;\n", nextIndent, i, fv.valueReference());
+                }
+                i++;
+            }
+            genCloseEvalMode_C(str, indent);
+        }
+    }
+    
+    public Map<FVariable,String> AbstractEquationBlock.createSolverArrayMap(Collection<FVariable> fvs) {
+        Map<FVariable,String> solverArrayMap = new LinkedHashMap<FVariable,String>();
+        int i = 0;
+        for (FVariable fv : fvs) {
+            solverArrayMap.put(fv, "x[" + (i++) + "]");
+        }
+        return solverArrayMap;
+    }
+    
+    public void AbstractEquationBlock.genEvalModeAttribute_C(CodePrinter p, CodeStream str, String indent, 
+            String mode, String attr, Map<FVariable,String> solverArrayMap) {
+        genEvalModeAttribute_C(p, str, indent, mode, attr, solverArrayMap, false);
+    }
+    
+    public void AbstractEquationBlock.genEvalModeAttribute_C(CodePrinter p, CodeStream str, String indent, 
+            String mode, String attr, Map<FVariable,String> solverArrayMap, boolean set) {
+        if (p.C_blockResidualAttributePrinter.attributeSet(attr, solverArrayMap)) {
+            String nextIndent = p.indent(indent);
+            genOpenEvalMode_C(str, indent, mode);
+            p.C_blockResidualAttributePrinter.print(p, str, nextIndent, attr, solverArrayMap, set);
+            genCloseEvalMode_C(str, indent);
+        }
+    }
+    
+    public void AbstractEquationBlock.genEvalModeSwitchIndex_C(CodePrinter p, CodeStream str, String indent, 
+            String mode, Collection<FRelExp> ... relExpss) {
+        boolean print = false;
+        for (Collection<FRelExp> relExps : relExpss) {
+            if (relExps.size() > 0) {
+                print = true;
+            }
+        }
+        if (print) {
+            String nextIndent = p.indent(indent);
+            genOpenEvalMode_C(str, indent, mode);
+            Enumerator e = new Enumerator();
+            for (Collection<FRelExp> relExps : relExpss) {
+                for (FRelExp relExp : relExps) {
+                    relExp.genBlockResidualFunction_printSwitchIndex_C(p, str, nextIndent, e);
+                }
+            }
+            genCloseEvalMode_C(str, indent);
+        }
+    }
+    
+    public void AbstractEquationBlock.genOpenEvalMode_C(CodeStream str, String indent, String mode) {
+        str.print("if (evaluation_mode == ");
+        str.print(mode);
+        str.print(") {\n");
+    }
+    
+    public void AbstractEquationBlock.genCloseEvalMode_C(CodeStream str, String indent) {
+        str.print(indent + "} else ");
+    }
+
+	public void AbstractEquationBlock.genBlockResidualFunction(CodePrinter p, CodeStream str, String outerIndent,
+			int generateSparseThreshold) {
+		if (!hasResidualFunction())
+            return;
+        for (AbstractEquationBlock subBlock : genBlockResidualFunction_subBlocks_C())
+            subBlock.genBlockResidualFunction(p, str, outerIndent, generateSparseThreshold);
+
+        p.genBlockResidualSetUpFunctionDecl(this, p, str, outerIndent);
+
+        genBlockResidualFunctionSignature(p, str, outerIndent);
+
+        String indent = p.indent(outerIndent);
+
+        String label = getLabel();
+        if (label == null) {
+            label = getClass().getSimpleName();
+        }
+        str.format("%s/***** %s: %s *****/\n", indent, p.inInitialSystem() ? "Init block" : "Block", label);
+
+        p.genBlockResidualFunctionVectorDecls(this, p, str, indent);
+        genVarDecls(p, str, indent, null);
+        
+        p.genResidualFunctionEvalModes(this, p, str, indent, generateSparseThreshold);
+        ASTNode.genFunctionEnd(str, indent);
+        str.print(outerIndent + "}\n\n");
+	}
+
+    public abstract class CodePrinter {
+        public abstract void genBlockResidualSetUpFunctionDecl(AbstractEquationBlock block, CodePrinter p, CodeStream str, String outerIndent);
+        public abstract void genBlockResidualFunctionName(AbstractEquationBlock block, CodePrinter p, CodeStream str);
+        public abstract void genBlockResidualFunctionArgumentList(AbstractEquationBlock block, CodePrinter p, CodeStream str);
+        public abstract void genBlockResidualFunctionVectorDecls(AbstractEquationBlock block, CodePrinter p, CodeStream str, String indent);
+        public abstract void genResidualFunctionEvalModes(AbstractEquationBlock block, CodePrinter p, CodeStream str, String indent, int generateSparseThreshold);
+    }
+
+    public class CPrettyPrinter {
+        @Override
+        public void genBlockResidualSetUpFunctionDecl(AbstractEquationBlock block, CodePrinter p, CodeStream str, String outerIndent) {
+            block.genBlockResidualSetUpFunctionDecl_C(p, str, outerIndent);
+        }
+        @Override
+        public void genBlockResidualFunctionVectorDecls(AbstractEquationBlock block, CodePrinter p, CodeStream str, String indent) {
+            block.genBlockResidualFunctionVectorDecls_C(p, str, indent);
+        }
+        @Override
+        public void genResidualFunctionEvalModes(AbstractEquationBlock block, CodePrinter p, CodeStream str, String indent, int generateSparseThreshold) {
+            block.genResidualFunctionEvalModes_C(p, str, indent, generateSparseThreshold);
+        }
+    }
+
+    public void AbstractEquationBlock.genBlockResidualFunctionVectorDecls_C(CodePrinter p, CodeStream str, String indent) {
+        str.print(indent);
+        str.println("jmi_real_t** res = &residual;");
+        ASTNode.genFunctionStart(str, indent);
+    }
+
+	public void AbstractEquationBlock.genResidualFunctionEvalModes_C(CodePrinter p, CodeStream str, String indent, int generateSparseThreshold) {
+		Map<FVariable,String> solverArrayMap = createSolverArrayMap(localUnsolvedVariables());
+		String nextIndent = p.indent(indent);
+        str.print(indent);
+
+        genEvalModeAttribute_C(p, str, indent, "JMI_BLOCK_NOMINAL",   FAttribute.NOMINAL, solverArrayMap); 
+        genEvalModeAttribute_C(p, str, indent, "JMI_BLOCK_START",     FAttribute.START,   solverArrayMap);
+        genEvalModeAttribute_C(p, str, indent, "JMI_BLOCK_START_SET", FAttribute.START,   solverArrayMap, true);
+        genEvalModeAttribute_C(p, str, indent, "JMI_BLOCK_MIN",       FAttribute.MIN,     solverArrayMap);
+        genEvalModeAttribute_C(p, str, indent, "JMI_BLOCK_MAX",       FAttribute.MAX,     solverArrayMap);
+
+        genEvalModeValueReferences_C(p, str, indent, "JMI_BLOCK_VALUE_REFERENCE",
+                localUnsolvedVariables());
+        genEvalModeValueReferences_C(p, str, indent, "JMI_BLOCK_SOLVED_REAL_VALUE_REFERENCE",
+                localSolvedRealVariables());
+        genEvalModeValueReferences_C(p, str, indent, "JMI_BLOCK_DISCRETE_REAL_VALUE_REFERENCE",
+                discreteRealVariables_C());
+        genEvalModeAttribute_C(p, str, indent,       "JMI_BLOCK_DISCRETE_REAL_NOMINAL", 
+                FAttribute.NOMINAL, createSolverArrayMap(discreteRealVariables_C()));
+        genEvalModeValueReferences_C(p, str, indent, "JMI_BLOCK_SOLVED_NON_REAL_VALUE_REFERENCE", 
+                nonRealNonStringVariables_C());
+        genEvalModeValueReferences_C(p, str, indent, "JMI_BLOCK_SOLVED_STRING_VALUE_REFERENCE", 
+                nonRealStringVariables_C());
+        genEvalModeValueReferences_C(p, str, indent, "JMI_BLOCK_DIRECTLY_IMPACTING_NON_REAL_VALUE_REFERENCE", 
+                directlyImpactingNonReals_C());
+        genEvalModeValueReferences_C(p, str, indent, "JMI_BLOCK_NON_REAL_TEMP_VALUE_REFERENCE", 
+                nonRealNonStringTempVariables_C());
+
+        genEvalModeSwitchIndex_C(p, str, indent, "JMI_BLOCK_ACTIVE_SWITCH_INDEX",
+                activeSwitches_C(), activeInitialSwitches_C());
+        genEvalModeSwitchIndex_C(p, str, indent, "JMI_BLOCK_DIRECTLY_ACTIVE_SWITCH_INDEX",
+                directlyActiveSwitches_C);
+
+        genEvalModeNominal(p, str, indent, "JMI_BLOCK_EQUATION_NOMINAL");
+        genEvalModeNominalAuto(p, str, indent, "JMI_BLOCK_EQUATION_NOMINAL_AUTO");
+        genEvalModeInitialize(p, str, indent, solverArrayMap, nextIndent, "JMI_BLOCK_INITIALIZE");
+        genEvalModeJacobian(p, str, indent, generateSparseThreshold, "JMI_BLOCK_EVALUATE_JACOBIAN");
+        
+        p = p.evalPrinter();
+        
+        genEvalModeEvalOrWriteBack(p, str, indent, solverArrayMap);
+	}
+
+    public void AbstractEquationBlock.genBlockResidualFunctionSignature(CodePrinter p, CodeStream str, String outerIndent) {
+        str.format("%sstatic int ", outerIndent);
+        p.genBlockResidualFunctionName(this, p, str);
+        p.genBlockResidualFunctionArgumentList(this, p, str);
+        str.print(" {\n");
+
+    }
+
+    public class CPrettyPrinter {
+        @Override
+        public void genBlockResidualFunctionName(AbstractEquationBlock block, CodePrinter p, CodeStream str) {
+            block.genBlockResidualFunctionName2_C(p, str);
+        }
+        @Override
+        public void genBlockResidualFunctionArgumentList(AbstractEquationBlock block, CodePrinter p, CodeStream str) {
+            block.genBlockResidualFunctionArgumentList_C(p, str);
+        }
+    }
+
+
+    public void AbstractEquationBlock.genBlockResidualFunctionName2_C(CodePrinter p, CodeStream str) {
+        str.print(genBlockResidualFunctionName_C(p));
+    }
+
+    public void AbstractEquationBlock.genBlockResidualFunctionArgumentList_C(CodePrinter p, CodeStream str) {
+        str.print("(jmi_t* jmi, jmi_real_t* x, jmi_real_t* residual, int evaluation_mode)");
+    }
+
+
+	public void AbstractEquationBlock.genEvalModeNominal(CodePrinter p, CodeStream str, String indent, String mode) {
+		// Equation nominal values
+        if (hasEquationNominal_C(false)) {
+			genOpenEvalMode_C(str, indent, mode);
+            Map<FAbstractEquation,FExp> nominalMap = new HashMap<FAbstractEquation,FExp>();
+            genEquationNominalVarDecl_C(p, str, p.indent(indent), false, nominalMap);
+            genEquationNominal_C(p, str, p.indent(indent), false, nominalMap);
+            genCloseEvalMode_C(str, indent);
+        }
+	}
+
+	public void AbstractEquationBlock.genEvalModeNominalAuto(CodePrinter p, CodeStream str, String indent, String mode) {
+		if (hasEquationNominal_C(true)) {
+			genOpenEvalMode_C(str, indent, mode);
+            Map<FAbstractEquation,FExp> nominalMap = new HashMap<FAbstractEquation,FExp>();
+            genEquationNominalVarDecl_C(p, str, p.indent(indent), true, nominalMap);
+            genEquationNominal_C(p, str, p.indent(indent), true, nominalMap);
+            genCloseEvalMode_C(str, indent);
+        }
+	}
+
+	public void AbstractEquationBlock.genEvalModeInitialize(CodePrinter p, CodeStream str, String indent,
+			Map<FVariable, String> solverArrayMap, String nextIndent, String mode) {
+		// Loop over all active variables and write their value to x
+        if (localUnsolvedVariables().size() > 0) {
+			genOpenEvalMode_C(str, indent, mode);
+            for (FVariable fv : localUnsolvedVariables()) 
+                fv.genBlockResidualInit_C(p, str, nextIndent, solverArrayMap);
+            genCloseEvalMode_C(str, indent);
+        }
+	}
+
+	public void AbstractEquationBlock.genEvalModeJacobian(CodePrinter p, CodeStream str, String indent, int generateSparseThreshold,
+			String mode) {
+		// Generate code for Jacobian
+		if (isLinear() && generateSparseThreshold >= localSolvedRealVariables().size()) {
+            genOpenEvalMode_C(str, indent, mode);
+            // TODO: Merge the two functions?
+            genBlockResidualFunction_jacobianDecls_C(p, str, p.indent(indent));
+            genBlockResidualFunction_jacobian_C(p, str, p.indent(indent));
+            genCloseEvalMode_C(str, indent);
+        } else if (isLinear()) {
+            genOpenEvalMode_C(str, indent, mode);
+            str.print(p.indent(indent) + "ef = -1;\n");
+            genCloseEvalMode_C(str, indent);
+        }
+	}
+
+	public void AbstractEquationBlock.genEvalModeEvalOrWriteBack(CodePrinter p, CodeStream str, String indent,
+			Map<FVariable, String> solverArrayMap) {
+		String nextIndent = p.indent(indent);
+		str.print("if (evaluation_mode & JMI_BLOCK_EVALUATE || evaluation_mode & JMI_BLOCK_WRITE_BACK) {\n");
+        // Loop over all active variables and write the values in x to the z vector
+        str.print(nextIndent + "if ((evaluation_mode & JMI_BLOCK_EVALUATE_NON_REALS) == 0) {\n"); // TODO: remove guard when correct x is given to JMI_BLOCK_EVALUATE_NON_REALS
+        for (FVariable fv : localUnsolvedVariables()) 
+            fv.genBlockResidualEvalInit_C(p, str, p.indent(nextIndent), solverArrayMap);
+        str.print(nextIndent + "}\n");
+        Set<FAbstractEquation> visitedList = new HashSet<FAbstractEquation>();
+        genSolvedPart(p, str, nextIndent, visitedList);
+        str.print(nextIndent + "if (evaluation_mode & JMI_BLOCK_EVALUATE) {\n");
+        // Write the residual expressions
+        genResidualPart(p, str, p.indent(nextIndent), new Enumerator(), visitedList);
+        str.print(nextIndent + "}\n");
+        str.print(indent + "}\n");
+	}
+
+    @Override
+    public void AbstractSubBLTBlock.genBlockResidualFunction(CodePrinter p, CodeStream str, String outerIndent, int generateSparseThreshold) {
+
+        for (T blt : subBLTs) {
+            for (AbstractEquationBlock block : blt) {
+                block.genBlockResidualFunction(p, str, outerIndent, generateSparseThreshold);
+            }
+        }
+    }
+
+    @Override
+    public void HomotopyBlock.genBlockResidualFunction(CodePrinter p, CodeStream str,
+            String outerIndent, int generateSparseThreshold) {
+
+        homotopySubBlock.genBlockResidualFunction(p, str, outerIndent, generateSparseThreshold);
+        CodePrinter simplifiedPrinter = p.homotopySimplifiedPrinter();
+
+        for (AbstractEquationBlock block : subBLTs()[SIMPLIFIED_BLT_POS]) {
+            block.genBlockResidualFunction(simplifiedPrinter, str, outerIndent, generateSparseThreshold);
+        }
+    }
+    /*
+     * Various dispatch methods used in genBlockResidualFunction():
+     */
+
+    /**
+     * Only needed for numerically solved equation blocks. Ensures that the
+     * residual function is generated for such blocks.
+     */
+    protected Collection<AbstractEquationBlock> AbstractEquationBlock.genBlockResidualFunction_subBlocks_C() {
+        return Collections.emptyList();
+    }
+
+    @Override
+    protected Collection<AbstractEquationBlock> EquationBlock.genBlockResidualFunction_subBlocks_C() {
+        return solvedBlocks();
+    }
+    
+    /**
+     * Prints the position for the switch in the z-vector
+     */
+    public void FRelExp.genBlockResidualFunction_printSwitchIndex_C(CodePrinter p, CodeStream str, String nextIndent, Enumerator enumerator) {
+        if (originalFExp().generatesEventInDAE()) {
+            str.format("%sx[%d] = jmi->offs_sw + %d;\n", nextIndent, enumerator.next(), mySwitchIndex());
+        } else {
+            str.format("%sx[%d] = jmi->offs_sw_init + %d;\n", nextIndent, enumerator.next(), relExpInInitialEquationsIndex());
+        }
+    }
+
+    public C_blockResidualAttributePrinter CodePrinter.C_blockResidualAttributePrinter = new C_blockResidualAttributePrinter();
+    
+    public abstract class CodePrinter {
+        public static class C_blockResidualAttributePrinter {
+            public void print(CodePrinter p, CodeStream str, String indent, String attr, 
+                    Map<FVariable, String> iterVarMap, boolean set) {
+                if (!set) {
+                    for (Map.Entry<FVariable, String> iterEntry : iterVarMap.entrySet()) {
+                        FExp exp = attributeExp(iterEntry.getKey(), attr);
+                        if (exp != null) {
+                            p.printVarDecls(exp, str, indent);
+                        }
+                    }
+                }
+                for (Map.Entry<FVariable, String> iterEntry : iterVarMap.entrySet()) {
+                    FVariable iv = iterEntry.getKey();
+                    if (attributeSet(iv, attr)) {
+                        if (set) {
+                            str.format("%s%s = 1;\n", indent, iterEntry.getValue());
+                        } else {
+                            FExp exp = attributeExp(iv, attr);
+                            if (exp != null) {
+                                p.printPreSteps(exp, str, indent);
+                                str.print(indent);
+                                str.print(iterEntry.getValue());
+                                str.print(" = ");
+                                p.print(exp, str, indent);
+                                str.print(";\n");
+                                p.printPostSteps(exp, str, indent);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            private Collection<String> attributes = Arrays.asList(FAttribute.START, FAttribute.MIN, FAttribute.MAX, FAttribute.NOMINAL);
+
+            public void printVariability(CodePrinter p, CodeStream str, String indent, Collection<FVariable> iterVars) {
+                TypePrefixVariability variability = Variability.CONSTANT;
+                for (FVariable var : iterVars) {
+                    for (String attr : attributes) {
+                        FExp exp = attributeExp(var, attr);
+                        if (exp != null) {
+                            variability = variability.combine(exp.variability());
+                        }
+                    }
+                    
+                }
+                str.print(variability.genJMIVariabilityConstant_C() + ", ");
+            }
+            
+            public boolean attributeSet(String attr, Map<FVariable, String> iterVarMap) {
+                for (FVariable fv : iterVarMap.keySet()) {
+                    if (attributeSet(fv, attr)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            
+            public boolean attributeSet(FVariable var, String attr) {
+                return var.attributeSet(attr);
+            }
+            
+            public FExp attributeExp(FVariable var, String attr) {
+                return var.attributeExp(attr);
+            }
+
+        }
+    }
+    
+    public abstract boolean AbstractEquationBlock.hasEquationNominal_C(boolean auto);
+
+    @Override
+    public boolean EquationBlock.hasEquationNominal_C(boolean auto) {
+        for (SimpleEquationBlock block : unsolvedBlocks()) {
+            if (block.hasEquationNominal_C(auto)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public boolean SimpleEquationBlock.hasEquationNominal_C(boolean auto) { 
+        return realVariables().size() > 0 && equation().equationNominal_C(auto) != null;
+    }
+
+    @Override
+    public boolean AbstractSubBLTBlock.hasEquationNominal_C(boolean auto) { return true; } // To trigger error message
+
+    public abstract void AbstractEquationBlock.genEquationNominalVarDecl_C(CodePrinter p, CodeStream str, String indent,
+            boolean auto, Map<FAbstractEquation,FExp> nominalMap);
+
+    @Override
+    public void EquationBlock.genEquationNominalVarDecl_C(CodePrinter p, CodeStream str, String indent,
+            boolean auto, Map<FAbstractEquation,FExp> nominalMap) {
+        for (SimpleEquationBlock block : unsolvedBlocks())
+            block.genEquationNominalVarDecl_C(p, str, indent, auto, nominalMap);
+    }
+
+    @Override
+    public void AbstractSubBLTBlock.genEquationNominalVarDecl_C(CodePrinter p, CodeStream str, String indent,
+            boolean auto, Map<FAbstractEquation,FExp> nominalMap) {
+        throw new UnsupportedOperationException("AbstractSubBLTBlock.genEquationNominalVarDecl_C() is not implemented!");
+    }
+
+    @Override
+    public void SimpleEquationBlock.genEquationNominalVarDecl_C(CodePrinter p, CodeStream str, String indent,
+            boolean auto, Map<FAbstractEquation,FExp> nominalMap) {
+        FExp nom = equation().equationNominal_C(auto);
+        nominalMap.put(equation(), nom);
+        if (nom == null) {
+            return;
+        }
+        p.printVarDecls(nom, str, indent);
+    }
+
+    public abstract void AbstractEquationBlock.genEquationNominal_C(CodePrinter p, CodeStream str, String indent,
+            boolean auto, Map<FAbstractEquation,FExp> nominalMap);
+
+    @Override
+    public void EquationBlock.genEquationNominal_C(CodePrinter p, CodeStream str, String indent,
+            boolean auto, Map<FAbstractEquation,FExp> nominalMap) {
+        Enumerator e = new Enumerator();
+        for (SimpleEquationBlock block : unsolvedBlocks()) {
+            block.genEquationNominal_C(p, str, indent, auto, nominalMap, e);
+        }
+    }
+
+    @Override
+    public void AbstractSubBLTBlock.genEquationNominal_C(CodePrinter p, CodeStream str, String indent,
+            boolean auto, Map<FAbstractEquation,FExp> nominalMap) {
+        throw new UnsupportedOperationException("AbstractSubBLTBlock.genEquationNominal_C() is not implemented!");
+    }
+
+    @Override
+    public void SimpleEquationBlock.genEquationNominal_C(CodePrinter p, CodeStream str, String indent,
+            boolean auto, Map<FAbstractEquation,FExp> nominalMap) {
+        genEquationNominal_C(p, str, indent, auto, nominalMap, new Enumerator());
+    }
+
+    public void SimpleEquationBlock.genEquationNominal_C(CodePrinter p, CodeStream str, String indent,
+            boolean auto, Map<FAbstractEquation,FExp> nominalMap, Enumerator e) {
+        FExp nom = nominalMap.get(equation());
+        if (nom == null) {
+            return;
+        }
+        for (int i = 0; i < realVariables().size(); i++) {
+            int num = e.next();
+            if (i == 0) {
+                p.printPreSteps(nom, str, indent);
+                str.format("%s(*res)[%d] = ", indent, num);
+                p.print(nom, str, indent);
+                p.printPostSteps(nom, str, indent);
+                str.print(";\n");
+            } else {
+                str.format("%s(*res)[%d] = (*res)[%d];\n", indent, num, num - 1);
+            }
+        }
+    }
+
+    public FExp FAbstractEquation.equationNominal_C(boolean auto) {
+        return auto ? nominal() : null;
+    }
+
+    public void FVariable.genBlockResidualValuref_C(CodePrinter p, CodeStream str, String indent, 
+            Map<FVariable,String> solverArrayMap) {
+        if (valueReference() != -1) 
+            str.format("%s%s = %d;\n", indent, solverArrayMap.get(this), valueReference());
+    }
+    
+    public void FVariable.genBlockResidualBoundsCall_C(CodePrinter p, CodeStream str, String indent,
+            String func, String msg, Map<FVariable,String> solverArrayMap) {
+        boolean min = minAttributeSet();
+        boolean max = maxAttributeSet();
+        if (min || max) {
+            String type = (min && max) ? "bounds" : (max ? "ubound" : "lbound");
+            str.format("%s%s_%s(%s, ", indent, func, type, solverArrayMap.get(this));
+            if (min)
+                str.format("%s, ", attributeExp(FAttribute.MIN).ceval());
+            if (max)
+                str.format("%s, ", attributeExp(FAttribute.MAX).ceval());
+            str.format("\"%s for variable %s\");\n", msg, name());
+        }
+    }
+    
+    public void FVariable.genBlockResidualInit_C(CodePrinter p, CodeStream str, String indent,
+            Map<FVariable,String> solverArrayMap) {
+        str.format("%s%s = %s;\n", indent, solverArrayMap.get(this), name_C());
+        genBlockResidualBoundsCall_C(p, str, indent, "init_with", "Resetting initial value", solverArrayMap);
+    }
+    
+    public void FVariable.genBlockResidualEvalInit_C(CodePrinter p, CodeStream str, String indent,
+            Map<FVariable,String> solverArrayMap) {
+        genBlockResidualBoundsCall_C(p, str, indent, "check", "Out of bounds", solverArrayMap);
+        genBlockResidualWriteback_C(p, str, indent, solverArrayMap);
+    }
+    
+    public void FVariable.genBlockResidualWriteback_C(CodePrinter p, CodeStream str, String indent,
+            Map<FVariable,String> solverArrayMap) {
+        str.format("%s%s = %s;\n", indent, name_C(), solverArrayMap.get(this));
+    }
+    
+    
+    public void AbstractEquationBlock.genBlockResidualFunction_jacobianDecls_C(CodePrinter p, CodeStream str, String indent) {
+        if (jacobian != null)
+            for (FExp[] col : jacobian)
+                for (FExp exp : col)
+                    if (exp != null)
+                        exp.genVarDecls_C(ASTNode.printer_C, str, indent);
+    }
+
+    public void AbstractEquationBlock.genBlockResidualFunction_jacobian_C(CodePrinter p, CodeStream str, String indent) {
+        if (jacobian == null)
+            return;
+        FExp[][] jacobian = jacobian();
+        int rows = jacobian.length;
+        int cols = jacobian.length;
+        str.format("%smemset(residual, 0, %d * sizeof(jmi_real_t));\n", indent, rows * cols);
+        // Output Jacobian
+        for (int col = 0; col < cols; col++) {
+            for (int row = 0; row < rows; row++) {
+                if (jacobian[row][col] != null) {
+                    p.printPreSteps(jacobian[row][col], str, indent);
+                    str.format("%sresidual[%d] = ", indent, rows * col + row);
+                    p.print(jacobian[row][col], str, indent);
+                    str.format(";\n");
+                    p.printPostSteps(jacobian[row][col], str, indent);
+                }
+            }
+        }
+    }
+
+    @Override
+    public void TornEquationBlock.genBlockResidualFunction_jacobian_C(CodePrinter p, CodeStream str, String indent) {
+        if (!isLinear())
+            return;
+        int n1 = localSolvedRealVariables().size();
+        int n2 = unsolvedVariables().size();
+        if (n1 == 0) {
+            /* This block should not be a torn block. #4691. */
+            super.genBlockResidualFunction_jacobian_C(p, str, indent);
+            return;
+        }
+        indent = p.indent(indent);
+        String innerIndent = p.indent(indent);
+        FExp[][] jacobian = jacobian();
+        str.format("%sjmi_real_t* Q1 = calloc(%d, sizeof(jmi_real_t));\n", indent, n1 * n2);
+        str.format("%sjmi_real_t* Q2 = calloc(%d, sizeof(jmi_real_t));\n", indent, n2 * n1);
+        str.format("%sjmi_real_t* Q3 = residual;\n", indent);
+        str.format("%sint i;\n", indent);
+        str.format("%schar trans = 'N';\n", indent);
+        str.format("%sdouble alpha = -1;\n", indent);
+        str.format("%sdouble beta = 1;\n", indent);
+        str.format("%sint n1 = %d;\n", indent, n1);
+        str.format("%sint n2 = %d;\n", indent, n2);
+        
+        // Write top-right quadrant, A12, to Q1.
+        for (int col = n1; col < n1 + n2; col++) {
+            for (int row = 0; row < n1; row++) {
+                if (jacobian[row][col] != null) {
+                    p.printPreSteps(jacobian[row][col], str, indent);
+                    str.format("%sQ1[%d] = ", indent, n1 * (col - n1) + row);
+                    p.print(jacobian[row][col], str, indent);
+                    str.format(";\n");
+                    p.printPostSteps(jacobian[row][col], str, indent);
+                }
+            }
+        }
+        // Compute L^-1 * A12 by doing Q1 = L^-1 * Q1
+        str.format("%sfor (i = 0; i < %d; i += %d) {\n", indent, n1 * n2, n1);
+        for (int row = 0; row < n1; row++) {
+            for (int col = 0; col <= row; col++) {
+                if (jacobian[row][col] != null) {
+                    p.printPreSteps(jacobian[row][col], str, innerIndent);
+                }
+            }
+            str.format("%sQ1[i + %d] = (Q1[i + %d]", innerIndent, row, row);
+            for (int col = 0; col < row; col++) {
+                if (jacobian[row][col] != null) {
+                    str.format(" - (");
+                    p.print(jacobian[row][col], str, indent);
+                    str.format(") * Q1[i + %d]", col);
+                }
+            }
+            str.format(") / (");
+            p.print(jacobian[row][row], str, indent);
+            str.format(");\n");
+            for (int col = 0; col <= row; col++) {
+                if (jacobian[row][col] != null) {
+                    p.printPostSteps(jacobian[row][col], str, innerIndent);
+                }
+            }
+        }
+        str.format("%s}\n", indent);
+        // Write bottom-left quadrant, A21, to Q2.
+        for (int col = 0; col < n1; col++) {
+            for (int row = n1; row < n1 + n2; row++) {
+                if (jacobian[row][col] != null) {
+                    p.printPreSteps(jacobian[row][col], str, indent);
+                    str.format("%sQ2[%d] = ", indent, n2 * col + (row - n1));
+                    p.print(jacobian[row][col], str, indent);
+                    str.format(";\n");
+                    p.printPostSteps(jacobian[row][col], str, indent);
+                }
+            }
+        }
+        
+        // Write bottom-right quadrant, A22, to Q3.
+        str.format("%smemset(Q3, 0, %d * sizeof(jmi_real_t));\n", indent, n2 * n2);
+        for (int col = n1; col < n1 + n2; col++) {
+            for (int row = n1; row < n1 + n2; row++) {
+                if (jacobian[row][col] != null) {
+                    p.printPreSteps(jacobian[row][col], str, indent);
+                    str.format("%sQ3[%d] = ", indent, n2 * (col - n1) + (row - n1));
+                    p.print(jacobian[row][col], str, indent);
+                    str.format(";\n");
+                    p.printPostSteps(jacobian[row][col], str, indent);
+                }
+            }
+        }
+        
+        // Compute block jacobian into Q3
+        str.format("%sdgemm_(&trans, &trans, &n2, &n2, &n1, &alpha, Q2, &n2, Q1, &n1, &beta, Q3, &n2);\n", indent);
+        
+        str.format("%sfree(Q1);\n", indent);
+        str.format("%sfree(Q2);\n", indent);
+    }
+
+    public void AbstractEquationBlock.genBlockAddCall_C(CodePrinter p, CodeStream str, String indent, boolean dirDer,
+            boolean inInit, boolean generateSparse, String nleSolver, int parentBlockNumber) {
+
+        if (!hasResidualFunction()) {
+            return;
+        }
+
+        int suffix = getSequenceNumber();
+
+        for (AbstractEquationBlock subBlock : genBlockResidualFunction_subBlocks_C()) {
+            subBlock.genBlockAddCall_C(p, str, indent, dirDer, inInit, generateSparse, nleSolver, suffix);
+        }
+        str.print(indent);
+        str.print("jmi_dae_" + (inInit ? "init_" : "") + "add_equation_block(");
+        str.print("*jmi, dae_" + (inInit ? "init_" : "") + "block_" + suffix + ", ");
+        if (dirDer) {
+            str.print("dae_" + (inInit ? "init_" : "") + "block_dir_der_" + suffix + ", ");
+        } else {
+            str.print("NULL, ");
+        }
+
+        addSparseJacobianFunctionPointers(str, generateSparse);
+
+        str.print(localUnsolvedVariables().size() + ", "); // Rename to realIterationVariables() and nonRealIterationVariables()?
+        str.print(localSolvedRealVariables().size() + ", ");
+        str.print(discreteRealVariables_C().size() + ", ");
+        str.print(nonRealNonStringVariables_C().size() + ", ");
+        str.print(directlyImpactingNonReals_C().size() + ", ");
+        str.print(nonRealNonStringTempVariables_C().size() + ", ");
+        str.print(nonRealStringVariables_C().size() + ", ");
+        str.print((activeSwitches_C().size() + activeInitialSwitches_C().size()) + ", ");
+        str.print(directlyActiveSwitches_C().size() + ", ");
+        str.print(variability().genJMIVariabilityConstant_C() + ", ");
+        p.C_blockResidualAttributePrinter.printVariability(p, str, indent, this.localUnsolvedVariables());
+        str.print(genJMISolverConstant_C(nleSolver) + ", ");
+        str.print(getSequenceNumber() + ", \"");
+        str.print(getLabel() + "\", ");
+        str.print(parentBlockNumber + ");\n");
+    }
+
+    protected void AbstractEquationBlock.addSparseJacobianFunctionPointers(CodeStream str, boolean generateSparse) {
+        str.print("NULL, NULL, ");
+    }
+    protected void TornEquationBlock.addSparseJacobianFunctionPointers(CodeStream str, boolean generateSparse) {
+        if (generateSparse) {
+            int suffix = getSequenceNumber();
+            str.print(JACOBIAN_FUNCTION_C + "_" + suffix + ", ");
+            str.print(JACOBIAN_STRUCT_FUNCTION_C + "_" + suffix + ", ");
+        } else {
+            super.addSparseJacobianFunctionPointers(str, generateSparse);
+        }
+    }
+
+    @Override
+    public void AbstractSubBLTBlock.genBlockAddCall_C(CodePrinter p, CodeStream str, String indent, boolean dirDer,
+            boolean inInit, boolean generateSparse, String nleSolver, int parentBlockNumber) {
+
+        for (T blt : subBLTs)
+            for (AbstractEquationBlock block : blt)
+                block.genBlockAddCall_C(p, str, indent, dirDer, inInit, generateSparse, nleSolver, parentBlockNumber);
+    }
+
+    public abstract String TypePrefixVariability.genJMIVariabilityConstant_C();
+    public String Parameter.genJMIVariabilityConstant_C()  { return "JMI_PARAMETER_VARIABILITY"; }
+    public String Discrete.genJMIVariabilityConstant_C()   { return "JMI_DISCRETE_VARIABILITY"; }
+    public String Constant.genJMIVariabilityConstant_C()   { return "JMI_CONSTANT_VARIABILITY"; }
+    public String Continuous.genJMIVariabilityConstant_C() { return "JMI_CONTINUOUS_VARIABILITY"; }
+    /* Composite variabilities are removed during scalarization */
+    public String CompositeVariability.genJMIVariabilityConstant_C() { return null; }
+    
+    public String AbstractEquationBlock.genJMISolverConstant_C(String nleSolver) {
+        if (isLinear() || localUnsolvedEquations().isEmpty())
+            return "JMI_LINEAR_SOLVER";
+        else if (nleSolver.equals("kinsol"))
+            return "JMI_KINSOL_SOLVER";
+        else if (nleSolver.equals("minpack"))
+            return "JMI_MINPACK_SOLVER";
+        else if (nleSolver.equals("realtime"))
+            return "JMI_REALTIME_SOLVER";
+        else
+            throw new UnsupportedOperationException("The string value: " + nleSolver + " is not valid for the compiler option nonlinear_solver");
+    }
+
+    private Collection<FRelExp> AbstractEquationBlock.activeSwitches_C = null;
+    private Collection<FRelExp> AbstractEquationBlock.inactiveSwitches_C = null;
+    private Collection<FRelExp> AbstractEquationBlock.activeInitialSwitches_C = null;
+    private Collection<FRelExp> AbstractEquationBlock.inactiveInitialSwitches_C = null;
+    private Collection<FRelExp> AbstractEquationBlock.directlyActiveSwitches_C = null;
+    private Collection<FVariable> AbstractEquationBlock.directlyImpactingNonReals_C = null;
+    
+    /**
+     * Returns all active switches in the block. A switch is considered active
+     * in a block if is located in the block and depends on active variables
+     * in the block.
+     */
+    public Collection<FRelExp> AbstractEquationBlock.activeSwitches_C() {
+        cacheSwitches_C();
+        return activeSwitches_C;
+    }
+    
+    
+    /**
+     * Returns all active initial switches in the block. A switch is considered
+     * active in a block if is located in the block and depends on active
+     * aariables in the block.
+     */
+    public Collection<FRelExp> AbstractEquationBlock.activeInitialSwitches_C() {
+        cacheSwitches_C();
+        return activeInitialSwitches_C;
+    }
+    
+    /**
+     * Returns all inactive switches in the block. A switch is considered active
+     * in a block if is located in the block and depends on active variables
+     * in the block.
+     */
+    public Collection<FRelExp> AbstractEquationBlock.inactiveSwitches_C() {
+        cacheSwitches_C();
+        return inactiveSwitches_C;
+    }
+    
+    
+    /**
+     * Returns all inactive initial switches in the block. A switch is considered
+     * active in a block if is located in the block and depends on active
+     * variables in the block.
+     */
+    public Collection<FRelExp> AbstractEquationBlock.inactiveInitialSwitches_C() {
+        cacheSwitches_C();
+        return inactiveInitialSwitches_C;
+    }
+    
+    /**
+     * Returns all directly active switches in the block. A switch is
+     * considered active in a block if is located in the block and depends on
+     * active variables in the block. A switch is considered direct if it
+     * diretly affects an continuous equation.
+     */
+    public Collection<FRelExp> AbstractEquationBlock.directlyActiveSwitches_C() {
+        cacheSwitches_C();
+        return directlyActiveSwitches_C;
+    }
+    
+    /**
+     * Returns all discrete real non temporary variables in the block.
+     */
+    public Collection<FVariable> AbstractEquationBlock.discreteRealVariables_C() {
+        Collection<FVariable> l = new ArrayList<FVariable>();
+        for (FVariable fv : localDiscreteRealVariables()) {
+            if (!fv.isTemporary()) {
+                l.add(fv);
+            }
+        }
+        return l;
+    }
+    
+    /**
+     * Returns all non real, non string, non temporary variables in the block.
+     */
+    public Collection<FVariable> AbstractEquationBlock.nonRealNonStringVariables_C() {
+        Collection<FVariable> l = new ArrayList<FVariable>();
+        for (FVariable fv : localNonRealVariables()) {
+            if (!fv.isTemporary() && !fv.isString()) {
+                l.add(fv);
+            }
+        }
+        return l;
+    }
+    
+    /**
+     * Returns all non real, string, non temporary variables in the block.
+     */
+    public Collection<FVariable> AbstractEquationBlock.nonRealStringVariables_C() {
+        Collection<FVariable> l = new ArrayList<FVariable>();
+        for (FVariable fv : localNonRealVariables()) {
+            if (!fv.isTemporary() && fv.isString()) {
+                l.add(fv);
+            }
+        }
+        return l;
+    }
+    
+    public Collection<FVariable> AbstractEquationBlock.nonRealNonStringTempVariables_C() {
+        Collection<FVariable> l = new ArrayList<FVariable>();
+        for (FVariable fv : localNonRealVariables()) {
+            if (fv.isTemporary() && !fv.isString()) {
+                l.add(fv);
+            }
+        }
+        return l;
+    }
+    
+    /**
+     * Returns all directly affecting non reals in the block. A non real is
+     * considered directly affecting in a block if is solved in the block and 
+     * is used in a continuous equation.
+     */
+    public Collection<FVariable> AbstractEquationBlock.directlyImpactingNonReals_C() {
+        cacheSwitches_C();
+        return directlyImpactingNonReals_C;
+    }
+    
+    private void AbstractEquationBlock.cacheSwitches_C() {
+        if (activeSwitches_C != null && activeInitialSwitches_C != null && inactiveSwitches_C != null &&
+                inactiveInitialSwitches_C != null && directlyActiveSwitches_C != null && directlyImpactingNonReals_C != null)
+            return;
+        activeSwitches_C = new LinkedHashSet<FRelExp>();
+        activeInitialSwitches_C = new LinkedHashSet<FRelExp>();
+        inactiveSwitches_C = new LinkedHashSet<FRelExp>();
+        inactiveInitialSwitches_C = new LinkedHashSet<FRelExp>();
+        directlyActiveSwitches_C = new LinkedHashSet<FRelExp>();
+        directlyImpactingNonReals_C = new LinkedHashSet<FVariable>();
+        
+        Set<FAbstractEquation> realEqns = new HashSet<FAbstractEquation>(localRealEquations());
+        Set<FVariable> nonRealVars = new HashSet<FVariable>(nonRealNonStringVariables_C());
+        Set<FVariable> allVariables = new HashSet<FVariable>(allLocalVariables());
+        for (FAbstractEquation equation : allLocalEquations()) {
+            boolean realEqn = realEqns.contains(equation);
+            for (FRelExp relExp : equation.relExpInInitialEquation()) {
+                FRelExp orig = relExp.originalFExp();
+                if (orig.dependsOn(allVariables)) {
+                    activeInitialSwitches_C.add(orig);
+                    if (realEqn)
+                        directlyActiveSwitches_C.add(orig);
+                } else {
+                    inactiveInitialSwitches_C.add(orig);
+                }
+            }
+            for (FRelExp relExp : equation.relExpInEquation()) {
+                FRelExp orig = relExp.originalFExp();
+                if (orig.dependsOn(allVariables)) {
+                    activeSwitches_C.add(orig);
+                    if (realEqn)
+                        directlyActiveSwitches_C.add(orig);
+                } else {
+                    inactiveSwitches_C.add(orig);
+                }
+            }
+            if (realEqn) {
+                for (FVariable var : equation.referencedFVariables()) {
+                    if (nonRealVars.contains(var))
+                        directlyImpactingNonReals_C.add(var);
+                }
+            }
+        }
+    }
+
+}

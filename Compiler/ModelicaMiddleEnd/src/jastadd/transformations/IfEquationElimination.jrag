@@ -1,0 +1,201 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+aspect IfEquationElimination {
+
+    /*
+     *  TODO: We shouldn't need this now that scalarization can do this anyway. 
+     *        Just removing it and making obviously necessary changes causes lots of tests to fail. 
+     */
+
+    public class FClass {
+
+        public class enableIfEquationElimination extends Transformation {
+
+            /**
+             * Eliminates unnecessary if equations; if a test can be determinedly evaluated to false or true
+             * the functions in the if or else branche's block can be discarded or inlined respectively.
+             * <p>
+             * Depends on MakeReinitedVarsStates when invoked after scalarization.
+             */
+            @Override
+            public void perform() {
+                List<FAbstractEquation> newEquations = new List<FAbstractEquation>();
+                List<FAbstractEquation> newInitialEquations = new List<FAbstractEquation>();
+                List<FAbstractEquation> newParameterEquations = new List<FAbstractEquation>();
+
+                for (FAbstractEquation equation : getFAbstractEquations()) {
+                    equation.eliminateIfEquations(newEquations);
+                }
+
+                for (FAbstractEquation equation : getFInitialEquations()) {
+                    equation.eliminateIfEquations(newInitialEquations);
+                }
+
+                for (FAbstractEquation equation : getParameterEquations()) {
+                    equation.eliminateIfEquations(newParameterEquations);
+                }
+
+                setFAbstractEquationList(newEquations);
+                setFInitialEquationList(newInitialEquations);
+                setParameterEquationList(newParameterEquations);
+
+                /*
+                 * Remove orphaned temporaries.
+                 */
+                flushAllRecursive();
+                removeUnusedTemporaries();
+            }
+
+        }
+
+    }
+
+    /**
+     * Eliminates unnecessary if equations.
+     * 
+     * @param equations
+     *          The list in which to put equations that are extracted from live branches.
+     */
+    public void ASTNode.eliminateIfEquations(List<FAbstractEquation> equations) {}
+    public void FAbstractEquation.eliminateIfEquations(List<FAbstractEquation> equations) { 
+        equations.add(this);
+    }
+
+    public void FIfWhenEquation.eliminateIfEquations(List<FAbstractEquation> equations) {
+        FIfWhenElseEquation eqn = eliminateIfEquationsLocal(equations);
+        if (eqn != null) {
+            equations.add(eqn);
+        }
+    }
+
+    /**
+     * Eliminates unnecessary if equations.
+     * <p>
+     * If an equation's test can be evaluated to {@code true}, it's block equations are added to the list and
+     * this method finishes. If it is evaluated to {@code false}, the block equations are disregarded.
+     * <p>
+     * If the test can not be evaluated, the branch is kept and remaining branches are kept, unless they can be
+     * evaluated to false, in which case they are disregarded. Remaining live branches are kept but their
+     * block equations are not added yet, since <i>the first</i> {@code true} test's equations should be added,
+     * and there are preceding branches that could not be evaluated.
+     * This is specified with {@code equations} being null.
+     * 
+     * @param equations
+     *          The list in which to put equations that are extracted from live branches.
+     *          If null, only eliminate dead branches, and return new else branch of parent.
+     * @return
+     *          this branch if it could not be evaluated, {@code null} otherwise. If non-{@code null} this equation is
+     *          added back to the {@code equations} list by {@link #eliminateIfEquations(List<FAbstractEquation>)}.
+     */
+    public FIfWhenElseEquation FIfWhenElseEquation.eliminateIfEquationsLocal(List<FAbstractEquation> equations) {
+        return this;
+    }
+
+    public FIfWhenElseEquation FIfEquation.eliminateIfEquationsLocal(List<FAbstractEquation> equations) {
+        boolean evaluated = false;
+        boolean testValue = false;
+        if (getTest().variability().knownParameterOrLess()) {
+            try {
+                CValue cval = getTest().ceval();
+                if (cval.hasBooleanValue()) {
+                    testValue = cval.booleanValue();
+                    evaluated = true;
+                }
+            } catch (ConstantEvaluationException e) {}
+        }
+        
+        if (evaluated) {
+            if (testValue) {
+                if (equations == null) {
+                    List<FAbstractEquation> subEquations = new List<>();
+                    eliminateChildIfEquationsToList(subEquations);
+                    return new FElseEquation(getType(), subEquations);
+               } else {
+                    eliminateChildIfEquationsToList(equations);
+                    return null;
+                }
+            } else {
+                if (hasElse()) {
+                    return getElse().eliminateIfEquationsLocal(equations);
+                } else {
+                    return null;
+                }
+            }
+        } else {
+            if (hasElse()) {
+                FIfWhenElseEquation elseEquation = getElse().eliminateIfEquationsLocal(null);
+                if (elseEquation == null) {
+                    setElseOpt(new Opt<FIfWhenElseEquation>());
+                } else {
+                    setElse(elseEquation);
+                }
+            }
+            return this;
+        }
+    }
+
+    /**
+     * Keeps the else branch, if it was determined to be the live branch.
+     * <p>
+     * If-equation-elimination only reaches this method in two cases: either all previous branches were determinedly
+     * false (meaning that {@code equations} is non-{@code null}) in which case the block equations are added
+     * to {@code equations}. In the other case not all branches could be evaluated, and this branch needs to be kept.
+     * 
+     * @param equations
+     *          The list in which to put equations that are extracted from true branches.
+     */
+    public FIfWhenElseEquation FElseEquation.eliminateIfEquationsLocal(List<FAbstractEquation> equations) {
+        if (equations == null) {
+            eliminateChildIfEquationsInPlace();
+            return this;
+        } else {
+            eliminateChildIfEquationsToList(equations);
+            return null;
+        }
+    }
+
+    public void FIfWhenElseEquation.eliminateChildIfEquationsToList(List<FAbstractEquation> equations) {
+        for (FAbstractEquation equation : getFAbstractEquations()) {
+            equation.eliminateIfEquations(equations);
+        }
+    }
+
+    public void FIfWhenElseEquation.eliminateChildIfEquationsInPlace() {
+        List<FAbstractEquation> equations = new List<>();
+        eliminateChildIfEquationsToList(equations);
+        setFAbstractEquationList(equations);
+    }
+
+    /**
+     * Replaces an {@link FIfExp} with either branch if its test can be evaluated.
+     * 
+     * @param equations
+     *          The equation list where to put equations that are extracted from {@code true} branches.
+     *          Note that this is not used for this method.
+     */
+    public void FIfExp.eliminateIfEquations(List<FAbstractEquation> equations) {
+        try {
+            if (getIfExp().isConstantExp()) {
+                replaceMe(getIfExp().ceval().booleanValue() ? getThenExp() : getElseExp());
+            }
+        } catch (ConstantEvaluationException e) {
+            /*
+             * Test failed to evaluate to boolean constant. In this case we do nothing.
+             */
+        }
+    }
+
+}

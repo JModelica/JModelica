@@ -1,0 +1,108 @@
+<project default="invalid">
+  <target name="invalid">
+    <fail>Don't call this file directly.</fail>
+  </target>
+
+  <target name="setup">
+    <taskdef resource="net/sf/antcontrib/antcontrib.properties">
+      <classpath location="${antcontrib.jar}"/>
+    </taskdef>
+  </target>
+
+  <target name="fullTest" depends="setup">
+    <trycatch property="foo" reference="bar">
+      <try>
+        <fail>Tada!</fail>
+      </try>
+      
+      <catch>
+        <echo>In &lt;catch&gt;.</echo>
+      </catch>
+      
+      <finally>
+        <echo>In &lt;finally&gt;.</echo>
+      </finally>
+    </trycatch>
+  </target>
+
+  <target name="twoCatches" depends="setup">
+    <trycatch>
+      <try>
+        <fail>Tada!</fail>
+      </try>
+      
+      <catch>
+        <echo>In &lt;catch&gt;.</echo>
+      </catch>
+      
+      <catch>
+        <echo>In &lt;catch2&gt;.</echo>
+      </catch>
+    </trycatch>
+  </target>
+
+  <target name="twoFinallys" depends="setup">
+    <trycatch>
+      <try>
+        <fail>Tada!</fail>
+      </try>
+      
+      <finally>
+        <echo>In &lt;finally&gt;.</echo>
+      </finally>
+
+      <finally>
+        <echo>In &lt;finally2&gt;.</echo>
+      </finally>
+    </trycatch>
+  </target>
+
+  <target name="twoTrys" depends="setup">
+    <trycatch>
+      <try>
+        <fail>Tada!</fail>
+      </try>
+      
+      <try>
+        <fail>Tada!</fail>
+      </try>
+
+      <catch>
+        <echo>In &lt;catch&gt;.</echo>
+      </catch>
+      
+      <finally>
+        <echo>In &lt;finally&gt;.</echo>
+      </finally>
+    </trycatch>
+  </target>
+
+  <target name="noTry" depends="setup">
+    <trycatch>
+      <catch>
+        <echo>In &lt;catch&gt;.</echo>
+      </catch>
+      
+      <finally>
+        <echo>In &lt;finally&gt;.</echo>
+      </finally>
+    </trycatch>
+  </target>
+
+  <target name="noException" depends="setup">
+    <trycatch property="foo" reference="bar">
+      <try>
+        <echo>Tada!</echo>
+      </try>
+      
+      <catch>
+        <echo>In &lt;catch&gt;.</echo>
+      </catch>
+      
+      <finally>
+        <echo>In &lt;finally&gt;.</echo>
+      </finally>
+    </trycatch>
+  </target>
+
+</project>

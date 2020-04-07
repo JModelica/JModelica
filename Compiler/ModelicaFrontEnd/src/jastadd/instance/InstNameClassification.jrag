@@ -1,0 +1,170 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+aspect InstNameClassification {
+
+	/**
+	 * Helper class for definition of kinds.
+	 */
+    abstract public class Kind {
+    	static Kind CLASS_ACCESS           = new ClassAccess();
+    	static Kind COMPONENT_ACCESS       = new ComponentAccess();
+    	static Kind AMBIGUOUS_ACCESS       = new AmbigousAccess();
+    	static Kind LAST_AMBIGUOUS_ACCESS  = new LastAmbigousAccess();
+    	static Kind FIRST_AMBIGUOUS_ACCESS = new FirstAmbigousAccess();
+    	
+    	public boolean isClassAccess()     { return false; }
+    	public boolean isComponentAccess() { return false; }
+    	public boolean isAmbigousAccess()  { return false; }
+    	
+    	public abstract Kind predKind(int i);
+    	
+    	static protected class ClassAccess extends Kind {
+    		public Kind    predKind(int i) { return CLASS_ACCESS; }
+    		public boolean isClassAccess() { return true; }
+    	}
+    	
+    	static protected class ComponentAccess extends Kind {
+    		public Kind    predKind(int i)     { return AMBIGUOUS_ACCESS; }
+    		public boolean isComponentAccess() { return true; }
+    	}
+    	
+    	static protected class AmbigousAccess extends Kind {
+    		public Kind    predKind(int i)    { return AMBIGUOUS_ACCESS; }
+    		public boolean isAmbigousAccess() { return true; }
+    	}
+    	
+    	static protected class LastAmbigousAccess extends AmbigousAccess {
+    		public Kind predKind(int i) { return CLASS_ACCESS; }
+    	}
+    	
+    	static protected class FirstAmbigousAccess extends ClassAccess {
+    		public Kind predKind(int i) { return (i == 0) ? AMBIGUOUS_ACCESS : FIRST_AMBIGUOUS_ACCESS; }
+    	}
+    }
+	
+	
+	rewrite InstParseAccess {
+		to InstAccess {
+			InstAccess a;
+			if (kind().isComponentAccess()) 
+			    a = new InstComponentAccess(getID());
+			else if (kind().isClassAccess()) 
+				a = new InstClassAccess(getID());
+			else 
+				a = new InstAmbiguousAccess(getID());
+			a.setLocation(this);
+			return a;
+  		}
+	}
+
+	rewrite InstParseArrayAccess {
+		to InstAccess {
+			InstAccess a;
+			if (kind().isComponentAccess()) 
+			    a = new InstComponentArrayAccess(getID(), getFArraySubscripts());
+			else if (kind().isClassAccess()) 
+				a = new InstClassAccess(getID());
+			else 
+				a = new InstAmbiguousArrayAccess(getID(), getFArraySubscripts());
+			a.setLocation(this);
+			return a;
+  		}
+	}
+
+	
+	// TODO: Check this section so that all inh calls are caught at the right level
+	/**
+	 * Here a few cases are classified based on their context.
+	 */
+	inh Kind InstAccess.kind();
+	eq InstRoot.getChild().kind() = Kind.AMBIGUOUS_ACCESS;
+	eq FlatRoot.getChild().kind() = Kind.AMBIGUOUS_ACCESS;
+
+	eq InstDot.getInstAccess(int i).kind() {
+		List<InstAccess> accesses = getInstAccesssNoTransform();
+		if (i >= accesses.getNumChildNoTransform() - 1)
+			return kind();
+		else
+			return accesses.getChildNoTransform(i + 1).kind().predKind(i);
+	}
+
+	eq InstExtends.getClassName().kind()          = Kind.CLASS_ACCESS;
+	eq InstImport.getPackageName().kind()         = Kind.LAST_AMBIGUOUS_ACCESS;
+	eq InstComponentDecl.getClassName().kind()    = Kind.CLASS_ACCESS;	
+	eq InstComponentModification.getName().kind() = hasValue() ? Kind.COMPONENT_ACCESS : Kind.AMBIGUOUS_ACCESS;
+	eq InstClassRedeclare.getName().kind()        = Kind.CLASS_ACCESS;
+	eq InstComponentRedeclare.getName().kind()    = Kind.COMPONENT_ACCESS;
+    eq InstFunctionCall.getName().kind()          = Kind.AMBIGUOUS_ACCESS;
+	
+	eq InstConstraining.getClassName().kind()             = Kind.CLASS_ACCESS;
+	eq InstComponentDecl.getConditionalAttribute().kind() = Kind.AMBIGUOUS_ACCESS;
+	eq InstBaseClassDecl.getFAbstractEquation().kind()    = Kind.AMBIGUOUS_ACCESS;	
+	eq InstSimpleShortClassDecl.getTarget().kind()        = Kind.CLASS_ACCESS;	
+
+	/**
+	 * Check if this modification has (or is) a value modification.
+	 */
+	syn boolean InstModification.hasValue() = false;
+	eq InstValueModification.hasValue()     = true;
+	eq InstComponentModification.hasValue() = hasInstModification() && getInstModification().hasValue();
+	eq InstCompleteModification.hasValue()  = hasInstValueModification();
+	
+}
+
+aspect InstResolveAmbiguousNames {
+
+    /**
+     * This rewrite determines whether an InstAmbiguousAccess is a InstTypeAcces or a
+     * InstComponentAccess by attempting type and component lookups respectively.
+     */
+    boolean InstAmbiguousAccess.rewritten = false;
+    rewrite InstAmbiguousAccess {
+        when (!rewritten) 
+        to InstAccess {
+            if (myInstLookupComponent().successful()) {
+                InstComponentAccess c = new InstComponentAccess(name());
+                c.setLocation(this);
+                return c;
+            } else if (myInstLookupClass().successful()) {
+                InstClassAccess t = new InstClassAccess(name());
+                t.setLocation(this);
+                return t;
+            }
+            rewritten = true;
+            return this;
+        }
+    }
+    boolean InstAmbiguousArrayAccess.rewritten = false;
+    rewrite InstAmbiguousArrayAccess {
+        when (!rewritten) 
+        to InstAccess {
+            if (myInstLookupComponent().successful()) {
+                InstComponentArrayAccess c = new InstComponentArrayAccess(name(), getFArraySubscripts());
+                c.setLocation(this);
+                return c;
+            } else if (myInstLookupClass().successful()) {
+                InstClassAccess t = new InstClassAccess(name());
+                t.setLocation(this);
+                return t;
+            }
+            rewritten = true;
+            return this;
+        }
+    }
+
+}

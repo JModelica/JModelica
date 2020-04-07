@@ -1,0 +1,141 @@
+Index: Modelica/Resources/C-Sources/gconstructor.h
+===================================================================
+--- Modelica/Resources/C-Sources/gconstructor.h	(revision 10917)
++++ Modelica/Resources/C-Sources/gconstructor.h	(working copy)
+@@ -16,6 +16,9 @@
+ 
+ */
+ 
++#ifndef G_CONSTRUCTOR_H_
++#define G_CONSTRUCTOR_H_
++
+ #if  __GNUC__ > 2 || (__GNUC__ == 2 && __GNUC_MINOR__ >= 7)
+ 
+ #define G_HAS_CONSTRUCTORS 1
+@@ -28,17 +31,30 @@
+ 
+ #define G_HAS_CONSTRUCTORS 1
+ 
+-#define G_DEFINE_CONSTRUCTOR(_func) \
++#ifdef _WIN64
++#define G_MSVC_SYMBOL_PREFIX ""
++#else
++#define G_MSVC_SYMBOL_PREFIX "_"
++#endif
++
++#define G_DEFINE_CONSTRUCTOR(_func) G_MSVC_CTOR (_func, G_MSVC_SYMBOL_PREFIX)
++#define G_DEFINE_DESTRUCTOR(_func) G_MSVC_DTOR (_func, G_MSVC_SYMBOL_PREFIX)
++
++#define G_MSVC_CTOR(_func,_sym_prefix) \
+   static void _func(void); \
+-  static int _func ## _wrapper(void) { _func(); return 0; } \
++  extern int (* _array ## _func)(void); \
++  int _func ## _wrapper(void) { _func(); return _array ## _func == NULL; } \
++  __pragma(comment(linker,"/include:" _sym_prefix # _func "_wrapper")) \
+   __pragma(section(".CRT$XCU",read)) \
+-  __declspec(allocate(".CRT$XCU")) static int (* _array ## _func)(void) = _func ## _wrapper;
++  __declspec(allocate(".CRT$XCU")) int (* _array ## _func)(void) = _func ## _wrapper;
+ 
+-#define G_DEFINE_DESTRUCTOR(_func) \
++#define G_MSVC_DTOR(_func,_sym_prefix) \
+   static void _func(void); \
+-  static int _func ## _constructor(void) { atexit (_func); return 0; } \
++  extern int (* _array ## _func)(void); \
++  int _func ## _constructor(void) { atexit (_func); return _array ## _func == NULL; } \
++   __pragma(comment(linker,"/include:" _sym_prefix # _func "_constructor")) \
+   __pragma(section(".CRT$XCU",read)) \
+-  __declspec(allocate(".CRT$XCU")) static int (* _array ## _func)(void) = _func ## _constructor;
++  __declspec(allocate(".CRT$XCU")) int (* _array ## _func)(void) = _func ## _constructor;
+ 
+ #elif defined (_MSC_VER) && (_MSC_VER >= 1400)
+ 
+@@ -88,3 +104,5 @@
+ /* constructors not supported for this compiler */
+ 
+ #endif
++
++#endif
+Index: Modelica/Resources/C-Sources/ModelicaInternal.c
+===================================================================
+--- Modelica/Resources/C-Sources/ModelicaInternal.c	(revision 11058)
++++ Modelica/Resources/C-Sources/ModelicaInternal.c	(working copy)
+@@ -705,17 +705,17 @@
+ #include <Windows.h>
+ static CRITICAL_SECTION cs;
+ #ifdef G_DEFINE_CONSTRUCTOR_NEEDS_PRAGMA
+-#pragma G_DEFINE_CONSTRUCTOR_PRAGMA_ARGS(initializeCS)
++#pragma G_DEFINE_CONSTRUCTOR_PRAGMA_ARGS(ModelicaInternal_initializeCS)
+ #endif
+-G_DEFINE_CONSTRUCTOR(initializeCS)
+-static void initializeCS(void) {
++G_DEFINE_CONSTRUCTOR(ModelicaInternal_initializeCS)
++static void ModelicaInternal_initializeCS(void) {
+     InitializeCriticalSection(&cs);
+ }
+ #ifdef G_DEFINE_DESTRUCTOR_NEEDS_PRAGMA
+-#pragma G_DEFINE_DESTRUCTOR_PRAGMA_ARGS(deleteCS)
++#pragma G_DEFINE_DESTRUCTOR_PRAGMA_ARGS(ModelicaInternal_deleteCS)
+ #endif
+-G_DEFINE_DESTRUCTOR(deleteCS)
+-static void deleteCS(void) {
++G_DEFINE_DESTRUCTOR(ModelicaInternal_deleteCS)
++static void ModelicaInternal_deleteCS(void) {
+     DeleteCriticalSection(&cs);
+ }
+ #define MUTEX_LOCK() EnterCriticalSection(&cs)
+Index: Modelica/Resources/C-Sources/ModelicaRandom.c
+===================================================================
+--- Modelica/Resources/C-Sources/ModelicaRandom.c	(revision 11058)
++++ Modelica/Resources/C-Sources/ModelicaRandom.c	(working copy)
+@@ -132,17 +132,17 @@
+ #include <Windows.h>
+ static CRITICAL_SECTION cs;
+ #ifdef G_DEFINE_CONSTRUCTOR_NEEDS_PRAGMA
+-#pragma G_DEFINE_CONSTRUCTOR_PRAGMA_ARGS(initializeCS)
++#pragma G_DEFINE_CONSTRUCTOR_PRAGMA_ARGS(ModelicaRandom_initializeCS)
+ #endif
+-G_DEFINE_CONSTRUCTOR(initializeCS)
+-static void initializeCS(void) {
++G_DEFINE_CONSTRUCTOR(ModelicaRandom_initializeCS)
++static void ModelicaRandom_initializeCS(void) {
+     InitializeCriticalSection(&cs);
+ }
+ #ifdef G_DEFINE_DESTRUCTOR_NEEDS_PRAGMA
+-#pragma G_DEFINE_DESTRUCTOR_PRAGMA_ARGS(deleteCS)
++#pragma G_DEFINE_DESTRUCTOR_PRAGMA_ARGS(ModelicaRandom_deleteCS)
+ #endif
+-G_DEFINE_DESTRUCTOR(deleteCS)
+-static void deleteCS(void) {
++G_DEFINE_DESTRUCTOR(ModelicaRandom_deleteCS)
++static void ModelicaRandom_deleteCS(void) {
+     DeleteCriticalSection(&cs);
+ }
+ #define MUTEX_LOCK() EnterCriticalSection(&cs)
+Index: Modelica/Resources/C-Sources/ModelicaStandardTables.c
+===================================================================
+--- Modelica/Resources/C-Sources/ModelicaStandardTables.c	(revision 11058)
++++ Modelica/Resources/C-Sources/ModelicaStandardTables.c	(working copy)
+@@ -316,17 +316,17 @@
+ #include <Windows.h>
+ static CRITICAL_SECTION cs;
+ #ifdef G_DEFINE_CONSTRUCTOR_NEEDS_PRAGMA
+-#pragma G_DEFINE_CONSTRUCTOR_PRAGMA_ARGS(initializeCS)
++#pragma G_DEFINE_CONSTRUCTOR_PRAGMA_ARGS(ModelicaStandardTables_initializeCS)
+ #endif
+-G_DEFINE_CONSTRUCTOR(initializeCS)
+-static void initializeCS(void) {
++G_DEFINE_CONSTRUCTOR(ModelicaStandardTables_initializeCS)
++static void ModelicaStandardTables_initializeCS(void) {
+     InitializeCriticalSection(&cs);
+ }
+ #ifdef G_DEFINE_DESTRUCTOR_NEEDS_PRAGMA
+-#pragma G_DEFINE_DESTRUCTOR_PRAGMA_ARGS(deleteCS)
++#pragma G_DEFINE_DESTRUCTOR_PRAGMA_ARGS(ModelicaStandardTables_deleteCS)
+ #endif
+-G_DEFINE_DESTRUCTOR(deleteCS)
+-static void deleteCS(void) {
++G_DEFINE_DESTRUCTOR(ModelicaStandardTables_deleteCS)
++static void ModelicaStandardTables_deleteCS(void) {
+     DeleteCriticalSection(&cs);
+ }
+ #define MUTEX_LOCK() EnterCriticalSection(&cs)

@@ -1,0 +1,203 @@
+import java.util.ArrayList;
+
+import beaver.Symbol;
+
+aspect SourcePrettyPrint {
+
+    /**
+     * Static printer instance.
+     */
+    static SourcePrettyPrinter ASTNode.printer_source = new SourcePrettyPrinter();
+
+    public class SourcePrettyPrinter extends PrettyPrinter {
+        public SourcePrettyPrinter() {
+            super();
+        }
+
+        public void print(ASTNode node, CodeStream str, String indent) { 
+            node.sourcePrettyPrint(this, str, indent); 
+        }
+    }
+
+    public void ASTNode.sourcePrettyPrint(Printer p, CodeStream str, String indent) {
+        prettyPrint(p, str, indent);
+    }
+
+    public void ASTNode.sourcePrettyPrint(CodeStream str, String indent) {
+        sourcePrettyPrint(printer_source, str, indent);
+    }
+
+	public void BaseNode.sourcePrettyPrint(Printer p, CodeStream str, String indent){
+		prettyPrint(p, str, indent);
+	}
+	
+	public void CommonAccess.sourcePrettyPrint(Printer p, CodeStream str, String indent){			// to ignore the error output
+		prettyPrint(p, str, indent);
+	}
+	
+	public void FAccessString.sourcePrettyPrint(Printer p, CodeStream str, String indent){	// to ignore the error output
+		prettyPrint(p, str, indent);
+	}
+	
+	/*public void FVariable.sourcePrettyPrint(Printer p, CodeStream str, String indent){
+		//if(this.fName != null)
+			//str.print("%Var location: " + this.fName);
+		
+		prettyPrint(p, str, indent);
+	}
+	
+	/*public void FSinExp.sourcePrettyPrint(Printer p, CodeStream str, String indent){
+		//str.print("Source file: " + this.start + " " + this.end);
+		prettyPrint(p, str, indent);
+	}*/
+	
+	/*public void FExp.sourcePrettyPrint(Printer p, CodeStream str, String indent){
+		prettyPrint(p, str, indent);
+		
+	}
+	public void FAbstractVariable.sourcePrettyPrint(Printer p, CodeStream str, String indent){
+		prettyPrint(p, str, indent);
+	}
+	
+	public void FEquation.sourcePrettyPrint(Printer p, CodeStream str, String indent){
+		prettyPrint(p, str, indent);
+		
+	}
+
+	
+	public void CommonAccessExp.sourcePrettyPrint(Printer p, CodeStream str, String indent){
+		//if(this.fName==null){
+		if(this.fName == null)
+			log.debug(this.toString() + " " + this.getClass().toString() + "----Source file: " + this.fName);
+		log.debug("CommonAccessExp----Source position: L" + Symbol.getLine(this.start) + ":" + Symbol.getColumn(this.start) + 
+				" - L" + Symbol.getLine(this.end) + ":" + Symbol.getColumn(this.end));
+		log.debug("CommonAccessExp----Source file: " + this.fName);
+	//	str.print(" [p: " + this.start + " " + this.end + "] ");
+	//	}
+
+		prettyPrint(p, str, indent);
+		
+		//str.println("CommonAccessExp----Source file: " + this.fName);
+		
+	}
+	
+	/*public void FTimeExp.sourcePrettyPrint(Printer p, CodeStream str, String indent){
+		log.debug("FTimeExp----Source position: " + this.start + " " + this.end);
+		log.debug("FTimeExp----Source file: " + this.fName);
+
+		prettyPrint(p, str, indent);
+	}
+	
+	public void FRecordConstructor.sourcePrettyPrint(Printer p, CodeStream str, String indent){			// on�dig? beh�vs till annat?
+		log.debug("FRecordConstructor----Source position: " + this.start + " " + this.end);
+		log.debug("FRecordConstructor----Source file: " + this.fName);
+
+		prettyPrint(p, str, indent);
+	}*/
+
+	
+	
+	
+	/*public class StringList extends String{
+		
+		private ArrayList<String> list;
+		
+		StringList(String s1, String s2){
+			super(s1);
+			if(s1 instanceof StringList)
+				list.addAll(s1.list);
+			
+			list.add(s2);				// To avoid recreating object. May create a deep chain of StringLists 
+		}
+		
+		public String toString(){
+			String str = super.toString();
+			for(String s : list)
+				str += s.toString();
+			return str;
+		}
+	}*/
+	
+}
+
+
+aspect SourceDiagnosticsPrinter{
+	
+	/*public class SourceDiagnosticsPrinter extends PrettyPrinter {
+		public SourceDiagnosticsPrinter() {
+			super();
+		}
+		
+ 		public void print(ASTNode node, CodeStream str, String indent) { 
+ 			node.sourceDiagnosticsPrint(this, indent); 
+ 		
+ 		}
+}
+public void ASTNode.sourceDiagnosticsPrint(Printer p, String indent) {
+	prettyPrint(p, new Codestream(), indent);
+}
+public void ASTNode.sourceDiagnosticsPrint(CodeStream str, String indent) {
+	sourceDiagnosticsPrint(new SourceDiagnosticsPrinter(), str, indent);
+		
+}*/
+	
+	
+}
+
+
+
+aspect Temp_CValue{
+	
+	
+	/*public CValue FExp.ceval(BaseNode sourceCollector) {
+        ASTNode$State state = state();
+        CValue ceval_value = ceval(defaultVariableEvaluator(), sourceCollector);
+
+        return ceval_value;
+	}
+
+	public CValue FExp.ceval(VariableEvaluator evaluator, BaseNode sourceCollector) {
+        ASTNode$State state = state();
+        try {
+                if (isCircular()) 
+                    return CValue.UNKNOWN;
+                if (isArray()) {
+                    if (size().evaluated().isUnknown())
+                        return CValue.UNKNOWN;
+                    return cevalArray(evaluator, Index.NULL);
+                }
+                CValue resOver = cevalOverloaded(evaluator);
+                return (resOver != null) ? resOver : cevalCalc(evaluator, sourceCollector);
+            }
+        finally {
+        }
+    }
+	public CValue FExp.cevalCalc(VariableEvaluator evaluator, BaseNode sourceCollector){
+		return cevalCalc(evaluator);
+	}
+	
+	public CValue FBinExp.cevalCalc(VariableEvaluator evaluator, BaseNode sourceCollector) {
+        ASTNode$State state = state();
+        CValue cevalCalc_VariableEvaluator_value = evaluator.evalBinOp(this,
+        		getLeft().ceval(evaluator, sourceCollector), getRight().ceval(evaluator, sourceCollector));
+        sourceCollector.addLocation(getLeft());
+        sourceCollector.addLocation(getRight());
+
+        return cevalCalc_VariableEvaluator_value;
+    }
+	
+	public CValue FUnaryExp.cevalCalc(VariableEvaluator evaluator, BaseNode sourceCollector) {
+        ASTNode$State state = state();
+        CValue cevalCalc_VariableEvaluator_value = evaluator.evalUnOp(this, getFExp().ceval(evaluator, sourceCollector));
+        sourceCollector.addLocation(getFExp());
+
+        return cevalCalc_VariableEvaluator_value;
+    }
+	
+	public CValue FLitExp.cevalCalc(VariableEvaluator evaluator, BaseNode sourceCollector){
+		sourceCollector.addLocation(this);
+		return cevalCalc(evaluator);
+	}*/
+
+
+}

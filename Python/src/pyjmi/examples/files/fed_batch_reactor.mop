@@ -1,0 +1,36 @@
+model FedBatchReactor
+    Real y1(start=7, fixed=true, min=0);
+    Real y2(start=0, fixed=true, min=-0.1);
+    Real rm;
+    input Real theta1(start=0.1);
+    input Real theta2(start=0.1);
+    input Real theta3(start=0.1);
+    input Real theta4(start=0.1);
+    input Real u1;
+    input Real u2;
+equation
+    der(y1) = (rm - u1)*y1 - theta4*y1;
+    der(y2) = -rm*y1/theta3 + u1*(u2-y2);
+    rm = theta1*y2/(theta2+y2);
+end FedBatchReactor;
+
+model FedBatchReactorParam
+    Real y1(start=7, fixed=true, min=0);
+    Real y2(start=0, fixed=true, min=-0.1);
+    Real rm;
+    parameter Real theta1 = 0.1;
+    parameter Real theta2 = 0.1;
+    parameter Real theta3 = 0.1;
+    parameter Real theta4 = 0.1;
+    input Real u1;
+    input Real u2;
+equation
+    der(y1) = (rm - u1)*y1 - theta4*y1;
+    der(y2) = -rm*y1/theta3 + u1*(u2-y2);
+    rm = theta1*y2/(theta2+y2);
+end FedBatchReactorParam;
+
+optimization FedBatchReactor_OED(finalTime=20)
+    extends FedBatchReactorParam(u1(min=0.05, max=0.2), u2(min=5, max=35));
+end FedBatchReactor_OED;
+

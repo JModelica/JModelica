@@ -1,0 +1,237 @@
+<project name="test_compilewithwalls" basedir="." default="cleanup">
+    <property name="test.dir" value="compilewithwalls"/>
+
+    <taskdef resource="net/sf/antcontrib/antcontrib.properties">
+        <classpath location="${antcontrib.jar}"/>
+    </taskdef>
+
+    <target name="cleanup">
+        <delete quiet="yes" dir="${test.dir}"/>
+    </target>
+
+    <target name="init">
+    </target>
+
+    <target name="testTooManyNestedWallElements" depends="init">
+        <compilewithwalls intermediaryBuildDir="${test.dir}/dir2">
+            <walls />
+            <walls />
+            <javac />
+        </compilewithwalls>
+    </target>
+
+    <target name="testTooManyNestedJavacElements" depends="init">
+        <compilewithwalls intermediaryBuildDir="${test.dir}/dir2">
+            <walls />
+            <javac />
+            <javac />
+        </compilewithwalls>
+    </target>
+
+    <target name="testNoWallElement" depends="init">
+        <compilewithwalls intermediaryBuildDir="${test.dir}/dir2">
+            <javac />
+        </compilewithwalls>
+    </target>
+
+    <target name="testNoJavacElement" depends="init">
+        <compilewithwalls intermediaryBuildDir="${test.dir}/dir2">
+            <walls />
+        </compilewithwalls>
+    </target>
+	
+	<target name="testNoSrcDirInJavac" depends="init">
+        <compilewithwalls intermediaryBuildDir="${test.dir}/dir2">
+            <walls>
+                <package name="modA" package="biz.xsoftware" />
+            </walls>
+
+            <javac>
+            </javac>
+        </compilewithwalls>	
+	</target>
+
+    <target name="testIntermediaryDirAndDestDirSame" depends="init">
+    	<mkdir dir="${test.dir}/dir1" />
+        <compilewithwalls intermediaryBuildDir="${test.dir}/dir1">
+            <walls>
+            </walls>
+
+            <javac srcdir="${test.dir}/dir1" destdir="${test.dir}/dir1">
+            </javac>
+        </compilewithwalls>
+    </target>
+
+    <target name="testIntermediaryDirInsideDestDir" depends="init">
+    	<mkdir dir="${test.dir}/dir1" />
+        <compilewithwalls intermediaryBuildDir="${test.dir}/dir1/insideDestDir">
+            <walls>
+            </walls>
+
+            <javac srcdir="${test.dir}/dir1" destdir="${test.dir}/dir1">
+            </javac>
+        </compilewithwalls>
+    </target>
+        	
+    <target name="testPackageDoesntEndWithStar" depends="init">
+        <mkdir dir="${test.dir}/dir1" />
+
+        <compilewithwalls intermediaryBuildDir="${test.dir}/dir2">
+            <walls>
+                <package name="modA" package="biz.xsoftware" />
+            </walls>
+
+            <javac srcdir="${test.dir}/dir1" destdir="${test.dir}/dir1">
+            </javac>
+        </compilewithwalls>
+
+    </target>
+
+    <target name="testPackageDoesntHaveSlash" depends="init">
+        <mkdir dir="${test.dir}/dir1" />
+
+        <compilewithwalls intermediaryBuildDir="${test.dir}/dir2">
+            <walls>
+                <package name="modA" package="biz/xsoftware.*" />
+            </walls>
+
+            <javac srcdir="${test.dir}/dir1" destdir="${test.dir}/dir1">
+            </javac>
+        </compilewithwalls>
+    </target>
+
+    <target name="testDependsOnNonExistPackage" depends="init">
+        <mkdir dir="${test.dir}/dir1" />
+
+        <compilewithwalls intermediaryBuildDir="${test.dir}/dir2">
+            <walls>
+                <package name="modA"
+                    package="biz.xsoftware.*"
+                    depends="modB" />
+            </walls>
+
+            <javac srcdir="${test.dir}/dir1" destdir="${test.dir}/dir1">
+            </javac>
+        </compilewithwalls>
+
+    </target>
+
+    <target name="testDependsOnPackageAfter" depends="init">
+        <mkdir dir="${test.dir}/dir1" />
+
+        <compilewithwalls intermediaryBuildDir="${test.dir}/dir2">
+            <walls>
+                <package name="modA"
+                    package="biz.xsoftware.*"
+                    depends="modB" />
+                <package name="modB"
+                    package="biz.xsoftware.something.*" />
+            </walls>
+
+            <javac srcdir="${test.dir}/dir1" destdir="${test.dir}/dir1">
+            </javac>
+        </compilewithwalls>
+
+    </target>
+
+    <target name="testPackageABreakingWhenAIsCompiledFirst" depends="init">
+        <mkdir dir="${test.dir}/classes/testA" />
+        <compilewithwalls intermediaryBuildDir="${test.dir}/classes/testAtemp">
+            <walls>
+                <package name="modA"
+                    package="mod.modA.*" />
+                <package name="modB"
+                    package="mod.modB.*" />
+                <package name="mod"
+                    package="mod.*"
+                    depends="modA,modB" />
+            </walls>
+
+            <javac srcdir="./testA" destdir="${test.dir}/classes/testA">
+            </javac>
+        </compilewithwalls>
+
+    </target>
+
+    <target name="testPackageBBreakingWhenAIsCompiledFirst" depends="init">
+        <mkdir dir="${test.dir}/classes/testB" />
+        <compilewithwalls intermediaryBuildDir="${test.dir}/classes/testBtemp">
+            <walls>
+                <package name="modA"
+                    package="mod.modA.*" />
+                <package name="modB"
+                    package="mod.modB.*" />
+                <package name="mod"
+                    package="mod.*"
+                    depends="modA,modB" />
+            </walls>
+            
+            <javac srcdir="./testB" destdir="${test.dir}/classes/testB">
+            </javac>
+        </compilewithwalls>
+
+    </target>
+
+    <target name="testMoreThanOneSrcDirInJavac" depends="init">
+	    <mkdir dir="${test.dir}/classes/testX" />
+        <compilewithwalls intermediaryBuildDir="${test.dir}/classes/testXtemp">
+            <walls/>
+            <javac destdir="${test.dir}/classes/testX">
+                <src path="${test.dir}/dir1">
+                </src>
+                <src path="xyz">
+                </src>
+            </javac>
+        </compilewithwalls>
+    </target>
+    
+    <target name="testCompileOfAllUsingDepends" depends="init">
+        <mkdir dir="${test.dir}/classes/testC" />
+        <compilewithwalls intermediaryBuildDir="${test.dir}/classes/testCtemp">
+            <walls>
+                <package name="modA"
+                    package="mod.modA.*" />
+                <package name="modB"
+                    package="mod.modB.*" />
+                <package name="mod"
+                    package="mod.*"
+                    depends="modA,modB" />
+            </walls>
+
+            <javac srcdir="./testC" destdir="${test.dir}/classes/testC">
+            </javac>
+        </compilewithwalls>
+
+    </target>
+
+<!--
+*********************************************************
+	These are mostly the same tests above but making sure it works with
+	external walls.xml file.
+*********************************************************
+-->
+    <target name="testDependsOnPackageAfterExternalWalls" depends="init">
+        <mkdir dir="${test.dir}/dir1" />
+        <compilewithwalls walls="dependsafter.xml" intermediaryBuildDir="${test.dir}/dir2">
+            <javac srcdir="${test.dir}/dir1" destdir="${test.dir}/dir1">
+            </javac>
+        </compilewithwalls>
+    </target>
+    
+    <target name="testPackageBBreakingWhenAIsCompiledFirstExternalWalls" depends="init">
+        <mkdir dir="${test.dir}/classes/testB" />
+        <compilewithwalls walls="packageB-break.xml" intermediaryBuildDir="${test.dir}/classes/testBtemp">           
+            <javac srcdir="./testB" destdir="${test.dir}/classes/testB">
+            </javac>
+        </compilewithwalls>
+    </target>
+
+    <target name="testCompileOfAllUsingDependsExternalWalls" depends="init">
+        <mkdir dir="${test.dir}/classes/testC" />
+        <compilewithwalls walls="walls.xml" intermediaryBuildDir="${test.dir}/classes/testCtemp">
+            <javac srcdir="./testC" destdir="${test.dir}/classes/testC">
+            </javac>
+        </compilewithwalls>
+    </target>
+
+</project>

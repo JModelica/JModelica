@@ -1,0 +1,240 @@
+/*
+    Copyright (C) 2013 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+optimization atomicOptimizationLEQ (objectiveIntegrand=x1) 
+    Real x1(start=0);
+equation
+    x1 = sin(x1) + 0.5;
+constraint
+    x1 <=  1.00;
+end atomicOptimizationLEQ;
+
+optimization atomicOptimizationGEQ (objectiveIntegrand=x1) 
+    Real x1(start=0);
+equation
+    x1 = sin(x1) + 0.5;
+constraint
+    x1 >=  1.00;
+end atomicOptimizationGEQ;
+
+optimization atomicOptimizationGEQandLEQ (objectiveIntegrand=x1) 
+    Real x1(start=0);
+    Real x2(start=0);
+equation
+    x1 = sin(x1) + 0.5;
+    x2 = sin(x1) + 0.5;
+constraint
+    x1 >=  1.00;
+    x2 <=  1.00;
+end atomicOptimizationGEQandLEQ;
+
+optimization atomicOptimizationEQpoint (objective=finalTime) 
+    Real x1;
+equation 
+    x1 = sin(x1) + 0.5;
+constraint
+    x1(finalTime) = 1.00;
+end atomicOptimizationEQpoint;
+
+
+optimization atomicOptimizationLEQpoint (objectiveIntegrand=x1) 
+    Real x1(start=0);
+equation
+    x1 = sin(x1) + 0.5;
+constraint
+    x1(finalTime) <=  1.00;
+end atomicOptimizationLEQpoint;
+
+optimization atomicOptimizationGEQpoint (objectiveIntegrand=x1) 
+    Real x1(start=0);
+equation
+    x1 = sin(x1) + 0.5;
+constraint
+    x1(finalTime) >=  1.00;
+end atomicOptimizationGEQpoint;
+
+optimization atomicOptimizationGEQandLEQandEQpoint (objectiveIntegrand=x1) 
+    Real x1(start=0);
+    Real x2(start=0);
+    Real x3(start=0);
+equation
+    x1 = sin(x1) + 0.5;
+    x2 = sin(x1) + 0.5;
+    x3 = sin(x1) + 0.5;
+constraint
+    x1(startTime + 1) >=  1.00;
+    x2(startTime + 1) <=  1.00;
+    x2(finalTime + 1) =  1.00;
+end atomicOptimizationGEQandLEQandEQpoint;
+
+optimization atomicOptimizationMixedConstraints (objectiveIntegrand=x1) 
+    Real x1(start=0);
+    Real x2(start=0);
+    Real x3(start=0);
+equation
+    x1 = sin(x1) + 0.5;
+    x2 = sin(x1) + 0.5;
+    x3 = sin(x1) + 0.5;
+constraint
+    x1(startTime + 1) >=  1.00;
+    x2(startTime + 1) <=  1.00;
+    x3(startTime + 1) <= x1;
+end atomicOptimizationMixedConstraints;
+
+optimization atomicOptimizationTimedVariables (objective=x1(finalTime)) 
+    Real x1(start=0);
+    Real x2(start=0);
+    Real x3(start=0);
+    Real c1 = 0.5;
+equation
+    x1 = sin(x1) + 0.5;
+    x2 = sin(x1) + 0.5;
+    x3 = sin(x1) + 0.5;
+constraint
+    x1(startTime + 1) >=  1.00;
+    x2(startTime + 1) <=  time;
+    x3(finalTime - 1) <= x1;
+end atomicOptimizationTimedVariables;
+
+optimization atomicOptimizationStart5 (objectiveIntegrand=x1, startTime = 5) 
+    Real x1(start=0);
+equation
+    x1 = sin(x1) + 0.5;
+constraint
+    x1 >=  1.00;
+end atomicOptimizationStart5;
+
+optimization atomicOptimizationFinal10(objectiveIntegrand=x1, finalTime=10) 
+    Real x1(start=0);
+equation
+    x1 = sin(x1) + 0.5;
+constraint
+    x1 >=  1.00;
+end atomicOptimizationFinal10;
+
+optimization atomicLagrangeX1(objectiveIntegrand=x1, finalTime=10) 
+    Real x1(start=0);
+equation
+    x1 = sin(x1) + 0.5;
+constraint
+    x1 >=  1.00;
+end atomicLagrangeX1;
+
+optimization atomicLagrangeNull(objective=finalTime, finalTime=10) 
+    Real x1(start=0);
+equation
+    x1 = sin(x1) + 0.5;
+constraint
+    x1 >=  1.00;
+end atomicLagrangeNull;
+
+optimization atomicMayerFinalTime(objective=finalTime) 
+    Real x1(start=0);
+equation
+    x1 = sin(x1) + 0.5;
+    
+constraint
+    x1 >=  1.00;
+end atomicMayerFinalTime;
+
+optimization atomicMayerNull(objectiveIntegrand=x1) 
+    Real x1(start=0);
+equation
+    x1 = sin(x1) + 0.5;
+constraint
+    x1 >=  1.00;
+end atomicMayerNull;
+
+optimization atomicMayerX1AtFinalTime(objective=x1(finaltime)) 
+    Real x1(start=0);
+equation
+    x1 = sin(x1) + 0.5;
+constraint
+    x1 >=  1.00;
+end atomicMayerX1AtFinalTime;
+
+type Voltage = Real(quantity="ElectricalPotential", unit="V");
+optimization atomicWithVoltageType(objectiveIntegrand=x1, finalTime=10) 
+    Voltage x1(start=0, fixed = true);
+equation
+    der(x1)  = sin(x1) + 0.5;
+constraint
+    x1 >=  1.00;
+end atomicWithVoltageType;
+
+optimization atomicWithFree(objectiveIntegrand=x1, finalTime=10) 
+    Real x1(start=0, free = false, fixed = true);
+equation
+    der(x1)  = sin(x1) + 0.5;
+constraint
+    x1 >=  1.00;
+end atomicWithFree;
+
+optimization atomicWithInitialGuess(objectiveIntegrand=x1, finalTime=10) 
+    Real x1(start=0, initialGuess = 5, fixed = true);
+equation
+    der(x1)  = sin(x1) + 0.5;
+constraint
+    x1 >=  1.00;
+end atomicWithInitialGuess;
+
+optimization InStream(objectiveIntegrand=x^2+u^2)
+    connector StreamConnector 
+        Real p(start=1); 
+        flow Real f(start=1.5); 
+        stream Real s(start=2.5); 
+    end StreamConnector; 
+    model A 
+        StreamConnector c1(f(nominal=0.1)); 
+        StreamConnector c2; 
+        StreamConnector c3(f(nominal=2)); 
+        Real x1(start=0.4) = inStream(c1.s); 
+        Real x2(start=0.7) = inStream(c2.s); 
+        Real x3(start=0.9) = inStream(c3.s); 
+    equation 
+        connect(c1, c2); 
+        connect(c1, c3); 
+    end A; 
+       
+    model B 
+        StreamConnector c4(p = 7, f = 8, s = 4); 
+        StreamConnector c5(s = 5); 
+        StreamConnector c6(s = 6, f = 9); 
+    end B; 
+     
+    A a; 
+    B b;
+    Real x(start=1, fixed=true);
+    input Real u;
+equation 
+    der(x) = x + a.x1 + b.c4.p + u;
+    connect(a.c1, b.c4); 
+    connect(a.c2, b.c5); 
+    connect(a.c3, b.c6);
+end InStream;
+
+package identifierTest
+
+    optimization identfierTestModel(objectiveIntegrand=x1, finalTime=10) 
+        Real x1(start=0, initialGuess = 5, fixed = true);
+    equation
+        der(x1)  = sin(x1) + 0.5;
+    constraint
+        x1 >=  1.00;
+    end identfierTestModel;
+
+end identifierTest;

@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<chapter version="5.0" xmlns="http://docbook.org/ns/docbook"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns:xs="http://www.w3.org/2001/XMLSchema"
+         xmlns:xlink="http://www.w3.org/1999/xlink"
+         xmlns:xi="http://www.w3.org/2001/XInclude"
+         xmlns:svg="http://www.w3.org/2000/svg"
+         xmlns:m="http://www.w3.org/1998/Math/MathML"
+         xmlns:html="http://www.w3.org/1999/xhtml"
+         xmlns:db="http://docbook.org/ns/docbook">
+  <title>Getting started</title>
+
+  <para>This chapter is intended to give a brief introduction to using the
+  JModelica.org Python packages and will therefore not go into any details.
+  Please refer to the other chapters of this manual for more information on
+  each specific topic.</para>
+
+  <section>
+    <title>The JModelica.org Python packages</title>
+
+    <para>The JModelica.org Python interface enables users to use Python
+    scripting to interact with Modelica and Optimica models. The interface
+    consists of three packages:</para>
+
+    <para><itemizedlist>
+        <listitem>
+          <para><emphasis role="bold">PyModelica</emphasis> Interface to the
+          compilers. Compile Modelica and Optimica code into model units,
+          FMUs. See <xref linkend="ch_models"/> for more information.</para>
+        </listitem>
+
+        <listitem>
+          <para><emphasis role="bold">PyFMI</emphasis> Work with models that
+          have been compiled into FMUs (Functional Mock-up Units), perform
+          simulations, parameter manipulation, plot results etc. See <xref
+          linkend="ch_simulation"/> for more information.</para>
+        </listitem>
+
+        <listitem>
+          <para><emphasis role="bold">PyJMI</emphasis> Work with models that
+          are represented in symbolic form based on the automatic
+          differentiation tool CasADi. This package is mainly used for solving
+          optimization problems. See <xref linkend="ch_optimization"/> for
+          more information.</para>
+        </listitem>
+      </itemizedlist></para>
+  </section>
+
+  <section xml:id="gs_sec_starting_a_python_session">
+    <title>Starting a Python session</title>
+
+    <para>Starting a Python session differs somewhat depending on your
+    operating system.</para>
+
+    <section>
+      <title>Windows</title>
+
+      <para>If you are on Windows, there are three different Python shells
+      available under the JModelica.org start menu.<itemizedlist>
+          <listitem>
+            <para><emphasis role="bold">Python</emphasis> Normal command shell
+            started with Python.</para>
+          </listitem>
+
+          <listitem>
+            <para><emphasis role="bold">IPython</emphasis> Interactive shell
+            for Python with, for example, code highlighting and tab
+            completion.</para>
+          </listitem>
+
+          <listitem>
+            <para><emphasis role="bold">pylab</emphasis> IPython shell which
+            also loads the numeric computation environment <link
+            xlink:href="http://www.scipy.org/PyLab">PyLab</link>.</para>
+          </listitem>
+        </itemizedlist>It is recommended to use either the IPython or pylab
+      shell.</para>
+    </section>
+
+    <section>
+      <title>Linux</title>
+
+      <para>To start the IPython shell with pylab on Linux open a terminal and
+      enter the command:</para>
+
+      <programlisting language="python">&gt; $JMODELICA_HOME/bin/jm_ipython.sh -pylab
+</programlisting>
+    </section>
+  </section>
+
+  <section>
+    <title>Running an example</title>
+
+    <para>The Python packages <literal>pyfmi</literal> and
+    <literal>pyjmi</literal> each contain a folder called
+    <literal>examples</literal> in which there are several Python example
+    scripts. The scripts demonstrate compilation, loading and simulation or
+    optimization of models. The corresponding model files are located in the
+    subdirectory <filename>files</filename>. The following code demonstrates
+    how to run such an example. First a Python session must be started, see
+    <xref linkend="gs_sec_starting_a_python_session"/> above. The example
+    scripts are preferably run in the pylab Python shell.</para>
+
+    <para>The following code will run the RLC example and plot some
+    results.</para>
+
+    <para><programlisting language="python"># Import the RLC example
+from pyjmi.examples import RLC
+
+# Run the RLC example and plot results
+RLC.run_demo()</programlisting></para>
+
+    <para>Open <filename>RLC.py</filename> in a text editor and look at the
+    Python code to see what happens when the script is run.</para>
+  </section>
+
+  <section>
+    <title>Redefining the JModelica.org environment</title>
+
+    <para>When importing <literal>pyjmi</literal> or
+    <literal>pymodelica</literal> in Python, the script
+    <filename>startup.py</filename> is run which sets the environment used by
+    JModelica.org for the current Python session. For example, the environment
+    variable <literal>JMODELICA_HOME</literal> points at the JModelica.org
+    installation directory and <literal>IPOPT_HOME</literal> points at the
+    Ipopt installation directory. These environment variables
+    set in <filename>startup.py</filename> can be overridden by a user defined
+    script: <filename>user_startup.py</filename>.</para>
+
+    <para>The script <filename>startup.py</filename> looks for
+    <filename>user_startup.py</filename> in the folder</para>
+
+    <itemizedlist>
+      <listitem>
+        <para><filename>$USERPROFILE/.jmodelica.org/</filename>
+        (Windows)</para>
+      </listitem>
+
+      <listitem>
+        <para><filename>$HOME/.jmodelica.org/</filename> (unix)</para>
+      </listitem>
+    </itemizedlist>
+
+    <para>If the script <filename>user_startup.py</filename> is not found, the
+    default environment variables will be used.</para>
+
+    <section>
+      <title>Example redefining IPOPT_HOME</title>
+
+      <para>The following step-by-step procedure will show how to redefine the
+      JModelica.org environment variable <literal>IPOPT_HOME</literal>:</para>
+
+      <orderedlist>
+        <listitem>
+          <para>Go to the folder <filename>$USERPROFILE</filename> (Windows)
+          or <filename>$HOME</filename> (Linux). To find out where
+          <literal>$USERPROFILE</literal> or <literal>$HOME</literal> points
+          to, open a Python shell and type:</para>
+
+          <programlisting language="python">import os
+os.environ['USERPROFILE']   // Windows
+os.environ['HOME']          // Linux</programlisting>
+        </listitem>
+
+        <listitem>
+          <para>Create a folder and name it <literal>.jmodelica.org</literal>
+          (or open it if it already exists)</para>
+        </listitem>
+
+        <listitem>
+          <para>In this folder, create a text file and name it
+          <filename>user_startup.py</filename>.</para>
+        </listitem>
+
+        <listitem>
+          <para>Open the file and type</para>
+
+          <programlisting>environ['IPOPT_HOME']='&lt;new path to Ipopt home&gt;'</programlisting>
+        </listitem>
+
+        <listitem>
+          <para>Save and close.</para>
+        </listitem>
+
+        <listitem>
+          <para>Check your changes by opening a Python shell, import
+          <literal>pyjmi</literal> and check the <literal>IPOPT_HOME</literal>
+          environment variable:</para>
+
+          <programlisting language="python">import pyjmi
+pyjmi.environ['IPOPT_HOME']</programlisting>
+        </listitem>
+      </orderedlist>
+    </section>
+  </section>
+
+  <section>
+    <title>The JModelica.org user forum</title>
+
+    <para>Please use the <link
+    xlink:href="http://www.jmodelica.org/forum">JModelica.org forum</link> for
+    any questions related to JModelica.org or the Modelica language. You can
+    search in old threads to see if someone has asked your question before or
+    start a new thread if you are a registered user.</para>
+  </section>
+</chapter>

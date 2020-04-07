@@ -1,0 +1,40 @@
+package MHETest
+    model MHEAlgebraicVariables
+        Real x1;
+        Real x2;
+        Real x3;
+        
+        Real y1;
+        Real y2;
+        Real y3;
+        
+        parameter Real a = 4;
+        
+        parameter Real b = 2;
+        
+        input Real u1;
+        input Real u2;
+        input Real u3;
+        
+        input Real w2;
+    equation
+        der(x1) = -a*(x1^3) + u1;
+        der(x2) = -y2^3 + u2 + w2;
+        der(x3) = -y3;
+        y1 = b*x1;
+        y2 = x2;
+        y3 = x3 - u3;
+    end MHEAlgebraicVariables;
+
+    optimization MHEAlgVarConstraints
+    
+    extends MHEAlgebraicVariables;
+    
+    constraint
+        //w2 >= 0;
+        
+    end MHEAlgVarConstraints;
+
+
+
+end MHETest;

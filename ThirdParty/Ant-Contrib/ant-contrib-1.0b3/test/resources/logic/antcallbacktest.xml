@@ -1,0 +1,54 @@
+<?xml version="1.0"?>
+
+<project name="antcallbacktest" basedir="." default="test1">
+   <description>
+     test build file for the AntCallBack task
+   </description>
+   
+   <taskdef resource="net/sf/antcontrib/antcontrib.properties">
+      <classpath location="${antcontrib.jar}"/>
+   </taskdef>         
+         
+         
+   <target name="test1">
+      <antcallback target="setProperty" return="prop1"/>
+   </target>
+  
+   <target name="test2">
+      <antcallback target="setProperties" return="prop1,prop2,prop3"/>
+   </target>
+  
+   <target name="test3">
+      <antcallback target="setProperties" return="prop1,   prop2,   prop3"/>
+   </target>
+  
+   <target name="test4">
+      <antcallback target="setTwoProperties" return="prop1,   prop2,   prop3"/>
+   </target>
+   
+   <target name="test5">
+      <!-- the beauty of unit testing is this test for checking that a property
+      won't get overwritten also revealed that params weren't supported.
+      AntCallBack is actually based on the ant task, not antcall. --> 
+      <antcallback target="setProperties" return="prop1,   prop2,   prop3">
+         <param name="prop1" value="blah"/>
+      </antcallback>
+   </target>
+  
+   <target name="setProperty">
+      <property name="prop1" value="prop1"/>
+   </target>
+   
+   <target name="setTwoProperties">
+      <property name="prop2" value="prop2"/>
+      <property name="prop3" value="prop3"/>
+   </target>
+   
+   <target name="setProperties">
+      <property name="prop1" value="prop1"/>
+      <property name="prop2" value="prop2"/>
+      <property name="prop3" value="prop3"/>
+   </target>
+   
+   <target name="setNoProperties"/>
+</project>

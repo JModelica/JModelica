@@ -1,0 +1,371 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect FlatteningAccess {
+
+    public FExp CommonAccessExp.flatten(Flattener f) {
+        return setLocationOf(flatten(f, 0));
+    }
+
+    public abstract FExp CommonAccessExp.flatten(Flattener f, int order);
+    
+    public FExp FAccessExp.flatten(Flattener f, int order) {
+        return treeCopy();
+    }
+    
+    public FExp InstAccessExp.flatten(Flattener f, int order) {
+        InstAccess ia = getInstAccess();
+        InstComponentDecl var = ia.myInstComponentDecl();
+        if (!inFunction()) {
+            if (ia.isNonAssignableArray()) {
+                return getArrayExp().buildFlattened(f, this, order);
+            } else if (!ia.indexVariability().indexParameterOrLess()) {
+                CommonAccessExp copy = dynamicFExp(treeCopy()).asCommonAccessExp();
+                List<FSubscript> sub = new List<FSubscript>();
+                copy.asInstAccess().extractNonParameterIndices(sub, ia.myInstComponentDecl().variability());
+                FExp res = dynamicFExp(new FSubscriptedExp(copy, new FArrayExpSubscripts(sub)));
+                return res.flatten(f);
+            }
+        }
+        return var.flattenAccess(f, this, order);
+    }
+
+    syn boolean InstAccess.isNonAssignableArray() = !myInstComponentDecl().isAssignable() && isArray();
+    eq InstDot.isNonAssignableArray() {
+        for (InstAccess ia : getInstAccessList()) {
+            if (ia.isNonAssignableArray()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public abstract FAccess CommonAccess.flatten(Flattener f);
+
+    public FAccess FAccess.flatten(Flattener f) {
+        return treeCopy();
+    }
+
+    /**
+     * Flatten an access expression to this component.
+     */
+    public FExp InstComponentDecl.flattenAccess(Flattener f, CommonAccessExp access, int order) {
+        return createCommonAccessExp(access.asInstAccess().flatten(f), order);
+    }
+
+    public FExp InstAssignable.flattenAccess(Flattener f, CommonAccessExp access, int order) {
+        if (variability().indexParameterOrLess()) {
+            FExp res = flattenAccessToConst(f, access);
+            if (res != null) {
+                return res;
+            }
+        }
+        return super.flattenAccess(f, access, order);
+    }
+
+    /**
+     * Move any non-parameter indices to given list and replace with colon.
+     * Copy any parameter non-scalar indices to given list.
+     */
+    public void InstAccess.extractNonParameterIndices(List<FSubscript> sub, TypePrefixVariability v) {}
+
+    public void InstArrayAccess.extractNonParameterIndices(List<FSubscript> sub, TypePrefixVariability v) {
+        getFArraySubscripts().extractNonParameterIndices(sub);
+    }
+
+    public void InstComponentAccess.extractNonParameterIndices(List<FSubscript> sub, TypePrefixVariability v) {
+        if (isArray()) {
+            for (int i = 0, n = ndims(); i < n; i++) {
+                sub.add(size().rangeFSubscript(i));
+            }
+        }
+    }
+
+    public void InstDot.extractNonParameterIndices(List<FSubscript> sub, TypePrefixVariability v) {
+        for (InstAccess ia : getInstAccesss()) {
+            ia.extractNonParameterIndices(sub, v);
+        }
+    }
+
+    public void FArraySubscripts.extractNonParameterIndices(List<FSubscript> sub) {}
+    public void FArrayExpSubscripts.extractNonParameterIndices(List<FSubscript> sub) {
+        for (int i = 0, n = getNumFSubscript(); i < n; i++) {
+            FSubscript fs = getFSubscript(i);
+            if (!fs.variability().indexParameterOrLess()) {
+                sub.add(fs);
+                setFSubscript(new FColonSubscript(), i);
+            } else if (fs.ndims() == 1) {
+                sub.add(fs.size().rangeFSubscript(0));
+            }
+        }
+    }
+
+    /**
+     * Flatten this access.
+     */
+    public FAccess InstAccess.flatten(Flattener f) {
+        return getFAccess().copyAndAddFas(flattenFAS(f));
+    }
+
+    public FAccess InstDot.flatten(Flattener f) {
+        FAccess res = null;
+        boolean assignable = false;
+        for (InstAccess cur : getInstAccessList()) {
+            if (assignable) {
+                res = res.append(cur.name(), cur.flattenFAS(f));
+            } else if (cur.myInstComponentDecl().isAssignable()) {
+                res = cur.flatten(f);
+                assignable = true;
+            }
+        }
+        if (res == null) {
+           res = getLastInstAccess().flatten(f);
+        }
+        return res;
+    }
+
+    public FAccess InstGlobalAccess.flatten(Flattener f) {
+        return getInstAccess().flatten(f);
+    }
+
+    syn FAccess InstAccess.getFAccess() {
+        throw new InternalCompilerError("getFAccess() not implemented for class '" + getClass().getName() + "'");
+    }
+    eq InstComponentAccess.getFAccess()      = myInstComponentDecl().getFAccess();
+    eq InstComponentArrayAccess.getFAccess() = myInstComponentDecl().getFAccess();
+    eq InstClassAccess.getFAccess()          = new FAccessString(myInstClassDecl().qualifiedName());
+
+    public FArraySubscripts InstAccess.flattenFAS(Flattener f) {
+        boolean arr = isArray();
+        if ((!arr && hasFArraySubscripts()) || (arr && flattenFASContext())) {
+            return allFArraySubscripts().get(0).flatten(f);
+        } else {
+            return null;
+        }
+    }
+    
+    inh boolean InstAccess.flattenFASContext();
+    inh boolean FExp.flattenFASContext();
+    eq BaseNode.getChild().flattenFASContext()             = true;
+    eq FUnknownSizeExp.getFExp().flattenFASContext()       = false;
+    eq FExternalStmt.getChild().flattenFASContext()        = false;
+    eq InstDot.getInstAccess(int i).flattenFASContext()    = i != getNumInstAccess() - 1 || flattenFASContext();
+    eq FIfExp.getChild().flattenFASContext()               = flattenFASContext();
+    eq CommonAccessExp.getChild().flattenFASContext()            = flattenFASContext() || isSlice();
+    
+    eq InstFunctionArgument.getChild().flattenFASContext() = !inFunction();
+    eq FFunctionCallLeft.getFExp().flattenFASContext()     = !inFunction();
+    eq InstForIndex.getChild().flattenFASContext()         = !inFunction();
+    eq FSizeExp.getFExp().flattenFASContext()              = !getFExp().isCircular() && !inFunction();
+    eq FAssignStmt.getLeft().flattenFASContext()           = !scalarizedAsFFunctionCallStmt();
+
+}
+
+
+aspect FlatteningFAccesss {
+    syn FAccess InstNode.getFAccessPrefix() = retrieveFAccess();
+
+    syn lazy FAccess InstNode.getFAccess() = getFAccessPrefix();
+    eq InstClassDecl.getFAccess()         = new FAccessEmpty();
+    eq InstComponentDecl.getFAccess()     = appendMyName(retrieveFAccess());
+
+    syn FAccess InstComponentDecl.appendMyName(FAccess prefix) = prefix.copyAndAppend(name());
+    eq InstRecord.appendMyName(FAccess prefix)                = super.appendMyName(prefix).asFAccessFull();
+    eq InstArrayComponentDecl.appendMyName(FAccess prefix) {
+        if (isArray()) {
+            return prefix;
+        } else {
+            InstComponentDecl top = arrayTopInstComponentDecl();
+            if (top.size().isEmpty() || top.size().isUnknown()) {
+                return prefix;
+            } else {
+                return prefix.copyAndAddFas(myIndex());
+            }
+        }
+    }
+
+    inh lazy FAccess InstNode.retrieveFAccess();
+    inh FAccess FExp.retrieveFAccess();
+    eq InstComponentDecl.getChild().retrieveFAccess()                             = getFAccess();
+    eq InstComponentDecl.getInstModification().retrieveFAccess()                  = retrieveFAccess();
+    eq InstReplacingRecord.getOriginalInstComponent().retrieveFAccess()           = retrieveFAccess();
+    eq InstReplacingComposite.getOriginalInstComponent().retrieveFAccess()        = retrieveFAccess();
+    eq InstReplacingPrimitive.getOriginalInstComponent().retrieveFAccess()        = retrieveFAccess();
+    eq InstReplacingFullClassDecl.getOriginalInstClass().retrieveFAccess()        = retrieveFAccess();
+    eq InstReplacingShortClassDecl.getOriginalInstClass().retrieveFAccess()       = retrieveFAccess();
+    eq InstReplacingSimpleShortClassDecl.getOriginalInstClass().retrieveFAccess() = retrieveFAccess();
+    eq InstReplacingShortClassDecl.getChild().retrieveFAccess()                   = 
+        (isFunction() || isRecord()) ? new FAccessEmpty() : retrieveFAccess();
+    eq InstReplacingSimpleShortClassDecl.getChild().retrieveFAccess()             = 
+        (isFunction() || isRecord()) ? new FAccessEmpty() : retrieveFAccess();
+    eq InstClassDecl.getChild().retrieveFAccess()                                 = new FAccessEmpty();
+    eq InstValueModification.getChild().retrieveFAccess()                         = retrieveFAccessFromModification();
+    eq InstForIndex.getChild().retrieveFAccess()                                  = new FAccessEmpty();
+    eq InstEnumClassDecl.getChild().retrieveFAccess()                             = new FAccessString(qualifiedName());
+    eq InstRoot.getChild().retrieveFAccess()                                      = new FAccessEmpty();
+    eq SourceRoot.getProgram().retrieveFAccess()                                  = new FAccessEmpty();
+    eq FClass.getChild().retrieveFAccess()                                        = null;
+
+    inh FAccess InstModification.retrieveFAccessFromModification();
+    eq InstClassDecl.getChild().retrieveFAccessFromModification()                 = retrieveFAccess();
+    eq InstComponentDecl.getChild().retrieveFAccessFromModification()             = retrieveFAccess();
+    eq Root.getChild().retrieveFAccessFromModification()                          = new FAccessEmpty();
+}
+
+
+aspect FlatteningFunctionConstant {
+
+    /**
+     * Flatten an access to a constant. If it could not be folded or 
+     * flattened as a global variable null is returned. This should not 
+     * be possible! When we have moved flattening of records from scalarization
+     * to flattening we should be able to replace return null with a hard error.
+     * (I think the flattening contain the last record variability+evaluation related bugs.)
+     */
+    public FExp InstAssignable.flattenAccessToConst(Flattener f, CommonAccessExp access) {
+        FType t = access.type();
+        if (t.isEmpty()) {
+            return t.createEmptyExp();
+        }
+        
+        InstAccess ia = access.asInstAccess();
+        
+        /* Primitives can be inlined. Records and arrays could be used in patterns
+         * where it is more efficient to keep them as global variables. */
+        if (isComposite() && ia.inFunction() && ia.flattenAsGlobalAccess()) {
+            return flattenGlobalAccess(f, ia);
+        }
+        
+        if (access.canInlineConstant() && !ia.hasUnknownIndices()) {
+            try {
+                CValue cval = access.ceval();
+                if (isReal() && cval.hasConvertReal()) {
+                    cval = cval.convertReal();
+                }
+                if (cval.hasBuildLiteral()) {
+                    return cval.buildLiteral();
+                }
+            } catch (ConstantEvaluationException e) {
+                // TODO: Error. See method documentation.
+            }
+        }
+        
+        /* The access should have been folded 
+         * or flattened as global by this point. */
+        if (ia.flattenAsGlobalAccess()) {
+            return flattenGlobalAccess(f, ia);
+        }
+        
+        return null;
+    }
+
+    public FExp InstAssignable.flattenGlobalAccess(Flattener f, InstAccess ia) {
+        InstAssignable top = ia.topInstAssignable();
+        
+        if (f != null && !f.isFlattenedGlobalVariable(top)) {
+            top.flatten(f, FlattenBindingExp.ALL, 0, true);
+        }
+        
+        return new FGlobalAccessExp(ia.flatten(f).copyAndPrepend(top.surroundingInstClass().qualifiedName()),
+                                    (String) null);
+    }
+
+    syn boolean InstAccess.flattenAsGlobalAccess() =
+            topInstAssignable().flattenAsGlobalVariable() || 
+            (inFunction() && topInstAssignable().flattenAsGlobalVariableFromFunction());
+    syn boolean InstAssignable.flattenAsGlobalVariable() =
+            isExternalObject() && variability().constantVariability();
+    syn boolean InstAssignable.flattenAsGlobalVariableFromFunction() =
+            !isInput() && !isOutput() && variability().constantVariability();
+
+    /**
+     *  Determines whether or not a constant can be in-lined
+     *  for the given context.
+     */
+    eq BaseNode.getChild().canInlineConstant()                 = true;
+    eq FArrayExpSubscripts.getFSubscript().canInlineConstant() = true;
+    eq FExternalStmt.getArg().canInlineConstant()              = false;
+    eq FFunctionCallLeft.getFExp().canInlineConstant()         = false;
+    eq InstExternalCall.getArg().canInlineConstant()           = false;
+    
+    inh boolean FArray.canInlineConstant();
+    inh boolean CommonAccessExp.canInlineConstant();
+    inh boolean FRecordConstructor.canInlineConstant();
+    inh boolean FSizeExp.canInlineConstant();
+    inh boolean InstFunctionArgument.canInlineConstant();
+    inh boolean InstRecordConstructor.canInlineConstant();
+    
+    eq FArray.getChild().canInlineConstant()                = canInlineConstant();
+    eq FRecordConstructor.getChild().canInlineConstant()    = canInlineConstant();
+    eq FSizeExp.getFExp().canInlineConstant()               = canInlineConstant();
+    eq InstFunctionArgument.getChild().canInlineConstant()  = canInlineConstant();
+    eq InstRecordConstructor.getArg().canInlineConstant()   = canInlineConstant();
+
+    private Map<InstComponentDecl,String> InstClassDecl.tempVarNames;
+    private int InstClassDecl.nextTempVarIndex = 1;
+    
+    inh String InstAccess.findTempVarName(InstComponentDecl var);
+    eq InstClassDecl.getChild().findTempVarName(InstComponentDecl var) = localTempVarName(var);
+    eq InstRoot.getChild().findTempVarName(InstComponentDecl var)      = null;
+    eq FlatRoot.getChild().findTempVarName(InstComponentDecl var)      = null;
+    
+    syn String InstClassDecl.localTempVarName(InstComponentDecl var) {
+        if (tempVarNames == null)
+            tempVarNames = new HashMap<InstComponentDecl,String>();
+        if (tempVarNames.containsKey(var))
+            return tempVarNames.get(var);
+        String name;
+        do {
+            name = "temp_" + nextTempVarIndex++;
+        } while (memberInstComponent(name).successful());
+        tempVarNames.put(var, name);
+        return name;
+    }
+    
+    syn int InstDot.firstAssignableIndex() {
+        for (int i = 0, n = getNumInstAccess(); i < n; i++)
+            if (getInstAccess(i).isAssignable())
+                return i;
+        return -1;
+    }
+    
+    syn InstAssignable InstAccess.topInstAssignable() = (InstAssignable) myInstComponentDecl();
+    eq InstDot.topInstAssignable()                    = 
+            getInstAccess(firstAssignableIndex()).topInstAssignable();
+    
+    syn boolean InstAccess.hasUnknownIndices() = 
+        hasFArraySubscripts() && getFArraySubscripts().hasUnknownIndices();
+    eq InstDot.hasUnknownIndices() {
+        for (InstAccess ia : getInstAccesss())
+            if (ia.hasUnknownIndices())
+                return true;
+        return false;
+    }
+    
+    syn boolean FArraySubscripts.hasUnknownIndices();
+    syn lazy boolean FArrayExpSubscripts.hasUnknownIndices() {
+        for (FSubscript fs : getFSubscripts())
+            if (fs.isUnknownIndex())
+                return true;
+        return false;
+    }
+    eq FArrayLitSubscripts.hasUnknownIndices() = false;
+    
+    // TODO: this doesn't seem to cover colon subscripts to arrays of unknown size
+    syn boolean FSubscript.isUnknownIndex() = false;
+    eq FExpSubscript.isUnknownIndex()       = !getFExp().canCeval();
+
+}

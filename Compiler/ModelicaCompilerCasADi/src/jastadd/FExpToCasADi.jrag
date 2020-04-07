@@ -1,0 +1,670 @@
+/*
+Copyright (C) 2013 Modelon AB
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, version 3 of the License.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import ifcasadi.ifcasadi;
+import ifcasadi.GenericType;
+import ifcasadi.MX;
+import ifcasadi.MXFunction;
+import ifcasadi.MXVector;
+
+aspect FExpToCasADi {
+
+    // Workaround since it's troublesome to wrap the ModelicaCompiler-nested
+    // class TargetObject with jcc
+    public class ModelicaCompiler {
+        public FClass compileModelNoCodeGen(String name[], String cl)
+          throws ModelicaException, FileNotFoundException, IOException, beaver.Parser.Exception {
+            OptionRegistry tempOptions = options.copy();
+            TargetObject target = createTargetObject("nocodegen", null);
+            target.setDefaultOptions(options);
+            try {
+                return compileModel(name, cl, target, null, null);
+            } finally {
+                options.copyAllOptions(tempOptions);
+            }
+        }
+    }
+
+
+    /******** MXFunction ********/
+    
+    public interface FCallable {
+        public MXFunction toMXFunction();
+    }
+    
+    /**
+     * Creates A MXFunction for this FFunctionDecl. The MXFunction requires a single expression
+     * for all output variables, and only functions for which this is possible are supported. 
+     * @return A MXFunction 
+     */
+    syn lazy MXFunction FFunctionDecl.toMXFunction() {  
+        MXVector finalExpressions = generateFinalExpressionVector();
+        MXFunction f = new MXFunction(generateInputVector(),pickMXCorrespondingToOutputs(finalExpressions));
+        f.setOption("name",new GenericType(name()));
+        f.init();
+        return f; 
+    }
+    
+    syn MXFunction FFunctionVariable.toMXFunction() {
+        throw new UnsupportedOperationException();
+    }
+    
+    /**
+     * Puts the MX for all function variables in a single vector. Arrays
+     * and records are flattened. 
+     * @return A MXVector
+     */
+    MXVector FFunctionDecl.getMXVectorForFuncVars(){
+        MXVector MXVec = new MXVector();
+        for (FFunctionVariable funcVar : getFFunctionVariables()) {
+            MXVector funcVarMXVec = funcVar.asMXVector();
+            for (int i = 0; i < funcVarMXVec.size(); ++i) {
+                MXVec.add(funcVarMXVec.get(i));
+            }
+        }
+        return MXVec;
+    }
+    
+    /**
+     * Calculates an inlined expression for all variables in this FFunctionDecl.
+     * Handles the statements sequentially, and returns a vector with the expressions. 
+     * @return A MXVector
+     */
+    MXVector FFunctionDecl.generateFinalExpressionVector() {
+        MXVector allVars = getMXVectorForFuncVars();
+        MXVector expressions = getMXVectorForFuncVars();
+        for (FStatement statement : getFAlgorithm().getFStatementList()) {
+            if (statement instanceof FReturnStmt) {
+                break;
+            }
+            expressions = statement.updateExpressionsAccordingToStatement(expressions, allVars);
+        }
+        return expressions;
+    }
+    
+    /**
+     * Collects the MX for the function variables that occur as inputs in 
+     * A MXVector
+     * @return A MXVector
+     */
+    MXVector FFunctionDecl.generateInputVector() {
+        MXVector allVars = getMXVectorForFuncVars();
+        MXVector MXVec = new MXVector();
+        for (FFunctionVariable funcVar : getFFunctionVariables()) {
+            if (funcVar.isInput()) {
+                MXVector funcVarMXVec = funcVar.asMXVector();
+                for (int i = 0; i < funcVarMXVec.size(); ++i) {
+                    MXVec.add(funcVarMXVec.get(i));
+                }
+            }    
+        }
+        return MXVec;
+    }
+       
+    /**
+     * Picks out the MX in the MXVector, that is supplied as input, that 
+     * corresponds to variables that occur as output for this function. 
+     * Assumes that the variables in the supplied vector is ordered in the
+     * same way as the variables in this function's variable list. 
+     * @param A MXVector mixedCausality
+     * @return A MXVector
+     */
+    MXVector FFunctionDecl.pickMXCorrespondingToOutputs(MXVector mixedCausality) {
+        MXVector allVars = getMXVectorForFuncVars();
+        MXVector MXVec = new MXVector();
+        int index = 0;
+        for (FFunctionVariable funcVar : getFFunctionVariables()) {
+            if (funcVar.isOutput()) {
+                for (int i = 0; i < funcVar.asMXVector().size(); ++i) {
+                    MXVec.add(mixedCausality.get(index));
+                    index++;
+                }
+            } else {
+                index += funcVar.asMXVector().size();
+            }    
+        }
+        return MXVec;
+    }
+    
+    /**
+     * Update the supplied expressions to reflect this statement.
+     * @param A MXVector with expressions
+     * @param A MXVector with MX for the function variables
+     * @return A MXVector
+     */
+    MXVector FStatement.updateExpressionsAccordingToStatement(MXVector expressions, MXVector allVars) {
+        return expressions;
+    }
+    
+    /**
+     * Update the supplied expressions to reflect this statement.
+     * @param A MXVector with expressions
+     * @param A MXVector with MX for the function variables
+     * @return A MXVector
+     */
+    MXVector FFunctionCallStmt.updateExpressionsAccordingToStatement(MXVector expressions, MXVector allVars) {   
+        if (getCall().isIgnored()) {
+            return expressions;
+        }
+        if (isIgnoredForCasADi()) {
+            System.err.println("Warning: Ignored statement:\n" + this);
+            return expressions;
+        }
+        MXVector lhsVec = new MXVector();
+        for (FFunctionCallLeft fleft : getLefts()) {
+            if (fleft.hasFExp()) {
+                MXVector fleftExpAsMXVex = fleft.getFExp().toMXVector();
+                for (int i = 0; i < fleftExpAsMXVex.size(); ++i) {
+                    lhsVec.add(fleftExpAsMXVex.get(i));
+                }
+            }
+        }
+        MXVector updatedRhsExpressions = ifcasadi.substitute(getCall().toMXVector(), allVars, expressions);
+        for (int i = 0; i < lhsVec.size(); ++i) {
+            expressions.set(findIndexOfMXInMXVector(lhsVec.get(i), allVars), updatedRhsExpressions.get(i));    
+        }
+        return expressions;
+    }
+    
+    /**
+     * Update the supplied expressions to reflect this statement.
+     * @param A MXVector with expressions
+     * @param A MXVector with MX for the function variables
+     * @return A MXVector
+     */
+    MXVector FAssignStmt.updateExpressionsAccordingToStatement(MXVector expressions, MXVector allVars) {
+        MXVector lhsVec = new MXVector();
+        MX left = getLeft().toMX();
+        if (left == null) {
+            throw new UnsupportedOperationException("The variable on the LHS does not exists: " + toString());
+        }
+        lhsVec.add(left);
+        MXVector rhsVec = getRight().toMXVector();
+        
+        MX updatedRhsExpression = ifcasadi.substitute(rhsVec, allVars, expressions).get(0);
+        int indexInAllCurrVars = findIndexOfMXInMXVector(lhsVec.get(0), allVars);
+        expressions.set(indexInAllCurrVars, updatedRhsExpression);
+        return expressions;
+    }
+    
+    MXVector FIfStmt.updateExpressionsAccordingToStatement(MXVector expressions, MXVector allVars) {
+        throw new UnsupportedOperationException("If-Statements are unsupported (try to rewrite into if-expressions): " + toString());
+    }
+    
+    MXVector FForStmt.updateExpressionsAccordingToStatement(MXVector expressions, MXVector allVars) {
+        for (FStatement stmt : getUnrolledForStmts()) {
+            expressions = stmt.updateExpressionsAccordingToStatement(expressions, allVars);
+        }
+        return expressions;
+    }
+    
+    /**
+     * @param A MX that is searched for
+     * @param A MXVector that is searched in
+     * @return An index >= 0 if successful
+     */
+    int FStatement.findIndexOfMXInMXVector(MX node, MXVector vec){
+        for (int i = 0; i < vec.size(); ++i) {
+            if (vec.get(i).isEqual(node)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+    
+    
+    /******** Equations ********/
+    /** @return An empty MX */
+    syn MX FAbstractEquation.toMXForLhs() = new MX();
+    /** @return An empty MX */
+    syn MX FAbstractEquation.toMXForRhs() = new MX();
+    /** @return A MX the left hand side expression */
+    eq FEquation.toMXForLhs() = getLeft().toMX();
+    /** @return A MX the eight hand side expression */
+    eq FEquation.toMXForRhs()  = getRight().toMX();
+    /** @return A possibly stacked MX for the variables that are to be set by the function call */
+    eq FFunctionCallEquation.toMXForLhs() {
+        MX myLefts = new MX();
+        for (FFunctionCallLeft fleft : getLefts()) {
+            if (fleft.hasFExp()) {
+                MXVector fleftExpAsMXVex = fleft.getFExp().toMXVector();
+                for (int i = 0; i < fleftExpAsMXVex.size(); ++i) {
+                    myLefts.append(fleftExpAsMXVex.get(i));
+                }
+            }
+        }
+        return myLefts;
+    }
+    /** @return A possibly stacked MX for the outputs of the function call */
+    eq FFunctionCallEquation.toMXForRhs() {
+        MXVector rhsVec = getCall().toMXVector();
+        MX returnMX = new MX();
+        for (int i = 0; i < rhsVec.size(); ++i) {
+            returnMX.append(rhsVec.get(i));
+        }
+        return returnMX;
+    }
+    
+    
+    /********* Expressions **********
+     * Expressions are transformed to MX expressions recursively. 
+     * The transformation of expressions to MX produces several MX
+     * for some expressions, such as some function calls and FAccessExps.
+     */
+      
+    /**
+     * Returns this expression as A MXVector. 
+     * @return A MXVector
+     */ 
+    syn MXVector FExp.toMXVector()  {
+        MXVector MXVec = new MXVector();
+        MXVec.add(toMX());
+        return MXVec;
+    }
+    /**
+     * Returns this expression as A MX. Note that this might
+     * not make sense for some expressions, e.g. function calls with
+     * several outputs and FAccessExp for arrays.
+     * @return A MX
+     */
+    syn MX FExp.toMX() {
+        throw new UnsupportedOperationException("Cannot convert expression to MX: " + toString());
+    }
+    
+    // Arithmetic expressions
+    eq FDotAddExp.toMX() = getLeft().toMX().__add__(getRight().toMX());
+    eq FDotSubExp.toMX() = getLeft().toMX().__sub__(getRight().toMX());
+    eq FDotMulExp.toMX() = getLeft().toMX().__mul__(getRight().toMX());
+    eq FDotDivExp.toMX() = getLeft().toMX().__div__(getRight().toMX());
+    
+    // Trigonometric expression
+    eq FAtan2Exp.toMX() = getFExp().toMX().arctan2(getY().toMX()); 
+    eq FSinExp.toMX()   = getFExp().toMX().sin();
+    eq FSinhExp.toMX()  = getFExp().toMX().sinh();
+    eq FAsinExp.toMX()  = getFExp().toMX().arcsin();
+    eq FCosExp.toMX()   = getFExp().toMX().cos();
+    eq FCoshExp.toMX()  = getFExp().toMX().cosh();
+    eq FAcosExp.toMX()  = getFExp().toMX().arccos();
+    eq FTanExp.toMX()   = getFExp().toMX().tan();
+    eq FTanhExp.toMX()  = getFExp().toMX().tanh();
+    eq FAtanExp.toMX()  = getFExp().toMX().arctan();
+    
+    // Elementary functions  
+    eq FMinExp.toMX() = getX().toMX().fmin(getY().toMX());
+    eq FMaxExp.toMX() = getX().toMX().fmax(getY().toMX());
+    eq FDotPowExp.toMX() = getLeft().toMX().__pow__(getRight().toMX());
+    eq FLogExp.toMX() = getFExp().toMX().log();
+    eq FLog10Exp.toMX() = getFExp().toMX().log10();
+    eq FSqrtExp.toMX() = getFExp().toMX().sqrt();
+    eq FAbsExp.toMX() = getFExp().toMX().fabs();
+    eq FExpExp.toMX() = getFExp().toMX().exp();
+    
+    // Boolean expressions
+    eq FIfExp.toMX() =  ifcasadi.if_else(getIfExp().toMX(), getThenExp().toMX(), getElseExp().toMX());
+    eq FGeqExp.toMX() = getRight().toMX().__le__(getLeft().toMX());
+    eq FGtExp.toMX() = getRight().toMX().__lt__(getLeft().toMX());
+    eq FLeqExp.toMX() = getLeft().toMX().__le__(getRight().toMX());
+    eq FLtExp.toMX() = getLeft().toMX().__lt__(getRight().toMX());
+    eq FEqExp.toMX() = getLeft().toMX().__eq__(getRight().toMX());
+    eq FNeqExp.toMX() = getLeft().toMX().__ne__(getRight().toMX());
+    eq FAndExp.toMX() = getLeft().toMX().logic_and(getRight().toMX());
+    eq FOrExp.toMX() = getLeft().toMX().logic_or(getRight().toMX());
+    
+    // Other expressions
+    eq FSubscriptedExp.toMX() = select().toMX();
+    syn lazy MX FClass.timeMX() = ifcasadi.msym("time");
+    eq FTimeExp.toMX() = myFClass().timeMX();
+    /** @return A MX with the first output, and perhaps only output, for this function call */
+    eq FFunctionCall.toMX() { 
+        return toMXVector().get(0);  
+    }
+    /** @return A MXVector with the outputs from this function call */
+    eq FFunctionCall.toMXVector() {
+        MXFunction f = myFCallable().toMXFunction();
+        MXVector argVec = new MXVector();
+        for (FExp exp : getArgs()) {
+            MXVector expMXVec = exp.toMXVector();
+            for (int i = 0; i < expMXVec.size(); ++i) {
+                argVec.add(expMXVec.get(i));
+            }
+        }
+        // To handle the case where some outputs are not used. 
+        return  myLefts().size() > 0 ? retrieveUsedOutputsFromMXFunctionCall(f.call(argVec)) : f.call(argVec);
+    }
+        
+    /** @return A MXVector with the used MX outputs for this function call */
+    MXVector FFunctionCall.retrieveUsedOutputsFromMXFunctionCall(MXVector callVector) {
+        MXVector usedCalls = new MXVector();
+        ArrayList<FFunctionCallLeft> lefts = myLefts();
+        int index = 0;
+        ArrayList<FFunctionCallLeft> myLefts = myLefts();
+        ArrayList<FFunctionVariable> myOutVars = myFCallable().myOutputs();
+        for (int i = 0; i < myLefts.size(); ++i) {
+            if (myLefts.get(i).hasFExp()) {
+                for (int j = 0; j < myLefts.get(i).getFExp().toMXVector().size(); ++j) {
+                    usedCalls.add(callVector.get(index + j));
+                }
+            } 
+            index += myOutVars.get(i).asMXVector().size();
+        }
+        return usedCalls;
+    }
+    
+    
+    
+    /**
+     * Connects the use of a variable in an expression with
+     * the symbolic and lazy MX for that variable. 
+     * Note that sometimes FAccessExp points to a whole
+     * matrices or record, and these should be transformed to vectors
+     * of MX instead. 
+     * @return A MX
+     */
+    eq FAccessExp.toMX() {
+        if (myFV().inRecord()) {
+            return getParent().getMXVariableFromRecordHashMap(getFAccess().toString());
+        } else if (hasFArraySubscripts() && inFunction()) {
+            int flatIndex = getFArraySubscripts().computeFlattenedIndexBasedOnSizeData(myFV().size());
+            return myFV().asMXVector().get(flatIndex);
+        } else {
+            return myFV().asMXVariable();
+        }
+    }
+    
+    eq FGlobalAccessExp.toMX() {
+        return ceval().buildLiteral().toMX();
+    }
+    
+    /**
+     * Connects the use of a variable in an expression with
+     * the symbolic and lazy MX for that variable. 
+     * Note that this function can handle the case when the FAccessExp
+     * points to whole matrices or records, e.g. as outputs of 
+     * function calls inside functions. 
+     * @return A MX
+     */
+    eq FAccessExp.toMXVector() {
+        if (inFunction() && (size().numElements() > 1 || type().isRecord())) {
+            return myFV().asMXVector();
+        } else {
+            MXVector MXVec = new MXVector();
+            MXVec.add(toMX());
+            return MXVec;
+        }
+    }
+    
+    eq FGlobalAccessExp.toMXVector() {
+        return ceval().buildLiteral().toMXVector();
+    }
+    
+    /**
+     * Returns a zero-based index for flattened arrays and records.
+     * Row-major, e.g. Real[2,2] is indexed as : [1,2] -> 1, [2,1] -> 2
+     */
+    int FArraySubscripts.computeFlattenedIndexBasedOnSizeData(Size size) {
+        int flattenedIndex = 0;
+        ArrayList<Subscript> subs = new ArrayList<>(numSubscript());
+        for (Subscript sub : subscripts()) {
+            subs.add(sub);
+        }
+        int nbrOfSizeDimsZeroBased = subs.size() - 1;
+        
+        try {
+            flattenedIndex += subs.get(nbrOfSizeDimsZeroBased).value() - 1;
+            int base = 1;
+            for (int i = nbrOfSizeDimsZeroBased; i > 0 ; --i) {
+                base*=size.get(i);
+                flattenedIndex +=  base*(subs.get(i - 1).value() - 1);
+            }
+            return flattenedIndex;
+        } catch (ConstantEvaluationException exp) {
+            throw new UnsupportedOperationException("Indexing into arrays with expressions that can't be preevaluated is not supported in CasADiInterface");
+        }
+    }
+    
+    eq FNegExp.toMX() = getFExp().toMX().__neg__();
+    eq FPreExp.toMX() = myFV().asMXVariable();
+    eq FNoEventExp.toMX() = getFExp().toMX();
+    eq FSmoothExp.toMX() = getFExp().toMX();
+    eq FInStreamEpsExp.toMX() = new MX(1e-8);
+    
+    eq FArray.toMXVector() {
+        MXVector MXVec = new MXVector();
+        for (FExp exp : getFExps()) {
+            MXVector expMXVec = exp.toMXVector();
+            for (int i = 0; i < expMXVec.size(); ++i) {
+                MXVec.add(expMXVec.get(i));
+            }
+        }
+        return MXVec;
+    }
+    eq FRecordConstructor.toMXVector() {
+        MXVector MXVec = new MXVector();
+        for (FExp exp : getArgList()) {
+            MXVector argVector = exp.toMXVector();
+            for (int i = 0; i < argVector.size(); ++i) {
+                MXVec.add(argVector.get(i));
+            }
+        }
+        return MXVec;
+    }
+    
+    // Literal expression
+    eq FBooleanLitExpTrue.toMX() = new MX(1);
+    eq FBooleanLitExpFalse.toMX() = new MX(0);
+    eq FStringLitExp.toMX() = ifcasadi.msym(getString());
+    eq FRealLitExp.toMX() = new MX(getValue());
+    eq FIntegerLitExp.toMX() = new MX((double)getValue());
+    
+    /************ Variables ************
+     * Note that Variables are lazy. This is necessary for the CasADi-toolchain.
+     * A variable can occur in different places, e.g. equations, and it is
+     * necessary that it is always the same variable as CasADi is symbolic. 
+     */  
+     
+     /**
+      * For retrieving the MXVector representation of this variable.
+      * Some variables, e.g. arrays can only be represented
+      * as MXVector
+      * @return A MXVector
+      */
+    syn lazy MXVector FAbstractVariable.asMXVector() {
+        MXVector MXVec = new MXVector();
+        MXVec.add(asMXVariable());
+        return MXVec;
+    }
+    
+    /**
+     * For retrieving the MX representation of this variable.
+     * Note that some variables can not be represented as a single MX, e.g.
+     * arrays. These may need to be represented as MXVector.
+     */
+    syn lazy MX FAbstractVariable.asMXVariable();
+    eq UnknownFVariable .asMXVariable() { throw new UnsupportedOperationException("Cannot convert unknown variable to MX"); }
+    eq FEnumLiteral     .asMXVariable() { throw new UnsupportedOperationException("Cannot convert enum literal to MX"); }
+    eq FVariable        .asMXVariable() = ifcasadi.msym(name());
+    eq FFunctionVariable.asMXVariable() = ifcasadi.msym(getFAccess().toString());
+    
+    /**
+     * Retrieves the MXVector for this variable. 
+     * Note that this method handles records. MX variables for records
+     * are created by recursive flattening. These MX variables are saved in
+     * a hashmap in the FFunctionDecl, put there via AST traversation. Furthermore
+     * the key for the variables in the hashmap is the same as the FAccess
+     * of the CommonAccess's that later refer to them. 
+     * @return A MXVector.
+     */ 
+    eq FFunctionVariable.asMXVector() {
+        MXVector MXVec = new MXVector();
+        if (isArray()) {
+            for (int i = 0; i < size().numElements(); ++i) {
+                MX mx = ifcasadi.msym(getFAccess().toString() + "_" +i);
+                MXVec.add(mx);
+            }
+        } else if (isRecord()) {
+            for (FVariable fvar : myFRecordDecl().getFVariables()) {             
+                ArrayList<String> myFlattenedVariables = new ArrayList<String>();
+                myFlattenedVariables.add(name());
+                myFlattenedVariables = fvar.createFullNestedName(myFlattenedVariables);
+                for (String str : myFlattenedVariables) {
+                    MX mx = ifcasadi.msym(str);
+                    MXVec.add(mx);
+                    getParent().setMXVariableInFunctionDeclRecordVariableMap(str, mx);
+                }
+            }
+        } else {
+            MXVec.add(asMXVariable());
+        }
+        return MXVec;
+    }
+    
+    ArrayList<String> FRecordVariable.createFullNestedName(ArrayList<String> parts) {
+        ArrayList<String> outList = new ArrayList<String>(); 
+        if (size().numElements() > 1) {
+            for (Index ind : size().rangeFArraySubscripts().indices()) {
+                outList.addAll(createFullNestedNameForAllMyVariables(appendStringToAllEntriesInList(parts, "." + name() + ind.toString())));
+            }
+        } else {
+            outList.addAll(createFullNestedNameForAllMyVariables(appendStringToAllEntriesInList(parts, "." + name())));
+       
+        }
+        
+        return outList;
+    }
+        
+    private ArrayList<String> FRecordVariable.createFullNestedNameForAllMyVariables(ArrayList<String> parts) {
+        ArrayList<String> outList = new ArrayList<String>(); 
+        for (FVariable fvar : myFRecordDecl().getFVariables()) {
+            outList.addAll(fvar.createFullNestedName(parts));
+        }
+        return outList;
+    }
+    
+    ArrayList<String> FVariable.createFullNestedName(ArrayList<String> parts) {
+        if (size().numElements() > 1) {
+            ArrayList<String> outList = new ArrayList<String>(size().numElements()*parts.size());
+            for (Index ind : size().rangeFArraySubscripts().indices()) {
+                outList.addAll(appendStringToAllEntriesInList(parts, "." + name() + ind.toString()));
+            }
+            return outList;
+        } else {
+            return appendStringToAllEntriesInList(parts, "." + name());
+        }
+    }
+        
+    ArrayList<String> FVariable.appendStringToAllEntriesInList(ArrayList<String> list, String str) {
+        ArrayList<String> outList = new ArrayList<String>(list.size());
+        for (String string : list) {
+            outList.add(string + str);
+        }
+        return outList;
+    }
+    
+    
+    /**
+     * Returns the binding expression for this variable if there is one, otherwhise null.
+     * @return A MX
+     */
+    syn MX FVariable.findMXBindingExpressionIfPresent() {
+        return hasBindingExp() ? getBindingExp().toMX() :  (hasParameterEquation() ? parameterEquationToMXBindingExpression() : null);
+    }
+    
+    /**
+     * Creates a binding expression for the parameter equation of this variable.
+     * Note that this handles cases where the parameter equation is a function call equation.
+     * @return A MX
+     */
+    syn MX FVariable.parameterEquationToMXBindingExpression() {
+        if (hasParameterEquation() && parameterEquation().hasFunctionCallEquationsWithLefts()) {
+            // E.g. for the case: parameter Real[2] p2 = function(p1);
+            // Need to find which output from the FFunctionCallEquation that
+            // corresponds to this variable.
+            FFunctionCallEquation feq = (FFunctionCallEquation) parameterEquation();
+            MXVector outs = feq.getCall().toMXVector();
+            int myOutIndex = 0;
+            
+            for (FFunctionCallLeft fleft : feq.getLefts()) {
+                if (fleft.hasFExp()) {
+                    MXVector fleftExpAsMXVex = fleft.getFExp().toMXVector();
+                    for (int i = 0; i < fleftExpAsMXVex.size(); ++i) {
+                        if (fleftExpAsMXVex.get(i).isEqual(asMXVariable())) {
+                            return outs.get(myOutIndex);
+                        }
+                        myOutIndex++;
+                    }
+                }
+            }
+        }
+        return hasParameterEquation() ? ((FEquation)parameterEquation()).getRight().toMX() : new MX(); 
+    }
+    
+    /** Is used for handling record variables */
+    private HashMap<String,MX> FFunctionDecl.hashMapWithMXForRecordVariables = new HashMap<String, MX>();
+    
+    /**
+     * Does a recursive AST traversation up to the first encountered FFunctionDecl. The FFunctionDecl has an hash map that contains 
+     * MX symbolic variables for records, and the MX for the passed in key (which should be equal to the FAccess of the variable) is returned. 
+     * @param A String 
+     * @return A MX
+     */
+    syn MX ASTNode.getMXVariableFromRecordHashMap(String key) {
+        if (getParent() != null) {
+            return getParent().getMXVariableFromRecordHashMap(key);
+        } else {
+            return null;
+        }
+    }
+    
+    /**
+     * Retrieves the MX for the record variable with this key (which should be equal to the FAccess of the variable).
+     * @param A String 
+     * @return A MX
+     */
+    eq FFunctionDecl.getMXVariableFromRecordHashMap(String key) = hashMapWithMXForRecordVariables.get(key); 
+    
+    /**
+     * Does a recursive AST traversation to the first encountered FFunctionDecl. The FFunctionDecl
+     * has a hash map where the key,value-pair passed in is set. The key should be the FAccess of a 
+     * variable  in a record and value its symbolic MX. 
+     * @param A String 
+     * @param A MX
+     */
+    public void ASTNode.setMXVariableInFunctionDeclRecordVariableMap(String key, MX val) {
+        if (getParent() != null) {
+            getParent().setMXVariableInFunctionDeclRecordVariableMap(key, val);
+        }
+    }
+    
+    /**
+     * Sets the passed in key,value-pair in the map, where the key should be the FAccess 
+     * of a variable in a record, and value its symbolic MX. 
+     * @param A String
+     * @param A MX
+     */
+    public void FFunctionDecl.setMXVariableInFunctionDeclRecordVariableMap(String key, MX val) {
+        hashMapWithMXForRecordVariables.put(key, val);
+    }
+
+    public boolean FAbstractEquation.isIgnoredForCasADi() { return false; }
+    public boolean FFunctionCallEquation.isIgnoredForCasADi() {
+        // Ignore things that we don't support right now, such as asserts
+        return getNumLeft() == 0;
+    }   
+    public boolean FStatement.isIgnoredForCasADi() { return false; }
+    public boolean FFunctionCallStmt.isIgnoredForCasADi() {
+        // Ignore things that we don't support right now, such as asserts
+        return getNumLeft() == 0;
+    }   
+}

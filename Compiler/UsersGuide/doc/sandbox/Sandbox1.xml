@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<chapter version="5.0" xmlns="http://docbook.org/ns/docbook"
+         xmlns:xlink="http://www.w3.org/1999/xlink"
+         xmlns:xi="http://www.w3.org/2001/XInclude"
+         xmlns:svg="http://www.w3.org/2000/svg"
+         xmlns:m="http://www.w3.org/1998/Math/MathML"
+         xmlns:html="http://www.w3.org/1999/xhtml"
+         xmlns:db="http://docbook.org/ns/docbook">
+  <title>Installation</title>
+
+  <section>
+    <title></title>
+
+    <section>
+      <title>General prerequisites</title>
+
+      <para><blockquote>
+          <note>
+            <para>This is a note that spans multiple multiple multiple
+            multiple multiple multiple multiple multiple multiple multiple
+            multiple multiple multiple multiple multiple multiple multiple
+            multiple multiple multiple multiple multiple multiple multiple
+            multiple multiple multiple multiple multiple multiple multiple
+            multiple multiple multiple multiple multiple multiple multiple
+            multiple multiple multiple multiple multiple multiple multiple
+            multiple multiple multiple multiple multiple multiple multiple
+            multiple multiple multiple multiple multiple multiple multiple
+            multiple multiple multiple multiple multiple multiple multiple
+            multiple multiple multiple multiple multiple multiple multiple
+            multiple multiple multiple multiple multiple multiple
+            lines.</para>
+          </note>
+        </blockquote><tip>
+          <para>This is a tip.</para>
+        </tip><important>
+          <para>This is important.</para>
+        </important><warning>
+          <para>This is a warning.</para>
+        </warning></para>
+
+      <section>
+        <title>Software</title>
+
+        <para>JModelica.org is based on Java, C, and Python technology.</para>
+
+        <section>
+          <title>Java</title>
+
+          <para>To build JModelica.org from sources you will need the Java SE
+          Development Kit (JDK) version 6. (The JDK also includes the
+          JRE.)<procedure>
+              <title>To install JDK</title>
+
+              <step>
+                <para>Get a <link
+                xlink:href="http://java.sun.com/javase/downloads/index.jsp#jdk">JDK
+                installer</link> suitable for your platform.</para>
+              </step>
+
+              <step>
+                <para>Run the installer.</para>
+              </step>
+            </procedure></para>
+        </section>
+
+        <section>
+          <title>C</title>
+
+          <para></para>
+        </section>
+
+        <section>
+          <title>Python</title>
+
+          <para></para>
+        </section>
+      </section>
+    </section>
+
+    <section>
+      <title></title>
+
+      <para></para>
+    </section>
+  </section>
+</chapter>

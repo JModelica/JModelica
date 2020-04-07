@@ -1,0 +1,95 @@
+/*
+    Copyright (C) 2009-2017 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect TransformCanonical {
+
+    public class FClass {
+        /**
+         * Add pre variables to the list of FVariables, one for each
+         * discrete variable and one for each continuous variable that is 
+         * used in a pre() expression in an initial equation.
+         */
+        public class addFPreVariables extends Transformation {
+            public void perform() {
+                ArrayList<FVariable> l = new ArrayList<FVariable>();
+                for (FVariable fv : discreteVariables()) 
+                    if (fv.myPreVariable().isUnknown())
+                        l.add(fv.createPreVariable());
+                for (FVariable fv : continuousVariablesUsedInPreInInitial())
+                    if (fv.myPreVariable().isUnknown())
+                        l.add(fv.createPreVariable());
+                for (FVariable fv : l) 
+                    addFVariableNoTransform(fv);
+                root().flushAllRecursive();
+            }
+        }
+    }
+    
+    syn lazy Collection<FVariable> FClass.continuousVariablesUsedInPreInInitial() {
+        Set<FVariable> res = new LinkedHashSet<FVariable>();
+        getFInitialEquations().gatherContinuousVariablesUsedInPre(res);
+        return new ArrayList<FVariable>(res);
+    }
+    
+    public void ASTNode.gatherContinuousVariablesUsedInPre(Set<FVariable> res) {
+        for (ASTNode n : this) 
+            n.gatherContinuousVariablesUsedInPre(res);
+    }
+    
+    public void FPreExp.gatherContinuousVariablesUsedInPre(Set<FVariable> res) {
+        FAbstractVariable fv = getFAccess().myFV();
+        if (fv.isContinuous())
+            res.add((FVariable) fv);
+    }
+    
+	
+	/**
+	 * Create a pre variable for this variable.
+	 */
+	abstract public FVariable FVariable.createPreVariable();
+
+    public FVariable FGlobalVariable.createPreVariable() {
+        throw new UnsupportedOperationException();
+    }
+
+	public FVariable FRealVariable.createPreVariable() {
+		return new FPreRealVariable(this);
+	}
+	
+	public FVariable FIntegerVariable.createPreVariable() {
+		return new FPreIntegerVariable(this);
+	}
+	
+	public FVariable FEnumVariable.createPreVariable() {
+		return new FPreEnumVariable(this);
+	}
+	
+	public FVariable FBooleanVariable.createPreVariable() {
+		return new FPreBooleanVariable(this);
+	}
+	
+	public FVariable FStringVariable.createPreVariable() {
+		return new FPreStringVariable(this);
+	}
+	
+	public FVariable FRecordVariable.createPreVariable() {
+		throw new UnsupportedOperationException();
+	}
+	
+	public FVariable FExternalObjectVariable.createPreVariable() {
+		throw new UnsupportedOperationException();
+	}
+}

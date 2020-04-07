@@ -1,0 +1,760 @@
+/*
+    Copyright (C) 2013 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect OverconstrainedConnections {
+    
+    public void FConnBranch.buildConnectionSets(FAccess prefix, ConnectionSetManager csm, boolean connect) {
+        if (connect) {
+            InstAccess left  = getA().asInstAccess();
+            InstAccess right = getB().asInstAccess();
+            left.connectTo(right, prefix, csm, this);
+        }
+    }
+    
+    public void FConnRoot.buildConnectionSets(FAccess prefix, ConnectionSetManager csm, boolean connect) {
+        if (connect)
+            csm.getGraph().addRoot(variableA());
+    }
+    
+    public void FConnPotentialRoot.buildConnectionSets(FAccess prefix, ConnectionSetManager csm, boolean connect) {
+        if (connect) {
+            int prio = hasPriority() ? getPriority().ceval().intValue() : 0;
+            csm.getGraph().addPotentialRoot(variableA(), prio);
+        }
+    }
+    
+    public void FConnBoolOp.buildConnectionSets(FAccess prefix, ConnectionSetManager csm, boolean connect) {
+        connectionGraph = csm.getGraph();
+    }
+    
+    /**
+     * Get the variable referenced by child A.
+     * 
+     * Assumes A is an InstAccessExp.
+     */
+    syn InstComponentDecl FConnectionsOp.variableA() = 
+            getA().asInstAccess().myInstComponentDecl();
+    
+    
+    /**
+     * Represents a broken branch in the overconstrained connection graph.
+     * 
+     * Generates a call to the relevant equalityConstraint() function.
+     */
+    public class EqualityConstraintConnection {
+        
+        private ConnectionSetEntry cse1;
+        private ConnectionSetEntry cse2;
+        private FAccess prefix;
+        
+        public EqualityConstraintConnection(ConnectionSetEntry cse1, ConnectionSetEntry cse2, FAccess prefix) {
+            this.cse1 = cse1;
+            this.cse2 = cse2;
+            this.prefix = prefix;
+        }
+        
+        /**
+         * Generate the equalityConstraint() call.
+         */
+        public void generate(Flattener f) {
+            InstClassDecl func = cse1.getVar().equalityConstraint();
+            func.flattenFunction(f);
+            Size s = func.myOutputs().get(0).size();
+            FFunctionCall right = new FFunctionCall();
+            right.setName(new FAccessString(func.qualifiedName()));
+            right.addArg(cse1.createFAccessExp());
+            right.addArg(cse2.createFAccessExp());
+            right.setFType(func.functionType().flatten(f, null, true));
+            FAbstractEquation eqn;
+            if (!s.isUnknown() && s.numElements() == 0) 
+                eqn = new FFunctionCallEquation(new List<FFunctionCallLeft>(), right);
+            else
+                eqn = new FEquation(s.createZeroFExp(), right);
+            f.addNormalEquation(eqn);
+        }
+        
+    }
+    
+    /**
+     * Check if an assignable is of an overconstrained connection type.
+     */
+    syn boolean InstComponentDecl.isOverconstrainedType() = equalityConstraint() != null;
+    
+    /**
+     * Name of equality constraint function.
+     */
+    public static final String InstAssignable.EQUALITY_CONSTRAINT_NAME = "equalityConstraint";
+
+    /**
+     * Get the equality constraint function for this type, if any.
+     */
+    syn InstClassDecl InstComponentDecl.equalityConstraint()  = null;
+    syn lazy InstClassDecl InstAssignable.equalityConstraint() {
+        InstLookupResult<InstClassDecl> res = memberInstClass(EQUALITY_CONSTRAINT_NAME);
+        if (!res.successful())
+            res = myInstClass().memberInstClass(EQUALITY_CONSTRAINT_NAME);
+        if (res.successful()) {
+            InstClassDecl icd = res.target().actualInstClass();
+            if (icd.isEqualityConstraint(type()))
+                return icd;
+        }
+        return null;
+    }
+
+    /**
+     * Check if this is an equality constraint function for the given type.
+     */
+    syn boolean InstClassDecl.isEqualityConstraint(FType type) {
+        ArrayList<InstComponentDecl> inputs = myInputs();
+        ArrayList<InstComponentDecl> outputs = myOutputs();
+        return isFunction() && 
+                inputs.size() == 2 && 
+                inputs.get(0).type().typeCompatible(type, true) && 
+                inputs.get(1).type().typeCompatible(type, true) && 
+                outputs.size() == 1 && 
+                outputs.get(0).ndims() == 1 && 
+                outputs.get(0).type().isReal();
+    }
+    
+    /**
+     * The source node for an edge in the overconstrained connection graph.
+     */
+    public interface ConnectionEdge {
+        
+        /**
+         * Does this node represent a breakable branch in the overconstrained connection graph?
+         */
+        public boolean isBreakable();
+        
+        /**
+         * Report a warning.
+         */
+        public void warning(String msg);
+        
+        /**
+         * Report an error.
+         */
+        public void error(String msg);
+        
+    }
+    
+    FConnectClause implements ConnectionEdge;
+    FConnBranch implements ConnectionEdge;
+    
+    syn boolean FConnectClause.isBreakable() = true;
+    syn boolean FConnBranch.isBreakable()    = false;
+    
+    /**
+     * Describes a system of overconstrained connenctions.
+     * 
+     * Will break loops in the graph to form spanning trees.
+     */
+
+}
+
+aspect OverconstrainedConnectionGraph {
+
+    public class OverconstrainedConnectionGraph {
+        
+        /**
+         * The calculated values for operators that depend on the graph for a specific component.
+         */
+        public static class OpsResult {
+            
+            /** The result for the Connections.isRoot() operator. */
+            public final boolean isRoot;
+            /** The result for the Connections.rooted() operator. */
+            public final boolean rooted;
+            
+            public OpsResult(boolean isRoot, boolean rooted) {
+                this.isRoot = isRoot;
+                this.rooted = rooted;
+            }
+            
+        }
+        
+        private Collection<Edge> edges = new ArrayList<Edge>();
+        private Collection<Node> nodes = new ArrayList<Node>();
+        private Map<String,Node> nodeMap = new HashMap<String,Node>();
+        private Map<String,OpsResult> opsMap;
+        static String UNROOTED_ERR_MSG  = "Set of unrooted connectors in overconstrained connection graph:";
+        static String MULTIROOT_ERR_MSG = "Multiple definite roots in unbreakable subgraph in overconstrained connection graph";
+        static String LOOP_ERR_MSG      = "Unbreakable loop in overconstrained connection graph";
+        static String MULTIDEF_ERR_MSG  = "Multiple root definitions for single connector in overconstrained connection graph";
+        static String ERR_SEP = "\n    ";
+        
+        /**
+         * Add a connection to the graph.
+         * 
+         * @param left    describes one end of connection
+         * @param right   describes other end of connection
+         * @param prefix  the prefix to use when flattening names
+         * @param source  the originating connect or branch statement
+         */
+        public void addConnection(ConnectionSetEntry left, ConnectionSetEntry right, FAccess prefix, ConnectionEdge source) {
+            Node leftNode = getNode(left.name(), left.getVar());
+            Node rightNode = getNode(right.name(), right.getVar());
+            edges.add(new Edge(source, leftNode, rightNode, left, right, prefix));
+        }
+        
+        /**
+         * Mark a component as a root in the graph.
+         */
+        public void addRoot(InstComponentDecl var) {
+            getNode(var).setRoot();
+        }
+        
+        /**
+         * Mark a component as a potential root with the given priority in the graph.
+         */
+        public void addPotentialRoot(InstComponentDecl var, int priority) {
+            getNode(var).setPotentialRoot(priority);
+        }
+
+        /**
+         * Convert graph to a set of spanning trees.
+         * 
+         * See Modelica Language Specification 3.3, section 9.4.2.
+         */
+        public void buildTrees(ConnectionSetManager csm) {
+            breakPureConnectLoops();
+            Queue<Node> roots = collectRoots();
+            java.util.List<Node> selected = new ArrayList<Node>(roots.size());
+            if (selectRoots(roots, selected))
+                return;
+            
+            buildTrees(csm, selected);
+            unrootedErrors();
+            buildOpsMap();
+        }
+
+        /**
+         * Break loops comprised entirely of connect edges.
+         */
+        private void breakPureConnectLoops() {
+            for (Node n : nodes) {
+                n.breakPureConnectLoops();
+            }
+        }
+
+        /**
+         * Collect roots sorted by priority.
+         */
+        private Queue<Node> collectRoots() {
+            Queue<Node> roots = new PriorityQueue<Node>();
+            for (Node n : nodes)
+                if (n.canBeRoot())
+                    roots.add(n);
+            return roots;
+        }
+
+        /**
+         * Select a root for each unbreakable sub-graph, and generate any root-related errors.
+         * 
+         * @param roots     list of roots sorted in priority order
+         * @param selected  list where the selected roots will be added
+         * @return  true if any errors were generated
+         */
+        private boolean selectRoots(Queue<Node> roots, java.util.List<Node> selected) {
+            clearVisited();
+            boolean foundError = false;
+            java.util.List<Node> otherRoots = new ArrayList<Node>();
+            for (Node root = roots.poll(); root != null; root = roots.poll()) {
+                if (!root.visited) {
+                    boolean loop = root.markSelectedRoot(root, otherRoots);
+                    selected.add(root);
+                    
+                    // Generate errors for unbreakable loops.
+                    if (loop) {
+                        genError(LOOP_ERR_MSG, root, "Selected root: ");
+                        foundError = true;
+                    }
+                    // Generate errors for multiple roots.
+                    if (otherRoots.size() > 0) {
+                        genError(MULTIROOT_ERR_MSG, root, "Selected root: ", otherRoots, "Other root: ");
+                        otherRoots = new ArrayList<Node>();
+                        foundError = true;
+                    }
+                }
+            }
+            return foundError;
+        }
+
+        /**
+         * Build spanning trees from graph, starting from selected roots.
+         */
+        private void buildTrees(ConnectionSetManager csm, java.util.List<Node> selected) {
+            clearVisited();
+            for (Node sel : selected) {
+                if (!sel.visited) {
+                    Queue<Node> work = new ArrayDeque<Node>();
+                    work.add(sel);
+                    sel.level = 0;
+                    sel.visited = true;
+                    for (Node n = work.poll(); n != null; n = work.poll()) {
+                        n.buildTree(work, csm);
+                    }
+                }
+            }
+        }
+
+        /**
+         * Generate errors for subgraphs without roots.
+         */
+        private void unrootedErrors() {
+            for (Node n : nodes) {
+                if (!n.visited) {
+                    ArrayList<Node> subGraph = new ArrayList<Node>();
+                    n.subGraph(subGraph);
+                    genError(UNROOTED_ERR_MSG, n, subGraph, null);
+                }
+            }
+        }
+
+        /**
+         * Build lookup map for operators that are dependent on the result.
+         */
+        private void buildOpsMap() {
+            opsMap = new HashMap<String,OpsResult>();
+            for (Node n : nodes) 
+                opsMap.put(n.flatName(), n.opsResult());
+        }
+
+        /**
+         * Clear visited flags.
+         */
+        private void clearVisited() {
+            for (Node n : nodes)
+                n.visited = false;
+            for (Edge e : edges)
+                e.visited = false;
+        }
+
+        /**
+         * Generate error message.
+         */
+        private void genError(String msg, Node node, 
+                java.util.List<Node> nodeList, String listMsg) {
+            genError(msg, node, null, nodeList, listMsg);
+        }
+
+        /**
+         * Generate error message.
+         */
+        private void genError(String msg, Node node, String nodeMsg) {
+            genError(msg, node, nodeMsg, null, null);
+        }
+
+        /**
+         * Generate error message.
+         */
+        private void genError(String msg, Node node, String nodeMsg, 
+                java.util.List<Node> nodeList, String listMsg) {
+            StringBuilder errorMsg = new StringBuilder();
+            errorMsg.append(msg);
+            if (nodeMsg != null) {
+                errorMsg.append(ERR_SEP);
+                errorMsg.append(nodeMsg);
+                errorMsg.append(node.flatName());
+            }
+            if (nodeList != null) {
+                for (Node n : nodeList) {
+                    errorMsg.append(ERR_SEP);
+                    if (listMsg != null) {
+                        errorMsg.append(listMsg);
+                    }
+                    errorMsg.append(n.flatName());
+                }
+            }
+            node.var.error(errorMsg.toString());
+        }
+
+        /**
+         * Check if conversion to spanning trees is finished.
+         */
+        public boolean builtTreesDone() {
+            return opsMap != null;
+        }
+        
+        /**
+         * Find the result for operators that depend on the graph for the given access.
+         */
+        public OpsResult ops(FExp e) {
+            OpsResult res = null;
+            CommonAccess u = e.asCommonAccess();
+            if (u.isInstAccess()) {
+                InstComponentDecl var = u.asInstAccess().myInstComponentDecl();
+                Node n = getNode(var);
+                res = (n == null) ? null : n.opsResult();
+            } else {
+                res = opsMap.get(u.name());
+            }
+            return (res == null) ? new OpsResult(false, false) : res;
+        }
+        
+        /**
+         * Remove all references to the instance tree, and discard information that is no longer needed.
+         */
+        public void disconnectFromInstanceTree() {
+            edges = null;
+            nodes = null;
+            nodeMap = null;
+        }
+
+        /**
+         * Find, or if neccessary create, the node for a given component.
+         */
+        private Node getNode(InstComponentDecl var) {
+            return getNode(var.getFAccess().name(), var);
+        }
+
+        /**
+         * Find, or if neccessary create, the node for a given component accessed by the specified name.
+         */
+        private Node getNode(String name, InstComponentDecl var) {
+            Node res = nodeMap.get(name);
+            if (res == null) {
+                res = new Node(var, name);
+                nodeMap.put(name, res);
+                nodes.add(res);
+            }
+            return res;
+        }
+
+        /**
+         * An edge in the graph.
+         */
+        private static class Edge {
+            
+            /** Visited flag used in traversals. */
+            public boolean visited;
+
+            private ConnectionEdge source;
+            private Node n1;
+            private Node n2;
+            private ConnectionSetEntry cse1;
+            private ConnectionSetEntry cse2;
+            private FAccess prefix;
+            private boolean broken;
+            private boolean ignore = false;
+            
+            /**
+             * Create a new edge.
+             * 
+             * The edge is undirected, use of "first" and "second" below is purely to tell them apart.
+             * 
+             * @param source  the originating connect or branch statement
+             * @param n1      first end of the edge
+             * @param n2      second end of the edge
+             * @param cse1    describes first end of edge in terms of the connection set manager
+             * @param cse2    describes second end of edge in terms of the connection set manager
+             * @param prefix  the prefix to use when flattening names
+             */
+            public Edge(ConnectionEdge source, Node n1, Node n2, ConnectionSetEntry cse1, ConnectionSetEntry cse2, FAccess prefix) {
+                this.source = source;
+                this.n1 = n1;
+                this.n2 = n2;
+                n1.addEdge(this);
+                n2.addEdge(this);
+                broken = false;
+                if (isBreakable()) {
+                    this.cse1 = cse1;
+                    this.cse2 = cse2;
+                    this.prefix = prefix;
+                }
+            }
+            
+            /**
+             * Check if this is a breakable edge (a connect() statement).
+             */
+            public boolean isBreakable() {
+                return source.isBreakable();
+            }
+            
+            public String toString() {
+                return n1 + " - " + n2;
+            }
+            
+            /**
+             * Get the other end of the edge.
+             * 
+             * Assumes that n is one of the ends.
+             */
+            public Node other(Node n) {
+                return (n == n1) ? n2 : n1;
+            }
+            
+            /**
+             * Checks if the given node is the edge corresponding to the left argument of a 
+             * connect or branch.
+             */
+            public boolean isLeft(Node n) {
+                return n == n1;
+            }
+            
+            /**
+             * Break this edge.
+             * 
+             * @throws UnsupportedOperationException  if the edge isn't breakable
+             */
+            public void breakEdge() {
+                if (!isBreakable())
+                    throw new UnsupportedOperationException();
+                broken = true;
+            }
+            
+            /**
+             * Check if edge is broken.
+             */
+            public boolean isBroken() {
+                return broken;
+            }
+            
+            /**
+             * Add edge to connection sets, either as normal connections or as equalityConstraint() calls.
+             */
+            public void connect(ConnectionSetManager csm) {
+                if (isBreakable()) {
+                    if (isBroken())
+                        csm.addEqualityConstraint(cse1, cse2, prefix);
+                    else
+                        cse1.getVar().connectTo(cse1, cse2, prefix, csm, source, false);
+                }
+            }
+
+            /**
+             * Checks if this edge should be ignored during computations
+             */
+            public boolean isIgnored() {
+                return ignore;
+            }
+
+            /**
+             * Marks this edge as ignored and will not be considered during computations
+             */
+            public void setAsIgnored() {
+                ignore = true;
+            }
+
+        }
+
+        /**
+         * A node in the graph.
+         */
+        private static class Node implements Comparable<Node> {
+
+            /** Visited flag used in traversals. */
+            public boolean visited = false;
+            /** Depth of this node from root of tree. Depth 0 is the root. */
+            public int level = -1;
+
+            private static final int DEFINITE_ROOT = -1;
+            private static final int NOT_ROOT      = Integer.MAX_VALUE;
+
+            private InstComponentDecl var;
+            private String name;
+            private int rootPriority;
+            private Collection<Edge> edges;
+            private Node selectedRoot;
+
+            public Node(InstComponentDecl var, String name) {
+                this.var = var;
+                this.name = name;
+                rootPriority = NOT_ROOT;
+                edges = new ArrayList<Edge>();
+                selectedRoot = null;
+            }
+
+            public int compareTo(Node other) {
+                return rootPriority - other.rootPriority;
+            }
+
+            public String toString() {
+                return name;
+            }
+
+            public void addEdge(Edge e) {
+                edges.add(e);
+            }
+
+            /**
+             * Check if this node is declared either root or potential root.
+             */
+            public boolean canBeRoot() {
+                return rootPriority != NOT_ROOT;
+            }
+
+            /**
+             * Check if this node was selected as a root during conversion to spanning trees.
+             * 
+             * Returns false before conversion.
+             */
+            public boolean isSelectedRoot() {
+                return level == 0;
+            }
+
+            /**
+             * The flattened name of the node, as a String.
+             */
+            public String flatName() {
+                return name;
+            }
+
+            /**
+             * Mark this node as a potential root with the given priority.
+             */
+            public void setPotentialRoot(int priority) {
+                if (rootPriority < NOT_ROOT && rootPriority != priority) {
+                    // Error - Multiple root definitions of a connector 
+                    StringBuilder errorMsg = new StringBuilder();
+                    errorMsg.append(MULTIDEF_ERR_MSG);
+                    errorMsg.append(ERR_SEP);
+                    errorMsg.append("Connector: ");
+                    errorMsg.append(this.flatName());
+                    var.error(errorMsg.toString());
+                }
+                if (rootPriority > priority)
+                    rootPriority = priority;
+            }
+
+            /**
+             * Mark this node as a definite root.
+             */
+            public void setRoot() {
+                setPotentialRoot(DEFINITE_ROOT);
+            }
+
+            /**
+             * Calculate the results of isRoot() and rooted() when applied to this node.
+             */
+            public OpsResult opsResult() {
+                Node other = null;
+                for (Edge e : edges)
+                    if (!e.isIgnored() && e.isLeft(this) && !e.isBreakable())
+                        other = e.other(this);
+                boolean rooted = other != null && level < other.level;
+                return new OpsResult(isSelectedRoot(), rooted);
+            }
+
+            /** 
+             * Traversal method for building the spanning trees.
+             */
+            public void buildTree(Queue<Node> work, ConnectionSetManager csm) {
+                for (Edge e : edges) 
+                    if (!e.isIgnored() && !e.visited) 
+                        buildTreeVisit(e, work, csm);
+            }
+
+            /** 
+             * Traversal method for decending into unbreakable subgraphs when building the spanning trees.
+             */
+            private void buildTreeForUnbreakable(Queue<Node> work, ConnectionSetManager csm) {
+                for (Edge e : edges) 
+                    if (!e.isIgnored() && !e.visited && !e.isBreakable()) 
+                        buildTreeVisit(e, work, csm);
+            }
+
+            /**
+             * Visit a specific edge during traversal for building the spanning trees.
+             */
+            private void buildTreeVisit(Edge e, Queue<Node> work, ConnectionSetManager csm) {
+                e.visited = true;
+                Node n = e.other(this);
+                if (n.visited) {
+                    e.breakEdge();
+                } else if (n.selectedRoot != selectedRoot) {
+                    if (n.selectedRoot != null && n.selectedRoot.rootPriority == DEFINITE_ROOT)
+                        e.breakEdge();
+                    else
+                        n.selectedRoot = selectedRoot;
+                }
+                n.visited = true;
+                e.connect(csm);
+                if (!e.isBroken()) {
+                    n.level = level + 1;
+                    work.add(n);
+                    n.buildTreeForUnbreakable(work, csm);
+                }
+            }
+
+            /**
+             * Find and break loops consisting only of connect edges.
+             */
+            public void breakPureConnectLoops() {
+                if (!visited) {
+                    visited = true;
+                    for (Edge e : edges) {
+                        if (!e.isIgnored() && !e.visited && e.isBreakable()) {
+                            e.visited = true;
+                            Node n = e.other(this);
+                            if (n.visited) {
+                                e.setAsIgnored();
+                            } else {
+                                n.breakPureConnectLoops();
+                            }
+                        }
+                    }
+                }
+            }
+
+            /**
+             * Set the selected root of this subgraph.
+             * @param root        the selected root node
+             * @param otherRoots  a collection to add any redundant roots to
+             * @return true if unbreakable loop found
+             */
+            public boolean markSelectedRoot(Node root, Collection<Node> otherRoots) {
+                boolean loop = false;
+                visited = true;
+                selectedRoot = root;
+                if (root != this && rootPriority == DEFINITE_ROOT) {
+                    // Error - more than one definite root in unbreakable subgraph
+                    otherRoots.add(this);
+                }
+                
+                for (Edge e : edges) {
+                    if (!e.isIgnored() && !e.visited && !e.isBreakable()) {
+                        e.visited = true;
+                        Node n = e.other(this);
+                        if (n.visited) {
+                            // Error - unbreakable loop
+                            loop = true;
+                        }
+                        loop = loop || n.markSelectedRoot(root, otherRoots);
+                    }
+                }
+                return loop;
+            }
+
+            /**
+             * Gathers the subgraph which n is in.
+             */
+            public void subGraph(ArrayList<Node> sg) {
+                if (visited)
+                    return;
+                visited = true;
+                sg.add(this);
+                for (Edge e : edges) {
+                    if (!e.isIgnored()) {
+                        e.other(this).subGraph(sg);
+                    }
+                }
+            }
+
+        }
+
+    }
+}

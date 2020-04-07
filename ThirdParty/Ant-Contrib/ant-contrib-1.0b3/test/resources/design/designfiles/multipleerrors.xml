@@ -1,0 +1,7 @@
+<design>
+
+<package name="dummy" package="mod.dummy"/>
+<package name="client" package="mod.arraydepend"/>
+<package name="client2" package="mod.catchdepend"/>
+
+</design>

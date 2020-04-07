@@ -1,0 +1,263 @@
+/*
+    Copyright (C) 2016-2017 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+aspect AlgorithmScalarization {
+    
+    public static void FStatement.scalarizeStmtList(Scalarizer.Algorithm s, List<FStatement> fromList) {
+        for (FStatement stmt : fromList) {
+            stmt.addSizeAsserts(s);
+            stmt.scalarize(s);
+        }
+    }
+    
+    public void FStatement.scalarize(Scalarizer.Algorithm s) {
+        s.add(fullCopy());
+    }
+    
+    @Override
+    public void FAssignStmt.scalarize(Scalarizer.Algorithm s) {
+        
+        FAssignableExp left = getLeft();
+        FExp right = getRight();
+        
+        left.createArrayTemporaries(s);
+        right.createArrayTemporaries(s);
+        
+        FType t = left.type();
+        if (extractTemp(s)) {
+            s.addTempVar(this, false);
+            CommonAccessExp temp = getRight().tempExp(tempVarName());
+            t.scalarizeAssignment(s, temp, right);
+            right = temp;
+        }
+        t.scalarizeAssignment(s, left, right);
+    }
+    
+    @Override
+    public void FFunctionCallStmt.scalarize(Scalarizer.Algorithm s) {
+        if (getCall().isOperatorWithoutOutputs()) {
+            createArrayTemporaries(s);
+            getCall().scalarizeOperatorWithoutOutputs(s);
+        } else {
+            getCall().createArrayTemporaries(s);
+            getLefts().createArrayTemporaries(s);
+        }
+    }
+    
+    @Override
+    public void FIfWhenStmt.scalarize(Scalarizer.Algorithm s) {
+        for (FIfWhenClause cl : getFIfWhenClauses()) {
+            cl.getTest().createArrayTemporaries(s);
+        }
+        FIfWhenStmt stmt = createEmptyNode();
+        List<FIfWhenClause> clauses = new List<FIfWhenClause>();
+        for (FIfWhenClause cl : getFIfWhenClauses()) {
+            cl.scalarize(s, clauses);
+        }
+        stmt.setFIfWhenClauseList(clauses);
+        scalarizeElse(s, stmt);
+        s.add(stmt);
+    }
+    
+    /**
+     * Scalarize the else part of an if statement. Does nothing for when statements.
+     */
+    public void FIfWhenStmt.scalarizeElse(Scalarizer.Algorithm s, FIfWhenStmt stmt) { 
+        
+    }
+    
+    public void FIfStmt.scalarizeElse(Scalarizer.Algorithm s, FIfWhenStmt stmt) {
+        FIfStmt ifstmt = (FIfStmt) stmt;
+        List<FStatement> l = new List<FStatement>();
+        FStatement.scalarizeStmtList(s.block(l), getElseStmts());
+        ifstmt.setElseStmtList(l);
+    }
+    
+    /**
+     * Scalarize the if or when clause.
+     */
+    public void FIfWhenClause.scalarize(Scalarizer.Algorithm s, List<FIfWhenClause> clauses) {
+        FExp test = getTest().scalarize(s);
+        List<FStatement> stmts = new List<FStatement>();
+        FStatement.scalarizeStmtList(s.block(stmts), getFStatements());
+        clauses.add(createNode(test, stmts));
+    }
+    
+    @Override
+    public void FForStmt.scalarize(Scalarizer.Algorithm s) {
+        if (getNumForStmt() == 0) {
+            return;
+        }
+        getIndex().createArrayTemporaries(s);
+        FForStmt stmt = new FForStmt();
+        List<FStatement> l = new List<FStatement>();
+        stmt.setIndex(getIndex().scalarize(s));
+        FStatement.scalarizeStmtList(s.block(l), getForStmts());
+        stmt.setForStmtList(l);
+        s.add(stmt);
+    }
+    
+    @Override
+    public void FWhileStmt.scalarize(Scalarizer.Algorithm s) {
+        getTest().createArrayTemporaries(s);
+        FWhileStmt stmt = new FWhileStmt();
+        List<FStatement> l = new List<FStatement>();
+        stmt.setTest(getTest().scalarize(s));
+        Scalarizer.Algorithm sb = s.block(l);
+        FStatement.scalarizeStmtList(sb, getWhileStmts());
+        getTest().createArrayTemporaries(sb);
+        stmt.setWhileStmtList(l);
+        s.add(stmt);
+    }
+    
+    @Override
+    public void FInitArrayStmt.scalarize(Scalarizer.Algorithm s) {
+        flushAttrCache();
+        getFAccessExp().myFV().type().scalarizeInitArray(s, null);
+        type();
+        
+        super.scalarize(s);
+    }
+    
+    public abstract void FType.scalarizeInitArray(Scalarizer.Algorithm s, ASTNode context);
+
+    public void FArrayType.scalarizeInitArray(Scalarizer.Algorithm s, ASTNode context) {
+        scalarizeFExps(s);
+    }
+
+    public void FCellType.scalarizeInitArray(Scalarizer.Algorithm s, ASTNode context) {
+        setSize(getSize().scalarizeInitArray(s, context == null ? this : context));
+    }
+    
+    public Size Size.scalarizeInitArray(Scalarizer.Algorithm s, ASTNode context) {
+        return this;
+    }
+    
+    @Override
+    public Size MutableSize.scalarizeInitArray(Scalarizer.Algorithm s, ASTNode context) {
+        MutableSize res = new MutableSize(ndims());
+        for (int i = 0; i < exps.length; i++) {
+            res.size[i] = size[i];
+            if (exps[i] != null) {
+                exps[i].createArrayTemporaries(s);
+                res.exps[i] = exps[i].scalarize(s);
+                res.exps[i].parent = context;
+            }
+        }
+        return res;
+    }
+}
+
+aspect AssignmentScalarization {
+
+    /** 
+     * Check if we can keep this statement as a composite assignment.
+     * The loop limitation is due to stack allocations performed in 
+     * scopes which the pointer copy will outlive.
+     */
+    syn boolean FType.keepCompositeAssign(FExp left, FExp right) = 
+        isComposite() && left.keepCompositeAssign() && right.keepCompositeAssign() && !left.inLoop();
+    
+    syn boolean FExp.keepCompositeAssign() = useTempVar;
+    eq FAccessExp.keepCompositeAssign() = !isSlice() && (getFAccess().myTopFV().isInput() || getFAccess().myTopFV().isConstant());
+    eq FTempAccessExp.keepCompositeAssign() = true;
+    
+    inh boolean FExp.inLoop();
+    eq Root      .getChild()    .inLoop() = false;
+    eq FAlgorithm.getChild()    .inLoop() = false;
+    eq FForStmt  .getForStmt()  .inLoop() = true;
+    eq FWhileStmt.getWhileStmt().inLoop() = true;
+    
+    /**
+     * Scalarize an assignment and put the resulting statements in the list of statements. 
+     */
+    public void FType.scalarizeAssignment(Scalarizer.Algorithm s, FAssignableExp left, FExp right) {
+        /* Either of left or right can be a FTempAccessExp which does not know its type */
+        FType t = left.type().isUnknown() ? (right.type().isUnknown() ? this : right.type()) : left.type();
+        
+        if (isComposite() && !s.unroll() && !keepCompositeAssign(left, right) && left.isTempAccessExp()) {
+            FInitArrayStmt stmt = new FInitArrayStmt((FAccessExp)left.treeCopy(), true, t.size().scalarizedSizeExpressions(s));
+            s.add(stmt);
+        }
+        
+        if (isArray() && !s.unroll() && !keepCompositeAssign(left, right)) {
+            
+            ForNames names = s.getNames();
+            names.addLayer(ndims());
+            names.fillLayer(left);
+
+            left.addArrayUsesToIndexMap(s);
+            right.addArrayUsesToIndexMap(s);
+
+            List<FStatement> stmts = new List<FStatement>();
+            scalarizeAssignment_sub(s.block(stmts), left, right);
+            
+            s.createForLoops(stmts, t.size());
+
+            names.removeLayer();
+        } else {
+            scalarizeAssignment_sub(s, left, right);
+        }
+    }
+    
+    syn boolean FExp.isTempAccessExp() = false;
+    eq FTempAccessExp.isTempAccessExp() = true;
+    
+    public void FType.scalarizeAssignment_sub(Scalarizer.Algorithm s, FAssignableExp left, FExp right) {
+        if (!s.unroll() && keepCompositeAssign(left, right)) {
+            s.add(new FAssignStmt((FAssignableExp)left.scalarize(s), right.scalarize(s)));
+            return;
+        }
+        if (isArray() && s.unroll()) {
+            for (Index i : indices()) {
+                scalarizeScalarAssignment(s, (FAssignableExp) left.extractArrayCell(s, i), right.extractArrayCell(s, i));
+            }
+        } else {
+            scalarizeScalarAssignment(s, left, right);
+        }
+    }
+    
+    /**
+     * Scalarize a scalar assignment
+     */
+    protected void FType.scalarizeScalarAssignment(Scalarizer.Algorithm s, FAssignableExp left, FExp right) {
+        left = (FAssignableExp) left.scalarize(s);
+        right = right.scalarize(s);
+        s.add(new FAssignStmt(left,right));
+    }
+    
+    protected void FRecordType.scalarizeScalarAssignment(Scalarizer.Algorithm s, FAssignableExp left, FExp right) {
+        if (!s.unroll()) {
+            for (FRecordComponentType comp : getComponents()) {
+                String name = comp.getName();
+                comp.getFType().scalarizeAssignment((Scalarizer.Algorithm) s, 
+                    left.componentDuringScalarization(s, name).asCommonAccessExp(),
+                    right.componentDuringScalarization(s, name));
+            }
+        } else {
+            scalarRecordClauses(s, new FAccessEmpty(), left, right);
+        }
+    }
+    
+    public FExp FExp.componentDuringScalarization(Scalarizer s, String name) {
+        if (isArray() || indexNames != null) {
+            return dynamicFExp(scalarRecordFExp(s, name));
+        } else {
+            return component(name);
+        }
+    }
+}

@@ -1,0 +1,26 @@
+optimization DisturbedIntegrator(objectiveIntegrand = x^2 + (u-w)^2)
+    Real x(start = 0, fixed = true);
+    input Real u;
+    input Real w;
+    Real xdot = u; // Used to test elimination of algebraic variables
+equation
+    der(x) = xdot;
+end DisturbedIntegrator;
+
+optimization Integrator(objectiveIntegrand = x^2)
+    Real x(start = 0, fixed = true);
+    input Real u;
+    Real xdot = u; // Used to test elimination of algebraic variables
+equation
+    der(x) = xdot;
+end Integrator;
+
+optimization TestDependentParameter
+    parameter Real p = 1;
+    parameter Real q = -p;  // negated alias
+    parameter Real r = p;   // alias
+    parameter Real s = p^2; // dependent parameter
+    Real x(start = 1, fixed = true);
+equation
+    der(x) = q*x;
+end TestDependentParameter;

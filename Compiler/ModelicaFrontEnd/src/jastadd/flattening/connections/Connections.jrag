@@ -1,0 +1,1431 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Queue;
+import java.util.Set;
+import java.util.ArrayDeque;
+import java.util.PriorityQueue;
+
+import org.jmodelica.util.Enumerator;
+import org.jmodelica.util.collections.GrowableSetIterable;
+import org.jmodelica.util.collections.ParallelIterable;
+
+aspect Connections {
+
+	/* Machinery to manage connection sets */
+
+	public ConnectionSetManager FClass.connectionSetManager = new ConnectionSetManager();
+	
+	public ConnectionSetManager FClass.getConnectionSetManager() {
+		return connectionSetManager;
+	}
+
+    public void FClass.genConnectionEquations(Flattener f) {
+        beginStep("genConnectionEquations()");
+        for (ConnectionSet set : connectionSetManager.getConnectionSetList()) 
+            set.generateEquations(f);
+        connectionSetManager.generateEqualityConstraints(f);
+        connectionSetManager.disconnectFromInstanceTree();
+        endStep("genConnectionEquations()");
+    }
+
+    public void ASTNode.enableStreamsRewrite() {
+        for (ASTNode n : this)
+            n.enableStreamsRewrite();
+    }
+
+    public void FStreamBuiltIn.enableStreamsRewrite() {
+        super.enableStreamsRewrite();
+        rewriteStreams = true;
+        is$Final = false;
+    }
+
+    protected boolean FStreamBuiltIn.rewriteStreams = false;
+
+    public class FClass {
+        public class enableStreamsRewrite extends Transformation {
+            // Depends on enableIfEquationElimination being done
+            public void perform() {
+                enableStreamsRewrite();
+                change();
+            }
+        }
+    }
+
+    /**
+     * Rewrite the inSteam operator to expanded form.
+     */
+    rewrite FInStream {
+        when (rewriteStreams) to FExp expandInStreamExp();
+    }
+
+    protected FExp FInStream.expandInStreamExp() {
+        // Always create expression from the connection set where the variable is an inside connector. 
+        String name = getFExp().asCommonAccess().name();
+        ConnectionSet cs = myFClass().getConnectionSetManager().getStreamConnectionSet(name, false);
+        return cs.expandInStreamExp(name);
+    }
+
+    protected FExp FDerStream.expandInStreamExp() {
+        // Note: this handles both enableStreamsRewrite and enableExpandedInStreamRewrite
+        if (getFExp().needsLaterInStreamRewrite()) {
+            return new FDerStream(getFExp().treeCopy());
+        } else {
+            return getFExp().diff(FExp.TIME);
+        }
+    }
+
+    syn boolean FExp.needsLaterInStreamRewrite() = false;
+    eq FExInStream.needsLaterInStreamRewrite()   = true;
+    eq FDerStream.needsLaterInStreamRewrite()    = true;
+
+    public class FClass {
+        public class enableExpandedInStreamRewrite extends Transformation {
+            // Depends on variabilityPropagationIfSet and the following aliasEliminationIfSet being done
+            public void perform() {
+                enableExpandedInStreamRewrite();
+                change();
+            }
+        }
+    }
+    
+    public void ASTNode.enableExpandedInStreamRewrite() {
+        for (ASTNode n : this)
+            n.enableExpandedInStreamRewrite();
+    }
+    
+    public void FDerStream.enableExpandedInStreamRewrite() {
+        super.enableExpandedInStreamRewrite();
+        rewriteStreams = true;
+        is$Final = false;
+    }
+
+    public void FExInStream.enableExpandedInStreamRewrite() {
+        super.enableExpandedInStreamRewrite();
+        
+        // We don't need to add anything for < 2 contributors
+        FExp stream = getDefault().treeCopy();
+        int n = 0;
+        for (InStreamPart cont : contributors()) {
+            stream = cont.stream.treeCopy();
+            n++;
+            if (n > 1) {
+                break;
+            }
+        }
+        if (n < 2) {
+            replaceMe(stream);
+            return;
+        }
+        
+        FExp eps   = getEps();
+        FExp alpha = generateAlpha(eps, generateS());
+        
+        // Generate replacement expression
+        ArrayList<FExp> nominatorTerms   = new ArrayList<FExp>();
+        ArrayList<FExp> denominatorTerms = new ArrayList<FExp>();
+        for (InStreamPart cont : contributors()) {
+            stream = cont.stream.treeCopy();
+            FExp flow = cont.flow.treeCopy();
+            if (!cont.outside) {
+                flow = new FNegExp(flow);
+            }
+            FExp posMax = positiveMax(eps, flow, alpha);
+            nominatorTerms.add(new FMulExp(posMax.treeCopyNoTransform(), stream));
+            denominatorTerms.add(posMax);
+        }
+        replaceMe(new FDivExp(
+                FExp.createBalancedBinaryTree(new FAddExp(), nominatorTerms),
+                FExp.createBalancedBinaryTree(new FAddExp(), denominatorTerms)));
+    }
+
+    /**
+     * Generate and add variable with varType, add an equation for the variable with rhs <code>exp</code>.
+     */
+    private FExp FExInStream.addEquation(FlatVariableMap.GeneratedVarType varType, FExp exp) {
+        String name = calcGeneratedVarName(varType);
+        TypePrefixVariability v = variability().combine(Variability.FIXEDPARAMETER);
+        myFClass().addFVariable(type().createTempFVariable(new FAccessString(name), variability()));
+        myFClass().equationList(v).add(new FEquation(new FAccessExp(name), exp));
+        return new FAccessExp(name);
+    }
+    
+    /**
+     * Get (no transform) equation list matching the variability <code>v</code>.
+     */
+    public List<FAbstractEquation> FClass.equationList(TypePrefixVariability v) {
+        if (v.knownParameterOrLess()) {
+            throw new UnsupportedOperationException();
+        } else if (v.fixedParameterVariability()) {
+            return getParameterEquationsNoTransform();
+        } else if (v.initialParameterVariability()) {
+            return getFInitialEquationsNoTransform();
+        } else {
+            return getFAbstractEquationsNoTransform();
+        }
+    }
+
+    /** 
+     * Add variable and equation for s_i, return reference to s_i
+     */
+    private FExp FExInStream.generateS() {
+        ArrayList<FExp> terms = new ArrayList<FExp>();
+        for (InStreamPart cont : contributors()) {
+            FExp flow = cont.flow.treeCopy();
+            if (!cont.outside) {
+                flow = new FNegExp(flow);
+            }
+            terms.add(new FMaxExp(flow, new Opt<FExp>(new FIntegerLitExp(0))));
+            
+        }
+        return addEquation(FlatVariableMap.GeneratedVarType.STREAM_S,
+                FExp.createBalancedBinaryTree(new FAddExp(), terms));
+    }
+
+    /** 
+     * Add variable and equation for alpha_i, return reference to alpha_i
+     */
+    private FExp FExInStream.generateAlpha(FExp eps, FExp s) {
+        FExp sDivEps = new FDivExp(s.treeCopyNoTransform(), eps.treeCopyNoTransform());
+        FExp alpha = new FSmoothExp(
+                new FIntegerLitExp(1), 
+                new FIfExp(
+                        new FGtExp(
+                                s.treeCopyNoTransform(),
+                                eps.treeCopyNoTransform()),
+                        new FIntegerLitExp(1),
+                        new FIfExp(
+                                new FGtExp(
+                                        s.treeCopyNoTransform(),
+                                        new FIntegerLitExp(0)),
+                                new FMulExp(
+                                        sDivEps.treeCopyNoTransform(), 
+                                        new FMulExp(
+                                                sDivEps.treeCopyNoTransform(),
+                                                new FSubExp(
+                                                        new FIntegerLitExp(3),
+                                                        new FMulExp(
+                                                                new FIntegerLitExp(2),
+                                                                s.treeCopyNoTransform())))),
+                                new FIntegerLitExp(0))));
+        return addEquation(FlatVariableMap.GeneratedVarType.STREAM_ALPHA, alpha);
+    }
+
+    /** 
+     * Add variable and equation for positiveMax_i, return reference to positiveMax_i
+     */
+    private FExp FExInStream.positiveMax(FExp eps, FExp flow, FExp alpha) {
+        FExp exp = new FAddExp(
+                new FMulExp(
+                        alpha.treeCopyNoTransform(),
+                        new FMaxExp(
+                                flow,
+                                new Opt<FExp>(new FIntegerLitExp(0)))),
+                new FMulExp(
+                        new FSubExp(
+                                new FIntegerLitExp(1),
+                                alpha.treeCopyNoTransform()),
+                        eps.treeCopyNoTransform()));
+        return addEquation(FlatVariableMap.GeneratedVarType.STREAM_POSMAX, exp);
+    }
+
+
+    syn int FExInStream.numVars() = getNumVar() / 3;
+
+    syn FExp FExInStream.flowExp(int i) = getVar(i * 3);
+
+    syn FExp FExInStream.streamExp(int i) = getVar(i * 3 + 1);
+
+    syn FExp FExInStream.isOutsideExp(int i) = getVar(i * 3 + 2);
+
+    syn boolean FExInStream.isOutside(int i) = isOutsideExp(i).ceval().booleanValue();
+
+    public class FExInStream {
+        /**
+         * An iterable over all stream/flow pairs that contribute to this inStream().
+         */
+        public Iterable<InStreamPart> contributors() {
+            return new ContributorIterable();
+        }
+        
+        public class InStreamPart {
+            public final FExp flow;
+            public final FExp stream;
+            public final boolean outside;
+
+            public InStreamPart(int i) {
+                flow = flowExp(i);
+                stream = streamExp(i);
+                outside = isOutside(i);
+            }
+
+            public boolean contributes() {
+                if (outside) {
+                    return flow.maxRealValue() > 0;
+                } else {
+                    return flow.minRealValue() < 0;
+                }
+            }
+        }
+
+        private class ContributorIterable implements Iterable<InStreamPart> {
+            private int n = numVars();
+            
+            public Iterator<InStreamPart> iterator() {
+                return new ContributorIterator();
+            }
+
+            private class ContributorIterator implements Iterator<InStreamPart> {
+                private int i;
+                private InStreamPart next;
+
+                public ContributorIterator() {
+                    i = -1;
+                    step();
+                }
+
+                public boolean hasNext() {
+                    return i < n;
+                }
+
+                public InStreamPart next() {
+                    InStreamPart res = next;
+                    step();
+                    return res;
+                }
+                
+                public void remove() {
+                    throw new UnsupportedOperationException();
+                }
+
+                private void step() {
+                    do {
+                        i++;
+                        next = (i < n) ? new InStreamPart(i) : null;
+                    } while (i < n && !next.contributes());
+                }
+            }
+        }
+    }
+
+    /**
+     * Check if this expression is multiplied with the given variable.
+     */
+    inh boolean FExp.isMultipliedWith(FVariable v);
+    eq BaseNode.getChild().isMultipliedWith(FVariable v)          = false;
+    eq FDotMulExp.getRight().isMultipliedWith(FVariable v)        = getLeft().isMultiplicationOf(v) || isMultipliedWith(v);
+    eq FDotMulExp.getLeft().isMultipliedWith(FVariable v)         = getRight().isMultiplicationOf(v) || isMultipliedWith(v);
+    eq FSemiLinearExp.getPosSlope().isMultipliedWith(FVariable v) = getX().isMultiplicationOf(v) || isMultipliedWith(v);
+    eq FSemiLinearExp.getNegSlope().isMultipliedWith(FVariable v) = getX().isMultiplicationOf(v) || isMultipliedWith(v);
+
+    /**
+     * Check if this expression is an access to v or a multiplication where one of the 
+     * multiplicands is an access to v.
+     */
+    syn boolean FExp.isMultiplicationOf(FVariable v) = false;
+    eq FAccessExp.isMultiplicationOf(FVariable v)    = v == myFV();
+    eq FNegExp.isMultiplicationOf(FVariable v)       = getFExp().isMultiplicationOf(v);
+    eq FDotMulExp.isMultiplicationOf(FVariable v)    = 
+        getLeft().isMultiplicationOf(v) || getRight().isMultiplicationOf(v);
+
+    rewrite FActualStream {
+        when (rewriteStreams) to FExp {
+            // Get the stream variable name prefix
+            FAccess varName = getFExp().asFAccessExp().getFAccess();
+            FAccess prefix = varName.copyPrefix();
+            ArrayList<ConnectionSetEntry> cses = 
+                myFClass().getConnectionSetManager().getFlowVariables(prefix.name());
+            ConnectionSetEntry cse = null;
+            if (cses.size() == 1) {
+                cse = cses.get(0);
+            } else if (cses.size() == 2) {
+                cse = cses.get(0);
+                // Check that this is an inside and an outside entry for the same name
+                ConnectionSetEntry cse2 = cses.get(1);
+                if (cse.isInside() == cse2.isInside() || !cse.name().equals(cse2.name()))
+                    cse = null;
+            }
+            if (cse != null) {
+                // Get the name of the single flow variable of the connector, then get the variables.
+                FAccess flowVarName = cse.getFAccess();
+                FRealVariable var = (FRealVariable) varName.myFV();
+                FRealVariable flowVar = (FRealVariable) varName.lookupFV(cse.name());
+                
+                // Decide what parts are valid
+                boolean constant = flowVar.isConstant();
+                double min = constant ? flowVar.ceval().realValue() : flowVar.minAttribute();
+                double max = constant ? min : flowVar.maxAttribute();
+                boolean multFlow = isMultipliedWith(flowVar);
+                boolean badMinMax = min > max;
+                boolean thenValid = badMinMax || max > 0.0;
+                boolean elseValid = badMinMax || min < 0.0 || (min == 0.0 && !(thenValid && multFlow));
+                
+                // Generate the expression
+                FExp res = null, elseExp = null;
+                FInStream thenExp = null;
+                if (thenValid) {
+                    res = thenExp = new FInStream(var.createAccessExp());
+                    thenExp.rewriteStreams = true; // Enable further rewrite of the inStream operator.
+                }
+                if (elseValid) 
+                    res = elseExp = var.createAccessExp();
+                if (thenValid && elseValid) {
+                    FExp guard = new FGtExp(flowVar.createAccessExp(), new FRealLitExp(0.0));
+                    res = new FIfExp(guard, thenExp, elseExp);
+                    if (multFlow)
+                        res = new FSmoothExp(0, res);
+                }
+                return res;
+            }
+            // There should already have been an error message in this case, so we should never come here.
+            throw new UnsupportedOperationException("Rewriting actualStream() for '" + varName.name() + 
+                    "': found " + cses.size() + " matching flow variables");
+        }
+    }
+
+	
+	public abstract class ConnectionSet extends TreeSet<ConnectionSetEntry> {
+		
+		protected ConnectionSet(ConnectionSetEntry e) {
+			add(e);
+		}
+		
+		public static ConnectionSet create(ConnectionSetEntry e) {
+			if (e.isFlow())
+				return new FlowConnectionSet(e);
+			else if (e.isStream())
+				return new StreamConnectionSet(e);
+			else 
+				return new PotentialConnectionSet(e);
+		}
+		
+		public void disconnectFromInstanceTree() {
+			for (ConnectionSetEntry e : this)
+				e.disconnectFromInstanceTree();
+		}
+		
+		public int getNumInside() {
+			int nInside = 0;
+			for (ConnectionSetEntry cse : this) {
+				if (cse.isInside()) {
+					nInside++;
+				}
+			}
+			return nInside;
+		}
+		
+		public int getNumOutside() {
+			int nOutside = 0;
+			for (ConnectionSetEntry cse : this) {
+				if (cse.isOutside()) {
+					nOutside++;
+				}
+			}
+			return nOutside;
+		}
+
+		public ConnectionSetEntry getConnectionSetEntry(String name, boolean outside) {
+			for (ConnectionSetEntry cse : this) {
+				if (cse.equals(name, outside)) {
+					return cse;
+				}
+			}
+			return null;
+		}
+		
+		/**
+		 * Check if a rewrite expression can be generated for an inStream() on a variable in this set.
+		 * 
+		 * Default implementation returns false, since inStream() only applies to stream connecton sets.
+		 */
+		public boolean canCreateInStreamExp() {
+			return false;
+		}
+		
+		/**
+		 * Create rewrite expression for an inStream() on a variable in this set.
+		 * 
+		 * Only valid for stream connecton sets.
+		 * 
+		 * @param name  the name of the variable to generate name for
+		 */
+		public FExp expandInStreamExp(String name) {
+			throw new UnsupportedOperationException();
+		}
+		
+		/**
+		 * Generate equations for this set.
+		 * 
+		 * @param eqns  equation list to add equations to
+		 */
+		public abstract void generateEquations(Flattener f);
+		
+		/**
+		 * Return all ConnectionSetEntrys corresponding to flow variables based
+		 * on a name prefix. This method is useful when generating expressions
+		 * for actualStream operators when the name of the flow variable in a
+		 * stream connector is needed.
+		 */
+		public ArrayList<ConnectionSetEntry> getFlowVariables(String prefix) {
+			return new ArrayList<ConnectionSetEntry>(0);
+		}
+		
+		public int numStreamVariables() {
+			int n_stream_vars = 0;
+			for (ConnectionSetEntry e : this) {
+				if (e.isStream()) {
+					n_stream_vars++;
+				}
+			}
+			return n_stream_vars;
+		}
+		
+		public String toString() {
+			StringBuffer str = new StringBuffer();
+			
+			str.append("Connection set (");
+			str.append(typeString());
+			str.append("): {");
+			String set_str = super.toString();
+			str.append(set_str.substring(1, set_str.length() - 1));
+			str.append("}\n");
+			return str.toString();
+		}
+		
+		protected abstract String typeString();
+		
+	}
+	
+	public class FlowConnectionSet extends ConnectionSet {
+		
+		public FlowConnectionSet(ConnectionSetEntry e) {
+			super(e);
+		}
+		
+		public String typeString() {
+			return "flow";
+		}
+		
+		public ArrayList<ConnectionSetEntry> getFlowVariables(String prefix) {
+			ArrayList<ConnectionSetEntry> cses = new ArrayList<ConnectionSetEntry>();
+			for (ConnectionSetEntry cse : this) 
+				if (cse.prefix().equals(prefix)) 
+					cses.add(cse);
+			return cses;
+		}
+
+        public void generateEquations(Flattener f) {
+            ConnectionSetEntry fst = first();
+            if (size() == 1 && fst.isInside() && fst.getVar().isTopLevelInputOutput()) {
+                return;
+            }
+            FExp e = null;
+            for (ConnectionSetEntry cse : this) 
+                e = cse.buildFlow(f, e);
+            FExp zero = fst.createZeroExp(f);
+            f.addNormalEquation(new FEquation(e, zero));
+        }
+
+	}
+
+    public class StreamConnectionSet extends ConnectionSet {
+
+        private double nominal = Double.MAX_VALUE;
+
+        public StreamConnectionSet(ConnectionSetEntry e) {
+            super(e);
+        }
+
+        public String typeString() {
+            return "stream";
+        }
+
+        public void generateEquations(Flattener f) {
+            for (ConnectionSetEntry e : this) {
+                nominal = Math.min(e.flowNominal(), nominal);
+            }
+            for (ConnectionSetEntry e : this) {
+                if (e.isOutside()) {
+                    FExp left = e.createFAccessExp();
+                    FExp right = expandInStreamExp(e, null, e.createZeroExp(f));
+                    f.addNormalEquation(new FEquation(left, right));
+                }
+            }
+        }
+
+        /**
+         * Create rewrite expression for an inStream() on a variable in this set.
+         * 
+         * @param name  the name of the variable to generate name for
+         */
+        public FExp expandInStreamExp(String name) {
+            ConnectionSetEntry e = getConnectionSetEntry(name, false);
+            FExp exp = expandInStreamExp(e, name, new FAccessExp(name));
+            exp.enableStreamsRewrite();
+            return exp;
+        }
+
+        /**
+         * Create an expression for the inStream() of the given entry.
+         * 
+         * Used for inStream() for inside entries and for additional equations for outside entries.
+         * 
+         * @param cse   the entry to generate the expression for
+         * @param name  the name of the scalar var to generate the stream access for, 
+         *              of null for the entire array (in scalar case they are equivalent)
+         * @param def   expression to use when there are no contributing streams
+         */
+        private FExp expandInStreamExp(ConnectionSetEntry cse, String name, FExp def) {
+            FExp stream = def;
+            List<FExp> vars = new List<FExp>();
+            for (ConnectionSetEntry e : this) {
+                if (cse != e) {
+                    stream = (name == null) ? e.createFAccessExp() : e.createCommonAccessExp(name, cse);
+                    if (e.isOutside()) 
+                        stream = new FInStream(stream);
+                    vars.add(e.createFlowCommonAccessExp());
+                    vars.add(stream);
+                    vars.add(FBooleanLitExp.create(e.isOutside()));
+                }
+            }
+            
+            if (vars.getNumChildNoTransform() < 6) {
+                return stream;
+            } else {
+                return new FExInStream(def, new FMulExp(new FInStreamEpsExp(), new FRealLitExp(nominal)), vars);
+            }
+        }
+    }
+
+    /**
+     * Find the flow variable corresponding to this stream variable.
+     * 
+     * Only valid for stream variables.
+     */
+    inh InstComponentDecl InstComponentDecl.myFlowVar();
+    eq InstComponentDecl.getChild().myFlowVar() = isConnector() ? findFlowVar() : null;
+    eq InstClassDecl.getChild().myFlowVar()     = isConnector() ? findFlowVar() : null;
+    eq InstRoot.getChild().myFlowVar()          = null;
+    eq Root.getChild().myFlowVar()              = null;
+
+    /**
+     * Find the first flow variable in this node, if any.
+     */
+    syn InstComponentDecl InstNode.findFlowVar() {
+        for (InstComponentDecl icd : allInstComponentDecls())
+            if (icd.isFlow())
+                return icd;
+        return null;
+    }
+
+    public class PotentialConnectionSet extends ConnectionSet {
+        
+        public PotentialConnectionSet(ConnectionSetEntry e) {
+            super(e);
+        }
+
+        public String typeString() {
+            return "potential";
+        }
+
+        public void generateEquations(Flattener f) {
+            if (size() == 1) {
+                // Cell that is not connected to in array in expandable connector
+                f.addNormalEquation(first().createZeroEquation(f));
+            } else {
+                FExp e1 = null;
+                for (ConnectionSetEntry cse : this) {
+                    FExp e2 = cse.createFAccessExp();
+                    if (e1 != null) {
+                        f.addNormalEquation(new FEquation(e1, e2));
+                    }
+                    e1 = e2;
+                }
+            }
+        }
+        
+    }
+
+
+	public class ConnectionSetManager {
+	
+		private ArrayList<ConnectionSet> list = new ArrayList<ConnectionSet>();
+		private ArrayList<EqualityConstraintConnection> equalityConstraints = new ArrayList<EqualityConstraintConnection>();
+		private Map<ConnectionSetEntry, ConnectionSet> cseMap = new HashMap<ConnectionSetEntry, ConnectionSet>();
+		private Map<String, CSENameMapEntry> cseStreamMap = new HashMap<String, CSENameMapEntry>();
+		private OverconstrainedConnectionGraph graph = null;
+		private ExpandableConnectorSets expandable = null;
+		
+        private static class CSENameMapEntry {
+            private ConnectionSetEntry outsideCSE = null;
+            private ConnectionSet outside = null;
+            private ConnectionSetEntry insideCSE = null;
+            private ConnectionSet inside = null;
+        }
+
+        private void updateCSEMapEntry(ConnectionSetEntry cse, ConnectionSet newValue) {
+            cseMap.put(cse, newValue);
+            if (!cse.isStream()) {
+                return;
+            }
+
+            for (String name : cse.names()) {
+                CSENameMapEntry entry = cseStreamMap.get(name);
+                if (entry == null) {
+                    entry = new CSENameMapEntry();
+                    cseStreamMap.put(name, entry);
+                }
+                if (cse.isOutside()) {
+                    entry.outsideCSE = cse;
+                    entry.outside = newValue;
+                } else {
+                    entry.insideCSE = cse;
+                    entry.inside = newValue;
+                }
+            }
+        }
+		
+		public ArrayList<ConnectionSet> getConnectionSetList() {
+			return list;
+		}
+		
+		public OverconstrainedConnectionGraph getGraph() {
+			if (graph == null) 
+				graph = new OverconstrainedConnectionGraph();
+			return graph;
+		}
+        
+       public ExpandableConnectorSets getExpandable() {
+           if (expandable == null) 
+               expandable = new ExpandableConnectorSets();
+           return expandable;
+       }
+       
+      public boolean isExpandableConnectorsDone() {
+          return expandable != null && expandable.isExpansionDone();
+      }
+
+        public void buildOverconstrainedConnectionTrees() {
+            if (graph != null) 
+                graph.buildTrees(this);
+        }
+        
+        public void elaborateExpandableConnectors() {
+            if (expandable != null) {
+                expandable.elaborate(this);
+                expandable = null;
+            }
+        }
+
+        public void addFlowVar(InstComponentDecl var, boolean outside, FAccess name) {
+            addVar(ConnectionSetEntry.create(var, outside, name));
+        }
+
+        public void addExpandableArrayMember(InstComponentDecl var, FAccess name) {
+            // TODO: this does not seem to handle when the expandable connector is connected in turn, 
+            //       i.e. no connection to outside an expandable connector
+            // If var is present as inner, don't add it as outer
+            if (getConnectionSet(ConnectionSetEntry.create(var, false, name)) == null)
+                addVar(ConnectionSetEntry.create(var, true, name));
+        }
+
+		/**
+		 * Add vars to connection sets.
+		 * 
+		 * Filters out parameters and constants.
+		 */
+		public void addVars(ConnectionSetEntry cse1, ConnectionSetEntry cse2) {
+
+//			log.debug("ConnectionSetManager.addVars");
+		
+//		    System.out.println(namePrefix1.name()+" . "+var1.name() + " outside: " + outside1);
+//		    System.out.println(namePrefix2.name()+" . "+var2.name() + " outside: " + outside2);
+		
+			// Don't add parameters or constants to connection set
+			// TODO: Add them, but generate asserts instead of equations
+			if (cse1.getVar().variability().parameterOrLess() || cse2.getVar().variability().parameterOrLess()) 
+				return;
+
+			ConnectionSet setA = getConnectionSet(cse1);
+			ConnectionSet setB = getConnectionSet(cse2);
+			
+			if (setA != null && setB != null) {
+				if (setA != setB)
+					merge(setA, setB);
+			} else if (setA != null && setB == null) {
+				add(setA, cse2);
+			} else if (setA == null && setB != null) {
+				add(setB, cse1);
+			} else if (setA == null && setB == null) {
+				join(cse1, cse2);
+			}
+		}
+		
+		public void addEqualityConstraint(ConnectionSetEntry cse1, ConnectionSetEntry cse2, FAccess prefix) {
+			equalityConstraints.add(new EqualityConstraintConnection(cse1, cse2, prefix));
+		}
+        
+        private void addVar(ConnectionSetEntry entry) {
+            if (getConnectionSet(entry) == null) {
+                ConnectionSet set = ConnectionSet.create(entry);
+                list.add(set);
+                updateCSEMapEntry(entry, set);
+            }
+        }
+		
+		private void join(ConnectionSetEntry entryA, ConnectionSetEntry entryB) {
+			ConnectionSet set = ConnectionSet.create(entryA);
+			set.add(entryB);
+			list.add(set);
+			updateCSEMapEntry(entryA, set);
+			updateCSEMapEntry(entryB, set);
+		}
+		
+		private void add(ConnectionSet set, ConnectionSetEntry entry) {
+			set.add(entry);
+			updateCSEMapEntry(entry, set);
+		}
+		
+		private void merge(ConnectionSet setA, ConnectionSet setB) {
+			if (setA.size() < setB.size()) {
+				ConnectionSet tmp = setA;
+				setA = setB;
+				setB = tmp;
+			}
+			for (ConnectionSetEntry entry : setB)
+			    updateCSEMapEntry(entry, setA);
+			setA.addAll(setB);
+			list.remove(setB);
+		}
+		
+		public ConnectionSet getConnectionSet(ConnectionSetEntry cse) {
+			return cseMap.get(cse);
+		}
+
+		public ConnectionSet getStreamConnectionSet(String name, boolean outside) {
+            CSENameMapEntry entry = cseStreamMap.get(name);
+            if (entry == null)
+                return null;
+            if (outside)
+                return entry.outside;
+            else
+                return entry.inside;
+		}
+
+		public ArrayList<ConnectionSetEntry> getFlowVariables(String prefix) {
+			ArrayList<ConnectionSetEntry> cses = new ArrayList<ConnectionSetEntry>();
+			for (ConnectionSet set : list) {
+				cses.addAll(set.getFlowVariables(prefix));		
+			}
+			return cses;
+		}
+		
+		public void disconnectFromInstanceTree() {
+			for (ConnectionSet set : list)
+				set.disconnectFromInstanceTree();
+            if (graph != null) 
+                graph.disconnectFromInstanceTree();
+			equalityConstraints = null;
+		}
+		
+		public void generateEqualityConstraints(Flattener f) {
+			for (EqualityConstraintConnection ecc : equalityConstraints)
+				ecc.generate(f);
+		}
+		
+		public String printConnectionSets() {
+		
+			StringBuffer str = new StringBuffer();
+			
+			str.append("Connection sets: " + list.size() + " sets\n");
+			
+			// Print connection sets 
+			for(ConnectionSet set : list) {
+				str.append(set);
+			}
+
+			return str.toString();
+		}
+	}
+
+
+    public class ConnectionSetEntry implements Comparable<ConnectionSetEntry> {
+
+        private InstComponentDecl cd;
+        private boolean outside;
+        private FAccess access;
+        private String prefix;
+        private String str;
+        private String[] scalarNames;
+
+        public static ConnectionSetEntry create(InstComponentDecl cd, boolean outside, FAccess access) {
+            if (cd.isFlow()) {
+                return new FlowConnectionSetEntry(cd, outside, access);
+            }
+            if (cd.isStream()) { 
+                return new StreamConnectionSetEntry(cd, outside, access);
+            }
+            return new ConnectionSetEntry(cd, outside, access);
+        }
+
+        private ConnectionSetEntry(InstComponentDecl cd, boolean outside, FAccess access) {
+            //log.debug("Created ConnectionSetEntry: " + cd.name());
+            this.cd = cd;
+            this.outside = outside;
+            this.access = access;
+            prefix = null;
+        }
+
+        public void disconnectFromInstanceTree() {
+            cd = null;
+        }
+
+        public boolean isOutside() {
+            return outside;
+        }
+
+        public boolean isInside() {
+            return !outside;
+        }
+
+        public InstComponentDecl getVar() {
+            return cd;
+        }
+
+        public boolean isFlow() {
+            return false;
+        }
+
+        public boolean isStream() {
+            return false;
+        }
+
+        public String name() {
+           return access.name();
+        }
+        
+        public String[] names() {
+            if (scalarNames != null)
+                return scalarNames;
+            else
+                return new String[] {name()};
+        }
+
+        public String prefix() {
+            if (prefix == null) 
+                prefix = access.copyPrefix().name();
+            return prefix;
+        }
+
+        public boolean equals(String name, boolean outside) {
+            if (outside != this.outside)
+                return false;
+            if (scalarNames != null) {
+                for (String scalarName : scalarNames)
+                    if (name.equals(scalarName))
+                        return true;
+                return false;
+            } else {
+                return name.equals(name());
+            }
+        }
+
+        public String toString() {
+            if (str == null)
+                str = access + (outside ? " (o)" : " (i)");
+            return str;
+        }
+
+        public FAccess getFAccess() {
+            return access;
+        }
+
+        public FAccessExp createFAccessExp() {
+            return new FAccessExp(access.treeCopy());
+        }
+
+        /**
+         * Create an FAccessExp that is an access to a variable in this entry, that is connected to 
+         * the variable named <code>name</code> in <code>other</code>.
+         */
+        public FAccessExp createCommonAccessExp(String name, ConnectionSetEntry other) {
+            if (other == this)
+                return new FAccessExp(name); 
+            if (scalarNames == null || other.scalarNames == null)
+                return createFAccessExp();
+            int i;
+            for (i = 0; i < other.scalarNames.length && !other.scalarNames[i].equals(name); i++);
+            return (i < scalarNames.length) ? new FAccessExp(scalarNames[i]) : createFAccessExp();
+        }
+
+        /**
+         * Create a zero expression suitable for this entry.
+         */
+        public FExp createZeroExp(Flattener f) {
+            FType t = cd.type();
+            if (access.hasFArraySubscripts() && access.getFArraySubscripts().accessNdims() == 0) {
+                t = t.scalarType();
+            }
+            return t.flattenZeroLiteral(f);
+        }
+
+        /**
+         * Create an equation setting the variable of this entry to zero.
+         */
+        public FAbstractEquation createZeroEquation(Flattener f) {
+            return new FEquation(createFAccessExp(), createZeroExp(f));
+        }
+
+        /**
+         * Create an access to the var of this entry and add or subtract it to/from e.
+         * 
+         * Used to build up flow equations.
+         */
+        public FExp buildFlow(Flattener f, FExp e) {
+            return createFAccessExp().appendSum(f, e, outside, cd.type());
+        }
+
+        public int hashCode() {
+            return toString().hashCode();
+        }
+
+        /**
+         * Create a new connection set entry referring to a specific cell of the variable this refers to.
+         * 
+         * Assumes that the variable is an array and that <code>i</code> is suitable.
+         */
+        public ConnectionSetEntry specifyCell(Index i) {
+            InstComponentDecl cell = cd.specify(i);
+            return ConnectionSetEntry.create(cell, outside, cell.getFAccess(i));
+        }
+
+        public boolean equals(Object o) {
+            return o instanceof ConnectionSetEntry && toString().equals(o.toString());
+        }
+    
+        public int compareTo(ConnectionSetEntry cse) {
+            return toString().compareTo(cse.toString());
+        }
+
+        /**
+         * Create an access expression to the associated flow variable.
+         * 
+         * Only valid for stream connection entries.
+         */
+        public FExp createFlowCommonAccessExp() {
+            throw new UnsupportedOperationException("Only supported for stream connection sets");
+        }
+
+        /**
+         * Get the epsilon to use when calculating flows, based on the associated flow variable's nominal value.
+         * 
+         * Only valid for stream connection entries.
+         */
+         public double flowNominal() {
+             throw new UnsupportedOperationException("Only supported for stream connection sets");
+        }
+
+         /**
+          * Check if this entry should contribute when calculating streams.
+          * 
+          * Only valid for stream connection entries.
+          */
+          public boolean contributesToStream() {
+              throw new UnsupportedOperationException("Only supported for stream connection sets");
+        }
+
+
+        private static class FlowConnectionSetEntry extends ConnectionSetEntry {
+
+            public FlowConnectionSetEntry(InstComponentDecl cd, boolean outside, FAccess access) {
+                super(cd, outside, access);
+            }
+
+            public boolean isFlow() {
+                return true;
+            }
+
+        }
+
+        private static class StreamConnectionSetEntry extends ConnectionSetEntry {
+
+            private FExp flowExp;
+            private double nominal = 1;
+            private boolean contribute = true;
+
+            public StreamConnectionSetEntry(InstComponentDecl cd, boolean outside, FAccess access) {
+                super(cd, outside, access);
+                InstComponentDecl flow = cd.myFlowVar();
+                flowExp = new FAccessExp(flow.getFAccess().treeCopy());
+                try {
+                    CValue cval = flow.nominalAttributeCValue();
+                    if (cval.hasRealValue()) {
+                        nominal = Math.abs(cval.realValue());
+                    }
+                } catch (ConstantEvaluationException e) {}
+                try {
+                    CValue cval = isOutside() ? flow.maxAttributeCValue() : flow.minAttributeCValue();
+                    if (cval.hasRealValue()) {
+                        double val = cval.realValue();
+                        contribute = isOutside() ? (val > 0) : (val < 0);
+                    }
+                } catch (ConstantEvaluationException e) {}
+            }
+
+            public boolean isStream() {
+                return true;
+            }
+
+            public FExp createFlowCommonAccessExp() {
+                return flowExp.fullCopy();
+            }
+
+            public double flowNominal() {
+                return nominal;
+            }
+
+            public boolean contributesToStream() {
+                return contribute;
+            }
+
+        }
+
+    }
+
+
+    /**
+     * Connect the variables referenced in a connect or branch statement in the connection set manager.
+     * 
+     * @param right   the other access
+     * @param prefix  the prefix to use when flattening names
+     * @param csm     the connection set manager to add variables to
+     * @param source  the originating connect or branch statement
+     */
+    public void InstAccess.connectTo(InstAccess right, FAccess prefix, ConnectionSetManager csm, ConnectionEdge source) {
+        
+        if (!csm.isExpandableConnectorsDone() && 
+                (isExpandableConnectorPart() || right.isExpandableConnectorPart())) {
+            /* We currently allow connecting two declared members of expandable connectors
+             * directly, and in that case we need to call addIntroducingConnection both ways.
+             * It is not entirely clear if that is allowed by the spec.
+             */
+            if (isExpandableConnectorPart()) {
+                csm.getExpandable().addIntroducingConnection(this, right, prefix, source);
+            }
+            if (right.isExpandableConnectorPart()) {
+                csm.getExpandable().addIntroducingConnection(right, this, prefix, source);
+            }
+        } else {
+            boolean leftOutside  = isOutsideConnector();
+            boolean rightOutside = right.isOutsideConnector();
+            InstComponentDecl leftComp  = lookupEvaluatingIndices();
+            InstComponentDecl rightComp = right.lookupEvaluatingIndices();
+            
+            if (isArray() && !leftComp.isOverconstrainedConnection(rightComp)) {
+                Indices leftInd = indices();
+                Indices rightInd = right.indices();
+                for (Index[] i : new ParallelIterable<Index>(new Index[2], leftInd, rightInd)) {
+                    Index leftI = leftInd.translate(i[0]);
+                    Index rightI = rightInd.translate(i[1]);
+                    InstComponentDecl leftCompCell = lookupWithIndex(leftI);
+                    InstComponentDecl rightCompCell = right.lookupWithIndex(rightI);
+                    FAccess leftCellName  = leftCompCell.getFAccess(leftI);
+                    FAccess rightCellName = rightCompCell.getFAccess(rightI);
+                    connectCells(csm, source, prefix, 
+                                 leftCompCell,  leftOutside,  leftCellName, 
+                                 rightCompCell, rightOutside, rightCellName);
+                }
+            } else {
+                FAccess leftName  = leftComp.getFAccess(accessIndex());
+                FAccess rightName = rightComp.getFAccess(right.accessIndex());
+                connectCells(csm, source, prefix, 
+                             leftComp,  leftOutside,  leftName, 
+                             rightComp, rightOutside, rightName);
+            }
+        }
+    }
+
+    /**
+     * Connect the variables referenced in a connect or branch statement in the connection set manager, 
+     * for a specific cell of the accesses.
+     * 
+     * @param right   the other access
+     * @param prefix  the prefix to use when flattening names
+     * @param csm     the connection set manager to add variables to
+     * @param source  the originating connect or branch statement
+     */
+    public static void InstAccess.connectCells(
+            ConnectionSetManager csm, ConnectionEdge source, FAccess prefix, 
+            InstComponentDecl leftComp,  boolean leftOutside,  FAccess leftName, 
+            InstComponentDecl rightComp, boolean rightOutside, FAccess rightName) {
+        if (!csm.isExpandableConnectorsDone() && leftComp.isExpandableConnector()) {
+            csm.getExpandable().addSpanningConnection(leftComp, rightComp, prefix, source);
+        } else {
+            ConnectionSetEntry leftEntry = ConnectionSetEntry.create(leftComp, leftOutside, leftName);
+            ConnectionSetEntry rightEntry = ConnectionSetEntry.create(rightComp, rightOutside, rightName);
+            leftComp.connectTo(leftEntry, rightEntry, prefix, csm, source, true);
+        }
+    }
+
+    /**
+     * Helper method for constructing FAccesses for connection sets
+     */
+    public FAccess InstComponentDecl.getFAccess(Index i) {
+        FAccess res = getFAccess();
+        if (isArray()) {
+            if (i.ndims() > 0) {
+                res = res.copyAndAddFas(i.subIndex(i.ndims() - ndims()).createFArraySubscripts());
+            } else {
+                res = res.copyAndAddFas(expandedSubscripts());
+            }
+        }
+        return res;
+    }
+    
+    syn Index InstAccess.accessIndex() = hasFArraySubscripts() ?
+            getFArraySubscripts().createIndex() :
+            Index.NULL;
+
+    syn Indices InstAccess.accessIndices() = indices().translated();
+
+    /**
+     * Connect the variables referenced in a connect or branch statement in the connection set manager.
+     * 
+     * @param left        describes current part of the left access
+     * @param right       describes current part of the right access
+     * @param prefix      the prefix to use when flattening names
+     * @param csm         the connection set manager to add variables to
+     * @param source      the originating connect or branch statement
+     * @param buildGraph  if true, pass instances of overconstrained types to overconstrained connection graph
+     */
+    public void InstComponentDecl.connectTo(ConnectionSetEntry left, ConnectionSetEntry right, 
+            FAccess prefix, ConnectionSetManager csm, ConnectionEdge source, boolean buildGraph) {
+        if (!isDisabled() && !right.getVar().isDisabled()) {
+            if (buildGraph && isOverconstrainedConnection(right.getVar())) {
+                csm.getGraph().addConnection(left, right, prefix, source);
+            } else if (isArray()) {
+                for (Index i : indices()) {
+                    ConnectionSetEntry leftEntry = left.specifyCell(i);
+                    ConnectionSetEntry rightEntry = right.specifyCell(i);
+                    leftEntry.getVar().connectTo(leftEntry, rightEntry, prefix, csm, source, buildGraph);
+                }
+            } else if (isOperatorRecord()) {
+                connectToAsPrimitive(left, right, prefix, csm, source, buildGraph);
+            } else {
+                SortedSet<InstComponentDecl> rightChildren = right.getVar().containedInstComponents();
+                for (InstComponentDecl leftComp : containedInstComponents()) {
+                    SortedSet<InstComponentDecl> rightTail = rightChildren.tailSet(leftComp);
+                    if (rightTail.size() > 0) {
+                        InstComponentDecl rightComp = rightTail.first();
+                        FAccess leftName  = leftComp.getFAccess(Index.NULL);
+                        FAccess rightName = rightComp.getFAccess(Index.NULL);
+                        ConnectionSetEntry leftEntry = ConnectionSetEntry.create(leftComp, left.isOutside(), leftName);
+                        ConnectionSetEntry rightEntry = ConnectionSetEntry.create(rightComp, right.isOutside(), rightName);
+                        leftComp.connectTo(leftEntry, rightEntry, prefix, csm, source, buildGraph);
+                    }
+                }
+            }
+            csm.countCardinality(left.getFAccess().scalarName());
+            csm.countCardinality(right.getFAccess().scalarName());
+        }
+    }
+
+    public void InstPrimitive.connectTo(ConnectionSetEntry left, ConnectionSetEntry right, 
+            FAccess prefix, ConnectionSetManager csm, ConnectionEdge source, boolean buildGraph) {
+        if (!isDisabled() && !right.getVar().isDisabled())
+            connectToAsPrimitive(left, right, prefix, csm, source, buildGraph);
+    }
+
+    public void InstComponentDecl.connectToAsPrimitive(ConnectionSetEntry left, ConnectionSetEntry right, 
+            FAccess prefix, ConnectionSetManager csm, ConnectionEdge source, boolean buildGraph) {
+        if (left.equals(right)) {
+            source.warning("Ignored connection from connector to itself");
+        } else {
+            if (buildGraph && isOverconstrainedConnection(right.getVar())) {
+                csm.getGraph().addConnection(left, right, prefix, source);
+            } else {
+                // In the special case of members of expandable connectors, we need each cell separately.
+                if (isArray() && (isExpandableConnectorMember() || right.getVar().isExpandableConnectorMember()) && 
+                        !left.getFAccess().hasScalarSubscripts()) 
+                    for (Index i : indices())
+                        csm.addVars(left.specifyCell(i), right.specifyCell(i));
+                else
+                    csm.addVars(left, right);
+            }
+            csm.countCardinality(left.getFAccess().scalarName());
+            csm.countCardinality(right.getFAccess().scalarName());
+        }
+    }
+
+    syn boolean FAccess.hasScalarSubscripts() {
+        FArraySubscripts fas = getFArraySubscripts();
+        if (fas == null)
+            return false;
+        for (Subscript s : fas.subscripts())
+            if (s.ndims() > 0)
+                return false;
+        return true;
+    }
+
+    syn boolean InstComponentDecl.isOverconstrainedConnection(InstComponentDecl right) =
+            isOverconstrainedType() && right.isOverconstrainedType();
+
+	syn boolean InstAccess.isOutsideConnector() = getFirstInstAccess().myInstComponentDecl().isConnector();
+	
+	
+	/**
+	 * Traverse tree and build connection sets and overconstranined connection graph from relevant constructs.
+	 * 
+	 * @param prefix   the prefix to use when flattening names
+	 * @param csm      the connection set manager to add variables to
+	 * @param connect  if false, then we are in a dead branch, and shouldn't change sets or graph
+	 */
+	public void ASTNode.buildConnectionSets(FAccess prefix, ConnectionSetManager csm, boolean connect) {
+		for (ASTNode n : this) 
+			n.buildConnectionSets(prefix, csm, connect);
+	}
+
+    public void InstNode.buildConnectionSets(FAccess prefix, ConnectionSetManager csm, boolean connect) {
+        prefix = getFAccess();
+        for (FAbstractEquation ae : getFAbstractEquations()) {
+            ae.buildConnectionSets(prefix, csm, connect);
+        }
+
+        getInstComponentDeclList().buildConnectionSets(prefix, csm, connect);
+        getInstExtendsList().buildConnectionSets(prefix, csm, connect);
+	}
+
+    public void InstClassDecl.buildConnectionSets(FAccess prefix, ConnectionSetManager csm, boolean connect) {
+        super.buildConnectionSets(prefix, csm, connect);
+        getInstGeneratedInners().buildConnectionSets(prefix, csm, connect);
+    }
+
+	public void InstComponentDecl.buildConnectionSets(FAccess prefix, ConnectionSetManager csm, boolean connect) {
+		if (useInFlattening()) 
+			super.buildConnectionSets(prefix, csm, connect);
+	}
+
+    public void InstAssignable.buildConnectionSets(FAccess prefix, ConnectionSetManager csm, boolean connect) {
+        if (useInFlattening() && hasBindingFExp())
+            getBindingFExp().buildConnectionSets(prefix, csm, connect);
+        if (isOperatorRecord())
+            buildConnectionSetsAsPrimitive(prefix, csm, connect);
+        else
+            super.buildConnectionSets(prefix, csm, connect);
+    }
+
+    public void InstPrimitive.buildConnectionSets(FAccess prefix, ConnectionSetManager csm, boolean connect) {
+        buildConnectionSetsAsPrimitive(prefix, csm, connect);
+        super.buildConnectionSets(prefix, csm, connect);
+    }
+
+    public void InstComponentDecl.buildConnectionSetsAsPrimitive(FAccess prefix, ConnectionSetManager csm, boolean connect) {
+        if (useInFlattening() && (isFlow() || isStream())) {
+            FAccess access = getFAccess(Index.NULL);
+            csm.addFlowVar(this, false, access);
+            if (inExpandableConnector()) {
+                csm.addFlowVar(this, true, access);
+            }
+        }
+    }
+
+    public void FIfEquation.buildConnectionSets(FAccess prefix, ConnectionSetManager csm, boolean connect) {
+        boolean all = true;
+        boolean test = false;
+        try {
+            CValue cval = getTest().ceval();
+            if (cval.hasBooleanValue()) {
+                test = cval.booleanValue();
+                all = false;
+            }
+        } catch (ConstantEvaluationException e) {
+        }
+        getTest().buildConnectionSets(prefix, csm, connect);
+        for (FAbstractEquation equ : getFAbstractEquations())
+            equ.buildConnectionSets(prefix, csm, (all || test) && connect);
+        if (hasElse())
+            getElse().buildConnectionSets(prefix, csm, (all || !test) && connect);
+    }
+
+	public void InstForClauseE.buildConnectionSets(FAccess prefix, ConnectionSetManager csm, boolean connect) {
+		Indices indices = Indices.create(getInstForIndexs());
+		for (Index i : indices) {
+			int j = 0;
+			int[] ii = indices.translate(i).index();
+			for (InstForIndex fi : getInstForIndexs()) {
+				fi.getInstPrimitive().setLocalCachedEvaluationValue(new CValueInteger(ii[j]));
+				j++;
+			}
+			for (FAbstractEquation equ : getFAbstractEquations())
+			    equ.buildConnectionSets(prefix, csm, connect);
+			getFAbstractEquations().flushAllRecursive();
+		}
+		for (InstForIndex fi : getInstForIndexs()) {
+			fi.getInstPrimitive().setLocalCachedEvaluationValue(null);
+			fi.buildConnectionSets(prefix, csm, connect);
+		}
+	}
+
+    public void FConnectClause.buildConnectionSets(FAccess prefix, ConnectionSetManager csm, boolean connect) {
+        if (!isDisabled() && connect) {
+            InstAccess left  = getConnector1();
+            InstAccess right = getConnector2();
+            left.connectTo(right, prefix, csm, this);
+        }
+    }
+
+    syn boolean FConnectClause.isDisabled() = getConnector1().isDisabled() || getConnector2().isDisabled();
+
+}
+
+aspect Cardinality {
+    
+    private Map<String,Enumerator> ConnectionSetManager.cardinality = null;
+    
+    public void ConnectionSetManager.countCardinality(String name) {
+        if (cardinality == null)
+            cardinality = new HashMap<String,Enumerator>();
+        Enumerator e = cardinality.get(name);
+        if (e == null)
+            cardinality.put(name, new Enumerator(1));
+        else
+            e.next();
+    }
+    
+    public int ConnectionSetManager.getCardinality(String name) {
+        if (cardinality == null)
+            return 0;
+        Enumerator e = cardinality.get(name);
+        return (e == null) ? 0 : e.peek();
+    }
+
+    // Can only be calculated after flattening - give dummy value before that to prevent error messages about structural parameters for cardinality()
+    syn int FExp.cardinalityValue() {
+        throw new UnsupportedOperationException();
+    }
+    eq InstAccessExp.cardinalityValue() = 1;
+    eq FAccessExp.cardinalityValue()    = getFAccess().cardinalityValue();
+
+    syn int FAccess.cardinalityValue() = myFClass().getConnectionSetManager().getCardinality(scalarName());
+
+}

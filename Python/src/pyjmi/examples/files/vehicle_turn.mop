@@ -1,0 +1,239 @@
+model Car
+  constant Real pi = Modelica.Constants.pi;
+
+  // init parameters
+  parameter Real X0 = 0;
+  parameter Real Y0 = 0;
+  parameter Real vx0 = 25;
+  parameter Real psi0 = 0;
+  
+  // vehicle properties
+  parameter Real l = 2.8;
+  parameter Real lf = 1.3;
+  parameter Real lr = l-lf;
+  parameter Real m = 2100;
+  parameter Real Iz = 3900;
+  parameter Real g = 9.82;
+  parameter Real Fzf = m*g*lr/l;
+  parameter Real Fzr = m*g*lf/l;
+
+  // tire parameters
+  parameter Real Re = .3; // effective rolling radius
+  parameter Real Rw = .3; // loaded wheel radius
+  parameter Real Iw = 2;
+  parameter Real sig = .3;
+
+  // Tire parameters corresponding to dry asphalt
+  // Front tire model parameters
+  parameter Real muxf = 1.1959;
+  parameter Real Bxf = 11.6848;
+  parameter Real Cxf = 1.685;
+  parameter Real Exf = 0.37729;
+ 
+  parameter Real muyf = 0.93476;
+  parameter Real Byf = 8.8626;
+  parameter Real Cyf = 1.193;
+  parameter Real Eyf = -1.2076;
+ 
+  parameter Real Cxaf = 1.092;
+  parameter Real Bx1f = 12.35;
+  parameter Real Bx2f = -10.77;
+ 
+  parameter Real Cykf = 1.081;
+  parameter Real By1f = 6.461;
+  parameter Real By2f = 4.196;
+ 
+  // Rear tire model parameter
+  parameter Real muxr = 1.2027;
+  parameter Real Bxr = 11.1217;
+  parameter Real Cxr = 1.685;
+  parameter Real Exr = 0.36192;
+ 
+  parameter Real muyr = 0.96146;
+  parameter Real Byr = 9.3016;
+  parameter Real Cyr = 1.193;
+  parameter Real Eyr = -1.1087;
+ 
+  parameter Real Cxar = 1.092;
+  parameter Real Bx1r = 12.35;
+  parameter Real Bx2r = -10.77;
+ 
+  parameter Real Cykr = 1.081;
+  parameter Real By1r = 6.461;
+  parameter Real By2r = 4.196;
+
+  parameter Real Twfmin = -muxf*m*g*Rw;
+  parameter Real Twrmin = -muxr*m*g*Rw;
+  parameter Real Twfmax = muxf*Fzf*Rw;
+  parameter Real Twrmax = muxr*Fzr*Rw;
+  parameter Real Fxfmax = muxf*Fzf;
+  parameter Real Fxrmax = muxr*Fzr;
+  parameter Real Fyfmax = muyf*Fzf;
+  parameter Real Fyrmax = muyr*Fzr;
+
+  // inputs
+  Modelica.Blocks.Interfaces.RealInput delta(min=-.5, max=.5, nominal=.2);
+  Modelica.Blocks.Interfaces.RealInput Twf(min=Twfmin, max=Twfmax, nominal=Twfmax);
+  Modelica.Blocks.Interfaces.RealInput Twr(min=Twrmin, max=Twrmax, nominal=Twrmax);
+
+  // variables
+  Real X(nominal=50, start=X0, fixed=true);
+  Real Y(nominal=10, start=Y0, fixed=true);
+  Real psi(nominal=pi, start=psi0, fixed=true);
+  Real vy(nominal=1, start=0, fixed=true);
+  Real vx(nominal=10, start=vx0, fixed=true, min=0.1, max=100);
+  Real dpsi(nominal=1, start=0, fixed=true);
+  Real alphaf(nominal=.2, start=0, fixed=true);
+  Real alphar(nominal=.2, start=0, fixed=true);
+  Real beta(nominal=.2, start=0);
+  Real Fxf0(nominal=Fxfmax, start=0);
+  Real Fxr0(nominal=Fxrmax, start=0);
+  Real Fyf0(nominal=Fyfmax, start=0);
+  Real Fyr0(nominal=Fyrmax, start=0);
+  Real Fyf(nominal=Fyfmax, start=0, min=-Fyfmax, max=Fyfmax);
+  Real Fyr(nominal=Fyrmax, start=0, min=-Fyrmax, max=Fyrmax);
+  Real Fxf(nominal=Fxfmax, start=0, min=-Fxfmax, max=Fxfmax);
+  Real Fxr(nominal=Fxrmax, start=0, min=-Fxrmax, max=Fxrmax);
+  Real omegaf(nominal=30, start=vx0/Re,fixed=true, min=0);
+  Real omegar(nominal=30, start=vx0/Re,fixed=true, min=0);
+  Real kappaf(nominal=.3, start=0);
+  Real kappar(nominal=.3, start=0);
+  Real Gxaf(nominal=1, start=1);
+  Real Gxar(nominal=1, start=1);
+  Real Gykf(nominal=1, start=1);
+  Real Gykr(nominal=1, start=1);
+  Real Bxaf(nominal=Bx1f);
+  Real Bxar(nominal=Bx1r);
+  Real Bykf(nominal=By1f);
+  Real Bykr(nominal=By1r);
+  Real vxf(nominal=10, start=vx0);
+  Real vxr(nominal=10, start=vx0);
+  Real Mz_g(start=0,nominal=Fxfmax);
+  Real Fx_g(start=0,nominal=Fxfmax);
+  Real Fy_g(start=0,nominal=Fyfmax);
+  
+equation
+  beta = atan(vy/vx);
+  Mz_g = (lf*Fyf*cos(delta) - lr*Fyr + lf*Fxf*sin(delta));
+  Fx_g = (Fxf*cos(delta) + Fxr - Fyf*sin(delta));
+  Fy_g = (Fyf*cos(delta) + Fyr + Fxf*sin(delta));
+
+  // motion equations
+  (-vy*dpsi+der(vx))*m = Fx_g;
+  (der(vy)+vx*dpsi)*m = Fy_g;
+  der(dpsi)*Iz = Mz_g; 
+
+  Twf - 2*Iw*der(omegaf) - Fxf*Rw = 0;
+  Twr - 2*Iw*der(omegar) - Fxr*Rw = 0;
+
+  // slip angles
+  der(alphaf)*sig/vxf + alphaf = delta - atan((vy + lf*dpsi)/vx);
+  der(alphar)*sig/vxr + alphar = -atan((vy - lr*dpsi)/vx);
+
+  vxf = vx*cos(delta) + (vy+lf*dpsi)*sin(delta);
+  vxr = vx;
+
+  kappaf = (Re*omegaf - vxf)/vxf;
+  kappar = (Re*omegar - vxr)/vxr;
+
+  // tire forces
+  Bxaf = Bx1f*cos(atan(Bx2f*kappaf));
+  Bxar = Bx1r*cos(atan(Bx2r*kappar));
+
+  Gxaf = cos(Cxaf*atan(Bxaf*alphaf));
+  Gxar = cos(Cxar*atan(Bxar*alphar));
+
+  Bykf = By1f*cos(atan(By2f*(alphaf)));
+  Bykr = By1r*cos(atan(By2r*(alphar)));
+
+  Gykf = cos(Cykf*atan(Bykf*kappaf));
+  Gykr = cos(Cykr*atan(Bykr*kappar));
+
+  Fxf0 = muxf*Fzf*sin(Cxf*atan(Bxf*kappaf - Exf*(Bxf*kappaf - atan(Bxf*kappaf))));
+  Fxr0 = muxr*Fzr*sin(Cxr*atan(Bxr*kappar - Exr*(Bxr*kappar - atan(Bxr*kappar))));
+  
+  Fyf0 = muyf*Fzf*sin(Cyf*atan(Byf*alphaf - Eyf*(Byf*alphaf - atan(Byf*alphaf))));
+  Fyr0 = muyr*Fzr*sin(Cyr*atan(Byr*alphar - Eyr*(Byr*alphar - atan(Byr*alphar))));
+
+  Fxf = Gxaf*Fxf0;
+  Fxr = Gxar*Fxr0;
+
+  Fyf = Gykf*Fyf0;
+  Fyr = Gykr*Fyr0;
+
+  // global coordinates
+  der(psi) = dpsi;
+  der(X) = vx*cos(psi) - vy*sin(psi);
+  der(Y) = vx*sin(psi) + vy*cos(psi);
+
+end Car;
+
+optimization Turn (objective=finalTime, startTime = 0,
+                   finalTime(free=true, min=.1, initialGuess=3))
+
+  constant Real pi = Modelica.Constants.pi;
+
+  // steering signal
+  constant Real ddeltamax = 1; // max steer rate
+  constant Real deltamax = .5; // max steer angle
+  Real delta(start=0, fixed=true, min=-deltamax, max=deltamax, nominal=.2);
+  input Real delta_u(min=-deltamax, max=deltamax);
+  
+  // torque signals
+  parameter Real tau_Tw = .1;
+  parameter Real tau_delta = .1;
+
+  parameter Real dTwmax = car.muxf*car.m*car.g*car.Rw/2 / .2;
+  input Real Twf_u(min=car.Twfmin, max=car.Twfmax, nominal=car.Twrmax);
+  input Real Twr_u(min=car.Twrmin, max=car.Twrmax, nominal=car.Twrmax);
+  parameter Real Twf_start = 0;
+  parameter Real Twr_start = 0;
+  Real Twf(start=0,fixed=true,min=car.Twfmin, max=car.Twfmax, nominal=car.Twrmax);
+  Real Twr(start=0,fixed=true,min=car.Twrmin, max=car.Twrmax, nominal=car.Twrmax);
+
+  // track parameters
+  parameter Real Ri = 35;
+  parameter Real Ro = 40;
+
+  parameter Real Xmin = 0;
+  parameter Real Xmax = Ro;
+  parameter Real Ymin = 0;
+  parameter Real Ymax = Ro;
+
+  // Define initial and final positions of the car
+  parameter Real X_start = (Ri+Ro)/2;
+  parameter Real Y_start = 0;
+  parameter Real psi_start = pi/2;
+  parameter Real vx_start = 70/3.6;
+
+  parameter Real X_final = 0;
+  parameter Real Y_final = (Ri+Ro)/2;
+  parameter Real psi_final = pi;
+
+  // Define car model, init coordinates and vx
+  Car car(X0=X_start, psi0=psi_start, Y0=Y_start, vx0=vx_start,
+          X(min=Xmin, max=Xmax), Y(min=Ymin, max=Ymax));
+
+equation
+  
+  // First-order dynamics on actuation
+  delta = car.delta;
+  der(delta)*tau_delta + delta = delta_u;
+  delta = car.delta;
+  der(Twf)*tau_Tw + Twf = Twf_u;
+  der(Twr)*tau_Tw + Twr = Twr_u;
+  Twf=car.Twf;
+  Twr=car.Twr;
+
+constraint
+  
+  // Road constraints
+  (car.X/Ri)^8 + (car.Y/Ri)^8 >= 1;
+  (car.X/Ro)^8 + (car.Y/Ro)^8 <= 1;
+  
+  // Terminal constraints
+  car.X(finalTime) = X_final;
+  car.Y(finalTime) = Y_final;
+  car.psi(finalTime) = psi_final;
+
+end Turn;

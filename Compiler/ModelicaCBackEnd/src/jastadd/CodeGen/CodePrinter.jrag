@@ -1,0 +1,219 @@
+/*
+Copyright (C) 2016 Modelon AB
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, version 3 of the License.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect CodePrinter {
+    public abstract class CodePrinter extends Printer {
+        
+        /**
+         * A list of code generator providers. Each provider in this list is
+         * called in the constructor of CodePrinter.
+         */
+        private static Collection<CodeGeneratorProvider> providers = null;
+        
+        /**
+         * Adds a CodeGeneratorProvider to the list of providers.
+         */
+        private static <T extends CodeGeneratorProvider> T addProvider(T provider) {
+            if (providers == null)
+                providers = new PriorityQueue<CodeGeneratorProvider>();
+            providers.add(provider);
+            return provider;
+        }
+        
+        /**
+         * Returns the list of CodeGeneratorProvider providers.
+         */
+        public Collection<CodeGeneratorProvider> getProviders() {
+            if (providers == null)
+                return Collections.emptyList();
+            else
+                return providers;
+        }
+
+        private final AbstractEquationBlock block;
+        private final boolean inInitialSystem;
+        private final Homotopy homotopyType;
+        private final boolean writeSwitches;
+
+        public CodePrinter(AbstractEquationBlock block, boolean inInitialSystem, Homotopy homotopyType, boolean writeSwitches) {
+            super("    ");
+            for (CodeGeneratorProvider provider : getProviders())
+                provider.provide(this);
+            this.block = block;
+            this.inInitialSystem = inInitialSystem;
+            this.homotopyType = homotopyType;
+            this.writeSwitches = writeSwitches;
+        }
+        
+        /**
+         * Abstract base class for code generator providers. Features that
+         * needs to affect the code gen process should extend this object and
+         * add it to the list of providers.
+         */
+        private abstract static class CodeGeneratorProvider implements Comparable<CodeGeneratorProvider> {
+            private final int priority;
+            
+            /**
+             * Constructs a new provider.
+             * The argument priority controls the order of wich providers are
+             * called. Providers are called in ascending order.
+             * 
+             * @param priority Denotes the priority of this provider.
+             */
+            private CodeGeneratorProvider(int priority) {
+                this.priority = priority;
+            }
+            
+            @Override
+            public int compareTo(CodeGeneratorProvider other) {
+                return Integer.valueOf(priority).compareTo(Integer.valueOf(other.priority));
+            }
+            
+            /**
+             * Abstract method that should be implemented by sub classes.
+             * The provider is then free to modify the CodePrinter object
+             * and redefine code generators.
+             */
+            public abstract void provide(CodePrinter p);
+        }
+        
+
+        @Override
+        public abstract void print(ASTNode node, CodeStream str, String indent);
+
+        public abstract void printVarDecls(ASTNode node, CodeStream str, String indent);
+        
+        public abstract void printDecl(ASTNode node, CodeStream str, String indent, Set<ASTNode> visited, Collection<FVariable> forVariables, boolean solved);
+
+        public abstract void printPreSteps(ASTNode node, CodeStream str, String indent);
+        
+        public abstract void printPostSteps(ASTNode node, CodeStream str, String indent);
+
+        public boolean inBlock() {
+            return block != null;
+        }
+        
+        public AbstractEquationBlock getBlock() {
+            return block;
+        }
+
+        protected abstract CodePrinter createPrinter(AbstractEquationBlock block, boolean inInitialSystem, Homotopy homotopyType,
+                boolean writeSwitches);
+
+        public final CodePrinter initialSystemPrinter() {
+            if (inInitialSystem())
+                return this;
+            else
+                return createPrinter(block, true, homotopyType, writeSwitches);
+        }
+
+        public final CodePrinter normalSystemPrinter() {
+            if (!inInitialSystem())
+                return this;
+            else
+                return createPrinter(block, false, homotopyType, writeSwitches);
+        }
+
+        public final CodePrinter homotopySimplifiedPrinter() {
+            if (homotopyType == Homotopy.SIMPLIFIED)
+                return this;
+            else
+                return createPrinter(block, inInitialSystem, Homotopy.SIMPLIFIED, writeSwitches);
+        }
+        
+        public final CodePrinter eventIndicatorPrinter() {
+            if (writeSwitches) {
+                return createPrinter(block, inInitialSystem, homotopyType, false);
+            }
+            return this;
+        }
+
+        public final CodePrinter evalPrinter() {
+            if (!writeSwitches) {
+                return createPrinter(block, inInitialSystem, homotopyType, true);
+            }
+            return this;
+        }
+
+        public boolean inInitialSystem() {
+            return inInitialSystem;
+        }
+        
+        public boolean writeSwitches() {
+            return writeSwitches;
+        }
+        
+        protected static enum Homotopy {
+            HOMOTOPY, SIMPLIFIED, ACTUAL
+        }
+        
+        public boolean inHomotopySimplified() {
+            return homotopyType == Homotopy.SIMPLIFIED;
+        }
+
+        public boolean inHomotopyActual() {
+            return homotopyType == Homotopy.ACTUAL;
+        }
+        
+        /**
+         * Generates the actual JMI call that solves the block in question.
+         */
+        public abstract void genBlockResidualCall(AbstractEquationBlock node, CodeStream str, String indent);
+
+        /**
+         * Produce c-statements that solves the equation in question.
+         * 
+         * @param node Equation which is going to be printed
+         * @param str Output stream
+         * @param indent Indentation
+         * @param visited Set of visited equations
+         * @param forVariables A collection of variables which we are producing
+         *      statements for
+         * @param forIndices The integer indices that we are producing
+         *      statements for
+         */
+        public abstract void genSolved(FAbstractEquation node, CodeStream str, String indent,
+                Set<FAbstractEquation> visited, Collection<FVariable> forVariables, Collection<Integer> forIndices);
+
+        /**
+         * Produce c-statements that forms an residual for the equation in
+         * question.
+         * 
+         * @param node Equation which is going to be printed
+         * @param str Output stream
+         * @param indent Indentation
+         * @param enumerator An enumerator which enumerates the residual vector.
+         * @param visited Set of visited equations
+         * @param forIndices The integer indices that we are producing
+         *      statements for
+         */
+        public abstract void genResidual(FAbstractEquation node, CodeStream str, String indent,
+                Enumerator enumerator, Set<FAbstractEquation> visited, Set<Integer> forIndices);
+
+        @Override
+        public String op(FBinExp e) { return e.op_C(); }
+
+        public abstract TypePrinter_C createDeclPrinter(CodeStream str);
+        public abstract TypePrinter_C createInitPrinter(CodeStream str);
+        public abstract TypePrinter_C createInitSetPrinter(CodeStream str);
+        
+        public String sep() {
+            return ", ";
+        }
+        
+    }
+
+}

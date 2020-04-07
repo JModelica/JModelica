@@ -1,0 +1,239 @@
+/*
+    Copyright (C) 2009-2018 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect GlobalsCleanup {
+
+    public void FClass.removeUnusedGlobals() {
+        beginStep("removeUnusedGlobals()");
+        
+        for (FFunctionDecl   g : getFFunctionDecls())   { g.global().reset(); }
+        for (FRecordDecl     g : getFRecordDecls())     { g.global().reset(); }
+        for (FGlobalVariable g : getFGlobalVariables()) { g.global().reset(); }
+        
+        getFVariables()         .markUsedGlobals();
+        getFInitialEquations()  .markUsedGlobals();
+        getParameterEquations() .markUsedGlobals();
+        getFAbstractEquations() .markUsedGlobals();
+        getDynamicStateManager().markUsedGlobals();
+        
+        List<FFunctionDecl> resFunc = new List<>();
+        for (FFunctionDecl g : getFFunctionDecls()) {
+            if (g.global().isUsed()) {
+                resFunc.add(g);
+            }
+        }
+        setFFunctionDeclList(resFunc);
+        
+        List<FRecordDecl> resRec = new List<>();
+        for (FRecordDecl g : getFRecordDecls()) {
+            if (g.global().isUsed()) {
+                resRec.add(g);
+            }
+        }
+        setFRecordDeclList(resRec);
+        
+        List<FGlobalVariable> resVar = new List<>();
+        for (FGlobalVariable g : getFGlobalVariables()) {
+            if (g.global().isUsed()) {
+                resVar.add(g);
+            }
+        }
+        setFGlobalVariableList(resVar);
+        
+        endStep("removeUnusedGlobals()");
+    }
+
+    class Global {
+        
+        private UseType useType = UseType.NONE; 
+        
+        public boolean update(UseType t) {
+            UseType oldType = useType;
+            useType = oldType.combine(t);
+            return useType != oldType;
+        }
+        
+        public void reset() {
+            useType = UseType.NONE;
+        }
+        
+        public boolean isUsed() {
+            return useType != UseType.NONE;
+        }
+        
+        public boolean is(UseType t) {
+            return useType == t;
+        }
+        
+        public boolean derivativeUse() {
+            return useType.derivativeUse();
+        }
+        
+        public enum UseType{
+            NONE(false, false),
+            ALIAS_ATTRIBUTE_USE(false, false),
+            ANNOTATION_DERIVATIVE(true, false),
+            DIRECT(true, true);
+            
+            private final boolean normalUse;
+            private final boolean derivativeUse;
+            UseType(boolean normalUse, boolean derivativeUse) {
+                this.normalUse = normalUse;
+                this.derivativeUse = derivativeUse;
+            }
+            public boolean normalUse() {
+                return normalUse;
+            }
+            public boolean derivativeUse() {
+                return derivativeUse;
+            }
+            
+            public UseType combine(UseType other) {
+                return compareTo(other) > 0 ? this : other;
+            }
+        }
+    }
+
+    private final Global FFunctionDecl  .global = new Global();
+    public        Global FFunctionDecl  .global() { return global; }
+
+    private final Global FRecordDecl    .global = new Global();
+    public        Global FRecordDecl    .global() { return global; }
+
+    private final Global FGlobalVariable.global = new Global();
+    public        Global FGlobalVariable.global() { return global; }
+
+    syn boolean FFunctionDecl.functionIsUsed()             = global().isUsed();
+    syn boolean FFunctionDecl.functionIsUsedAsDerivative() = global().derivativeUse();
+
+    /**
+     * Mark all referenced globals as used.
+     */
+    public final void ASTNode.markUsedGlobals() {
+        markUsedGlobals(Global.UseType.DIRECT);
+    }
+    public void ASTNode.markUsedGlobals(Global.UseType type) {
+        for (ASTNode node : this)
+            node.markUsedGlobals(type);
+    }
+    
+    @Override
+    public void FVariable.markUsedGlobals(Global.UseType type) {
+        AliasManager.AliasSet set = aliasSet();
+        if (type != Global.UseType.ALIAS_ATTRIBUTE_USE && set != null)
+            for (AliasManager.AliasVariable alias : set)
+                if (alias.getFVariable() != this)
+                    alias.getFVariable().markUsedGlobals(Global.UseType.ALIAS_ATTRIBUTE_USE);
+        super.markUsedGlobals(type);
+    }
+    
+    public void FExternalObjectVariable.markUsedGlobals(Global.UseType type) {
+        super.markUsedGlobals(type);
+        getDestructorCall().markUsedGlobals(type);
+    }
+    
+    @Override
+    public void FFunctionCall.markUsedGlobals(Global.UseType type) {
+        myFCallable().markUsedGlobals(type);
+        super.markUsedGlobals(type);
+    }
+    
+    public interface FCallable {
+        public void markUsedGlobals(Global.UseType type);
+    }
+    
+    @Override
+    public void FFunctionDecl.markUsedGlobals(Global.UseType type) {
+        if (global().update(type)) {
+            markUsedGlobalsExtra(type);
+            super.markUsedGlobals(type);
+        }
+    }
+    
+    public void FFunctionDecl.markUsedGlobalsExtra(Global.UseType type) {
+        // Hook to facilitate extensions
+    }
+    
+    @Override
+    public void FFunctionVariable.markUsedGlobals(Global.UseType type) {
+        super.markUsedGlobals(type);
+        if (type().isFunction()) {
+            myFCallable().markUsedGlobals(type);
+        }
+    }
+
+    @Override
+    public void FRecordVariable.markUsedGlobals(Global.UseType type) {
+        super.markUsedGlobals(type);
+        myFRecordDecl().markUsedGlobals(type);
+    }
+
+    @Override
+    public void FType.markUsedGlobals(Global.UseType type) {
+        super.markUsedGlobals(type);
+        getSize().markUsedGlobals(type);
+    }
+    
+    @Override
+    public void FExternalObjectType.markUsedGlobals(Global.UseType type) {
+        super.markUsedGlobals(type);
+        getConstructor().myFCallable().markUsedGlobals(type);
+        getDestructor ().myFCallable().markUsedGlobals(type);
+    }
+    
+    public void Size.markUsedGlobals(Global.UseType type) {
+        
+    }
+    
+    @Override
+    public void MutableSize.markUsedGlobals(Global.UseType type) {
+        for (FExp e : exps)
+            if (e != null)
+                e.markUsedGlobals(type);
+    }
+    
+    @Override
+    public void FRecordType.markUsedGlobals(Global.UseType type) {
+        super.markUsedGlobals(type);
+        myFRecordDecl().markUsedGlobals(type);
+    }
+    
+    @Override
+    public void FRecordConstructor.markUsedGlobals(Global.UseType type) {
+        super.markUsedGlobals(type);
+        getRecord().myFRecordDecl().markUsedGlobals(type);
+    }
+    
+    @Override
+    public void FRecordDecl.markUsedGlobals(Global.UseType type) {
+        if (global().update(type)) {
+            super.markUsedGlobals(type);
+        }
+    }
+    
+    @Override
+    public void FGlobalAccessExp.markUsedGlobals(Global.UseType type) {
+        super.markUsedGlobals(type);
+        getFAccess().myTopFV().markUsedGlobalVariable(type);
+    }
+    
+    public void FAbstractVariable.markUsedGlobalVariable(Global.UseType type) {}
+    public void FGlobalVariable.markUsedGlobalVariable(Global.UseType type) {
+        if (global().update(type)) {
+            markUsedGlobals(type);
+        }
+    }
+}

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="Project" default="build" basedir=".">
+
+    <taskdef resource="net/sf/antcontrib/antcontrib.properties" />
+
+    <property file="propertyselector.properties" />
+
+    <target name="init">
+        <taskdef resource="net/sf/antcontrib/antcontrib.properties">
+            <classpath location="${antcontrib.jar}"/>
+        </taskdef>
+        <property file="propertyselector.properties" />
+    </target>
+
+    <target name="select.test.grouping.0" depends="init">
+        <propertyselector property="module.list"
+            match="module\.([^\.]*)\.id"
+            delimiter=","
+            casesensitive="false" />
+
+        <echo message="${module.list}" />
+    </target>
+
+    <target name="select.test.grouping.1" depends="init">
+        <propertyselector property="module.list"
+            match="module\.([^\.]*)\.id"
+            select="\1"
+            delimiter=","
+            casesensitive="false" />
+
+        <echo message="${module.list}" />
+    </target>
+
+</project>

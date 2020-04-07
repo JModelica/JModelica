@@ -1,0 +1,397 @@
+Index: Blocks/Interaction.mo
+===================================================================
+--- Blocks/Interaction.mo	(revision 12799)
++++ Blocks/Interaction.mo	(working copy)
+@@ -164,7 +164,7 @@
+             extent={{-188.0,-80.0},{62.0,-60.0}},
+             textString="%active"),
+           Ellipse(lineColor={64,64,64},
+-            fillColor=DynamicSelect({192,192,192}, if showActive > 0.5 then {0,255,0} else {235,235,235}),
++            fillColor=DynamicSelect({192,192,192}, if showActive then {0,255,0} else {235,235,235}),
+             pattern=LinePattern.None,
+             fillPattern=FillPattern.Sphere,
+             extent={{-100.0,-40.0},{-20.0,40.0}})}), Documentation(info="<html>
+Index: Blocks/Interfaces.mo
+===================================================================
+--- Blocks/Interfaces.mo	(revision 12799)
++++ Blocks/Interfaces.mo	(working copy)
+@@ -952,16 +952,12 @@
+     annotation (Icon(coordinateSystem(preserveAspectRatio=true, extent={{-100,-100},
+               {100,100}}), graphics={Ellipse(
+             extent={{-71,7},{-85,-7}},
+-            lineColor=DynamicSelect({235,235,235}, if u > 0.5 then {0,255,0}
+-                 else {235,235,235}),
+-            fillColor=DynamicSelect({235,235,235}, if u > 0.5 then {0,255,0}
+-                 else {235,235,235}),
++            lineColor=DynamicSelect({235,235,235}, if u then {0,255,0} else {235,235,235}),
++            fillColor=DynamicSelect({235,235,235}, if u then {0,255,0} else {235,235,235}),
+             fillPattern=FillPattern.Solid), Ellipse(
+             extent={{71,7},{85,-7}},
+-            lineColor=DynamicSelect({235,235,235}, if y > 0.5 then {0,255,0}
+-                 else {235,235,235}),
+-            fillColor=DynamicSelect({235,235,235}, if y > 0.5 then {0,255,0}
+-                 else {235,235,235}),
++            lineColor=DynamicSelect({235,235,235}, if y then {0,255,0} else {235,235,235}),
++            fillColor=DynamicSelect({235,235,235}, if y then {0,255,0} else {235,235,235}),
+             fillPattern=FillPattern.Solid)}), Documentation(info="<html>
+ <p>
+ Block has one continuous Boolean input and one continuous Boolean output signal
+@@ -987,24 +983,18 @@
+           extent={{-100,-100},{100,100}}), graphics={
+           Ellipse(
+             extent={{-71,7},{-85,-7}},
+-            lineColor=DynamicSelect({235,235,235}, if u1 > 0.5 then {0,255,0}
+-                 else {235,235,235}),
+-            fillColor=DynamicSelect({235,235,235}, if u1 > 0.5 then {0,255,0}
+-                 else {235,235,235}),
++            lineColor=DynamicSelect({235,235,235}, if u1 then {0,255,0} else {235,235,235}),
++            fillColor=DynamicSelect({235,235,235}, if u1 then {0,255,0} else {235,235,235}),
+             fillPattern=FillPattern.Solid),
+           Ellipse(
+             extent={{-71,-74},{-85,-88}},
+-            lineColor=DynamicSelect({235,235,235}, if u2 > 0.5 then {0,255,0}
+-                 else {235,235,235}),
+-            fillColor=DynamicSelect({235,235,235}, if u2 > 0.5 then {0,255,0}
+-                 else {235,235,235}),
++            lineColor=DynamicSelect({235,235,235}, if u2 then {0,255,0} else {235,235,235}),
++            fillColor=DynamicSelect({235,235,235}, if u2 then {0,255,0} else {235,235,235}),
+             fillPattern=FillPattern.Solid),
+           Ellipse(
+             extent={{71,7},{85,-7}},
+-            lineColor=DynamicSelect({235,235,235}, if y > 0.5 then {0,255,0}
+-                 else {235,235,235}),
+-            fillColor=DynamicSelect({235,235,235}, if y > 0.5 then {0,255,0}
+-                 else {235,235,235}),
++            lineColor=DynamicSelect({235,235,235}, if y then {0,255,0} else {235,235,235}),
++            fillColor=DynamicSelect({235,235,235}, if y then {0,255,0} else {235,235,235}),
+             fillPattern=FillPattern.Solid)}), Documentation(info="<html>
+ <p>
+ Block has two continuous Boolean input and one continuous Boolean output signal
+@@ -1032,31 +1022,23 @@
+           extent={{-100,-100},{100,100}}), graphics={
+           Ellipse(
+             extent={{-71,74},{-85,88}},
+-            lineColor=DynamicSelect({235,235,235}, if u1 > 0.5 then {0,255,0}
+-                 else {235,235,235}),
+-            fillColor=DynamicSelect({235,235,235}, if u1 > 0.5 then {0,255,0}
+-                 else {235,235,235}),
++            lineColor=DynamicSelect({235,235,235}, if u1 then {0,255,0} else {235,235,235}),
++            fillColor=DynamicSelect({235,235,235}, if u1 then {0,255,0} else {235,235,235}),
+             fillPattern=FillPattern.Solid),
+           Ellipse(
+             extent={{-71,7},{-85,-7}},
+-            lineColor=DynamicSelect({235,235,235}, if u2 > 0.5 then {0,255,0}
+-                 else {235,235,235}),
+-            fillColor=DynamicSelect({235,235,235}, if u2 > 0.5 then {0,255,0}
+-                 else {235,235,235}),
++            lineColor=DynamicSelect({235,235,235}, if u2 then {0,255,0} else {235,235,235}),
++            fillColor=DynamicSelect({235,235,235}, if u2 then {0,255,0} else {235,235,235}),
+             fillPattern=FillPattern.Solid),
+           Ellipse(
+             extent={{-71,-74},{-85,-88}},
+-            lineColor=DynamicSelect({235,235,235}, if u3 > 0.5 then {0,255,0}
+-                 else {235,235,235}),
+-            fillColor=DynamicSelect({235,235,235}, if u3 > 0.5 then {0,255,0}
+-                 else {235,235,235}),
++            lineColor=DynamicSelect({235,235,235}, if u3 then {0,255,0} else {235,235,235}),
++            fillColor=DynamicSelect({235,235,235}, if u3 then {0,255,0} else {235,235,235}),
+             fillPattern=FillPattern.Solid),
+           Ellipse(
+             extent={{71,7},{85,-7}},
+-            lineColor=DynamicSelect({235,235,235}, if y > 0.5 then {0,255,0}
+-                 else {235,235,235}),
+-            fillColor=DynamicSelect({235,235,235}, if y > 0.5 then {0,255,0}
+-                 else {235,235,235}),
++            lineColor=DynamicSelect({235,235,235}, if y then {0,255,0} else {235,235,235}),
++            fillColor=DynamicSelect({235,235,235}, if y then {0,255,0} else {235,235,235}),
+             fillPattern=FillPattern.Solid)}), Documentation(info="<html><p>
+ Block has three continuous Boolean input and one continuous Boolean output signal
+ with a 3D icon (e.g., used in Blocks.Logical library).
+@@ -1074,10 +1056,8 @@
+     annotation (Icon(coordinateSystem(preserveAspectRatio=true, extent={{-100,-100},
+               {100,100}}), graphics={Ellipse(
+             extent={{-71,7},{-85,-7}},
+-            lineColor=DynamicSelect({235,235,235}, if u > 0.5 then {0,255,0}
+-                 else {235,235,235}),
+-            fillColor=DynamicSelect({235,235,235}, if u > 0.5 then {0,255,0}
+-                 else {235,235,235}),
++            lineColor=DynamicSelect({235,235,235}, if u then {0,255,0} else {235,235,235}),
++            fillColor=DynamicSelect({235,235,235}, if u then {0,255,0} else {235,235,235}),
+             fillPattern=FillPattern.Solid)}), Documentation(info="<html>
+ <p>
+ Block has one continuous Boolean input signal
+@@ -1096,10 +1076,8 @@
+     annotation (Icon(coordinateSystem(preserveAspectRatio=true, extent={{-100,-100},
+               {100,100}}), graphics={Ellipse(
+             extent={{71,7},{85,-7}},
+-            lineColor=DynamicSelect({235,235,235}, if y > 0.5 then {0,255,0}
+-                 else {235,235,235}),
+-            fillColor=DynamicSelect({235,235,235}, if y > 0.5 then {0,255,0}
+-                 else {235,235,235}),
++            lineColor=DynamicSelect({235,235,235}, if y then {0,255,0} else {235,235,235}),
++            fillColor=DynamicSelect({235,235,235}, if y then {0,255,0} else {235,235,235}),
+             fillPattern=FillPattern.Solid)}), Documentation(info="<html>
+ <p>
+ Block has one continuous Boolean output signal
+@@ -1133,10 +1111,8 @@
+             fillPattern=FillPattern.Solid),
+           Ellipse(
+             extent={{71,7},{85,-7}},
+-            lineColor=DynamicSelect({235,235,235}, if y > 0.5 then {0,255,0}
+-                 else {235,235,235}),
+-            fillColor=DynamicSelect({235,235,235}, if y > 0.5 then {0,255,0}
+-                 else {235,235,235}),
++            lineColor=DynamicSelect({235,235,235}, if y then {0,255,0} else {235,235,235}),
++            fillColor=DynamicSelect({235,235,235}, if y then {0,255,0} else {235,235,235}),
+             fillPattern=FillPattern.Solid)}),
+       Diagram(coordinateSystem(preserveAspectRatio=true, extent={{-100,-100},{
+               100,100}}), graphics={Polygon(
+@@ -1191,10 +1167,8 @@
+             textString="%threshold"),
+           Ellipse(
+             extent={{71,7},{85,-7}},
+-            lineColor=DynamicSelect({235,235,235}, if y > 0.5 then {0,255,0}
+-                 else {235,235,235}),
+-            fillColor=DynamicSelect({235,235,235}, if y > 0.5 then {0,255,0}
+-                 else {235,235,235}),
++            lineColor=DynamicSelect({235,235,235}, if y then {0,255,0} else {235,235,235}),
++            fillColor=DynamicSelect({235,235,235}, if y then {0,255,0} else {235,235,235}),
+             fillPattern=FillPattern.Solid)}), Documentation(info="<html>
+ <p>
+ Block has one continuous Real input and one continuous Boolean output signal
+@@ -1225,10 +1199,8 @@
+             borderPattern=BorderPattern.Raised),
+           Ellipse(
+             extent={{73,7},{87,-7}},
+-            lineColor=DynamicSelect({235,235,235}, if y > 0.5 then {0,255,0}
+-                 else {235,235,235}),
+-            fillColor=DynamicSelect({235,235,235}, if y > 0.5 then {0,255,0}
+-                 else {235,235,235}),
++            lineColor=DynamicSelect({235,235,235}, if y then {0,255,0} else {235,235,235}),
++            fillColor=DynamicSelect({235,235,235}, if y then {0,255,0} else {235,235,235}),
+             fillPattern=FillPattern.Solid),
+           Ellipse(extent={{32,10},{52,-10}}, lineColor={0,0,127}),
+           Line(points={{-100,-80},{42,-80},{42,0}}, color={0,0,127})}),
+@@ -1266,10 +1238,8 @@
+             borderPattern=BorderPattern.Raised),
+           Ellipse(
+             extent={{60,10},{80,-10}},
+-            lineColor=DynamicSelect({235,235,235}, if y > 0.5 then {0,255,0}
+-                 else {235,235,235}),
+-            fillColor=DynamicSelect({235,235,235}, if y > 0.5 then {0,255,0}
+-                 else {235,235,235}),
++            lineColor=DynamicSelect({235,235,235}, if y then {0,255,0} else {235,235,235}),
++            fillColor=DynamicSelect({235,235,235}, if y then {0,255,0} else {235,235,235}),
+             fillPattern=FillPattern.Solid)}));
+   end PartialBooleanSISO_small;
+ 
+@@ -1300,10 +1270,8 @@
+             borderPattern=BorderPattern.Raised),
+           Ellipse(
+             extent={{60,10},{80,-10}},
+-            lineColor=DynamicSelect({235,235,235}, if y > 0.5 then {0,255,0}
+-                 else {235,235,235}),
+-            fillColor=DynamicSelect({235,235,235}, if y > 0.5 then {0,255,0}
+-                 else {235,235,235}),
++            lineColor=DynamicSelect({235,235,235}, if y then {0,255,0} else {235,235,235}),
++            fillColor=DynamicSelect({235,235,235}, if y then {0,255,0} else {235,235,235}),
+             fillPattern=FillPattern.Solid)}));
+   end PartialBooleanMISO;
+ 
+Index: Blocks/MathBoolean.mo
+===================================================================
+--- Blocks/MathBoolean.mo	(revision 12799)
++++ Blocks/MathBoolean.mo	(working copy)
+@@ -68,10 +68,8 @@
+               textString="%expr"),
+             Ellipse(
+               extent={{275,8},{289,-6}},
+-              lineColor=DynamicSelect({235,235,235}, if y > 0.5 then {0,255,0} else
+-                        {235,235,235}),
+-              fillColor=DynamicSelect({235,235,235}, if y > 0.5 then {0,255,0} else
+-                        {235,235,235}),
++              lineColor=DynamicSelect({235,235,235}, if y then {0,255,0} else {235,235,235}),
++              fillColor=DynamicSelect({235,235,235}, if y then {0,255,0} else {235,235,235}),
+               fillPattern=FillPattern.Solid)}),
+     Documentation(info="<html>
+ <p>
+Index: Blocks/Sources.mo
+===================================================================
+--- Blocks/Sources.mo	(revision 12799)
++++ Blocks/Sources.mo	(working copy)
+@@ -109,10 +109,8 @@
+             lineColor={0,0,255}),
+           Polygon(
+             points={{100,10},{120,0},{100,-10},{100,10}},
+-            lineColor=DynamicSelect({255,0,255}, if y > 0.5 then {0,255,0}
+-                 else {255,0,255}),
+-            fillColor=DynamicSelect({255,255,255}, if y > 0.5 then {0,255,0}
+-                 else {255,255,255}),
++            lineColor=DynamicSelect({255,0,255}, if y then {0,255,0} else {255,0,255}),
++            fillColor=DynamicSelect({255,255,255}, if y then {0,255,0} else {255,255,255}),
+             fillPattern=FillPattern.Solid)}), Documentation(info="<html>
+ <p>
+ The (time varying) Boolean output signal of this block can be defined in its
+@@ -3177,10 +3175,8 @@
+           initialScale=0.06), graphics={Rectangle(
+             extent={{-100,-100},{100,100}},
+             borderPattern=BorderPattern.Raised,
+-            fillColor=DynamicSelect({192,192,192}, if on > 0.5 then {0,255,0}
+-                 else {192,192,192}),
+-            fillPattern=DynamicSelect(FillPattern.Solid, if on > 0.5 then
+-                FillPattern.Solid else FillPattern.Solid),
++            fillColor=DynamicSelect({192,192,192}, if on then {0,255,0} else {192,192,192}),
++            fillPattern=FillPattern.Solid,
+             lineColor={128,128,128},
+             lineThickness=5.0), Text(
+             extent={{-300,110},{300,175}},
+Index: Fluid/Examples/ControlledTankSystem.mo
+===================================================================
+--- Fluid/Examples/ControlledTankSystem.mo	(revision 12799)
++++ Fluid/Examples/ControlledTankSystem.mo	(working copy)
+@@ -460,10 +460,8 @@
+                 100}}),
+           graphics={Rectangle(
+               extent={{-100,-100},{100,100}},
+-              fillColor=DynamicSelect({192,192,192}, if on > 0.5 then {0,255,0} else
+-                        {192,192,192}),
+-              fillPattern=DynamicSelect(FillPattern.Solid, if on > 0.5 then
+-                  FillPattern.Solid else FillPattern.Solid),
++              fillColor=DynamicSelect({192,192,192}, if on then {0,255,0} else {192,192,192}),
++              fillPattern=FillPattern.Solid,
+               lineColor={128,128,128},
+               lineThickness=0.5), Text(
+               extent={{-80,-40},{80,40}},
+Index: Fluid/Valves.mo
+===================================================================
+--- Fluid/Valves.mo	(revision 12799)
++++ Fluid/Valves.mo	(working copy)
+@@ -396,8 +396,7 @@
+             fillPattern=FillPattern.Solid),
+           Polygon(
+             points={{-100,50},{100,-50},{100,50},{0,0},{-100,-50},{-100,50}},
+-            fillColor=DynamicSelect({255,255,255}, if open > 0.5 then {0,255,0} else
+-                      {255,255,255}),
++            fillColor=DynamicSelect({255,255,255}, if open then {0,255,0} else {255,255,255}),
+             lineColor={0,0,0},
+             fillPattern=FillPattern.Solid)}),
+     Documentation(info="<html>
+Index: StateGraph.mo
+===================================================================
+--- StateGraph.mo	(revision 12799)
++++ StateGraph.mo	(working copy)
+@@ -2171,8 +2171,7 @@
+             lineColor={0,0,255}),
+           Rectangle(
+             extent={{-100,100},{100,-100}},
+-            fillColor=DynamicSelect({255,255,255}, if active > 0.5 then {0,255,
+-                0} else {255,255,255}),
++            fillColor=DynamicSelect({255,255,255}, if active then {0,255,0} else {255,255,255}),
+             lineColor={0,0,0},
+             fillPattern=FillPattern.Solid),
+           Rectangle(extent={{-80,80},{80,-80}}, lineColor={0,0,0})}),
+@@ -2209,8 +2208,7 @@
+             lineColor={0,0,255}),
+           Rectangle(
+             extent={{-100,100},{100,-100}},
+-            fillColor=DynamicSelect({255,255,255}, if active > 0.5 then {0,255,
+-                0} else {255,255,255}),
++            fillColor=DynamicSelect({255,255,255}, if active then {0,255,0} else {255,255,255}),
+             lineColor={0,0,0},
+             fillPattern=FillPattern.Solid),
+           Text(
+@@ -2239,8 +2237,7 @@
+             textString="%name",
+             lineColor={0,0,255}), Rectangle(
+             extent={{-100,100},{100,-100}},
+-            fillColor=DynamicSelect({255,255,255}, if active > 0.5 then {0,255,
+-                0} else {255,255,255}),
++            fillColor=DynamicSelect({255,255,255}, if active then {0,255,0} else {255,255,255}),
+             lineColor={0,0,0},
+             fillPattern=FillPattern.Solid)}),
+     Diagram(coordinateSystem(
+@@ -2274,8 +2271,7 @@
+             lineColor={0,0,255}),
+           Rectangle(
+             extent={{-100,100},{100,-100}},
+-            fillColor=DynamicSelect({255,255,255}, if active > 0.5 then {0,255,
+-                0} else {255,255,255}),
++            fillColor=DynamicSelect({255,255,255}, if active then {0,255,0} else {255,255,255}),
+             lineColor={0,0,0},
+             fillPattern=FillPattern.Solid),
+           Text(
+@@ -2299,8 +2295,7 @@
+           extent={{-100,-100},{100,100}}), graphics={
+           Rectangle(
+             extent={{-10,100},{10,-100}},
+-            fillColor=DynamicSelect({0,0,0}, if enableFire > 0.5 then {0,255,0} else
+-                      {0,0,0}),
++            fillColor=DynamicSelect({0,0,0}, if enableFire then {0,255,0} else {0,0,0}),
+             lineColor={0,0,0},
+             fillPattern=FillPattern.Solid),
+           Line(points={{-30,0},{-10,0}}),
+@@ -2310,13 +2305,11 @@
+             lineColor={0,0,255}),
+           Text(
+             extent={{20,20},{200,45}},
+-            lineColor=DynamicSelect({0,0,0}, if enableTimer < 0.5 then {255,255,
+-                255} else {0,0,0}),
++            lineColor=DynamicSelect({0,0,0}, if enableTimer then {255,255,255} else {0,0,0}),
+             textString="%waitTime"),
+           Text(
+             extent={{-200,-120},{200,-145}},
+-            lineColor=DynamicSelect({0,0,0}, if condition > 0.5 then {0,255,0} else
+-                      {0,0,0}),
++            lineColor=DynamicSelect({0,0,0}, if condition then {0,255,0} else {0,0,0}),
+             textString="%condition")}),
+     Diagram(coordinateSystem(
+           preserveAspectRatio=true,
+@@ -2346,13 +2339,11 @@
+           extent={{-100,-100},{100,100}}), graphics={
+           Text(
+             extent={{20,20},{200,45}},
+-            lineColor=DynamicSelect({0,0,0}, if enableTimer < 0.5 then {255,255,
+-                255} else {0,0,0}),
++            lineColor=DynamicSelect({0,0,0}, if enableTimer then {255,255,255} else {0,0,0}),
+             textString="%waitTime"),
+           Rectangle(
+             extent={{-10,100},{10,-100}},
+-            fillColor=DynamicSelect({0,0,0}, if enableFire > 0.5 then {0,255,0} else
+-                      {0,0,0}),
++            fillColor=DynamicSelect({0,0,0}, if enableFire then {0,255,0} else {0,0,0}),
+             lineColor={0,0,0},
+             fillPattern=FillPattern.Solid),
+           Line(points={{-30,0},{-10,0}}),
+@@ -2362,10 +2353,8 @@
+             lineColor={0,0,255}),
+           Ellipse(
+             extent={{7,-81},{-7,-95}},
+-            lineColor=DynamicSelect({0,0,0}, if condition > 0.5 then {0,255,0} else
+-                      {0,0,0}),
+-            fillColor=DynamicSelect({0,0,0}, if condition > 0.5 then {0,255,0} else
+-                      {0,0,0}),
++            lineColor=DynamicSelect({0,0,0}, if condition then {0,255,0} else {0,0,0}),
++            fillColor=DynamicSelect({0,0,0}, if condition then {0,255,0} else {0,0,0}),
+             fillPattern=FillPattern.Solid)}),
+     Diagram(coordinateSystem(
+           preserveAspectRatio=true,
+@@ -2790,8 +2779,7 @@
+             lineColor={0,0,255}),
+           Rectangle(
+             extent={{-150,150},{150,-150}},
+-            fillColor=DynamicSelect({255,255,255}, if active > 0.5 then {0,255,
+-                0} else {255,255,255}),
++            fillColor=DynamicSelect({255,255,255}, if active then {0,255,0} else {255,255,255}),
+             lineColor={0,0,0},
+             fillPattern=FillPattern.Solid),
+           Text(
+@@ -3017,8 +3005,7 @@
+     annotation (Icon(coordinateSystem(preserveAspectRatio=true, extent={{-100,
+                 -100},{100,100}}), graphics={Ellipse(
+               extent={{-100,-100},{100,100}},
+-              fillColor=DynamicSelect({235,235,235}, if u > 0.5 then {0,255,0} else
+-                        {235,235,235}),
++              fillColor=DynamicSelect({235,235,235}, if u then {0,255,0} else {235,235,235}),
+               lineColor={0,0,0},
+               pattern=LinePattern.None,
+               fillPattern=FillPattern.Sphere), Text(

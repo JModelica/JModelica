@@ -1,0 +1,224 @@
+/*
+Copyright (C) 2011 Modelon AB
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, version 3 of the License.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+
+import org.jmodelica.util.collections.ListMap;
+import org.jmodelica.util.collections.LinkedHashListMap;
+
+aspect ExportFunctions {
+	
+	// TODO: handle general case for outputs (currently only single scalar real/integer)
+	
+	/**
+	 * Check if function should generate an export wrapper. 
+	 */
+	syn boolean FFunctionDecl.hasExportWrapper_C() {
+		if (myOutputs().size() != 1)
+			return false;
+		if (!myOutputs().get(0).type().isNumericScalar())
+			return false;
+		for (FFunctionVariable ffv : myInputs())
+			if (ffv.type().isRecord())
+				return false;
+		return true;
+	}
+	
+	/**
+	 * The return type of the export wrapper of this function.
+	 */
+	syn String FFunctionDecl.exportWrapperType_C() = 
+		exportWrapperReturnsValue_C() ? myOutputs().get(0).exportWrapperType_C() : "void";
+	
+	/**
+	 * Check if the export wrapper for the function should have a return type. 
+	 */
+	syn boolean FFunctionDecl.exportWrapperReturnsValue_C() = 
+		myOutputs().size() == 1 && myOutputs().get(0).type().isScalar();
+	
+	/**
+	 * The type of this variable in an export wrapper function.
+	 */
+	syn String FFunctionVariable.exportWrapperType_C() = type().exportWrapperType_C();
+	
+	/**
+	 * The name of the export wrapper of this function.
+	 */
+	syn String FFunctionDecl.funcNameExportWrapper() = 
+		funcNameUnderscore(C_SUFFIX_EXPORT);
+	
+	// TODO: handle more types
+	syn String FType.exportWrapperType_C() = "void";
+	eq FRealType.exportWrapperType_C()     = "double";
+	eq FIntegerType.exportWrapperType_C()  = "int";
+
+	public static final String ASTNode.C_SUFFIX_EXPORT = "export";
+
+	public void FFunctionDecl.exportWrapper_C(CodeStream str, String indent) {
+		// TODO: handle multiple outputs/array output
+
+		// Function header
+		str.format("%sDllExport %s %s(", indent, exportWrapperType_C(), funcNameExportWrapper());
+		exportWrapperArgumentDecl_C(str);
+		str.print(") {\n");
+		
+		// Function body
+		// TODO: add conversions from/to our internal representations, where needed
+		String bodyInd = printer_C.indent(indent);
+		FFunctionVariable out = myOutputs().get(0);
+		// - Declare return var
+		str.print(bodyInd);
+		out.exportWrapperDecl_C(str);
+		str.print(";\n");
+		// - Declare temporary vars
+		for (FFunctionVariable var : myInputs()) 
+			var.exportWrapperDeclareTemp_C(str, bodyInd);
+		// - Initialize temporary vars
+		for (FFunctionVariable var : myInputs()) 
+			var.exportWrapperInitTemp_C(str, bodyInd);
+		// - Call function
+		str.format("%s%s(", bodyInd, funcNameUnderscore(C_SUFFIX_DEF));
+		for (FFunctionVariable var : myInputs()) 
+			str.format("%s, ", var.name_C());
+		str.format("&%s);\n", out.name_C());
+		// - Return value
+		str.format("%sreturn %s;\n", bodyInd, out.name_C());
+		
+		str.format("%s}\n\n", indent);
+	}
+
+	public void FFunctionDecl.exportWrapperArgumentDecl_C(CodeStream str) {
+		// TODO: handle multiple outputs/array output
+		String sep = "";
+		for (FFunctionVariable var : myInputs()) {
+			str.print(sep);
+			var.exportWrapperDecl_C(str);
+			sep = ", ";
+		}
+	}
+
+	public void FFunctionDecl.exportWrapperArgumentTypeDecl_C(CodeStream str) {
+		// TODO: handle multiple outputs/array output
+		String sep = "";
+		for (FFunctionVariable var : myInputs()) {
+			str.print(sep);
+			var.exportWrapperTypeDecl_C(str);
+			sep = ", ";
+		}
+	}
+
+	public void FFunctionDecl.exportWrapperArgumentCall_C(CodeStream str) {
+		// TODO: handle multiple outputs/array output
+		String sep = "";
+		for (FFunctionVariable var : myInputs()) {
+			str.print(sep);
+			var.exportWrapperCall_C(str);
+			sep = ", ";
+		}
+	}
+    
+    public void FFunctionVariable.exportWrapperDecl_C(CodeStream str) {
+        if (isArray()) {
+            String name = name_C();
+            str.format("%s* %sp", exportWrapperType_C(), name);
+            for (int i = 0; i < ndims(); i++) {
+                str.format(", int %s%d", name, i);
+            }
+        } else {
+            str.format("%s %s", exportWrapperType_C(), name_C());
+        }
+    }
+    
+    public void FFunctionVariable.exportWrapperTypeDecl_C(CodeStream str) {
+        if (isArray()) {
+            str.format("%s*", exportWrapperType_C());
+            for (int i = 0; i < ndims(); i++) {
+                str.print(", int");
+            }
+        } else {
+            str.print(exportWrapperType_C());
+        }
+    }
+    
+    public void FFunctionVariable.exportWrapperCall_C(CodeStream str) {
+        if (isArray()) {
+            String name = name_C();
+            str.format("%sp", name);
+            for (int i = 0; i < ndims(); i++) {
+                str.format(", %s%d", name, i);
+            }
+        } else {
+            str.print(name_C());
+        }
+    }
+    
+    public void FFunctionVariable.exportWrapperDeclareTemp_C(CodeStream str, String ind) {
+        if (isArray()) {
+            // NB: makes assumptions about definitions in jmi_array_none.h
+            String name = name_C();
+            str.format("%sint %s_size[%d];\n", ind, name, ndims());
+            str.format("%sjmi_array_t %s_obj;\n", ind, name);
+            str.format("%sjmi_array_t* %s = &%s_obj;\n", ind, name, name);
+        }
+    }
+    
+    public void FFunctionVariable.exportWrapperInitTemp_C(CodeStream str, String ind) {
+        if (isArray()) {
+            // NB: makes assumptions about definitions in jmi_array_none.h
+            String name = name_C();
+            str.format("%s%s_obj.var = %sp;\n", ind, name, name);
+            str.format("%s%s_obj.size = %s_size;\n", ind, name, name);
+            str.format("%s%s_obj.num_dims = %d;\n", ind, name, ndims());
+            str.format("%s%s_obj.num_elems = 1", ind, name);
+            for (int i = 0; i < ndims(); i++) {
+                str.format(" * %s%d", name, i);
+            }
+            str.print(";\n");
+            for (int i = 0; i < ndims(); i++) {
+                str.format("%s%s_size[%d] = %s%d;\n", ind, name, i, name, i);
+            }
+        }
+    }
+    
+    syn lazy java.util.List<java.util.List<FFunctionDecl>> FClass.exportWrapperGroups() {
+        ListMap<String,FFunctionDecl> map = new LinkedHashListMap<String,FFunctionDecl>();
+        for (FFunctionDecl f : getFFunctionDecls()) {
+            if (f.hasExportWrapper_C()) {
+                map.add(f.signatureString(), f);
+            }
+        }
+        
+        java.util.List<java.util.List<FFunctionDecl>> res = new ArrayList<java.util.List<FFunctionDecl>>();
+        for (java.util.List<FFunctionDecl> list : map.values()) {
+            Collections.sort(list, FFunctionDecl.UNAME_COMPARATOR);
+            res.add(list);
+        }
+        return res;
+    }
+
+	public static final Comparator<FFunctionDecl> FFunctionDecl.UNAME_COMPARATOR = 
+		new Comparator<FFunctionDecl>() {
+		 public int compare(FFunctionDecl f1, FFunctionDecl f2) {
+			 return f1.getFAccess().nameUnderscore().compareTo(f2.getFAccess().nameUnderscore());
+		 }
+		 
+		 public boolean equals(Object obj) {
+			 return obj == this;
+		 }
+	};
+	
+}

@@ -1,0 +1,487 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<chapter version="5.0" xmlns="http://docbook.org/ns/docbook"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns:xs="http://www.w3.org/2001/XMLSchema"
+         xmlns:xlink="http://www.w3.org/1999/xlink"
+         xmlns:xi="http://www.w3.org/2001/XInclude"
+         xmlns:svg="http://www.w3.org/2000/svg"
+         xmlns:m="http://www.w3.org/1998/Math/MathML"
+         xmlns:html="http://www.w3.org/1999/xhtml"
+         xmlns:db="http://docbook.org/ns/docbook">
+  <title>Abstract syntax tree access</title>
+
+  <section>
+    <title>Tutorial on Abstract Syntax Trees (ASTs)</title>
+
+    <section>
+      <title>About Abstract Syntax Trees</title>
+
+      <para>A fundamental data structure in most compilers is the Abstract
+      Syntax Tree (AST). An AST serves as an abstract representation of a
+      computer program and is often used in a compiler to perform analyses
+      (e.g., binding names to declarations and checking type correctness of a
+      program) and as a basis for code generation.</para>
+
+      <para>Three different ASTs are used in the JModelica.org
+      front-ends.</para>
+
+      <itemizedlist>
+        <listitem>
+          <para>The <emphasis>source AST</emphasis> results from parsing of
+          the Modelica or Optimica source code. This AST shares the structure
+          of the source code, and consists of a hierarchy consisting of Java
+          objects corresponding to class and component declarations, equations
+          and algorithms. The source AST can also be used for unparsing, i.e.,
+          pretty printing of the source code.</para>
+        </listitem>
+
+        <listitem>
+          <para>The <emphasis>instance AST</emphasis> represents a particular
+          model instance. Typically, the user selects a class to instantiate,
+          and the compiler then computes the corresponding instance AST. The
+          instance AST differs from the source AST in that in the former case,
+          all components are expanded down to variables of primitive type. An
+          important feature of the instance AST is that it is used to
+          represent modification environments; merging of modifications takes
+          place in the instance AST. As a consequence, all analysis, such as
+          name and type analysis takes is done based on the instance
+          AST.</para>
+        </listitem>
+
+        <listitem>
+          <para>The <emphasis>flat AST</emphasis> represents the flat Modelica
+          model. Once the instance AST has been computed, the flat AST is
+          computed simply by traversing the instance AST and collecting all
+          variables of primitive type, all equations and all algorithms. The
+          flat AST is then used, after some transformations, as a basis for
+          code generation.</para>
+        </listitem>
+      </itemizedlist>
+
+      <para>For more information on how the JModelica.org compiler transforms
+      these ASTs, see the paper "Implementation of a Modelica compiler using
+      JastAdd attribute grammars" by J.Åkesson et. al.</para>
+
+      <para>This tutorial demonstrates how the Python interface to the three
+      different ASTs in the compiler can be used. The JPype package is used to
+      create Java objects in a Java Virtual Machine which is seamlessly
+      integrated with the Python shell. The Java objects can be accessed
+      interactively and methods of the object can be invoked.</para>
+
+      <para>For more information about the Java classes and their methods used
+      in this example, please consult the API documentation for the Modelica
+      compiler. Note however that the documentation for the compiler
+      front-ends is still very rudimentary. Also, the interfaces to the source
+      and instance AST will be made more user friendly in upcoming
+      versions.</para>
+
+      <para>Three different usages of ASTs are shown:</para>
+
+      <itemizedlist>
+        <listitem>
+          <para>Count the number of classes in the Modelica standard library.
+          In this example, a Python function is defined to traverse the source
+          AST which results from parsing of the Modelica standard
+          library.</para>
+        </listitem>
+
+        <listitem>
+          <para>Instantiate the CauerLowPassAnalog model. The instance AST for
+          this model is dumped and it is demonstrated how the merged
+          modification environments can be accessed. Also, it is shown how a
+          component redeclaration affects the instance tree.</para>
+        </listitem>
+
+        <listitem>
+          <para>Flatten the CauerLowPassAnalog model instance and print some
+          statistics of the flattened Model.</para>
+        </listitem>
+      </itemizedlist>
+
+      <para>The Python commands in this tutorial may be copied and pasted
+      directly into a Python shell, in some cases with minor modifications.
+      You are, however, strongly encouraged to copy the commands into a text
+      file, e.g., <filename>ast_example.py</filename>.</para>
+
+      <para>Start the tutorial by creating a working directory and copy the
+      file
+      <filename>$JMODELICA_HOME/Python/pyjmi/examples/files/CauerLowPassAnalog.mo</filename>
+      to your working directory. An on-line version of <filename
+      xlink:href=""><link
+      xlink:href="https://svn.jmodelica.org/trunk/Python/src/pyjmi/examples/files/CauerLowPassAnalog.mo">CauerLowPassAnalog.mo</link></filename>
+      is also available (depending on which browser you use, you may have to
+      accept the site certificate by clicking through a few steps). If you
+      choose to create Python script file, save it to the working directory.
+      The tutorial is based on a model from the Modelica Standard Library:
+      <literal>Modelica.Electrical.Analog.Basic.Examples.CauerLowPassAnalog</literal>.</para>
+    </section>
+
+    <section>
+      <title>Load the Modelica standard library</title>
+
+      <para>Before we can start working with the ASTs, we need to import the
+      Python packages that will be used</para>
+
+      <programlisting language="python"># Import library for path manipulations
+import os.path
+
+# Import the JModelica.org Python packages
+import pymodelica
+from pymodelica.compiler_wrappers import ModelicaCompiler
+
+# Import numerical libraries
+import numpy as N
+import ctypes as ct
+import matplotlib.pyplot as plt
+
+# Import JPype
+import jpype
+
+# Create a reference to the java package 'org'
+org = jpype.JPackage('org')
+</programlisting>
+
+      <para>Also, we need to create an instance of a Modelica compiler in
+      order to compile models:</para>
+
+      <programlisting language="python"># Create a compiler and compiler target object
+mc = ModelicaCompiler()
+
+# Build trees as if for an FMU for ME v 1.0
+target = mc.create_target_object("me", "1.0")
+</programlisting>
+
+      <para>In order to avoid parsing the same file multiple times (we will
+      not change the Modelica file in this tutorial), we will check the
+      variable <literal>source_root</literal> exists in the shell before we
+      parse the file <filename>CauerLowPassAnalog.mo</filename>:</para>
+
+      <programlisting language="python"># Don't parse the file if it has already been parsed.
+try:
+    source_root.getProgramRoot()
+except:
+    # Parse the file CauerLowPassAnalog.mo and get the root node
+    # of the source AST
+    source_root = mc.parse_model("CauerLowPassAnalog.mo")
+</programlisting>
+
+      <para>At this point, try the built-in help feature of Python by typing
+      the following command in the shell to see the help text for the function
+      you just used.</para>
+
+      <programlisting language="python">In [2]: help(mc.parse_model)
+</programlisting>
+
+      <para>In the first part of the tutorial, we will not work with the
+      filter model, but rather load the Modelica standard library. Again, we
+      check if the library has already been loaded:</para>
+
+      <programlisting language="python"># Don't load the standard library if it is already loaded
+try:
+    modelica.getName().getID()
+except NameError, e:
+    # Load the Modelica standard library and get the class
+    # declaration AST node corresponding to the Modelica
+    # package.
+    modelica = source_root.getProgram().getLibNode(0). \
+               getStoredDefinition().getElement(0)
+</programlisting>
+
+      <para>The means to access the node in the source AST corresponding to
+      the class (package) declaration of the Modelica library is somewhat
+      cumbersome; the source AST interface will be improved in later
+      versions.</para>
+    </section>
+
+    <section>
+      <title>Count the number of classes in the Modelica standard
+      library</title>
+
+      <para>Having accessed a node in the source AST, we may now perform
+      analysis by traversing the tree. Say that we are interested in counting
+      the number of classes (packages, models, blocks, functions etc.) in the
+      Modelica standard library. As the basis for traversing the AST, we may
+      use the method <literal>ClassDecl.classes()</literal> that returns an
+      iterator over local classes contained in a class. Based on this method,
+      a Python function for traversing the class hierarchy of the source AST
+      can be defined:</para>
+
+      <programlisting language="python">def count_classes(class_decl,depth):
+    """ Count the number of classes hierarchically contained
+    in a class declaration."""
+    # Get an iterator over of local classes using the method ClassDecl.classes()
+    # which returns a Java Iterable object over ClassDecl objects.
+    local_classes = class_decl.classes().iterator()
+       
+    num_classes = 0
+    # Loop over all local classes
+    while local_classes.hasNext():
+        # Call count_classes recursively for all local classes 
+        # (including the contained class itself)
+        num_classes += 1 + count_classes(local_classes.next(), depth + 1)
+
+    # If the class declaration corresponds to a package, print
+    # the number of hierarchically contained classes
+    if class_decl.isPackage() and depth &lt;= 1:
+        print("The package %s has %d hierachically contained classes" \
+              %(class_decl.qualifiedName(),num_classes))
+            
+    # Return the number of hierachically contained classes
+    return num_classes
+</programlisting>
+
+      <para>We then call the function:</para>
+
+      <programlisting language="python"># Call count_classes for 'Modelica'
+num_classes = count_classes(modelica,0)
+</programlisting>
+
+      <para>Now run the script and study the printouts in the Python shell.
+      The first time the script is run, you will see printouts corresponding
+      also to the compiler accessing individual files of the Modelica standard
+      library; the loading of the library is done on demand as the library
+      classes are actually accessed. Run the script once again (using the '-i'
+      switch), to get a cleaner output, which should now look similar
+      to:</para>
+
+      <programlisting>The package Modelica.UsersGuide has 39 hierachically contained classes
+The package Modelica.Blocks has 343 hierachically contained classes
+The package Modelica.ComplexBlocks has 44 hierachically contained classes
+The package Modelica.StateGraph has 66 hierachically contained classes
+The package Modelica.Electrical has 992 hierachically contained classes
+The package Modelica.Magnetic has 174 hierachically contained classes
+The package Modelica.Mechanics has 558 hierachically contained classes
+The package Modelica.Fluid has 687 hierachically contained classes
+The package Modelica.Media has 1791 hierachically contained classes
+The package Modelica.Thermal has 95 hierachically contained classes
+The package Modelica.Math has 166 hierachically contained classes
+The package Modelica.ComplexMath has 31 hierachically contained classes
+The package Modelica.Utilities has 97 hierachically contained classes
+The package Modelica.Constants has 0 hierachically contained classes
+The package Modelica.Icons has 32 hierachically contained classes
+The package Modelica.SIunits has 584 hierachically contained classes
+The package Modelica has 5715 hierachically contained classes
+</programlisting>
+
+      <para>Take some time to ponder the results and make sure that you
+      understand how the Python function <literal>count_classes</literal>
+      works and which Python variables corresponds to references into the
+      source AST.</para>
+    </section>
+
+    <section>
+      <title>Dump the instance AST</title>
+
+      <para>We shall now turn our attention to the CauerLowPassAnalog model.
+      Specifically, we would like to analyze the instance hierarchy of the
+      model by dumping the tree structure to the Python shell. In addition, we
+      will look at the merged modification environment of each instance AST
+      node. Again, we will use methods defined for the Java objects
+      representing the AST.</para>
+
+      <para>First we create an instance of the CauerLowPassAnalog filter.
+      Again we only create the instance if it has not already been
+      created:</para>
+
+      <programlisting language="python"># Don't instantiate if instance has been computed already
+try:
+    filter_instance.components()
+except:
+    # Retrieve the node in the instance tree corresponding to the class
+    # Modelica.Electrical.Analog.Examples.CauerLowPassAnalog
+    filter_instance = mc.instantiate_model(source_root,"CauerLowPassAnalog", target)
+</programlisting>
+
+      <para>Next we define a Python function for traversing the instance AST
+      and printing each node in the shell. We also print the merged
+      modification environment for each instance node. In order to traverse
+      the AST, we use the methods
+      <literal>InstNode.instComponentDeclList()</literal> and
+      <literal>InstNode.instExtendsList()</literal>, which both return an
+      object of the class <literal>List</literal>, which in turn contain
+      instantiated component declarations and instantiated extends clauses. By
+      invoking the <literal>dump_inst_ast</literal> function recursively for
+      each element in these lists, the instance AST is in effect traversed.
+      Due to the internal representation of the instance AST, nodes of type
+      <literal>InstPrimitive</literal>, corresponding to primitive variables,
+      are not leaves in the AST as would be expected. To overcome this
+      complication, we simply check if a node is of type
+      <literal>InstPrimitive</literal>, and if this is the case, the recursion
+      stops.</para>
+
+      <para>The environment of an instance node is accessed by calling the
+      method <literal>InstNode.getMergedEnvrionment()</literal>, which returns
+      a list of modifications. According to the Modelica specification, outer
+      modifications overrides inner modifications, and accordingly,
+      modifications in the beginning of the list has precedence over later
+      modifications.</para>
+
+      <programlisting language="python">def dump_inst_ast(inst_node, indent):
+    """Pretty print an instance node, including its merged enviroment."""
+    
+    # Get the merged environment of an instance node
+    env = inst_node.getMergedEnvironment()
+
+    # Create a string containing the type and name of the instance node
+    str = indent + inst_node.prettyPrint("")
+    str = str + " {"
+
+    # Loop over all elements in the merged modification environment
+    for i in range(env.size()):
+        str = str + env.get(i).toString()
+        if i&lt;env.size()-1:
+            str = str + ", "
+        str = str + "}"
+
+    # Print
+    print(str)
+
+    # Get all components and dump them recursively
+    components = inst_node.instComponentDeclList
+    
+    for i in range(components.getNumChild()):
+        # Assume that primitive variables are leafs in the instance AST
+        if (inst_node.getClass() is \
+            org.jmodelica.modelica.compiler.InstPrimitive) is False:
+            dump_inst_ast(components.getChild(i),indent + "  ")
+
+    # Get all extends clauses and dump them recursively    
+    extends= inst_node.instExtendsList
+    for i in range(extends.getNumChild()):
+        # Assume that primitive variables are leafs in the instance AST
+        if (inst_node.getClass() is \
+            org.jmodelica.modelica.compiler.InstPrimitive) is False:
+            dump_inst_ast(extends.getChild(i),indent + "  ")
+</programlisting>
+
+      <para>Take a minute and make sure that you understand the essential
+      parts of the function.</para>
+
+      <para>Having defined the function <literal>dump_inst_ast</literal>, we
+      call it with the CauerLowPassAnalog instance as an argument.</para>
+
+      <programlisting language="python"># Dump the filter instance
+dump_inst_ast(filter_instance,"")
+</programlisting>
+
+      <para>You should now see a rather lengthy printout in your shell window.
+      Let us have a closer look at a few of the instances in the model. First
+      look at the printouts for a resistor in the model:</para>
+
+      <programlisting>    InstComposite: Modelica.Electrical.Analog.Basic.Resistor R1 {R=1}
+      InstPrimitive: SI.Resistance R {=1, start=1, final quantity="Resistance", \
+                                      final unit="Ohm"}
+      InstExtends: Interfaces.OnePort {R=1}
+        InstPrimitive: SI.Voltage v {final quantity="ElectricPotential", final unit="V"}
+        InstPrimitive: SI.Current i {final quantity="ElectricCurrent", final unit="A"}
+        InstComposite: PositivePin p {}
+          InstPrimitive: SI.Voltage v {final quantity="ElectricPotential", final unit="V"}
+          InstPrimitive: SI.Current i {final quantity="ElectricCurrent", final unit="A"}
+        InstComposite: NegativePin n {}
+          InstPrimitive: SI.Voltage v {final quantity="ElectricPotential", final unit="V"}
+          InstPrimitive: SI.Current i {final quantity="ElectricCurrent", final unit="A"}
+</programlisting>
+
+      <para>The model instance if of type <literal>InstComposite</literal>,
+      and contains two elements, one primitive variable, <literal>R</literal>,
+      and one extends clause. The modification environment for the resistor
+      contains a value modification '=1' and some modifications of the built
+      in attributes for the type Real. The <literal>InstExtends</literal> node
+      contains a number of child nodes, which corresponds to the content of
+      the class <literal>Interfaces.OnePort</literal>. Notice the difference
+      between the source AST, where an extends node is essentially a leaf in
+      the tree, whereas in the instance tree, the extends clause is
+      expanded.</para>
+
+      <para>Let us have a look at the effects of redeclarations in the
+      instance AST. In the CauerLowPassAnalog model, a step voltage signal
+      source is used, which in turn relies on redeclaration of a generic
+      signal source to a step. The instance node for the step voltage source
+      <emphasis>V</emphasis> is given below:</para>
+
+      <programlisting>    InstComposite: Modelica.Electrical.Analog.Sources.StepVoltage V {V=0, startTime=1, \
+                                                                     offset=0}
+      InstPrimitive: SI.Voltage V {=0, start=1, final quantity="ElectricPotential", \
+                                   final unit="V"}
+      InstExtends: Interfaces.VoltageSource {V=0, startTime=1, offset=0, 
+           redeclare Modelica.Blocks.Sources.Step signalSource(height=V)}
+        InstPrimitive: SI.Voltage offset {=0, =0, final quantity="ElectricPotential", \
+                                          final unit="V"}
+        InstPrimitive: SI.Time startTime {=1, =0, final quantity="Time", final unit="s"}
+        InstReplacingComposite: Modelica.Blocks.Sources.Step signalSource {height=V, \
+                                          final offset=offset, final startTime=startTime}
+          InstPrimitive: Real height {=V, =1}
+          InstExtends: Interfaces.SignalSource {height=V, final offset=offset, \
+                                                final startTime=startTime}
+            InstPrimitive: Real offset {=offset, =0}
+            InstPrimitive: SIunits.Time startTime {=startTime, =0, final quantity="Time", \
+                                                   final unit="s"}
+            InstExtends: SO {height=V, final offset=offset, final startTime=startTime}
+              InstPrimitive: RealOutput y {}
+              InstExtends: BlockIcon {height=V, final offset=offset, 
+                                      final startTime=startTime}
+</programlisting>
+
+      <para>Here we see how the modification <emphasis>redeclare
+      Modelica.Blocks.Sources.Step signalSource(height=V)</emphasis> affects
+      the instance AST. The node <literal>InstReplacingComposite</literal>
+      represents the component instance, instantiated from the class
+      <literal>Modelica.Blocks.Sources.Step</literal>, resulting from the
+      redeclaration. As a consequence, this branch of the instance AST is
+      significantly altered by the redeclare modification.</para>
+
+      <para>Now look at the modification environment for the component
+      instance <literal>startTime</literal>. The environment contains two
+      value modifications: '=1' and '=0'. As noted above, the first
+      modification in the list corresponds to the outermost modification and
+      have precedence over the following modifications. Take a minute to
+      figure out the origin of the modifications by looking upwards in the
+      instance AST.</para>
+    </section>
+
+    <section>
+      <title>Flattening of the filter model</title>
+
+      <para>Having computed the instance, we can now flatten the model:</para>
+
+      <programlisting language="python"># Don't flatten model if it already exists
+try:
+    filter_flat_model.name()
+except:
+    # Flatten the model instance filter_instance
+    filter_flat_model = mc.flatten_model(filter_instance, target)
+</programlisting>
+
+      <para>During flattening, the instance tree is traversed and all
+      primitive declarations and equations are collected. In addition, such as
+      scalarization and elimination of alias variables are performed.</para>
+
+      <para>Let us have a look at the flattened model:</para>
+
+      <programlisting language="python">print(filter_flat_model)
+</programlisting>
+
+      <para>We may also retrieve some model statistics:</para>
+
+      <programlisting language="python">print("*** Model statistics for CauerLowPassAnalog *** ")
+print("Number of differentiated variables: %d" \
+       % filter_flat_model.numDifferentiatedRealVariables())
+print("Number of algebraic variables:      %d" \
+       % filter_flat_model.numAlgebraicContinousRealVariables())
+print("Number of equations:                %d" \
+       % filter_flat_model.numEquations())
+print("Number of initial equations:        %d" \
+       % filter_flat_model.numInitialEquations())
+</programlisting>
+
+      <para>How many variables and equations is the model composed of? Does
+      the model seem to be well posed?</para>
+
+      <para>At this point, take some time to explore the
+      <literal>filter_flat_model</literal> object by typing
+      'filter_flat_model.&lt;tab&gt;' in the Python shell to see what methods
+      are available. You may also have a look in the Modelica compiler
+      API.</para>
+    </section>
+  </section>
+</chapter>

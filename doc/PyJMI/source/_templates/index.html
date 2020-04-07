@@ -1,0 +1,34 @@
+{% extends "layout.html" %}
+{% set title = 'Overview' %}
+{% block body %}
+  <h1>Welcome</h1>
+    
+ 
+     <p>
+        PyJMI is a package for ...
+     </p>
+
+
+  <h2>Documentation</h2>
+
+  <table class="contentstable" align="center" style="margin-left: 30px"><tr>
+    <td width="33%">
+        <p class="biglink"><a class="biglink" href="{{ pathto("examples") }}">Examples</a><br/>
+         <span class="linkdescr">view a range of examples</span></p>
+    </td><td width="33%">
+      <p class="biglink"><a class="biglink" href="{{ pathto("content") }}">Contents</a><br/>
+         <span class="linkdescr">overview of the documentation</span></p>
+    </td><td width="33%">
+        <p class="biglink"><a class="biglink" href="{{ pathto("search") }}">Search page</a><br/>
+         <span class="linkdescr">search the documentation</span></p>
+    </td></tr>
+  </table>
+  
+  
+  <h2>Contact</h2>
+  <p>
+  Contact us preferably through the <a target="_parent" href="http://www.jmodelica.org/forum">forum</a>.
+  </p>
+
+
+{% endblock %}

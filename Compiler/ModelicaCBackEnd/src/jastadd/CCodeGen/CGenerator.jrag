@@ -1,0 +1,1579 @@
+
+/*
+Copyright (C) 2009 Modelon AB
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, version 3 of the License.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+/** \file CGenerator.java
+*  CGenerator class.
+*/
+
+import java.io.*;
+
+public class CGenerator extends GenericGenerator {
+    
+    protected static final String INDENT = "    ";
+    
+    /**
+     * C: external function includes
+     */
+    public class DAETag_C_externalFuncIncludes extends DAETag {
+        
+        public DAETag_C_externalFuncIncludes(AbstractGenerator myGenerator, FClass fclass) {
+            super("external_func_includes", myGenerator, fclass);
+        }
+        
+        public void generate(CodeStream genPrinter) {
+            for (String incl : fclass.externalIncludes()) 
+                genPrinter.println(incl);
+        }
+    }
+
+    /**
+     * C: scaling_method
+     */
+    public class DAETag_C_scalingMethod extends DAETag {
+        
+        public DAETag_C_scalingMethod(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_DAE_scaling_method", myGenerator, fclass);
+        }
+    
+        public void generate(CodeStream genPrinter) {
+            if (fclass.myOptions().getBooleanOption("enable_variable_scaling")) {
+                genPrinter.print("JMI_SCALING_VARIABLES");
+            } else {
+                genPrinter.print("JMI_SCALING_NONE");
+            }
+        }
+    
+    }
+    
+    /**
+     * Base class for tags generating an array and the size of the array.
+     */
+    public abstract class DAEArrayTag<T extends ASTNode> extends DAETag {
+        
+        private String varName;
+        private String nullValue;
+        private String type;
+        
+        public DAEArrayTag(String name, AbstractGenerator myGenerator, FClass fclass, 
+                String varName, String type, String nullValue) {
+            super(name, myGenerator, fclass);
+            this.varName = varName;
+            this.type = type;
+            this.nullValue = nullValue;
+        }
+        
+        public void generate(CodeStream str) {
+            Collection<T> elems = elements();
+            int n = numElements(elems);
+            str.print("static const int N_", varName, " = ", n, ";\n");
+            
+            str.print("static const ", type, " DAE_", varName, "[] = { ");
+            
+            if (n == 0) {
+                str.print(nullValue);
+            } else {
+                boolean first = true;
+                for (T e : elems) {
+                    if (first)
+                        first = false;
+                    else
+                        str.print(", ");
+                    generateFor(e, str);
+                }
+            }
+            str.print(" };");
+        }
+        
+        protected int numElements(Collection<T> elems) {
+            return elems.size();
+        }
+        
+        protected abstract Collection<T> elements();
+        
+        protected abstract void generateFor(T e, CodeStream str);
+        
+    }
+
+    /**
+     * C: relational operator kind, <, >, <=, <=
+     */
+    public class DAETag_C_initial_relations extends DAEArrayTag<FRelExp> {
+        
+        public DAETag_C_initial_relations(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_DAE_initial_relations", myGenerator, fclass, "initial_relations", "int", "-1");
+        }
+        
+        protected Collection<FRelExp> elements() {
+            return fclass.eventExpInInitialEquations();
+        }
+        
+        protected void generateFor(FRelExp e, CodeStream genPrinter) {
+            e.genRelExpKind(genPrinter);
+        }
+    
+    }
+
+    /**
+     * C: relational operator kind, <, >, <=, <=
+     */
+    public class DAETag_C_relations extends DAEArrayTag<FExp> {
+        
+        public DAETag_C_relations(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_DAE_relations", myGenerator, fclass, "relations", "int", "-1");
+        }
+        
+        @Override
+        protected Collection<FExp> elements() {
+            return fclass.stateEventExps();
+        }
+        
+        @Override
+        protected int numElements(Collection<FExp> elems) {
+            return fclass.numEventIndicators();
+        }
+        
+        protected void generateFor(FExp e, CodeStream genPrinter) {
+            e.genRelExpKind(genPrinter);
+        }
+        
+    }
+    
+    /**
+     * C: nominal values
+     */
+    public class DAETag_C_nominals extends DAEArrayTag<FVariable> {
+        
+        public DAETag_C_nominals(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_DAE_nominals", myGenerator, fclass, "nominals", "jmi_real_t", "0.0");
+        }
+        
+        protected Collection<FVariable> elements() {
+            return fclass.differentiatedRealVariables();
+        }
+        
+        protected void generateFor(FVariable e, CodeStream genPrinter) {
+            genPrinter.print(StrictMath.abs(e.nominalAttribute()));
+        }
+    
+    }
+
+    
+    /**
+     * C: equation residuals
+     */
+    public class DAETag_C_equationResiduals extends DAETag {
+        
+        public DAETag_C_equationResiduals(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_DAE_equation_residuals", myGenerator, fclass);
+            addOptions("generate_dae");
+        }
+    
+        public void generate(CodeStream genPrinter) {
+            for (FAbstractEquation e : fclass.equations()) 
+                e.genVarDecls_C(ASTNode.printer_C, genPrinter, INDENT);
+            Enumerator enumerator = new Enumerator();
+            for (FAbstractEquation e : fclass.equations())
+                e.genResidual_C(ASTNode.printer_C, genPrinter, INDENT, enumerator, null, null);
+        }
+    
+    }
+
+    /**
+     * C: event indicator residuals in equations
+     */
+    public class DAETag_C_eventIndicatorResiduals extends DAETag {
+        
+        public DAETag_C_eventIndicatorResiduals(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_DAE_event_indicator_residuals", myGenerator, fclass);
+        }
+    
+        public void generate(CodeStream genPrinter) {
+            CodePrinter p = ASTNode.printer_C.eventIndicatorPrinter();
+            if (!fclass.onlyInitBLT()) {
+                ASTNode.genFunctionStart(genPrinter, INDENT);
+                for (FExp e : fclass.stateEventExps()) 
+                    e.genEventResidualVarDecls_C(p, genPrinter, INDENT);
+                Enumerator enumerator = new Enumerator();
+                for (FExp e : fclass.stateEventExps())
+                    e.genEventResidual_C(p, genPrinter, INDENT, enumerator);
+                ASTNode.genFunctionEnd(genPrinter, INDENT);
+            } else {
+                genPrinter.print("  model_init_R0(jmi, res);\n");
+            }
+        }
+    
+    }
+
+    /**
+     * C: initial equation residuals
+     */
+    public class DAETag_C_initialEquationResiduals extends DAETag {
+        
+        public DAETag_C_initialEquationResiduals(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_DAE_initial_equation_residuals", myGenerator, fclass);
+            addOptions("generate_dae");
+        }
+    
+        public void generate(CodeStream genPrinter) {
+            CodePrinter printer = ASTNode.printer_C.initialSystemPrinter();
+            for (FAbstractEquation e : fclass.equations()) 
+                e.genVarDecls_C(printer, genPrinter, INDENT);
+            for (FAbstractEquation e : fclass.initialEquations()) 
+                e.genVarDecls_C(printer, genPrinter, INDENT);
+            Enumerator enumerator = new Enumerator();
+            for (FAbstractEquation e : fclass.equations())
+                e.genResidual_C(printer, genPrinter, INDENT, enumerator, null, null);
+            for (FAbstractEquation e : fclass.initialEquations())
+                e.genResidual_C(printer, genPrinter, INDENT, enumerator, null, null);
+        }   
+    }
+
+    /**
+     * C: event indicator residuals in initial equations
+     */
+    public class DAETag_C_initialEventIndicatorResiduals extends DAETag {
+        
+        public DAETag_C_initialEventIndicatorResiduals(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_DAE_initial_event_indicator_residuals", myGenerator, fclass);
+        }
+    
+        public void generate(CodeStream genPrinter) {
+            ASTNode.genFunctionStart(genPrinter, INDENT);
+            CodePrinter printer = ASTNode.printer_C.initialSystemPrinter().eventIndicatorPrinter();
+            for (FExp e : fclass.stateEventExps()) 
+                e.genEventResidualVarDecls_C(printer, genPrinter, INDENT);
+            for (FExp e : fclass.eventExpInInitialEquations()) 
+                e.genEventResidualVarDecls_C(printer, genPrinter, INDENT);
+            Enumerator enumerator = new Enumerator();
+            for (FExp e : fclass.stateEventExps())
+                e.genEventResidual_C(printer, genPrinter, INDENT, enumerator);
+            for (FExp e : fclass.eventExpInInitialEquations())
+                e.genEventResidual_C(printer, genPrinter, INDENT, enumerator);
+            ASTNode.genFunctionEnd(genPrinter, INDENT);
+        }
+    }
+    
+    /**
+     * C: initial guess equation residuals
+     */
+    public class DAETag_C_initialGuessEquationResiduals extends DAETag {
+        
+        public DAETag_C_initialGuessEquationResiduals(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_DAE_initial_guess_equation_residuals", myGenerator, fclass);
+        }
+    
+        public void generate(CodeStream genPrinter) {
+            for (FRealVariable fv : fclass.realVariables())
+                if (!fv.isFixed()) {
+                    fv.genVarDecls_C(ASTNode.printer_C, genPrinter, INDENT);
+                }
+            Enumerator enumerator = new Enumerator();
+            for (FRealVariable fv : fclass.realVariables())
+                if (!fv.isFixed()) {
+                    fv.genStartAttributeResidual_C(ASTNode.printer_C, genPrinter, INDENT, enumerator);
+                }
+        }
+    
+    }
+
+    /**
+     * C: dependent parameter residuals
+     */
+    public class DAETag_C_initialDependentParameterResiduals extends DAETag {
+        
+        public DAETag_C_initialDependentParameterResiduals(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_DAE_initial_dependent_parameter_residuals", myGenerator, fclass);
+            addOptions("generate_dae");
+        }
+    
+        public void generate(CodeStream genPrinter) {
+            Enumerator enumerator = new Enumerator();
+            for (FAbstractEquation e : fclass.getParameterEquations())
+                e.genResidual_C(ASTNode.printer_C, genPrinter, INDENT, enumerator, null, null);
+        }
+    
+    }
+
+    /**
+     * C: macros for C variable aliases
+     */
+    public class DAETag_C_variableAliases extends DAETag {
+        
+        public DAETag_C_variableAliases(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_variable_aliases", myGenerator, fclass);
+        }
+        
+        private class Visitor implements FClass.ZVisitor {
+
+            private static final String FMT_DEFAULT       = 
+                    "#define %s ((*(jmi->z))[jmi->offs%s_%s+%d])\n";
+            private static final String FMT_DEFAULT_INDEX = 
+                    "#define %s ((*(jmi->z))[%d])\n";
+            private static final String FMT_DEFAULT_STRING = 
+                    "#define %s (jmi->z_t.strings.values[jmi->z_t.strings.offs.wp+%d])\n";
+            private static final String FMT_DEFAULT_STRING_INDEX = 
+                    "#define %s (jmi->z_t.strings.values[%d])\n";
+            private static final String FMT_EXTERNAL      = 
+                    "#define %s ((jmi->ext_objs)[%d])\n";
+            private static final String FMT_VIRTUAL_FIRST = 
+                    "#define _%s ((*(jmi->z))[jmi->offs_%s])\n";
+            private static final String FMT_VIRTUAL       = 
+                    "#define _%s ((*(jmi->z))[jmi->offs_%s + %d])\n";
+            
+            private boolean pre;
+            private String prefix;
+            private CodeStream cs;
+
+            public Visitor(CodeStream cs, boolean pre) {
+                this.pre = pre;
+                prefix = pre ? "_pre" : "";
+                this.cs = cs;
+            }
+
+            public void visitVariable(FVariable fv, FClass.ZCategoryEntry entry) {
+                switch (entry.category().zStructVector()) {
+                case DEFAULT:
+                    if (pre) { //TODO: Should also be changed to direct index once the mapping from pre to index is defined
+                        cs.format(FMT_DEFAULT, fv.preName_C(), prefix, entry.category().zOffsetName(), entry.getOffsetIndexFor(fv));
+                    } else {
+                        cs.format(FMT_DEFAULT_INDEX, fv.name_C(), entry.getIndexFor(fv));
+                    }
+                    break;
+                case STRING:
+                    if (pre) {
+                        cs.format(FMT_DEFAULT_STRING, fv.preName_C(), entry.getOffsetIndexFor(fv));
+                    } else {
+                        cs.format(FMT_DEFAULT_STRING_INDEX, fv.name_C(), entry.getIndexFor(fv));
+                    }
+                    break;
+                case EXTERNAL:
+                    cs.format(FMT_EXTERNAL, fv.name_C(), entry.getOffsetIndexFor(fv));
+                    break;
+                }
+            }
+
+            public void visitVirtualVariable(String name, String zOffsetName, int offset) {
+                String format = (offset == 0) ? FMT_VIRTUAL_FIRST : FMT_VIRTUAL;
+                cs.format(format, name, zOffsetName, offset);
+            }
+
+        }
+
+        public void generate(CodeStream genPrinter) {
+            fclass.varRefMap().visitZOrder(new Visitor(genPrinter, false), false);
+            if (fclass.myOptions().getBooleanOption("generate_ode")) {
+                fclass.varRefMap().visitZOrder(new Visitor(genPrinter, true), true);
+            }
+        }
+    }
+
+    class ZOffsets {
+        private LinkedHashListMap<TypePrefixVariability.VariabilityCausality_C, FVariable> m = 
+                new LinkedHashListMap<TypePrefixVariability.VariabilityCausality_C, FVariable>();
+        
+        public ZOffsets(Collection<? extends FVariable> fvs) {
+            for (FVariable fv : fvs) {
+                m.add(fv.variabilityCausality_C(), fv);
+            }
+        }
+        
+        public int size() {
+            int res = 0;
+            for (java.util.List<FVariable> l : m.values()) {
+                res = res + l.size();
+            }
+            return res;
+        }
+        
+        public java.util.List<FVariable> get(TypePrefixVariability.VariabilityCausality_C s) {
+            return m.getList(s);
+        }
+    }
+    
+    public class DAETag_C_z_stringOffsets extends DAETag {
+        
+        public DAETag_C_z_stringOffsets(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_z_offsets_strings", myGenerator, fclass);
+        }
+        
+        public void generate(CodeStream str) {
+            ZOffsets zo = new ZOffsets(fclass.strings());
+            int o = 0;
+            o = genList(str, fclass.numIndependentStringConstants()           , o, TypePrefixVariability.VariabilityCausality_C.CI);
+            o = genList(str, fclass.numDependentStringConstants()             , o, TypePrefixVariability.VariabilityCausality_C.CD);
+            o = genList(str, fclass.numRegularIndependentStringParameters()   , o, TypePrefixVariability.VariabilityCausality_C.PI);
+            o = genList(str, fclass.numStructuralIndependentStringParameters(), o, TypePrefixVariability.VariabilityCausality_C.PS);
+            o = genList(str, fclass.numFinalIndependentStringParameters()     , o, TypePrefixVariability.VariabilityCausality_C.PF);
+            o = genList(str, fclass.numEvalIndependentStringParameters()      , o, TypePrefixVariability.VariabilityCausality_C.PE);
+            o = genList(str, fclass.numDependentStringParameters()            , o, TypePrefixVariability.VariabilityCausality_C.PD);
+            int nStringVariables = fclass.numDiscreteStringVariables() + fclass.numStringInputs();
+            o = genList(str, nStringVariables                                 , o, TypePrefixVariability.VariabilityCausality_C.W);
+            o = genList(str, nStringVariables                                 , o, TypePrefixVariability.VariabilityCausality_C.WP);
+            str.print("z->n = ", o, ";\n");
+        }
+        
+        int genList(CodeStream str, int n, int o, TypePrefixVariability.VariabilityCausality_C s) {
+            str.print("z->offs.", s, " = ", o, ";\n");
+            str.print("z->nums.", s, " = ", n, ";\n");
+            return o + n;
+        }
+    }
+    
+    
+    /**
+     * Generates code for BLT block residuals
+     */
+    /**
+     * C: C functions for the DAE BLT block residuals
+     */
+    public class DAETag_C_dae_blocks_residual_functions extends DAETag {
+        
+        public DAETag_C_dae_blocks_residual_functions(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_dae_blocks_residual_functions", myGenerator, fclass);
+            addOptions("generate_ode");
+        }
+        
+        @Override
+        public boolean isActive() {
+            return !fclass.onlyInitBLT() && super.isActive();
+        }
+
+        public void generate(CodeStream genPrinter) {
+            String indent = "";
+            int generateSparseThreshold = fclass.myOptions().getIntegerOption("generate_sparse_block_jacobian_threshold");
+            for (AbstractEquationBlock block : fclass.getDAEStructuredBLT().getAllBlocks()) {
+                CodePrinter printer = block.blockPrinter();
+                block.genBlockResidualFunction(printer, genPrinter, indent, generateSparseThreshold);
+                if (block.isLinear() && generateSparseThreshold < block.localSolvedRealVariables().size()) {
+                    block.genBlockResidualFunction_sparse_jacobian(printer, genPrinter, indent, false);
+                }
+            }
+        }
+    }
+
+    /**
+     * Generates code for adding BLT blocks 
+     */
+    /**
+     * C: Add the DAE block functions to the JMI struct
+     */
+    public class DAETag_C_dae_add_blocks_residual_functions extends DAETag {
+
+        public DAETag_C_dae_add_blocks_residual_functions(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_dae_add_blocks_residual_functions", myGenerator, fclass);
+            addOptions("generate_ode");
+        }
+
+        @Override
+        public boolean isActive() {
+            return !fclass.onlyInitBLT() && super.isActive();
+        }
+
+        public void generate(CodeStream genPrinter) {
+            CodePrinter p = ASTNode.printer_C;
+            String indent = p.indent("");
+            OptionRegistry options = fclass.myOptions();
+
+            for (AbstractEquationBlock block : fclass.getDAEStructuredBLT().getAllBlocks())
+                block.genBlockAddCall_C(p, genPrinter, indent, false,
+                        false, block.isLinear() && options.getIntegerOption("generate_sparse_block_jacobian_threshold") < block.localSolvedRealVariables().size(),
+                        options.getStringOption("nonlinear_solver"), -1);
+        }
+    }
+
+    /**
+     * Number of DAE blocks
+     */
+    /**
+     * C: Number of DAE blocks
+     */
+    public class DAETag_C_dae_n_blocks extends DAETag {
+        
+        public DAETag_C_dae_n_blocks(AbstractGenerator myGenerator, FClass fclass) {
+            super("n_dae_blocks", myGenerator, fclass);
+        }
+
+        public void generate(CodeStream genPrinter) {
+            if (fclass.onlyInitBLT())
+                genPrinter.print("0");
+            else
+                genPrinter.print(fclass.getDAEBLT().getNumLabledBlocks());
+        }
+    }
+
+    /**
+     * Generates code for BLT block residuals (DAE initialization system)
+     */
+    /**
+     * C: C functions for the DAE BLT block residuals
+     */
+    public class DAETag_C_dae_init_blocks_residual_functions extends DAETag {
+
+        public DAETag_C_dae_init_blocks_residual_functions(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_dae_init_blocks_residual_functions", myGenerator, fclass);
+            addOptions("generate_ode");
+        }
+
+        public void generate(CodeStream genPrinter) {
+            String indent = "";
+            
+            int generateSparseThreshold = fclass.myOptions().getIntegerOption("generate_sparse_block_jacobian_threshold");
+
+            for (AbstractEquationBlock block : fclass.getDAEInitBLT()) {
+                CodePrinter printer = block.blockPrinter().initialSystemPrinter();
+                block.genBlockResidualFunction(printer, genPrinter, indent, generateSparseThreshold);
+
+                if (block.isLinear() && generateSparseThreshold < block.localSolvedRealVariables().size()) {
+                    block.genBlockResidualFunction_sparse_jacobian(printer, genPrinter, indent, true);
+                }
+            } 
+        }
+    }
+
+    /**
+     * Generates code for adding BLT blocks 
+     */
+    /**
+     * C: Add the DAE initialization block functions to the JMI struct
+     */
+    public class DAETag_C_dae_init_add_blocks_residual_functions extends DAETag {
+
+        public DAETag_C_dae_init_add_blocks_residual_functions(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_dae_init_add_blocks_residual_functions", myGenerator, fclass);
+            addOptions("generate_ode");
+        }
+
+        public void generate(CodeStream genPrinter) {
+            CodePrinter p = ASTNode.printer_C;
+            String indent = p.indent("");
+            OptionRegistry options = fclass.myOptions();
+
+            for (AbstractEquationBlock block : fclass.getDAEInitBLT())
+                block.genBlockAddCall_C(p, genPrinter, indent, false,
+                        true, block.isLinear() && options.getIntegerOption("generate_sparse_block_jacobian_threshold") < block.localSolvedRealVariables().size(),
+                        fclass.myOptions().getStringOption("init_nonlinear_solver"), -1);
+        }
+    }
+
+    /**
+     * Number of DAE initialization blocks
+     */
+    /**
+     * C: Number of DAE initialization blocks
+     */
+    public class DAETag_C_dae_init_n_blocks extends DAETag {
+        
+        public DAETag_C_dae_init_n_blocks(AbstractGenerator myGenerator, FClass fclass) {
+            super("n_dae_init_blocks", myGenerator, fclass);
+        }
+
+        public void generate(CodeStream genPrinter) {
+            genPrinter.print(fclass.getDAEInitBLT().getNumLabledBlocks());
+        }
+    }
+
+    /**
+     * Generates code for computing the guard expressions
+     */
+    /**
+     * C: Compute guard expressions ODE
+     */
+    public class DAETag_C_ode_guards extends DAETag {
+        
+        public DAETag_C_ode_guards(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_ode_guards", myGenerator, fclass);
+            addOptions("generate_ode");
+        }
+
+        public void generate(CodeStream str) {
+            if (!fclass.onlyInitBLT()) {
+                for (FExp e : fclass.guardExpInEquations()) 
+                    e.genVarDecls_C(ASTNode.printer_C, str, INDENT);
+                int i=0;
+                for (FExp e : fclass.guardExpInEquations()) {
+                    str.print("  _guards(" + i + ") = ");
+                    ASTNode.printer_C.print(e, str, "");
+                    str.print(";\n");        
+                    i++;
+                }
+            } else {
+                str.print("  model_ode_guards_init(jmi);\n");
+            }
+        }
+    }
+
+    /**
+     * Generates code for computing the guard expressions in the initial equations
+     */
+    /**
+     * C: Compute guard expressions ODE initialization system
+     */
+    public class DAETag_C_ode_guards_init extends DAETag {
+        
+        public DAETag_C_ode_guards_init(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_ode_guards_init", myGenerator, fclass);
+            addOptions("generate_ode");
+        }
+
+        public void generate(CodeStream genPrinter) {
+            CodePrinter printer = ASTNode.printer_C.initialSystemPrinter();
+            for (FExp e : fclass.guardExpInInitialEquations()) 
+                e.genVarDecls_C(printer, genPrinter, INDENT);
+            int i=0;
+            for (FExp e : fclass.guardExpInInitialEquations()) {
+                genPrinter.print("  _guards_init(" + i + ") = ");
+                e.prettyPrint_C(printer, genPrinter,"");
+                genPrinter.print(";\n");
+                i++;
+            }
+        }
+    }
+
+    /**
+     * Generates code for computation of the nect time event.
+     */
+    /**
+     * C: Compute the next time event.
+     */
+    public class DAETag_C_ode_time_events extends DAETag {
+        
+        public DAETag_C_ode_time_events(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_ode_time_events", myGenerator, fclass);
+            addOptions("generate_ode");
+        }
+
+        @Override
+        public boolean isActive() {
+            return !fclass.onlyInitBLT() && super.isActive();
+        }
+        
+        public void generate(CodeStream str) {
+            CodePrinter p = ASTNode.printer_C.eventIndicatorPrinter();
+            String indent = p.indent("");
+            for (FExp e : fclass.timeEventExps()) 
+                e.genTimeEventVarDecls_C(p, str, INDENT);
+            
+            str.formatln("%sjmi_real_t nSamp;", indent);
+            for (FExp e : fclass.timeEventExps()) {
+                e.genTimeEvent_C(p, str, indent, "nextTimeEvent");
+            }
+        }
+    }
+    
+    /**
+     * Generates code for solving the BLT blocks
+     */
+    /**
+     * C: Compute derivatives of the ODE
+     */
+    public class DAETag_C_ode_derivatives extends DAETag {
+        
+        public DAETag_C_ode_derivatives(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_ode_derivatives", myGenerator, fclass);
+        }
+
+        public void generate(CodeStream str) {
+            CodePrinter p = ASTNode.printer_C;
+            String indent = "";
+            String next = p.indent(indent);
+            
+            CodeSplitter<AbstractEquationBlock> cs = new CodeSplitter<AbstractEquationBlock>(p, str, next, true,
+                    "model_ode_derivatives", fclass.myOptions()) {
+                @Override
+                public void genDecl(AbstractEquationBlock element) {
+                    element.genVarDecls(p, str, indent);
+                }
+                @Override
+                public void genPre(AbstractEquationBlock element) {
+                    element.genReinitTempInits_C(p, str, indent);
+                }
+                @Override
+                public void gen(AbstractEquationBlock element) {
+                    element.genSolvedInBLT(p, str, indent);
+                }
+                @Override
+                public void genPost(AbstractEquationBlock element) {
+                    //element.genReinitWritebacks_C(p, indent, str);
+                }
+            };
+            
+            if (!fclass.onlyInitBLT() && fclass.myOptions().getBooleanOption("generate_ode")) {
+                cs.add(fclass.getDAEStructuredBLT().getAllBlocks());
+            }
+            
+            cs.genFuncImpls();
+            
+            cs.genFuncHeads();
+            
+            str.print("int model_ode_derivatives_base(jmi_t* jmi) {\n");
+            cs.printStatusDecl();
+            if (fclass.onlyInitBLT()) {
+                str.print(next + "ef = model_ode_initialize(jmi);\n");
+            } else {
+                cs.genFuncCalls();
+            }
+            cs.printStatusReturn();
+            str.print("}\n");
+        }
+    }
+    
+    /**
+     * Generates code for solving the BLT blocks in the initialization system
+     */
+    /**
+     * C: Solve the initialization system
+     */
+    public class DAETag_C_ode_initialization extends DAETag {
+        
+        public DAETag_C_ode_initialization(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_ode_initialization", myGenerator, fclass);
+        }
+
+        public void generate(CodeStream str) {
+            
+            CodePrinter p = ASTNode.printer_C.initialSystemPrinter();
+            String indent = "";
+            String next = p.indent(indent);
+            
+            CodeSplitter<AbstractEquationBlock> cs = new CodeSplitter<AbstractEquationBlock>(p, str, next, true,
+                    "model_ode_initialize", fclass.myOptions()) {
+                @Override
+                public void genDecl(AbstractEquationBlock element) {
+                    element.genVarDecls(p, str, indent);
+                }
+                @Override
+                public void genPre(AbstractEquationBlock element) {
+                    element.genReinitTempInits_C(p, str, indent);
+                }
+                @Override
+                public void gen(AbstractEquationBlock element) {
+                    element.genSolvedInBLT(p, str, indent);
+                }
+                @Override
+                public void genPost(AbstractEquationBlock element) {
+                    //element.genReinitWritebacks_C(p, indent, str);
+                }
+            };
+            
+            if (fclass.myOptions().getBooleanOption("generate_ode")) {
+                cs.add(fclass.getDAEInitBLT());
+            }
+            
+            cs.genFuncImpls();
+            
+            cs.genFuncHeads();
+            
+            str.print("int model_ode_initialize_base(jmi_t* jmi) {\n");
+            cs.printStatusDecl();
+            cs.genFuncCalls();
+            cs.printStatusReturn();
+            str.print("}\n");
+        }
+    }
+
+    /**
+     * Generates code for solving the BLT blocks for computing the outputs
+     */
+    /**
+     * C: Compute the ODE outputs
+     */
+    public class DAETag_C_ode_outputs extends DAETag {
+        
+        public DAETag_C_ode_outputs(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_ode_outputs", myGenerator, fclass);
+        }
+
+        public void generate(CodeStream genPrinter) {
+        }
+    }
+    
+    /**
+     * Generates headers for Modelica functions.
+     */
+    /**
+     * C: C function headers representing Modelica functions
+     */
+    public class DAETag_C_function_headers extends DAETag {
+        
+        public DAETag_C_function_headers(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_function_headers", myGenerator, fclass);
+        }
+
+        public void generate(CodeStream str) {
+            fclass.generateFunctionHeaders(ASTNode.printer_C, str, "");
+        }
+    }
+    
+    /**
+     * Generates definitions for Modelica functions.
+     */
+    /**
+     * C: C functions representing Modelica functions
+     */
+    public class DAETag_C_functions extends DAETag {
+        
+        public DAETag_C_functions(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_functions", myGenerator, fclass);
+        }
+
+        public void generate(CodeStream str) {
+            for (FFunctionDecl func : fclass.myFFunctionDeclsPartialCalled()) {
+                func.prettyPrintPartial_C(ASTNode.printer_C, str, "");
+            }
+            for (FFunctionDecl func : fclass.getFFunctionDecls()) {
+                ASTNode.printer_C.print(func, str, "");
+            }
+        }
+    }
+    
+    /**
+     * Generates structs for Modelica records.
+     */
+    /**
+     * C: C structs representing Modelica records
+     */
+    public class DAETag_C_records extends DAETag {
+        
+        public DAETag_C_records(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_records", myGenerator, fclass);
+        }
+
+        public void generate(CodeStream str) {
+            for (FRecordDecl rec : fclass.getFRecordDecls()) {
+                ASTNode.printer_C.print(rec, str, "");
+            }
+        }
+    }
+    
+    /**
+     * Generates string representations of enumeration literals.
+     */
+    /**
+     * C: string representations of enumeration literals
+     */
+    public class DAETag_C_enums_strings extends DAETag {
+        
+        public DAETag_C_enums_strings(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_enum_strings", myGenerator, fclass);
+        }
+
+        public void generate(CodeStream str) {
+            for (FEnumDecl e : fclass.getFEnumDecls()) {
+                ASTNode.printer_C.print(e, str, "");
+            }
+        }
+    }
+    
+    /**
+     * Generates wrappers for Modelica functions for exporting in a shared library.
+     */
+    /**
+     * C: C functions wrapping internal representation of Modelica functions
+     */
+    public class DAETag_C_export_functions extends DAETag {
+        
+        public DAETag_C_export_functions(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_export_functions", myGenerator, fclass);
+            addOptions("export_functions");
+        }
+
+        public void generate(CodeStream out) {
+            for (FFunctionDecl func : fclass.getFFunctionDecls())
+                if (func.hasExportWrapper_C())
+                    func.exportWrapper_C(out, "");
+        }
+    }
+    
+    /**
+     * Generates export wrappers for groups of Modelica functions with the same signature.
+     * 
+     * Allows less functions to be imported from resulting shared library. 
+     * Requires $C_export_functions$, and must be after it.
+     */
+    /**
+     * C: C functions wrapping groups of export function with same signature
+     */
+    public class DAETag_C_export_wrappers extends DAETag {
+        
+        public DAETag_C_export_wrappers(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_export_wrappers", myGenerator, fclass);
+            addOptions("export_functions_vba");
+        }
+
+        public void generate(CodeStream out) {
+            // TODO: refactor out parts not specific to VBA to make it 
+            //       easier to support other platforms with special needs
+            int i = 0;
+            String ind = ASTNode.printer_C.indent("");
+            for (java.util.List<FFunctionDecl> grp : fclass.exportWrapperGroups()) {
+                FFunctionDecl first = grp.get(0);
+                String type = first.exportWrapperType_C();
+                String name = "select_vba_" + (++i);
+                
+                out.format("char* %s_names[] = { ", name);
+                String fmt = "\"%s\"";
+                for (FFunctionDecl f : grp) {
+                    out.format(fmt, f.getFAccess().nameUnderscore());
+                    fmt = ", \"%s\"";
+                }
+                out.print(" };\n");
+                
+                out.format("int %s_lengths[] = { ", name);
+                fmt = "%d";
+                for (FFunctionDecl f : grp) {
+                    out.format(fmt, f.getFAccess().nameUnderscore().length());
+                    fmt = ", %d";
+                }
+                out.print(" };\n");
+                
+                out.format("%s (*%s_funcs[])(", type, name);
+                first.exportWrapperArgumentTypeDecl_C(out);
+                out.print(") = { ");
+                fmt = "*%s";
+                for (FFunctionDecl f : grp) {
+                    out.format(fmt, f.funcNameExportWrapper());
+                    fmt = ", *%s";
+                }
+                out.print(" };\n");
+                
+                String sep = first.myInputs().isEmpty() ? "" : ", "; 
+                out.format("DllExport %s __stdcall %s(char* name%s", type, name, sep);
+                first.exportWrapperArgumentDecl_C(out);
+                out.print(") {\n");
+                out.format("%sint i, j;\n", ind);
+                out.format("%sfor (i = 0, j = 0; name[i] != 0; i++) \n", ind);
+                out.format("%s%swhile (j < %d && i <= %s_lengths[j] && name[i] > %s_names[j][i]) j++;\n", ind, ind, grp.size(), name, name);
+                out.format("%sif (j >= %d || strcmp(%s_names[j], name)) return 0;\n", ind, grp.size(), name);
+                out.format("%sreturn %s_funcs[j](", ind, name);
+                first.exportWrapperArgumentCall_C(out);
+                out.print(");\n");
+                out.print("}\n\n");
+            }
+        }
+    }
+
+    /**
+     * C: DAE output value references
+     */
+    public class DAETag_C_outputVrefs extends DAETag {
+        
+        public DAETag_C_outputVrefs(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_DAE_output_vrefs", myGenerator, fclass);
+        }
+    
+        public void generate(CodeStream genPrinter) {
+
+            if (fclass.numOutputs()>0) {
+                genPrinter.print("static const int Output_vrefs[" + 
+                    fclass.numOutputs() + "] = {");     
+
+                int ind = 0;
+                for (FVariable fv : fclass.outputs()) {
+                    genPrinter.print(fv.valueReference());
+                    if (ind < fclass.numOutputs()-1) {
+                        genPrinter.print(",");
+                    }   
+                    ind++;
+                }       
+                genPrinter.print("};\n");
+            } else {
+                genPrinter.print("static const int Output_vrefs[1] = {-1};");
+            } 
+        }   
+    }
+
+    /**
+     * Generates MODEL_IDENTIFIER.
+     */
+    /**
+     * C: Model identifier
+     */
+    public class DAETag_C_model_id extends DAETag {
+        
+        public DAETag_C_model_id(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_model_id", myGenerator, fclass);
+        }
+
+        public void generate(CodeStream genPrinter) {
+            genPrinter.print(fclass.nameUnderscore());
+        }
+    }
+    
+    /**
+     * Generates JM_VERSION.
+     */
+    /**
+     * C: JModelica version
+     */
+    public class DAETag_C_jmodelica_version extends DAETag {
+        
+        public DAETag_C_jmodelica_version(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_jmodelica_version", myGenerator, fclass);
+        }
+        
+        public void generate(CodeStream genPrinter) {
+            genPrinter.print(Version.parseVersion());
+        }
+    }
+
+    /**
+     * Generates GUID.
+     */
+    /**
+     * C: GUID
+     */
+    public class DAETag_C_guid extends DAETag {
+        
+        public DAETag_C_guid(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_guid", myGenerator, fclass);
+        }
+
+        public void generate(CodeStream genPrinter) {
+            genPrinter.print("\""+fclass.guidManager().getGuidToken()+"\"");
+        }
+    }
+
+    /**
+     * C: block number for the block that contains homotopy
+     */
+    public class DAETag_C_DAE_INIT_homotopy_block extends DAETag {
+        
+        public DAETag_C_DAE_INIT_homotopy_block(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_DAE_INIT_homotopy_block", myGenerator, fclass);
+        }
+    
+        public void generate(CodeStream genPrinter) {
+            int num = -1;
+            if (fclass.myOptions().getBooleanOption("generate_ode")) {
+                for (AbstractEquationBlock block : fclass.getDAEInitBLT()) {
+                    if (block.containsFHomotopyExp()) {
+                        if (num != -1) {
+                            throw new UnsupportedOperationException("There is more than one block which contains homotopy operator, this should not be possible!");
+                        } else {
+                            num = block.getSequenceNumber();
+                        }
+                    }
+                }
+            }
+            genPrinter.print(num);
+        }
+    
+    }
+
+    public class DAETag_model_init_eval_independent_start extends DAETag {
+        
+        public DAETag_model_init_eval_independent_start(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_model_init_eval_independent_start", myGenerator, fclass);
+        }
+        
+        public void generate(CodeStream str) {
+            CodePrinter p = ASTNode.printer_C;
+            String indent = "";
+            String next = p.indent(indent);
+            
+            CodeSplitter<FVariable> splitter = new CodeSplitter<FVariable>(p, str, next, true,
+                    "model_init_eval_independent_start", fclass.myOptions()) {
+                @Override
+                public void genDecl(FVariable element) {
+                    p.printVarDecls(element, str, indent);
+                }
+                @Override
+                public void gen(FVariable element) {
+                    element.genStartValue_C(p, str, indent);
+                }
+            };
+            splitter.add(fclass.independentConstants());
+            splitter.add(fclass.dependentConstants());
+            splitter.add(fclass.independentParameters());
+            
+            for (FVariable fv : fclass.initialParameters()) {
+                if (!fv.hasParameterEquation() && !fv.hasDependentStartValue()) {
+                    splitter.add(fv);
+                }
+            }
+            for (FVariable fv : fclass.variables()) {
+                if (!fv.hasDependentStartValue()) {
+                    splitter.add(fv);
+                }
+            }
+            for (FVariable fv : fclass.discretePreVariables()) {
+                if (!fv.hasDependentStartValue()) {
+                    splitter.add(fv);
+                }
+            }
+            splitter.generate();
+        }
+    }
+    
+    public class DAETag_model_init_eval_dependent extends DAETag {
+        
+        public DAETag_model_init_eval_dependent(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_model_init_eval_dependent_parameters", myGenerator, fclass);
+        }
+        
+        public void generate(CodeStream str) {
+            CodePrinter p = ASTNode.printer_C;
+            String indent = "";
+            String next = p.indent(indent);
+            
+            CodeSplitter<FAbstractEquation> splitter = new CodeSplitter<FAbstractEquation>(p, str, next, 
+                    true, "model_init_eval_dependent_parameters", fclass.myOptions(), fclass.getParameterEquations().toArrayList()) {
+                @Override
+                public void genDecl(FAbstractEquation element) {
+                    p.printVarDecls(element, str, indent);
+                }
+                @Override
+                public void gen(FAbstractEquation element) {
+                    element.genAssignment_C(p, str, indent);
+                }
+            };
+            splitter.generate();
+        }
+    }
+    
+    public class DAETag_model_init_eval_dependent_variables extends DAETag {
+        
+        public DAETag_model_init_eval_dependent_variables(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_model_init_eval_dependent_variables", myGenerator, fclass);
+        }
+        
+        public void generate(CodeStream str) {
+            CodePrinter p = ASTNode.printer_C;
+            String indent = "";
+            String next = p.indent(indent);
+            
+            CodeSplitter<FVariable> splitter = new CodeSplitter<FVariable>(p, str, next, true,
+                    "model_init_eval_dependent_variables", fclass.myOptions()) {
+                @Override
+                public void genDecl(FVariable element) {
+                    p.printVarDecls(element, str, indent);
+                }
+                @Override
+                public void gen(FVariable element) {
+                    element.genStartValue_C(p, str, indent);
+                }
+            };
+            for (FVariable fv : fclass.initialParameters()) {
+                if (fv.hasParameterEquation() || fv.hasDependentStartValue()) {
+                    splitter.add(fv);
+                }
+            }
+            for (FVariable fv : fclass.variables()) {
+                if (fv.hasDependentStartValue()) {
+                    splitter.add(fv);
+                }
+            }
+            for (FVariable fv : fclass.discretePreVariables()) {
+                if (fv.hasDependentStartValue()) {
+                    splitter.add(fv);
+                }
+            }
+            splitter.generate();
+        }
+    }
+    
+    /**
+     * Generates mapping between runtime option names and value references for the 
+     * associated parameters.
+     */
+    /**
+     * C: runtime option name map
+     */
+    public class DAETag_C_runtime_option_map extends DAETag {
+        
+        public DAETag_C_runtime_option_map(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_runtime_option_map", myGenerator, fclass);
+        }
+
+        public void generate(CodeStream genPrinter) {
+            genPrinter.print("const char *fmi_runtime_options_map_names[] = {\n");
+            for (FVariable fv : fclass.runtimeOptionParameters())
+                genPrinter.println("    \"" + fv.name() + "\",");
+            genPrinter.print("    NULL\n};\n\n");
+
+            genPrinter.print("const int fmi_runtime_options_map_vrefs[] = {\n    ");
+            int i = 0;
+            for (FVariable fv : fclass.runtimeOptionParameters()) 
+                genPrinter.print(fv.valueReference() + ((++i % 10) == 0 ? ",\n    " : ", "));
+            genPrinter.print("0\n};\n\n");
+
+            genPrinter.print("const int fmi_runtime_options_map_length = " + fclass.numRuntimeOptionParameters() + ";");
+        }
+    }
+    
+    /**
+     * Generates calls to the destructors of all external objects.
+     */
+    public class DAETag_C_destruct_external_object extends DAETag {
+        
+        public DAETag_C_destruct_external_object(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_destruct_external_object", myGenerator, fclass);
+        }
+
+        public void generate(CodeStream str) {
+            CodePrinter p = ASTNode.printer_C;
+            for (FVariable eo : fclass.externalObjectVariables()) {
+                eo.genDestructorCall_C(p, str, p.indent(""));
+            }
+            for (FGlobalVariable eo : fclass.getFGlobalVariables()) {
+                eo.genDestructorCall_C(p, str, p.indent(""));
+            }
+        }
+    }
+    
+    /**
+     * Prints number of delay blocks.
+     */
+    public class DAETag_n_delays extends DAETag {
+        
+        public DAETag_n_delays(AbstractGenerator myGenerator, FClass fclass) {
+            super("n_delays", myGenerator, fclass);
+        }
+        
+        public void generate(CodeStream genPrinter) {
+            genPrinter.print(fclass.myDelayExps().size());
+        }
+    }
+    
+    /**
+     * Prints number of delay switches needed.
+     */
+    public class DAETag_numDelaySwitchingFunctions extends DAETag {
+        
+        public DAETag_numDelaySwitchingFunctions(AbstractGenerator myGenerator, FClass fclass) {
+            super("n_delay_switches", myGenerator, fclass);
+        }
+    
+        public void generate(CodeStream genPrinter) {
+            genPrinter.print(fclass.numDelaySwitches());
+        }
+    
+    }
+    
+    /**
+     * Prints number of spatialDistribution blocks.
+     */
+    public class DAETag_n_spatialdists extends DAETag {
+        
+        public DAETag_n_spatialdists(AbstractGenerator myGenerator, FClass fclass) {
+            super("n_spatialdists", myGenerator, fclass);
+        }
+        
+        public void generate(CodeStream genPrinter) {
+            genPrinter.print(fclass.mySpatialDistExps().size());
+        }
+    }
+    
+    /**
+     * Prints number of spatialDistribution switches needed.
+     */
+    public class DAETag_numSpatialDistSwitchingFunctions extends DAETag {
+        
+        public DAETag_numSpatialDistSwitchingFunctions(AbstractGenerator myGenerator, FClass fclass) {
+            super("n_spatialdist_switches", myGenerator, fclass);
+        }
+    
+        public void generate(CodeStream genPrinter) {
+            genPrinter.print(fclass.numSpatialDistSwitches());
+        }
+    
+    }
+    
+    /**
+     * Generates statements to initialize delay blocks.
+     */
+    public class DAETag_C_delay_init extends DAETag {
+        
+        public DAETag_C_delay_init(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_delay_init", myGenerator, fclass);
+        }
+        
+        public void generate(CodeStream genPrinter) {
+            CodePrinter p = ASTNode.printer_C;
+            String indent = p.indent("");
+            for (FDelayExp d : fclass.myDelayExps()) {
+                d.genInitVarDecls_C(p, genPrinter, indent);
+            }
+            for (FSpatialDistExp d : fclass.mySpatialDistExps()) {
+                d.genInitVarDecls_C(p, genPrinter, indent);
+            }
+            for (FDelayExp d : fclass.myDelayExps()) {
+                d.genInit_C(p, genPrinter, indent);
+            }
+            for (FSpatialDistExp d : fclass.mySpatialDistExps()) {
+                d.genInit_C(p, genPrinter, indent);
+            }
+        }
+    }
+    
+    /**
+     * Generates statements to sample delay blocks.
+     */
+    public class DAETag_C_delay_sample extends DAETag {
+        
+        public DAETag_C_delay_sample(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_delay_sample", myGenerator, fclass);
+        }
+        
+        public void generate(CodeStream genPrinter) {
+            CodePrinter p = ASTNode.printer_C;
+            String indent = p.indent("");
+            for (FDelayExp d : fclass.myDelayExps()) {
+                d.genSampleVarDecls_C(p, genPrinter, indent);
+            }
+            for (FSpatialDistExp d : fclass.mySpatialDistExps()) {
+                d.genSampleVarDecls_C(p, genPrinter, indent);
+            }
+            for (FDelayExp d : fclass.myDelayExps()) {
+                d.genSample_C(p, genPrinter, indent);
+            }
+            for (FSpatialDistExp d : fclass.mySpatialDistExps()) {
+                d.genSample_C(p, genPrinter, indent);
+            }
+        }
+    }
+    
+    /**
+     * Returns the string denoting the beginning of the copyright blurb.
+     */
+    protected String startOfBlurb() { return "/*"; }
+    
+    /**
+     * Constructor.
+     * 
+     * @param expPrinter Printer object used to generate code for expressions.
+     * @param escapeCharacter Escape characters used to decode tags.
+     * @param fclass An FClass object used as a basis for the code generation.
+     */
+    public CGenerator(Printer expPrinter, char escapeCharacter,
+            FClass fclass) {
+        super(expPrinter, escapeCharacter, fclass);
+    }
+    
+    
+    
+    public class ECETag_external_includes extends ExternalCEvalTag {
+        public ECETag_external_includes(AbstractGenerator myGenerator, FClass fClass) {
+            super("ECE_external_includes", myGenerator, fClass);
+        }
+        
+        @Override
+        public void generate(CodePrinter p, CodeStream str, String indent, FExternalStmt ext,
+                CodeGenContext cgc, Map<String,String> tempMap) {
+            Set<String> incs = new LinkedHashSet<String>();
+            ext.externalDependencies(incs, null, null, null);
+            for (String inc : incs) {
+                str.println(inc);
+            }
+        }
+    }
+    
+    public class ECETag_record_definitions extends ExternalCEvalTag {
+        public ECETag_record_definitions(AbstractGenerator myGenerator, FClass fClass) {
+            super("ECE_record_definitions", myGenerator, fClass);
+        }
+        
+        @Override
+        public void generate(CodePrinter p, CodeStream str, String indent, FExternalStmt ext,
+                CodeGenContext cgc, Map<String,String> tempMap) {
+            for (FType rec : ext.usedTypes().values()) {
+                if (rec.isRecord()) {
+                    p.print(rec, str, indent);
+                }
+            }
+        }
+    }
+    
+    public class ECETag_decl extends ExternalCEvalTag {
+        public ECETag_decl(AbstractGenerator myGenerator, FClass fClass) {
+            super("ECE_decl", myGenerator, fClass);
+        }
+        
+        @Override
+        public void generate(CodePrinter p, CodeStream str, String indent, FExternalStmt ext,
+                CodeGenContext cgc, Map<String,String> tempMap) {
+            indent = p.indent(indent);
+            TypePrinter_C tp = new DeclPrinter_ECE(p, str, tempMap, cgc);
+            for (ExternalArgument cvd : ext.externalObjectsToSerialize()) {
+                 tp.reset(cvd.name_C(), null, cvd.type().size(), false, indent);
+                 tp.print(cvd.type());
+            }
+        }
+    }
+    
+    public class ECETag_free extends ExternalCEvalTag {
+        public ECETag_free(AbstractGenerator myGenerator, FClass fClass) {
+            super("ECE_free", myGenerator, fClass);
+        }
+        
+        @Override
+        public void generate(CodePrinter p, CodeStream str, String indent, FExternalStmt ext,
+                CodeGenContext cgc, Map<String,String> tempMap) {
+            indent = p.indent(indent);
+            TypePrinter_C tp = new FreePrinter_ECE(p, str, tempMap, cgc);
+            for (ExternalArgument cvd : ext.externalObjectsToSerialize()) {
+                 tp.reset(cvd.name_C(), null, cvd.type().size(), false, indent);
+                 tp.printExt((FExternalObjectType)cvd.type());
+            }
+        }
+    }
+    
+    public class ECETag_setup_decl extends ExternalCEvalTag {
+        public ECETag_setup_decl(AbstractGenerator myGenerator, FClass fClass) {
+            super("ECE_setup_decl", myGenerator, fClass);
+        }
+        
+        @Override
+        public void generate(CodePrinter p, CodeStream str, String indent, FExternalStmt ext,
+                CodeGenContext cgc, Map<String,String> tempMap) {
+            indent = p.indent(indent);
+            TypePrinter_C tp = new DeclPrinter_ECE(p, str, tempMap, cgc);
+            ext.genSerializeComps_C(tp, indent, cgc, tempMap, ext.externalObjectsToSerialize());
+        }
+    }
+    
+    public class ECETag_setup_init extends ExternalCEvalTag {
+        public ECETag_setup_init(AbstractGenerator myGenerator, FClass fClass) {
+            super("ECE_setup_init", myGenerator, fClass);
+        }
+        
+        @Override
+        public void generate(CodePrinter p, CodeStream str, String indent, FExternalStmt ext,
+                CodeGenContext cgc, Map<String,String> tempMap) {
+            indent = p.indent(indent);
+            TypePrinter_C tp = new InitPrinter_ECE(p, str, tempMap, cgc);
+            ext.genSerialize_C(tp, indent, cgc, tempMap, ext.externalObjectsToSerialize());
+        }
+    }
+    
+    public class ECETag_setup_free extends ExternalCEvalTag {
+        public ECETag_setup_free(AbstractGenerator myGenerator, FClass fClass) {
+            super("ECE_setup_free", myGenerator, fClass);
+        }
+        
+        @Override
+        public void generate(CodePrinter p, CodeStream str, String indent, FExternalStmt ext,
+                CodeGenContext cgc, Map<String,String> tempMap) {
+            indent = p.indent(indent);
+            TypePrinter_C tp = new FreePrinter_ECE(p, str, tempMap, cgc);
+            ext.genSerializeComps_C(tp, indent, cgc, tempMap, ext.externalObjectsToSerialize());
+        }
+    }
+    
+    public class ECETag_calc_decl extends ExternalCEvalTag {
+        public ECETag_calc_decl(AbstractGenerator myGenerator, FClass fClass) {
+            super("ECE_calc_decl", myGenerator, fClass);
+        }
+        
+        @Override
+        public void generate(CodePrinter p, CodeStream str, String indent, FExternalStmt ext,
+                CodeGenContext cgc, Map<String,String> tempMap) {
+            indent = p.indent(indent);
+            ext.setExternalArgumentAliases(cgc);
+            TypePrinter_C tp = new DeclPrinter_ECE(p, str, tempMap, cgc);
+            ext.genSerialize_C(tp, indent, cgc, tempMap, ext.functionArgsToSerialize());
+            ext.genVarDecls_C(p, str, indent);
+        }
+    }
+    
+    public class ECETag_calc_init extends ExternalCEvalTag {
+        public ECETag_calc_init(AbstractGenerator myGenerator, FClass fClass) {
+            super("ECE_calc_init", myGenerator, fClass);
+        }
+        
+        @Override
+        public void generate(CodePrinter p, CodeStream str, String indent, FExternalStmt ext,
+                CodeGenContext cgc, Map<String,String> tempMap) {
+            indent = p.indent(indent);
+            ext.setExternalArgumentAliases(cgc);
+            TypePrinter_C tp = new InitPrinter_ECE(p, str, tempMap, cgc);
+            ext.genSerialize_C(tp, indent, cgc, tempMap, ext.functionArgsToSerialize());
+        }
+    }
+    
+    public class ECETag_calc extends ExternalCEvalTag {
+        public ECETag_calc(AbstractGenerator myGenerator, FClass fClass) {
+            super("ECE_calc", myGenerator, fClass);
+        }
+        
+        @Override
+        public void generate(CodePrinter p, CodeStream str, String indent, FExternalStmt ext,
+                CodeGenContext cgc, Map<String,String> tempMap) {
+            indent = p.indent(p.indent(indent));
+            ext.setExternalArgumentAliases(cgc);
+            ext.genSerializeCalc_C(p, str, indent, cgc, tempMap);
+        }
+    }
+    
+    public class ECETag_calc_free extends ExternalCEvalTag {
+        public ECETag_calc_free(AbstractGenerator myGenerator, FClass fClass) {
+            super("ECE_calc_free", myGenerator, fClass);
+        }
+        
+        @Override
+        public void generate(CodePrinter p, CodeStream str, String indent, FExternalStmt ext,
+                CodeGenContext cgc, Map<String,String> tempMap) {
+            indent = p.indent(indent);
+            TypePrinter_C tp = new FreePrinter_ECE(p, str, tempMap, cgc);
+            ext.setExternalArgumentAliases(cgc);
+            ext.genSerialize_C(tp, indent, cgc, tempMap, ext.functionArgsToSerialize());
+        }
+    }
+    
+    /**
+     * C: Add the DAE block functions to the JMI struct
+     */
+    public class DAETag_C_dynamic_state_add_call extends DAETag {
+
+        public DAETag_C_dynamic_state_add_call(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_dynamic_state_add_call", myGenerator, fclass);
+            addOptions("generate_ode");
+        }
+
+        public void generate(CodeStream genPrinter) {
+            CodePrinter p = ASTNode.printer_C;
+            fclass.getDynamicStateManager().genDynamicStateAddCall_C(p, genPrinter, p.indent(""));
+        }
+    }
+
+    /**
+     * C: C functions for the DAE BLT block residuals
+     */
+    public class DAETag_C_dynamic_state_coefficients extends DAETag {
+        
+        public DAETag_C_dynamic_state_coefficients(AbstractGenerator myGenerator, FClass fclass) {
+            super("C_dynamic_state_coefficients", myGenerator, fclass);
+            addOptions("generate_ode");
+        }
+        
+        public void generate(CodeStream genPrinter) {
+            CodePrinter p = ASTNode.printer_C;
+            fclass.getDynamicStateManager().genDynamicStateCoefficients_C(p, genPrinter, "");
+        }
+    }
+
+}
+
+public class ExternCEvalGenerator extends CGenerator {
+    public ExternCEvalGenerator(Printer expPrinter, char escapeCharacter, FClass fclass,
+            FExternalStmt ext, CodeGenContext cgc, Map<String,String> tempMap) {
+        super(expPrinter, escapeCharacter, fclass);
+        for (AbstractTag t : tagMap.values())
+            if (t instanceof ExternalCEvalTag)
+                ((ExternalCEvalTag)t).setExt(ext, cgc, tempMap);
+    }
+}

@@ -1,0 +1,6 @@
+<design>
+
+<package name="temp" package="mod.recursion.rec" subpackages="include"/>
+<package name="client" package="mod.recursion.client" depends="temp"/>
+
+</design>

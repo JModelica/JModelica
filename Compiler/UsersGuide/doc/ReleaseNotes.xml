@@ -1,0 +1,3393 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<appendix version="5.0" xmlns="http://docbook.org/ns/docbook"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xmlns:xs="http://www.w3.org/2001/XMLSchema"
+          xmlns:xlink="http://www.w3.org/1999/xlink"
+          xmlns:xi="http://www.w3.org/2001/XInclude"
+          xmlns:svg="http://www.w3.org/2000/svg"
+          xmlns:m="http://www.w3.org/1998/Math/MathML"
+          xmlns:html="http://www.w3.org/1999/xhtml"
+          xmlns:db="http://docbook.org/ns/docbook">
+  <title>Release Notes</title>
+
+  <section>
+    <title>Release notes for JModelica.org version 2.14</title>
+        <section>
+            <title>Important information</title>
+            <para>Note, with the next release the Python distribution bundled with JModelica is planned to be updated from version 2.7 to version 3.x.</para>
+        </section>
+    <section><title>Compiler Changes</title>
+    <para>Important changes to the compiler:</para>
+    <itemizedlist>
+        <listitem>Generate one field per option in OptionRegistry. Renamed OptionRegistry to AbstractOptionRegistry, renamed OptionsAggregated to OptionRegistry.</listitem>
+        <listitem>Switch to "java.nio.file.Path" instead of "File" or "String"s representing paths in most places. "Path" is more thought-through and more powerful, which will allow to implement advanced featuers in the future. Note that while java.nio allows to access non-File resources with the same API, the internal workings of JModelica currently make restrictions on only supporting file accesses. </listitem>
+        <listitem>Added new option time_events, allows time events to be generated, enabled by default. Deprecated option relational_time_events. </listitem>
+        <listitem>SrcDot now has SrcNamedAccess instead of SrcAccess as children.</listitem>
+        <listitem>Dependency to beaver-rt.jar is now recorded in the jar manifest which means it is no longer necessary to add it to the classpath when interfacing directly with the compiler jars.</listitem>
+    </itemizedlist>
+    </section>
+            <section><title>Python Packages Improvements</title>
+            <para>Important changes to Python packages:</para>
+            <para>The PyFMI version has been updated from 2.5 to 2.5.3, this infer the following changes:</para>
+            <itemizedlist>
+                <listitem>Fixed wrong default value for FMUModelME1Extended.</listitem>
+                <listitem>Improved relative imports of Assimulo dependent classes.</listitem>
+                <listitem>Fixed issue with unicode symbols in result files.</listitem>
+                <listitem>Fixed a number of encode/decoding issues for Python3.</listitem>
+                <listitem>Forced no copy if the provided array is already correct, minor 
+              performance improvement.</listitem>
+                <listitem>Fixed issue with corrupt result files after failed simulations.</listitem>
+            </itemizedlist>
+            </section>
+  </section>
+
+  <section>
+    <title>Release notes for JModelica.org version 2.12</title>    
+    <section><title>Compiler Changes</title>
+    <para>A major change in this release is the update of Java version used into OpenJDK 11.</para>
+    <para>Important changes to the compiler:</para>
+    <itemizedlist>
+        <listitem>Added support for unspecified enumerations.</listitem>
+        <listitem>Turned off loop unrolling in functions to increase performance.</listitem>
+        <listitem>Improved array initialization for primitive arrays in global constants.</listitem>
+        <listitem>Added option for controlling maximum allowed size of dynamic state sets. Changed default from 8 to 10.</listitem>
+    </itemizedlist>
+    </section>
+  </section>
+  
+    <section>
+    <title>Release notes for JModelica.org version 2.10</title>    
+    <section><title>Compiler Changes</title>
+    <para>Important changes to the compiler:</para>
+    <itemizedlist>
+        <listitem>Fixed a bug that resulted in variables not being re-initialized in certain cases by adding writeback
+            of reinitialization in block residual functions.</listitem>
+    </itemizedlist>
+    </section>
+    </section>
+
+    <section>
+    <title>Release notes for JModelica.org version 2.8</title>    
+    <para>For this release there are some minor performance and debug improvements</para>
+    </section>
+
+    <section>
+    <title>Release notes for JModelica.org version 2.6.1</title>    
+    
+    <section><title>Compiler Changes</title>
+    <para>Important changes to the compiler:</para>
+    <itemizedlist>
+        <listitem>Fixed lookup of constraining class of redeclared class.</listitem>
+    </itemizedlist>
+    </section>
+    </section>
+    
+    <section>
+    <title>Release notes for JModelica.org version 2.6</title>    
+    
+    <section><title>Compiler Changes</title>
+    <para>Important changes to the compiler:</para>
+    <itemizedlist>
+        <listitem>Fixed type checking of array sizes for elements in arrays of records.</listitem>
+        <listitem>Made sure to release the package.order file after reading.</listitem>
+    </itemizedlist>
+    </section>
+    </section>
+    
+    <section>
+    <title>Release notes for JModelica.org version 2.5</title>    
+    <section><title>Python Packages Improvements</title>
+    <para>Important changes to Python packages:</para>
+    <itemizedlist>
+        <listitem>Fixed issue with reusing the PyFMI computed FD Jacobian.</listitem>
+    </itemizedlist>
+    </section>
+    
+    <section><title>Compiler Changes</title>
+    <para>Important changes to the compiler:</para>
+    <itemizedlist>
+        <listitem>Updated the GUID calculation in FMUs to only be dependent on the generated model description XML.</listitem>
+        <listitem>Updated calculation order of start values and dependent parameters to reduce number of evaluations.</listitem>
+        <listitem>Fixed that binding expression splitting doesn't check bounds.</listitem>
+        <listitem>Don't allow any inlining of equations in when loops.</listitem>
+        <listitem>Fixed exception from specific combination of record with array of unknown size in if expression in binding expression.</listitem>
+        <listitem>Enabled evaluation of non-literal expressions in annotations.</listitem>
+    </itemizedlist>
+    </section>
+    </section>
+    
+    <section>
+    <title>Release notes for JModelica.org version 2.4</title>    
+    <section><title>Runtime Changes</title>
+    <para>Important changes to Runtime:</para>
+    <itemizedlist>
+        <listitem>Improved the runtime logging framework due to performance issues with specific models.</listitem>
+    </itemizedlist>
+    </section>
+    
+    <section><title>Compiler Changes</title>
+    <para>Important changes to the compiler:</para>
+    <itemizedlist>
+        <listitem>Minor improvements of compilation and simulation performance.</listitem>
+        <listitem>loadResource on directories now always leads to compile time evaluation of path.</listitem>
+    </itemizedlist>
+    </section>
+    </section>
+
+    <section>
+    <title>Release notes for JModelica.org version 2.3</title>    
+    <section><title>Compiler Changes</title>
+    <para>Important changes to the compiler:</para>
+    <itemizedlist>
+        <listitem>Support for initial parameter external objects.</listitem>
+        <listitem>Changed error check of arguments when compiling from command line to allow empty library argument if a modelica path is supplied.</listitem>
+    </itemizedlist>
+    </section>
+    <section><title>Python Packages Improvements</title>
+    <para>Important improvements to our Python packages:</para>
+    <itemizedlist>
+        <listitem>Fixed issue with getting time varying variables (sometimes wrong variables were returned).</listitem>
+        <listitem>Added functionality to set enumerations with strings.</listitem>
+        <listitem>Improved input handling for FMI2.</listitem>
+    </itemizedlist>
+    </section>
+  </section>
+  <section>
+    <title>Release notes for JModelica.org version 2.2</title>
+    <section><title>Highlights</title>
+    <itemizedlist>
+		<listitem>Support for 64-bit Python has been added together with
+        new and updated Python packages, see <xref linkend="Release22Python"/>.
+        This enables simulation of 64-bit FMUs with PyFMI.</listitem>
+        <listitem>The bundled gcc C-compiler is now updated to gcc-tdm 5.1.0 which
+        enables compilation of 64 bit FMUs.</listitem>
+        <listitem>Full string support</listitem>
+        <listitem>Changed the default FMI version when compiling FMUs from Python to FMI 2.0 instead of FMI 1.0.</listitem>
+        <listitem>Changed default file storing method to binary format when simulating FMUs with PyFMI in Python.</listitem>
+        <listitem>Achieved significant speedup in some models by adding a new memory allocation algorithm.</listitem>
+        <listitem>There is now support for OPC communication through the
+        bundled Python package OpenOPC together with <emphasis>Graybox OPC
+        Automation Wrapper</emphasis>.</listitem>
+    </itemizedlist>
+    </section>
+    
+    
+    <section><title>Compiler Changes</title>
+    <para>Important changes to the compiler:</para>
+    <itemizedlist>
+        <listitem>Removed the experimental directional derivative generation feature.</listitem>
+        <listitem>Added option for disabling external evaluation during variability propagation</listitem>
+    </itemizedlist>
+    </section>
+    
+    <section xml:id="Release22Python">
+    <title>Python distributions</title>
+    <para>With this release there are now two bundled Python interpreters, one
+    for 32 bit mode and one for 64 bit mode. In addition, there are now many
+    more Python packages included and previously bundled packages are updated
+    to newer versions. Among the new packages we have: <emphasis>XLwings, openpyxl, 
+    freeopcua, jupyter, SALib, natsort, pyserial, pyro</emphasis> and 
+    <emphasis>coverage.</emphasis> </para>
+    </section>
+  </section>
+  <section>
+    <title>Release notes for JModelica.org version 2.1</title>
+	<section><title>Highlights</title>
+	<para> One of the focus areas for this release has been performance. 
+	The following are the main improvements:
+	<itemizedlist>
+		<listitem>With this release compiler performance has been improved
+	with up to 30% in compilation time and 20% in memory reduction
+	for some benchmark models. </listitem>
+	<listitem> Support for the sparse solver SuperLU is added for simulation of
+	FMI2 ME FMUs in PyFMI.</listitem>
+	<listitem> A sparse solver has been added to solve large linear blocks. </listitem>
+	</itemizedlist>
+	</para>
+	</section>
+	</section>
+  <section>
+    <title>Release notes for JModelica.org version 2.0</title>
+
+    <section>
+      <title>Highlights</title>
+
+      <para>For this release, focus has been on Modelica/MSL compliance. All
+      example models in the bundled MSL version simulate correctly with this
+      release, with marginal additions, see <xref linkend="MSL20"/>. There
+      is also support for IBPSA, see <xref linkend="IBPSA20"/></para>
+      
+      <para>A novel co-simulation master is available in PyFMI. It implements
+      a number of master algorithms, see <citation>And2016</citation> for
+      details.</para>
+
+    </section>
+
+    <section>
+      <title>Compiler</title>
+
+      <section><title>Compliance</title>
+        <section xml:id="MSL20"><title>Modelica Standard Library (MSL)</title>
+        <para>For this release, the Modelica Standard Library (MSL) version
+        3.2.2 build 3 with the following patches applied is used:
+        <itemizedlist>
+            <listitem>To the model <emphasis>Modelica.Blocks.Examples.NoiseExamples.ActuatorWithNoise</emphasis> 
+                defined in Modelica/Blocks/package.mo a StateSelect.always is added for
+                Controller.y1. With this patch dynamic state selection is avoided. See also
+                the reported <link xlink:href="https://github.com/modelica/Modelica/issues/2189">issue 2189</link>
+                 on the GitHub repository for Modelica Association.
+            </listitem>
+            <listitem> The model <emphasis>Modelica.Fluid.Examples.Tanks.TanksWithOverflow</emphasis> does not
+                initialize with the original parametrization in MSL 3.2.2 build 3 due to variable bounds not being 
+                respected, see <link xlink:href="https://github.com/modelica/Modelica/issues/2060">issue 2060</link>
+                on the GitHub repository for Modelica Association. In the patch additional fluid flows through 
+                an overflow pipe if the level of the upper tank exceeds 6 meters instead of 10 meters.
+            </listitem>
+            <listitem> The state selection in <emphasis>Modelica.Magnetic.FluxTubes.Examples.Hysteresis.HysteresisModelComparison</emphasis>
+                is patched to improve the numerical robustness, see <link xlink:href="https://github.com/modelica/Modelica/issues/2248">issue 2248</link>
+                on the GitHub repository for Modelica Association.
+            </listitem>
+            <listitem> In <emphasis>Modelica.Fluid.Examples.TraceSubstances.RoomCO2WithControls</emphasis> the
+                experiment tolerance is tightened to 1e-007 instead of 1e-006 to avoid chattering.
+            </listitem>
+            <listitem> In <emphasis>Modelica.Fluid.Examples.InverseParameterization</emphasis> pump.m_flow_start
+                is set to 0.5 instead of 0.0. With this change the correct branch is chosen in the actualStream operator,
+                see <link xlink:href="https://github.com/modelica/Modelica/issues/2063">issue 2063</link> on the GitHub
+                repository for Modelica Association.
+            </listitem>            
+        </itemizedlist>
+        With the patches listed above applied, all example models in version 3.2.2 build 3 of MSL simulate
+        correctly with JModelica.org 2.0. The results can be seen in the
+        compliance reports for simulation and check on the JModelica.org <link
+        xlink:href="http://jmodelica.org/binary">download site</link>. 
+        </para>
+        
+        <para>The trunk version of MSL has some additional example models
+        compared to version 3.2.2. build 3. Compliance reports for trunk MSL
+        can be found on the JModelica.org public <link
+        xlink:href="http://jmodelica.org:8080">Jenkins</link>, using trunk
+        version of JModelica.org.</para>
+        </section>  
+      <section xml:id="IBPSA20"><title>IBPSA</title>
+      <para>With JModelica.org 2.0 there is support for IBPSA, a Modelica library for 
+      building and disctrict energy systems. More information can be found on the
+      <link xlink:href="https://github.com/ibpsa/modelica-ibpsa">
+      Modelica IBPSA library GitHub website</link>.
+      
+      </para>
+      </section>
+    </section>
+    <section><title>Simulation</title>
+    <para>For JModelica.org 2.0 improvements have been made for numerical
+    robustness during initialization and simulation, 
+    especially with regards to event handling.</para>
+    </section>
+
+    <section><title>A novel co-simulation algorithm</title>
+
+      <para>A novel co-simulation master algorithm is now available in the
+      Python package PyFMI. The master algorithm supports FMUs 2.0 for
+      co-simulation. Features of the master algorithm include a parallel
+      Jacobi approach as well as a step-size controlled algorithm based on
+      Richardson extrapolation. The theory and implementation of the software
+      is described in <citation>And2016</citation>. </para>
+    </section>
+    <section><title>HTML Diagnostics</title>
+    <para>Improved HTML diagnostics with formatting and interactive functions.</para>
+    </section>
+    
+  </section>
+</section>
+  <section>
+    <title>Release notes for JModelica.org version 1.17</title>
+
+    <section>
+      <title>Highlights</title>
+
+      <para>For this release, all focus has been on Modelica/MSL compliance.
+      All example models in the bundled MSL version both check and simulate
+      correctly with this release.</para>
+    </section>
+
+    <section>
+      <title>Compiler</title>
+
+      <section>
+        <title>Compliance</title>
+
+        <para>For this release, the Modelica Standard Library (MSL) version
+        3.2.1 build 4 is used with some additional handpicked revisions from
+        trunk. All example models in this version of MSL simulate correctly
+        with the JModelica.org 1.17 release. The results can be seen in the
+        compliance reports for simulation and check on the JModelica.org <link
+        xlink:href="http://jmodelica.org/binary">download site</link>.</para>
+
+        <para>The trunk version of MSL has some additional example models
+        compared to version 3.2.1. build 4. Compliance reports for trunk MSL
+        can be found on the JModelica.org public <link
+        xlink:href="http://jmodelica.org:8080">Jenkins</link>, using trunk
+        version of JModelica.org.</para>
+      </section>
+    </section>
+  </section>
+
+  <section>
+    <title>Release notes for JModelica.org version 1.16</title>
+
+    <section>
+      <title>Highlights</title>
+
+      <para><itemizedlist>
+          <listitem>
+            <para>Strong focus on Modelica/MSL compliance</para>
+          </listitem>
+
+          <listitem>
+            <para>A number of improvements to the CasADi tool chain for
+            optimization</para>
+          </listitem>
+        </itemizedlist></para>
+    </section>
+
+    <section>
+      <title>Compiler</title>
+
+      <section>
+        <title>Compliance</title>
+
+        <para>For this release, there has been a strong emphasis on improving
+        Modelica/MSL compliance. In several MSL subpackages almost all example
+        models now simulate with a correct result. Complete compliance reports
+        can be found on JModelica.org public <link
+        xlink:href="http://jmodelica.org:8080">Jenkins</link>.</para>
+
+        <para>Especially, compliance improvements have been made in the
+        following subpackages:</para>
+
+        <para><itemizedlist>
+            <listitem>
+              <para>Modelica.Mechanics.MultiBody</para>
+            </listitem>
+
+            <listitem>
+              <para>Modelica.Blocks</para>
+            </listitem>
+
+            <listitem>
+              <para>Modelica.Electrical.Analog</para>
+            </listitem>
+
+            <listitem>
+              <para>Modelica.Electrical.Digital</para>
+            </listitem>
+
+            <listitem>
+              <para>Modelica.Electrical.QuasiStationary</para>
+            </listitem>
+
+            <listitem>
+              <para>Modelica.Electrical.Spice3</para>
+            </listitem>
+
+            <listitem>
+              <para>Modelica.Magnetic</para>
+            </listitem>
+
+            <listitem>
+              <para>Modelica.Mechanics.Rotational</para>
+            </listitem>
+
+            <listitem>
+              <para>Modelica.Media</para>
+            </listitem>
+
+            <listitem>
+              <para>Modelica.Thermal</para>
+            </listitem>
+
+            <listitem>
+              <para>Modelica.Math</para>
+            </listitem>
+          </itemizedlist></para>
+
+        <para>Further, the following operators are now supported:</para>
+
+        <itemizedlist>
+          <listitem>
+            <para>delay</para>
+          </listitem>
+
+          <listitem>
+            <para>spatialDistribution</para>
+          </listitem>
+        </itemizedlist>
+      </section>
+
+      <section>
+        <title>Support for dynamic state select</title>
+
+        <para>JModelica.org now does dynamic state selection, when
+        necessary.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>Optimization</title>
+
+      <para>Several additions and improvements in the CasADi tool chain for
+      optimization have been made. Among the most important are:</para>
+
+      <itemizedlist>
+        <listitem>
+          <para>Warm starting - descretize an optimization problem once, solve
+          it multiple times with different parameters, inputs, and initial
+          guesses</para>
+        </listitem>
+
+        <listitem>
+          <para>Classes for Model Predictive Control and Moving Horizon
+          Estimation</para>
+        </listitem>
+
+        <listitem>
+          <para>Back tracking from discretized problem to original. Trace back
+          residuals, dual variables, and troublesome Jacobian entries to the
+          original model's equations and variables</para>
+        </listitem>
+
+        <listitem>
+          <para>Possible to inspect equation scaling</para>
+        </listitem>
+
+        <listitem>
+          <para>Checkpointing option to reduce discretization work</para>
+        </listitem>
+      </itemizedlist>
+    </section>
+  </section>
+
+  <section>
+    <title>Release notes for JModelica.org version 1.15</title>
+
+    <section>
+      <title>Highlights</title>
+
+      <para><itemizedlist>
+          <listitem>
+            <para>FMI export supporting FMI 2.0</para>
+          </listitem>
+
+          <listitem>
+            <para>FMI import supporting FMI 2.0 with PyFMI</para>
+          </listitem>
+
+          <listitem>
+            <para>Improved MSL compliance</para>
+          </listitem>
+
+          <listitem>
+            <para>Support for over-constrained initialization systems</para>
+          </listitem>
+
+          <listitem>
+            <para>Dynamic optimization framework based on CasADi 2.0</para>
+          </listitem>
+
+          <listitem>
+            <para>Improved numerical algorithms in FMU runtime</para>
+          </listitem>
+        </itemizedlist></para>
+    </section>
+
+    <section>
+      <title>Compiler</title>
+
+      <section>
+        <title>Compliance</title>
+
+        <para>Many bug fixes in the compiler has resulted in greatly increased
+        MSL support. Most or all of the tests and examples for the following
+        MSL sub-libraries now compile and simulate successfully (complete
+        compliance information for MSL can be found on the JModelica.org
+        website, www.jmodelica.org):</para>
+
+        <para><itemizedlist>
+            <listitem>
+              <para>Blocks</para>
+            </listitem>
+
+            <listitem>
+              <para>ComplexBlocks</para>
+            </listitem>
+
+            <listitem>
+              <para>Electrical.Analog</para>
+            </listitem>
+
+            <listitem>
+              <para>Electrical.Machines</para>
+            </listitem>
+
+            <listitem>
+              <para>Electrical.MultiPhase</para>
+            </listitem>
+
+            <listitem>
+              <para>Electrical.QuasiStationary</para>
+            </listitem>
+
+            <listitem>
+              <para>Electrical.Spice3</para>
+            </listitem>
+
+            <listitem>
+              <para>Magnetic</para>
+            </listitem>
+
+            <listitem>
+              <para>Mechanics.Rotational</para>
+            </listitem>
+
+            <listitem>
+              <para>Mechanics.Translational</para>
+            </listitem>
+
+            <listitem>
+              <para>Media</para>
+            </listitem>
+
+            <listitem>
+              <para>Thermal</para>
+            </listitem>
+
+            <listitem>
+              <para>Utilities</para>
+            </listitem>
+          </itemizedlist></para>
+      </section>
+
+      <section>
+        <title>Support for over-constrained initialization systems</title>
+
+        <para>Automatic balancing of over-constrained initial systems is now
+        implemented. This means that the compiler automatically checks the
+        consistency of the initial system and automatically removes redundant
+        initial equations.</para>
+      </section>
+
+      <section>
+        <title>FMU 2.0 export</title>
+
+        <para>Support for export of FMUs according to the the recently
+        released FMI 2.0 specification, both for Model Exchange and
+        Co-Simulation, has been added.</para>
+      </section>
+
+      <section>
+        <title>Improved numerical algorithms in FMU runtime</title>
+
+        <para>Numerous improvements has been made to the FMU runtime code.
+        Specific improvements include solving one-dimensional non-linear
+        systems more robustly.</para>
+      </section>
+
+      <section>
+        <title>CasADi 2.0 support in Optimization</title>
+
+        <para>The CasADi based optimization tool chain has been updated to
+        work with CasADi 1.9 and later (which is not backwards compatible with
+        CasADi 1.8 and earlier). This allows exploiting new CasADi
+        improvements such as bug fixes, pluggable solvers, and improved
+        documentation. The version of CasADi that is included in JModelica.org
+        is now 2.0.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>Simulation</title>
+
+      <para>Support for the recently released FMI 2.0 specification has been
+      included in PyFMI. FMUs following FMI 2.0 can now be loaded and
+      simulated just as easily as FMUs following FMI 1.0.</para>
+    </section>
+  </section>
+
+  <section>
+    <title>Release notes for JModelica.org version 1.14</title>
+
+    <section>
+      <title>Highlights</title>
+
+      <para><itemizedlist>
+          <listitem>
+            <para>All models in the Modelica Standard Library, except
+            Modelica.Fluid and those using operator delay() or function
+            pointers, pass error check</para>
+          </listitem>
+
+          <listitem>
+            <para>FMI export supporting FMI 2.0RC2</para>
+          </listitem>
+
+          <listitem>
+            <para>FMI import supporting FMI 2.0RC2 with PyFMI</para>
+          </listitem>
+
+          <listitem>
+            <para>Improved error messages from the compiler</para>
+          </listitem>
+
+          <listitem>
+            <para>Various improvements and extensions to the CasADi-based
+            optimization toolchain</para>
+          </listitem>
+        </itemizedlist></para>
+    </section>
+
+    <section>
+      <title>Compiler</title>
+
+      <section>
+        <title>Compliance</title>
+
+        <para>A lot of work with compliance has resulted in that almost all
+        models in the Modelica Standard Library now pass error check.
+        Exceptions are models in Modelica.Fluid and those using the operator
+        delay() or function pointers. In particular, the following
+        improvements have been made:</para>
+
+        <para><itemizedlist>
+            <listitem>
+              <para>Support for arrays indexed with enumerations or
+              Booleans</para>
+            </listitem>
+
+            <listitem>
+              <para>Support for overloaded operators and the Complex
+              type</para>
+            </listitem>
+
+            <listitem>
+              <para>Improved error messages</para>
+            </listitem>
+
+            <listitem>
+              <para>Support for structural parameters depending on external
+              C/Fortran code</para>
+            </listitem>
+
+            <listitem>
+              <para>Support for index reduction of optimization classes</para>
+            </listitem>
+
+            <listitem>
+              <para>Improved modularization and extension points in the
+              compiler</para>
+            </listitem>
+
+            <listitem>
+              <para>Support for index reduction of optimization classes</para>
+            </listitem>
+
+            <listitem>
+              <para>Many bug fixes to improve Modelica compliance</para>
+            </listitem>
+          </itemizedlist></para>
+      </section>
+
+      <section>
+        <title>New compiler API</title>
+
+        <para>A new Java API for calling the compiler through a separate
+        process has been added.</para>
+      </section>
+
+      <section>
+        <title>FMI 2.0 RC2 export</title>
+
+        <para>Support for export of FMUs that are compliant with FMI 2.0 RC2
+        has been added.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>Simulation</title>
+
+      <para>Support for import and simulation of 2.0 RC2 FMUs with the Python
+      package PyFMI.</para>
+    </section>
+
+    <section>
+      <title>Optimization</title>
+
+      <para>The following improvements have been made to the CasADi-based
+      collocation algorithm:</para>
+
+      <itemizedlist>
+        <listitem>
+          <para>More efficient memory usage and code generation for function
+          evaluations</para>
+        </listitem>
+
+        <listitem>
+          <para>Interface added to WORHP, which serves as an alternative to
+          IPOPT</para>
+        </listitem>
+
+        <listitem>
+          <para>More general treatment of blocking factors. In particular it
+          is now possible to penalize and constrain the discontinuity
+          jumps.</para>
+        </listitem>
+      </itemizedlist>
+    </section>
+  </section>
+
+  <section>
+    <title>Release notes for JModelica.org version 1.13</title>
+
+    <section>
+      <title>Highlights</title>
+
+      <para><itemizedlist>
+          <listitem>
+            <para>FMI 2.0 Export, according to RC1</para>
+          </listitem>
+
+          <listitem>
+            <para>New CasADi tool chain for optimization</para>
+          </listitem>
+
+          <listitem>
+            <para>In-lined switches</para>
+          </listitem>
+
+          <listitem>
+            <para>Improved compliance</para>
+          </listitem>
+        </itemizedlist></para>
+    </section>
+
+    <section>
+      <title>Compilers</title>
+
+      <section>
+        <title>FMI 2.0 RC1 export</title>
+
+        <para>FMI 2.0 export according to RC1 is supported. There are some
+        limitations, summarized in the list below.</para>
+
+        <para><itemizedlist>
+            <listitem>
+              <para>Support for dependencies but not for dependenciesKind in
+              the XML tag ModelStructure</para>
+            </listitem>
+
+            <listitem>
+              <para>Support for directional derivative but known to have
+              limitations in some cases</para>
+            </listitem>
+
+            <listitem>
+              <para>No support for strings and running asynchronuously</para>
+            </listitem>
+
+            <listitem>
+              <para>No support for FMU states (set, get and serialize)</para>
+            </listitem>
+          </itemizedlist></para>
+      </section>
+
+      <section>
+        <title>Compliance</title>
+
+        <para><itemizedlist>
+            <listitem>
+              <para>Improved support for expandable connectors</para>
+            </listitem>
+
+            <listitem>
+              <para>Improved support for unknown array sizes in
+              functions</para>
+            </listitem>
+
+            <listitem>
+              <para>Improved handling of the state select attribute</para>
+            </listitem>
+
+            <listitem>
+              <para>Many bug fixes</para>
+            </listitem>
+          </itemizedlist></para>
+      </section>
+    </section>
+
+    <section>
+      <title>Simulation</title>
+
+      <section>
+        <title>In-lined switches</title>
+
+        <para>In-lined switches have been introduced, which gives a more
+        robust initialization and simulation of systems with discrete
+        parts.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>Optimization</title>
+
+      <section>
+        <title>New CasADi tool chain</title>
+
+        <itemizedlist>
+          <listitem>
+            <para>Support for more Modelica features than previous
+            CasADi-based tool chain</para>
+
+            <itemizedlist>
+              <listitem>
+                <para>User defined functions in models</para>
+
+                <itemizedlist>
+                  <listitem>
+                    <para>No support for control flow</para>
+                  </listitem>
+                </itemizedlist>
+              </listitem>
+            </itemizedlist>
+          </listitem>
+
+          <listitem>
+            <para>Flat model is exposed in Python in symbolic form using
+            CasADi, and can be inspected and manipulated</para>
+          </listitem>
+
+          <listitem>
+            <para>Support for a variety of collocation options</para>
+          </listitem>
+        </itemizedlist>
+      </section>
+    </section>
+  </section>
+
+  <section>
+    <title>Release notes for JModelica.org version 1.12</title>
+
+    <section>
+      <title>Highlights</title>
+
+      <para><itemizedlist>
+          <listitem>
+            <para>Greatly improved support for
+            Modelica.Mechanics.MultiBody</para>
+          </listitem>
+
+          <listitem>
+            <para>Support for expandable connectors</para>
+          </listitem>
+
+          <listitem>
+            <para>Support for when statements</para>
+          </listitem>
+
+          <listitem>
+            <para>Support for event generating built-in functions</para>
+          </listitem>
+
+          <listitem>
+            <para>Support for overconstrained connection graphs</para>
+          </listitem>
+
+          <listitem>
+            <para>Support for reinit() operator</para>
+          </listitem>
+        </itemizedlist></para>
+    </section>
+
+    <section>
+      <title>Compilers</title>
+
+      <para>The following compliance improvements have been made:</para>
+
+      <itemizedlist>
+        <listitem>
+          <para>Improved support for algorithms, including when
+          statements.</para>
+        </listitem>
+
+        <listitem>
+          <para>Improved support for if equations.</para>
+        </listitem>
+
+        <listitem>
+          <para>Improved handling of discrete constructs.</para>
+        </listitem>
+
+        <listitem>
+          <para>Improved handling of attributes in alias sets.</para>
+        </listitem>
+
+        <listitem>
+          <para>Improved index reduction algorithm.</para>
+        </listitem>
+
+        <listitem>
+          <para>Added support for expandable connectors and for
+          overconstrained connection systems.</para>
+        </listitem>
+
+        <listitem>
+          <para>Added support for automatic differentiation of functions with
+          smoothOrder annotation.</para>
+        </listitem>
+
+        <listitem>
+          <para>Added support for String operations.</para>
+        </listitem>
+
+        <listitem>
+          <para>Many bug fixes.</para>
+        </listitem>
+      </itemizedlist>
+
+      <para>Added check mode, where a class is checked for errors to see if it
+      can be used in a simulation class.</para>
+
+      <para>Class annotations are now only allowed as the last element of the
+      class, as per the Modelica 3.2 specification.</para>
+    </section>
+
+    <section>
+      <title>Simulation</title>
+
+      <para>The following simulation improvements have been made:</para>
+
+      <itemizedlist>
+        <listitem>
+          <para>Improved the simulation run-time with support for the
+          improvements made in the compiler</para>
+        </listitem>
+
+        <listitem>
+          <para>Improved the robustness when solving linear and nonlinear
+          blocks.</para>
+        </listitem>
+      </itemizedlist>
+
+      <para>JModelica.org now simulates the example models from the MultiBody
+      package in MSL with the exception of the few models that require dynamic
+      state selection.</para>
+    </section>
+
+    <section>
+      <title>Contributors</title>
+
+      <para>Bengt-Arne Andersson</para>
+
+      <para>Christian Andersson</para>
+
+      <para>Tove Bergdahl</para>
+
+      <para>Emil Fredriksson</para>
+
+      <para>Magnus Gäfvert</para>
+
+      <para>Toivo Henningsson</para>
+
+      <para>Jonathan Kämpe</para>
+
+      <para>Björn Lennernäs</para>
+
+      <para>Fredrik Magnusson</para>
+
+      <para>Jesper Mattsson</para>
+
+      <para>Iakov Nakhimovski</para>
+
+      <para>Jon Sten</para>
+
+      <para>Johan Ylikiiskilä</para>
+
+      <para>Johan Åkesson</para>
+
+      <section>
+        <title>Previous contributors</title>
+
+        <para>Sofia Gedda</para>
+
+        <para>Petter Lindgren</para>
+
+        <para>John Lindskog</para>
+
+        <para>Tobias Mattsson</para>
+
+        <para>Lennart Moraeus</para>
+
+        <para>Philip Nilsson</para>
+
+        <para>Teo Nilsson</para>
+
+        <para>Patrik Meijer</para>
+
+        <para>Kristina Olsson</para>
+
+        <para>Roberto Parrotto</para>
+
+        <para>Jens Rantil</para>
+
+        <para>Philip Reuterswärd</para>
+
+        <para>Jonas Rosenqvist</para>
+      </section>
+    </section>
+  </section>
+
+  <section>
+    <title>Release notes for JModelica.org version 1.11</title>
+
+    <section>
+      <title>Highlights</title>
+
+      <para><itemizedlist>
+          <listitem>
+            <para>Runtime logging</para>
+          </listitem>
+
+          <listitem>
+            <para>Support for ModelicaError and assert</para>
+          </listitem>
+
+          <listitem>
+            <para>Additional method in block solver</para>
+          </listitem>
+
+          <listitem>
+            <para>Support for ModelicaStandardTables in MSL</para>
+          </listitem>
+
+          <listitem>
+            <para>Improved compliance</para>
+          </listitem>
+        </itemizedlist></para>
+    </section>
+
+    <section>
+      <title>Compilers</title>
+
+      <para>The following compliance improvements have been made:</para>
+
+      <itemizedlist>
+        <listitem>
+          <para>Most of the previously unsupported operators are now supported
+          for FMUs</para>
+        </listitem>
+
+        <listitem>
+          <para>Support for assert clauses</para>
+        </listitem>
+
+        <listitem>
+          <para>String operations are now supported (this is useful for
+          asserts, even though String variables are not supported)</para>
+        </listitem>
+
+        <listitem>
+          <para>Support for vectorization for built-in functions</para>
+        </listitem>
+
+        <listitem>
+          <para>Inlining of simple functions is now activated by
+          default</para>
+        </listitem>
+
+        <listitem>
+          <para>Several bug fixes</para>
+        </listitem>
+      </itemizedlist>
+    </section>
+
+    <section>
+      <title>Simulation</title>
+
+      <section>
+        <title>Runtime logging</title>
+
+        <para>The runtime logging has been much improved with a new debugging
+        and analysis framework. This enables debugging of convergence issues
+        in non-linear systems of equations.</para>
+      </section>
+
+      <section>
+        <title>Support for ModelicaError and assert</title>
+
+        <para>The compiler and runtime has support for ModelicaError and
+        assert clauses. If an assert clause fails or a ModelicaError is
+        called, the integrator will reject the current step.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>Contributors</title>
+
+      <para>Bengt-Arne Andersson</para>
+
+      <para>Christian Andersson</para>
+
+      <para>Tove Bergdahl</para>
+
+      <para>Emil Fredriksson</para>
+
+      <para>Magnus Gäfvert</para>
+
+      <para>Toivo Henningsson</para>
+
+      <para>Jonathan Kämpe</para>
+
+      <para>Fredrik Magnusson</para>
+
+      <para>Jesper Mattsson</para>
+
+      <para>Iakov Nakhimovski</para>
+
+      <para>Jon Sten</para>
+
+      <para>Johan Ylikiiskilä</para>
+
+      <para>Johan Åkesson</para>
+
+      <section>
+        <title>Previous contributors</title>
+
+        <para>Sofia Gedda</para>
+
+        <para>Björn Lennernäs</para>
+
+        <para>Petter Lindgren</para>
+
+        <para>John Lindskog</para>
+
+        <para>Tobias Mattsson</para>
+
+        <para>Lennart Moraeus</para>
+
+        <para>Philip Nilsson</para>
+
+        <para>Teo Nilsson</para>
+
+        <para>Patrik Meijer</para>
+
+        <para>Kristina Olsson</para>
+
+        <para>Roberto Parrotto</para>
+
+        <para>Jens Rantil</para>
+
+        <para>Philip Reuterswärd</para>
+
+        <para>Jonas Rosenqvist</para>
+      </section>
+    </section>
+  </section>
+
+  <section>
+    <title>Release notes for JModelica.org version 1.10</title>
+
+    <section>
+      <title>Highlights</title>
+
+      <para><itemizedlist>
+          <listitem>
+            <para>Export of FMUs for Co-Simulation</para>
+          </listitem>
+
+          <listitem>
+            <para>Import of FMU 2.0b4 in PyFMI</para>
+          </listitem>
+
+          <listitem>
+            <para>Improved log format for FMUs</para>
+          </listitem>
+
+          <listitem>
+            <para>Improved variable scaling in the CasADi collocation</para>
+          </listitem>
+
+          <listitem>
+            <para>Improved handling of measurement data in the CasADi
+            collocation</para>
+          </listitem>
+
+          <listitem>
+            <para>Improved logging from compilers</para>
+          </listitem>
+
+          <listitem>
+            <para>Improved Modelica compliance</para>
+          </listitem>
+        </itemizedlist></para>
+    </section>
+
+    <section>
+      <title>Compilers</title>
+
+      <para>The following compliance improvements have been made:<itemizedlist>
+          <listitem>
+            <para>The following operators are now supported:<itemizedlist>
+                <listitem>
+                  <para>smooth()</para>
+                </listitem>
+
+                <listitem>
+                  <para>skew(x)</para>
+                </listitem>
+
+                <listitem>
+                  <para>scalar(A)</para>
+                </listitem>
+
+                <listitem>
+                  <para>vector(A)</para>
+                </listitem>
+
+                <listitem>
+                  <para>matrix(A)</para>
+                </listitem>
+
+                <listitem>
+                  <para>diagonal(v)</para>
+                </listitem>
+              </itemizedlist></para>
+          </listitem>
+
+          <listitem>
+            <para>Improved handling of unmatched HGT. All unmatched iteration
+            variables and residual equations are now paired and treated the
+            same way as regular HGT pairs.</para>
+          </listitem>
+
+          <listitem>
+            <para>Improvements have been made to analytical jacobians. Notably
+            full support for functions and bug fixes.</para>
+          </listitem>
+        </itemizedlist>Also many bug fixes and performance improvements have
+      been made.</para>
+
+      <section>
+        <title>Export of FMUs for Co-Simulation</title>
+
+        <para>Export of FMUs for Co-Simulation version 1.0 is now supported.
+        Specifying a co-simulation FMU instead of a model exchange FMU is done
+        via an option to the <literal>compile_fmu</literal> method. The
+        internal solver in the co-simulation FMU is CVode from the Sundials
+        suite and there is also an explicit Euler method. The choice of the
+        solver can be changed via a parameter in the FMU.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>Python</title>
+
+      <section>
+        <title>Improved result data access</title>
+
+        <para>Modified handling of simulation and optimization results to
+        facilitate post processing of results such as plotting. Accessing
+        variables and parameters from results will always return a vector of
+        size equal to the time vector. Also, the base result class
+        (<literal>JMResultBase</literal>) has two new functions,
+        <literal>initial</literal> and <literal>final</literal>, which will
+        always return initial and final value of the simulation/optimization
+        as scalar values. See both <xref linkend="ch_simulation"/> and <xref
+        linkend="ch_optimization"/> for plotting code examples.</para>
+      </section>
+
+      <section>
+        <title>Improved error handling</title>
+
+        <para>Improved error handling of compiler problems (exceptions, errors
+        and warnings). Problems are now given in the same way as regardless if
+        JPype or separate process is used when compiling. Additionally errors
+        and warning are now returned as python objects to facilitate easier
+        post processing of compiler problems. It is also possible to retrieve
+        warnings from the return result of <literal>compile_fmu</literal>,
+        <literal>compile_jmu</literal> and <literal>compile_fmux</literal>,
+        e.g.:</para>
+
+        <programlisting>r = compile_fmu('Test', 'test.mo')
+print r.warnings</programlisting>
+      </section>
+
+      <section>
+        <title>Parsing of FMU log files</title>
+
+        <para>FMUs and JMUs created with JModelica.org now produce logs in a
+        structured XML format, which can be either parsed using tools in the
+        Python module <literal>pyjmi.log</literal> or using general purpose
+        XML tools. See <xref linkend="sec_models_debug_nonlinear"/> for code
+        examples.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>Simulation</title>
+
+      <section>
+        <title>Support for FMU version 2.0b4</title>
+
+        <para>Added support for simulation of models following the FMI version
+        2.0 beta 4, both model exchange FMUs and co-simulation FMUs.</para>
+      </section>
+
+      <section>
+        <title>Result filter</title>
+
+        <para>Added an option to the simulation method for filtering which
+        variables are stored. This is especially useful in case of large
+        models with many variables as just selecting a subset of variables to
+        store can speed up the simulation. Additionally there is now the
+        option to store the result directly in the memory instead of writing
+        the result to file.</para>
+      </section>
+
+      <section>
+        <title>Improved solver support</title>
+
+        <para>Improvements on the solvers has been made resulting in that
+        simulation of Model Exchange FMUs can now be performed by a number of
+        solvers. See the simulation options for the supported solvers. For
+        example there is now an Radau5 solver.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>Optimization</title>
+
+      <section>
+        <title>Improved variable scaling</title>
+
+        <para>The variable scaling performed based on nominal trajectories for
+        the CasADi collocation has been improved and can now be set
+        individually for each variable. It also has a more robust default
+        behavior.</para>
+      </section>
+
+      <section>
+        <title>Improved handling of measurement data</title>
+
+        <para>The old class <literal>ParameterEstimationData</literal> for the
+        CasADi collocation has been replaced by
+        <literal>MeasurementData</literal>. The new class can also be used for
+        optimal control, and not only parameter estimation, and also offers
+        additional strategies in the handling of the data.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>Contributors</title>
+
+      <para>Bengt-Arne Andersson</para>
+
+      <para>Christian Andersson</para>
+
+      <para>Tove Bergdahl</para>
+
+      <para>Emil Fredriksson</para>
+
+      <para>Magnus Gäfvert</para>
+
+      <para>Toivo Henningsson</para>
+
+      <para>Jonathan Kämpe</para>
+
+      <para>John Lindskog</para>
+
+      <para>Fredrik Magnusson</para>
+
+      <para>Jesper Mattsson</para>
+
+      <para>Iakov Nakhimovski</para>
+
+      <para>Teo Nilsson</para>
+
+      <para>Jon Sten</para>
+
+      <para>Johan Ylikiiskilä</para>
+
+      <para>Johan Åkesson</para>
+
+      <section>
+        <title>Previous contributors</title>
+
+        <para>Sofia Gedda</para>
+
+        <para>Björn Lennernäs</para>
+
+        <para>Petter Lindgren</para>
+
+        <para>Tobias Mattsson</para>
+
+        <para>Lennart Moraeus</para>
+
+        <para>Philip Nilsson</para>
+
+        <para>Patrik Meijer</para>
+
+        <para>Kristina Olsson</para>
+
+        <para>Roberto Parrotto</para>
+
+        <para>Jens Rantil</para>
+
+        <para>Philip Reuterswärd</para>
+
+        <para>Jonas Rosenqvist</para>
+      </section>
+    </section>
+  </section>
+
+  <section>
+    <title>Release notes for JModelica.org version 1.9.1</title>
+
+    <para>This release contains a bug fix which eliminates a dependency on
+    external libraries in FMUs. Apart from this bug fix, the release is
+    identical to JModelica.org version 1.9.</para>
+  </section>
+
+  <section>
+    <title>Release notes for JModelica.org version 1.9</title>
+
+    <section>
+      <title>Highlights</title>
+
+      <para><itemizedlist>
+          <listitem>
+            <para>Improved function inlining</para>
+          </listitem>
+
+          <listitem>
+            <para>Manual selection of iteration variables in tearing algorithm
+            - Hand Guided Tearing (HGT)</para>
+          </listitem>
+
+          <listitem>
+            <para>Support for external objects</para>
+          </listitem>
+
+          <listitem>
+            <para>Simulation of Co-simulation FMUs in Python</para>
+          </listitem>
+
+          <listitem>
+            <para>Improved compiler execution speed</para>
+          </listitem>
+
+          <listitem>
+            <para>Improved compiler memory efficiency</para>
+          </listitem>
+
+          <listitem>
+            <para>Support for MSL CombiTables</para>
+          </listitem>
+
+          <listitem>
+            <para>Improvements to the CasADi-based collocation optimization
+            algorithm, including support for non-fixed time horizons and
+            supplying nominal trajectories for scaling purposes</para>
+          </listitem>
+
+          <listitem>
+            <para>Updated to MSL 3.2</para>
+          </listitem>
+        </itemizedlist></para>
+    </section>
+
+    <section>
+      <title>Compilers</title>
+
+      <section>
+        <title>Improved Modelica compliance</title>
+
+        <para>The following compliance improvements have been
+        made:<itemizedlist>
+            <listitem>
+              <para>Support for external objects (classes extending the
+              predefined partial class ExternalObject)</para>
+            </listitem>
+
+            <listitem>
+              <para>Support for the same component being added from more than
+              one extends clause.</para>
+            </listitem>
+
+            <listitem>
+              <para>Many bug fixes, notably concerning inheritance and
+              redeclares.</para>
+            </listitem>
+          </itemizedlist></para>
+      </section>
+
+      <section>
+        <title>Support for MSL CombiTables</title>
+
+        <para>There is now support for MSL CombiTables, both 1D and 2D. The
+        table can be either read from file or explicitly supplied as a
+        parameter matrix.</para>
+      </section>
+
+      <section>
+        <title>Support for hand guided tearing</title>
+
+        <para>The tearing algorithm in the compiler can now be influenced by
+        user selected residuals and iteration variables, in order to make such
+        selections explicit, e.g., to exploit physical insight in the choice
+        of iteration variables. The selections are made by means of vendor
+        specific annotations and can be done at the component level and at the
+        system level.</para>
+      </section>
+
+      <section>
+        <title>Improved function inlining</title>
+
+        <para>Improved support for inlining of functions. Notably a new
+        in-lining mode has been added, where functions that can be inlined
+        without introducing additional variables to the model. The inlining
+        algorithm has also been expanded to handle more situations.</para>
+      </section>
+
+      <section>
+        <title>Memory and execution time improvements in the compiler</title>
+
+        <para>The compilation times for large simulation models has been
+        reduced by more than two orders of magnitudes. Also, the memory
+        required to compile large models has been decreased by two orders of
+        magnitude. As a consequence, larger models up to 100.000 equations can
+        be comfortably compiled on a standard computer.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>Python</title>
+
+      <section>
+        <title>Compile in separate process</title>
+
+        <para>The possibility to compile in a separate process from the Python
+        interface has been added. This is enabled with an argument to
+        <literal>compile_fmu</literal>, <literal>compile_jmu</literal> or
+        <literal>compile_fmux</literal> which is <literal>False</literal> by
+        default. It is also possible to pass arguments to the JVM. This
+        enables, among other things, users on 64 bit Windows to use a 64 bit
+        JRE (Java Runtime Environment) for compiling a model.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>Simulation</title>
+
+      <section>
+        <title>Simulation of co-simulation FMUs</title>
+
+        <para>Support for simulation of co-simulation FMUs following the FMI
+        version 1.0 has been implemented and follows the same work-flow as for
+        loading and simulating an model exchange FMU, i.e:</para>
+
+        <programlisting>from pyfmi import load_fmu
+model = load_fmu("CS_Model.fmu")
+res = model.simulate(final_time=1.0)
+...
+</programlisting>
+      </section>
+    </section>
+
+    <section>
+      <title>Optimization</title>
+
+      <section>
+        <title>Improvements to CasADi-based collocation algorithm</title>
+
+        <para>The following features have been added to the CasADi-based
+        collocation algorithm<itemizedlist>
+            <listitem>
+              <para>Support for non-fixed time horizons, allowing the
+              formulation of, for example, minimum-time problems</para>
+            </listitem>
+
+            <listitem>
+              <para>Possibility to supply nominal trajectories based on
+              simulation results, which are used to compute (possibly
+              time-variant) scaling factors. This makes it possible to
+              conveniently obtain good scaling for all variables in a
+              model.</para>
+            </listitem>
+
+            <listitem>
+              <para>Possibility to use more advanced interpolation of
+              optimized inputs based on collocation polynomials, instead of
+              linear interpolation, providing higher accuracy when simulating
+              a system using optimized inputs</para>
+            </listitem>
+
+            <listitem>
+              <para>Setting of nominal attributes from Python in loaded
+              models</para>
+            </listitem>
+          </itemizedlist></para>
+      </section>
+    </section>
+
+    <section>
+      <title>Contributors</title>
+
+      <para>Bengt-Arne Andersson</para>
+
+      <para>Christian Andersson</para>
+
+      <para>Tove Bergdahl</para>
+
+      <para>Magnus Gäfvert</para>
+
+      <para>Fredrik Magnusson</para>
+
+      <para>Jesper Mattsson</para>
+
+      <para>Iakov Nakhimovski</para>
+
+      <para>Jonas Rosenqvist</para>
+
+      <para>Jon Sten</para>
+
+      <para>Johan Ylikiiskilä</para>
+
+      <para>Johan Åkesson</para>
+
+      <section>
+        <title>Previous contributors</title>
+
+        <para>Sofia Gedda</para>
+
+        <para>Petter Lindgren</para>
+
+        <para>Tobias Mattsson</para>
+
+        <para>Lennart Moraeus</para>
+
+        <para>Philip Nilsson</para>
+
+        <para>Patrik Meijer</para>
+
+        <para>Kristina Olsson</para>
+
+        <para>Roberto Parrotto</para>
+
+        <para>Jens Rantil</para>
+
+        <para>Philip Reuterswärd</para>
+      </section>
+    </section>
+  </section>
+
+  <section>
+    <title>Release notes for JModelica.org version 1.8.1</title>
+
+    <para>This release is identical to JModelica.org version 1.8 apart from
+    one important bug fix. The issue that has been fixed concerns the scaling
+    of start attributes in JMUs.</para>
+  </section>
+
+  <section>
+    <title>Release notes for JModelica.org version 1.8</title>
+
+    <section>
+      <title>Highlights</title>
+
+      <itemizedlist>
+        <listitem>
+          <para>Improved Modelica compliance of the compiler front-end,
+          including support for if equations and inner/outer
+          declarations</para>
+        </listitem>
+
+        <listitem>
+          <para>Optimized performance and memory utilization of the compiler
+          front-end</para>
+        </listitem>
+
+        <listitem>
+          <para>A new state selection algorithm with support for user defined
+          state selections</para>
+        </listitem>
+
+        <listitem>
+          <para>A new function inlining algorithm for conversion of
+          algorithmic functions into equations</para>
+        </listitem>
+
+        <listitem>
+          <para>Improvements to the CasADi-based collocation optimization
+          algorithm, including support for terminal constraints</para>
+        </listitem>
+      </itemizedlist>
+    </section>
+
+    <section>
+      <title>Compilers</title>
+
+      <section>
+        <title>Improved Modelica compliance</title>
+
+        <para>The following compliance improvements have been
+        made:<itemizedlist>
+            <listitem>
+              <para>Support for if equations</para>
+            </listitem>
+
+            <listitem>
+              <para>Support for inner/outer declarations</para>
+            </listitem>
+
+            <listitem>
+              <para>Expressions in der() operator</para>
+            </listitem>
+
+            <listitem>
+              <para>Function call equations in when equations</para>
+            </listitem>
+
+            <listitem>
+              <para>Limited support for String parameters. String parameters
+              are now supported in the compiler front-end, although they are
+              discarded in the code generation.</para>
+            </listitem>
+          </itemizedlist>Also, many bug fixes and performance improvements in
+        the compiler are included in this release.</para>
+      </section>
+
+      <section>
+        <title>Function inlining</title>
+
+        <para>There is a new function inlining algorithm for conversion of
+        algorithmic functions into equations.</para>
+      </section>
+
+      <section>
+        <title>New state selection algorithm</title>
+
+        <para>The new state selection algorithm takes user input (stateSelect
+        attribute) into account and implements heuristics to select states
+        that avoids, if possible, iteration of non-linear systems of
+        equations.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>Python</title>
+
+      <section>
+        <title>Simplified compiling with libraries</title>
+
+        <para>The compiler now support adding extra libraries as files, which
+        makes it easier to compile a model using a structured library not in
+        the MODELICAPATH. Both Python functions <literal>compile_jmu</literal>
+        and <literal>compile_fmu</literal> support this. For example,
+        compiling <literal>A.B.Example</literal> from a library
+        <literal>A</literal> in directory <filename>LibDir</filename> with
+        <literal>compile_fmu</literal>, this can now be written
+        as:<programlisting>compile_fmu('A.B.Example', 'LibDir/A')</programlisting></para>
+      </section>
+    </section>
+
+    <section>
+      <title>Optimization</title>
+
+      <section>
+        <title>Improvements to CasADi-based collocation algorithm</title>
+
+        <para>The CasADi-based collocation algorithm has been improved with
+        new features</para>
+
+        <itemizedlist>
+          <listitem>
+            <para>Support for point constraints</para>
+          </listitem>
+
+          <listitem>
+            <para>Setting of parameter values from Python in loaded
+            models</para>
+          </listitem>
+
+          <listitem>
+            <para>Setting of min/max attributes from Python in loaded
+            models</para>
+          </listitem>
+        </itemizedlist>
+      </section>
+    </section>
+
+    <section>
+      <title>Contributors</title>
+
+      <para>Bengt-Arne Andersson</para>
+
+      <para>Christian Andersson</para>
+
+      <para>Tove Bergdahl</para>
+
+      <para>Magnus Gäfvert</para>
+
+      <para>Fredrik Magnusson</para>
+
+      <para>Jesper Mattsson</para>
+
+      <para>Tobias Mattsson</para>
+
+      <para>Iakov Nakhimovski</para>
+
+      <para>Jon Sten</para>
+
+      <para>Johan Ylikiiskilä</para>
+
+      <para>Johan Åkesson</para>
+
+      <section>
+        <title>Previous contributors</title>
+
+        <para>Sofia Gedda</para>
+
+        <para>Petter Lindgren</para>
+
+        <para>Lennart Moraeus</para>
+
+        <para>Philip Nilsson</para>
+
+        <para>Patrik Meijer</para>
+
+        <para>Kristina Olsson</para>
+
+        <para>Roberto Parrotto</para>
+
+        <para>Jens Rantil</para>
+
+        <para>Philip Reuterswärd</para>
+      </section>
+    </section>
+  </section>
+
+  <section>
+    <title>Release notes for JModelica.org version 1.7</title>
+
+    <section>
+      <title>Highlights</title>
+
+      <itemizedlist>
+        <listitem>
+          <para>Improved support for hybrid systems, including friction models
+          and ideal diodes</para>
+        </listitem>
+
+        <listitem>
+          <para>Support for tearing of equation systems</para>
+        </listitem>
+
+        <listitem>
+          <para>Support for external Fortran functions</para>
+        </listitem>
+
+        <listitem>
+          <para>Support for function inlining</para>
+        </listitem>
+
+        <listitem>
+          <para>Reorganization of the Python code: a new stand-alone package,
+          PyFMI, provided</para>
+        </listitem>
+
+        <listitem>
+          <para>A novel dynamic optimization algorithm implemented in Python
+          based on collocation and CasADi is provided</para>
+        </listitem>
+      </itemizedlist>
+    </section>
+
+    <section>
+      <title>Compilers</title>
+
+      <section>
+        <title>Support for mixed systems of equations</title>
+
+        <para>Mixed systems of equations, i.e., equation systems containing
+        both real and integer/boolean variables are supported. Such systems
+        commonly occurs in, e.g., friction models and diode models.</para>
+      </section>
+
+      <section>
+        <title>Support for tearing</title>
+
+        <para>Tearing is a technique to improve simulation efficiency by
+        reducing the number of iteration variables when solving systems of
+        equations. A tearing algorithm relying on graph-theoretical methods
+        has been implemented, which is used to generate more efficient
+        simulation code.</para>
+      </section>
+
+      <section>
+        <title>Improved Modelica compliance</title>
+
+        <para>With added support for external Fortran function and many bug
+        fixes, the compiler now handles many models that previously would not
+        compile.</para>
+      </section>
+
+      <section>
+        <title>Function inlining</title>
+
+        <para>Calls to Modelica functions (i.e. not external functions) in
+        equations can now be inlined, by adding the equivalent equations and
+        temporary variables. This allows some transformations that are
+        specific to equations to be performed on the function calls as well.
+        It also allows compilation targets that does not handle functions,
+        such as CasADi, to be used with models containing functions.
+        Currently, only functions that only contains assignment statements are
+        supported. Such function are common in e.g. media libraries.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>Python</title>
+
+      <section>
+        <title>New package structure</title>
+
+        <para>The Python code has been refactored into three
+        packages:<itemizedlist>
+            <listitem>
+              <para><emphasis role="bold">PyFMI</emphasis> A package for
+              working with FMUs, perform simulations, interact with the model,
+              plotting of result data and more. This package can be used
+              stand-alone, see <link
+              xlink:href="http://www.pyfmi.org">www.pyfmi.org</link>.</para>
+            </listitem>
+
+            <listitem>
+              <para><emphasis role="bold">PyJMI</emphasis> A package for
+              working with JMUs, solve optimization problems, perform
+              simulations, model interaction and more.</para>
+            </listitem>
+
+            <listitem>
+              <para><emphasis role="bold">PyModelica</emphasis> A package
+              containing Modelica and Optimica compilers.</para>
+            </listitem>
+          </itemizedlist></para>
+      </section>
+
+      <section>
+        <title>Support for shared libraries in FMUs</title>
+
+        <para>The FMU import and export now supports dependencies on extra
+        shared libraries. For the export, the shared libraries are placed in
+        the same folder as the model binary. Similarly, any shared libraries
+        packed with the model binary will be found when importing the
+        FMU.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>Simulation</title>
+
+      <section>
+        <title>Simulation of hybrid systems</title>
+
+        <para>The improved compiler support for mixed systems of equations is
+        matched by extensions to the JModelica.org simulation runtime system,
+        enabling simulation of more sophisticated hybrid models. Amongst
+        others, the classic
+        Modelica.Mechanics.Rotational.Examples.CoupledClutches benchmark model
+        can be now simulated.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>Optimization</title>
+
+      <section>
+        <title>A novel CasADi-based collocation algorithm</title>
+
+        <para>A novel CasADi-based collocation algorithm is provided. The new
+        algorithm is implemented in Python and relies on the CasADi package
+        for computation of derivatives and interaction with IPOPT. The new
+        algorithm is an order of magnitude faster than the existing
+        collocation algorithm on many problems, and provides significantly
+        improved flexibility.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>Contributors</title>
+
+      <para>Bengt-Arne Andersson</para>
+
+      <para>Christian Andersson</para>
+
+      <para>Tove Bergdahl</para>
+
+      <para>Magnus Gäfvert</para>
+
+      <para>Petter Lindgren</para>
+
+      <para>Fredrik Magnusson</para>
+
+      <para>Jesper Mattsson</para>
+
+      <para>Patrik Meijer</para>
+
+      <para>Iakov Nakhimovski</para>
+
+      <para>Johan Ylikiiskilä</para>
+
+      <para>Johan Åkesson</para>
+
+      <section>
+        <title>Previous contributors</title>
+
+        <para>Sofia Gedda</para>
+
+        <para>Lennart Moraeus</para>
+
+        <para>Philip Nilsson</para>
+
+        <para>Kristina Olsson</para>
+
+        <para>Roberto Parrotto</para>
+
+        <para>Jens Rantil</para>
+
+        <para>Philip Reuterswärd</para>
+      </section>
+    </section>
+  </section>
+
+  <section>
+    <title>Release notes for JModelica.org version 1.6</title>
+
+    <section>
+      <title>Highlights</title>
+
+      <itemizedlist>
+        <listitem>
+          <para>A new derivative free parameter optimization algorithm for
+          FMUs</para>
+        </listitem>
+
+        <listitem>
+          <para>A new pseudo spectral optimization algorithm</para>
+        </listitem>
+
+        <listitem>
+          <para>Index reduction to handle high-index DAEs</para>
+        </listitem>
+
+        <listitem>
+          <para>A new graphical user interface for plotting of simulation and
+          optimization results</para>
+        </listitem>
+
+        <listitem>
+          <para>Icon rendering and many improvements in the Eclipse Modelica
+          plug-in</para>
+        </listitem>
+      </itemizedlist>
+    </section>
+
+    <section>
+      <title>Compilers</title>
+
+      <section>
+        <title>Index reduction</title>
+
+        <para>High-index systems, commonly occurring in mechanical systems,
+        are supported in JModelica.org 1.6. The implementation relies on
+        Pantelides' algorithm and the dummy derivative selection
+        algorithm.</para>
+      </section>
+
+      <section>
+        <title>Modelica compliance</title>
+
+        <para>The following improvements to the Modelica compliance of the
+        editors has been made:</para>
+
+        <itemizedlist>
+          <listitem>
+            <para>Partial support for the <code>smooth()</code> operator (not
+            used in event handling, otherwise supported).</para>
+          </listitem>
+
+          <listitem>
+            <para>Support for global name lookup (i.e. names starting with a
+            dot are looked up from the top scope).</para>
+          </listitem>
+        </itemizedlist>
+      </section>
+    </section>
+
+    <section>
+      <title>Python</title>
+
+      <section>
+        <title>Graphical user interface for visualization of simulation and
+        optimization results</title>
+
+        <para>A new graphical interface for displaying simulation and / or
+        optimization results have been implemented. The interface also
+        supports results generated from Dymola, both binary and
+        textual.</para>
+      </section>
+
+      <section>
+        <title>Simulation with function inputs</title>
+
+        <para>The Python simulation interface has been improved so that top
+        level inputs in FMUs can be driven by Python functions in addition to
+        tables.</para>
+      </section>
+
+      <section>
+        <title>Compilation of XML models</title>
+
+        <para>A new convenience function for compilation of Modelica and
+        Optimica models into XML, including equations, has been added.</para>
+      </section>
+
+      <section>
+        <title>Python version upgrade</title>
+
+        <para>The Python package has been updated to Python 2.7.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>Optimization</title>
+
+      <section>
+        <title>Derivative- free optimization of FMUs</title>
+
+        <para>The derivative-free optimization algorithm in JModelica.org
+        enables users to calibrate dynamic models compliant with the
+        Functional Mock-up Interface standard (FMUs) using measurement data.
+        The new functionality offers flexible and easy to use Python functions
+        for model calibration and relies on the FMU simulation capabilities of
+        JModelica.org. FMU models generated by JModelica.org or other
+        FMI-compliant tools such as AMESim, Dymola, or SimulationX can be
+        calibrated.</para>
+      </section>
+
+      <section>
+        <title>Pseudo spectral methods for dynamic optimization</title>
+
+        <para>Pseudo spectral optimization methods, based on collocation, are
+        now available. The algorithms relies on CasADi for evaluation of
+        derivatives, first and second order, and IPOPT is used to solve the
+        resulting non-linear program. Optimization of ordinary differential
+        equations and multi-phase problems are supported. The algorithm has
+        been developed in collaboration with Mitsubishi Electric Research Lab,
+        Boston, USA, where it has been used to solve satellite navigation
+        problems.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>Eclipse Modelica plugin</title>
+
+      <para>The JModelica.org Eclipse plugin has improved to the point where
+      we are ready to do a release. Version 0.4.0 is now available from the
+      JModelica.org website.</para>
+
+      <para>Changes from the versions that has been available from the SVN
+      repository are mainly stability and performance improvements. To this
+      end, some features have been disabled (auto-complete and format
+      file/region). There are also a few new features, most notably support
+      for rendering of class icons.</para>
+    </section>
+
+    <section>
+      <title>Contributors</title>
+
+      <para>Christian Andersson</para>
+
+      <para>Tove Bergdahl</para>
+
+      <para>Sofia Gedda</para>
+
+      <para>Magnus Gäfvert</para>
+
+      <para>Petter Lindgren</para>
+
+      <para>Fredrik Magnusson</para>
+
+      <para>Jesper Mattsson</para>
+
+      <para>Patrik Meijer</para>
+
+      <para>Lennart Moraeus</para>
+
+      <para>Kristina Olsson</para>
+
+      <para>Johan Ylikiiskilä</para>
+
+      <para>Johan Åkesson</para>
+
+      <section>
+        <title>Previous contributors</title>
+
+        <para>Philip Nilsson</para>
+
+        <para>Roberto Parrotto</para>
+
+        <para>Jens Rantil</para>
+
+        <para>Philip Reuterswärd</para>
+      </section>
+    </section>
+  </section>
+
+  <section>
+    <title>Release notes for JModelica.org version 1.5</title>
+
+    <section>
+      <title>Highlights</title>
+
+      <itemizedlist>
+        <listitem>
+          <para>FMU export</para>
+        </listitem>
+
+        <listitem>
+          <para>Improvements in compiler front-end</para>
+        </listitem>
+
+        <listitem>
+          <para>Equation sorting and BLT</para>
+        </listitem>
+
+        <listitem>
+          <para>Symbolic solution of simple equations</para>
+        </listitem>
+
+        <listitem>
+          <para>Improved simulation support for hybrid and sampled
+          systems</para>
+        </listitem>
+
+        <listitem>
+          <para>Improved initialization with Kinsol and SuperLU</para>
+        </listitem>
+
+        <listitem>
+          <para>Improved support for external functions.</para>
+        </listitem>
+      </itemizedlist>
+    </section>
+
+    <section>
+      <title>Compilers</title>
+
+      <section>
+        <title>When clauses</title>
+
+        <para>When clauses are supported in the Modelica compiler.</para>
+      </section>
+
+      <section>
+        <title>Equation sorting</title>
+
+        <para>Equations are sorted using Tarjan's algorithm and the resulting
+        BLT representation is used in the C code generation. Also, trivial
+        equations are solved and converted into assignment statements.</para>
+      </section>
+
+      <section>
+        <title>Connections</title>
+
+        <para>Added support for connecting arrays of components and for
+        connect equations in for clauses.</para>
+      </section>
+
+      <section>
+        <title>Eclipse IDE</title>
+
+        <para>The JModelica plugin for Eclipse has been updated to be more
+        stable and to syntax highlight Modelica 3.2 code properly.</para>
+      </section>
+
+      <section>
+        <title>Miscellaneous</title>
+
+        <para>Fixed several compiler bugs.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>Simulation</title>
+
+      <section>
+        <title>FMU export</title>
+
+        <para>JModelica.org 1.5 supports export of Functional Mock-up
+        Interface (FMI) compliant models (FMUs). The exported models follows
+        the FMI standard and may be imported in other FMI compilant simulation
+        tools, or they may be simulated using JModelica.org using the FMU
+        import feature introduced in version 1.4. The exported FMUs contain an
+        XML file, containing model meta data such as variable names, a DLL,
+        containing the compiled C functions specified by FMI, and additional
+        files containing the flattened Modelica model useful for debugging
+        purposes.</para>
+      </section>
+
+      <section>
+        <title>Simulation of ODEs</title>
+
+        <para>A causalization approach to simulation of Modelica models has
+        been implemented. This means that the DAE resulting from flattening is
+        transformed into an ODE, and ODE solvers can be used to simulate the
+        model. This feature is a requirement for export of FMUs. This strategy
+        has required the symbolic algorithms and the C code generation module
+        to be adapted as described above. In addition, the simulation runtime
+        system has been extended to allow for trivial equations converted into
+        assignments and for implicit systems of equations. The latter are
+        solved using the Newton solver KINSOL, modified to support
+        regularization to handle singular Jacobian matrices.</para>
+      </section>
+
+      <section>
+        <title>Simulation of hybrid and sampled systems</title>
+
+        <para>When clauses are now supported, as well as the sample operator.
+        Accordingly, some classes of hybrid systems may be simulated as well
+        as sampled control systems. In addition, variables of type Integer and
+        Boolean are also supported.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>Initialization of DAEs</title>
+
+      <para>A novel initialization algorithm based on the Newton solver KINSOL
+      from the SUNDIALS suite is introduced. The KINSOL solver has been
+      improved by adding support for Jacobian regularization in order to
+      handle singular Jacobians and by interfacing the sparse linear solver
+      SuperLU in order to more efficiently handle large scale systems.</para>
+    </section>
+
+    <section>
+      <title>Optimization</title>
+
+      <para>Curtis Powell Reid seeding has been implemented to speed up
+      computation of sparse Jacobians. When solving large optimization
+      problems, this can give a speed-up factor of up to 10-15.</para>
+    </section>
+
+    <section>
+      <title>Contributors</title>
+
+      <para>Christian Andersson</para>
+
+      <para>Tove Bergdahl</para>
+
+      <para>Magnus Gäfvert</para>
+
+      <para>Jesper Mattsson</para>
+
+      <para>Johan Ylikiiskilä</para>
+
+      <para>Johan Åkesson</para>
+
+      <section>
+        <title>Previous contributors</title>
+
+        <para>Philip Nilsson</para>
+
+        <para>Roberto Parrotto</para>
+
+        <para>Jens Rantil</para>
+
+        <para>Philip Reuterswärd</para>
+      </section>
+    </section>
+  </section>
+
+  <section>
+    <title>Release notes for JModelica.org version 1.4</title>
+
+    <section>
+      <title>Highlights</title>
+
+      <itemizedlist>
+        <listitem>
+          <para>Improved Python user interaction functions</para>
+        </listitem>
+
+        <listitem>
+          <para>Improvements in compiler front-end</para>
+        </listitem>
+
+        <listitem>
+          <para>Support for sensitivity analysis of DAEs using Sundials</para>
+        </listitem>
+
+        <listitem>
+          <para>Introduced new model concept, jmu-models.</para>
+        </listitem>
+
+        <listitem>
+          <para>Support for enumerations</para>
+        </listitem>
+      </itemizedlist>
+    </section>
+
+    <section>
+      <title>Compilers</title>
+
+      <section>
+        <title>Enumerations</title>
+
+        <para>Added support for enumerations to the same extent as Integers,
+        except that arrays indexed with enumerations are not supported.</para>
+      </section>
+
+      <section>
+        <title>Miscellaneous</title>
+
+        <para>Fixed many compiler bugs, especially concerning complex class
+        structures.</para>
+      </section>
+
+      <section>
+        <title>Improved reporting of structural singularities</title>
+
+        <para>Systems which are structurally singular now generates an error
+        message. Also, high-index systems, which are not yet supported, are
+        reported as structurally singular systems.</para>
+      </section>
+
+      <section>
+        <title>Automatic addition of initial equations</title>
+
+        <para>A matching algorithm is used to automatically add initial
+        equations to obtain a balanced DAE initialization system. If too few
+        initial equations are given, the algorithm will set the
+        <literal>fixed</literal> attribute to true for some of the
+        differentiated variables in the model.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>Python interface</title>
+
+      <section>
+        <title>Models</title>
+
+        <para><itemizedlist>
+            <listitem>
+              <para>Introduced new model class
+              <literal>jmodelica.jmi.JMUModel</literal> which replaced
+              <literal>jmodelica.jmi.JMIModel</literal>.</para>
+            </listitem>
+
+            <listitem>
+              <para><literal>jmodelica.fmi.FMIModel</literal> changed name to
+              <literal>jmodelica.fmi.FMUModel</literal>.</para>
+            </listitem>
+
+            <listitem>
+              <para><literal>jmodelica.jmi.JMIModel.get_value</literal> and
+              <literal>set_value</literal> have changed to
+              <literal>jmodelica.jmi.JMUModel.get</literal> and
+              <literal>set</literal>, which have also been introduced for
+              <literal>jmodelica.fmi.FMUModel</literal></para>
+            </listitem>
+          </itemizedlist></para>
+      </section>
+
+      <section>
+        <title>Compiling</title>
+
+        <para><itemizedlist>
+            <listitem>
+              <para>Introduced JMU files which are compressed files containing
+              files created during compilation.</para>
+            </listitem>
+
+            <listitem>
+              <para>Introduced new method
+              <literal>jmodelica.jmi.compile_jmu</literal> which compiles
+              Modelica or Optimica models to JMUs. These JMUs are then used
+              when creating a <literal>JMUModel</literal> which loads the
+              model in a Python object.</para>
+            </listitem>
+
+            <listitem>
+              <para>Removed possibility to compile models directly in
+              high-level functions, initialize, simulate and optimize. Instead
+              <literal>compile_jmu</literal> should be used.</para>
+            </listitem>
+          </itemizedlist></para>
+      </section>
+
+      <section>
+        <title>initialize, simulate and optimize</title>
+
+        <itemizedlist>
+          <listitem>
+            <para><literal>initialize</literal>, <literal>simulate</literal>
+            and <literal>optimize</literal> are no longer functions under
+            <literal>jmodelica</literal> but methods of
+            <literal>jmodelica.jmi.JMUModel</literal> and
+            <literal>jmodelica.fmi.FMUModel</literal>
+            (<literal>initialize</literal> and <literal>simulate</literal>
+            only).</para>
+          </listitem>
+
+          <listitem>
+            <para>New objects for options to <literal>initialize</literal>,
+            <literal>simulate</literal> and <literal>optimize</literal> have
+            been introduced. The <literal>alg_args</literal> and
+            <literal>solver_args</literal> parameters have therefore been
+            removed. The options from <literal>alg_args</literal> and
+            <literal>solver_args</literal> can now be found in the options
+            object. Each algorithm for <literal>initialize</literal>,
+            <literal>simulate</literal> and <literal>optimize</literal> have
+            their own options object.</para>
+          </listitem>
+        </itemizedlist>
+      </section>
+
+      <section>
+        <title>Result object</title>
+
+        <para>Added convenience methods for getting variable trajectories from
+        the result. The result trajectories are now accessed as objects in a
+        dictionary:</para>
+
+        <programlisting language="python">res = model.simulate()
+yres = res['y']
+</programlisting>
+      </section>
+    </section>
+
+    <section>
+      <title>Simulation</title>
+
+      <section>
+        <title>Input trajectories</title>
+
+        <para>Changed how the input trajectories are handled. The trajectories
+        now have to be connected to an input variable as a 2-tuple. The first
+        argument should be a list of variables or a single variable. The
+        second argument should be a data matrix with the first column as the
+        time vector and the following columns corresponding to the variables
+        in the first argument.</para>
+      </section>
+
+      <section>
+        <title>Sensitivity calculations</title>
+
+        <para>Sensitivity calculations have been implemented when using the
+        solver IDA from the Assimulo package. The sensitivity calculations are
+        activated with the the option:</para>
+
+        <para>opts['IDA_options']['sensitivity'] = True</para>
+
+        <para>which calculates sensitivities of the states with respect to the
+        free parameters.</para>
+      </section>
+
+      <section>
+        <title>Write scaled simulation result to file</title>
+
+        <para>In some cases, it is useful to be able to write the scaled
+        simulation result when the option
+        <literal>enable_variable_scaling</literal> is set to true.
+        Specifically, this supports debugging to detect if additional
+        variables should have a nominal value. This feature is available also
+        for initialization and optimization.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>Contributors</title>
+
+      <para>Christian Andersson</para>
+
+      <para>Tove Bergdahl</para>
+
+      <para>Magnus Gäfvert</para>
+
+      <para>Jesper Mattsson</para>
+
+      <para>Johan Ylikiiskilä</para>
+
+      <para>Johan Åkesson</para>
+
+      <section>
+        <title>Previous contributors</title>
+
+        <para>Philip Nilsson</para>
+
+        <para>Roberto Parrotto</para>
+
+        <para>Jens Rantil</para>
+
+        <para>Philip Reuterswärd</para>
+      </section>
+    </section>
+  </section>
+
+  <section>
+    <title>Release notes for JModelica.org version 1.3</title>
+
+    <section>
+      <title>Highlights</title>
+
+      <itemizedlist>
+        <listitem>
+          <para>Functional Mockup Interface (FMI) simulation support</para>
+        </listitem>
+
+        <listitem>
+          <para>Support for minimum time problems</para>
+        </listitem>
+
+        <listitem>
+          <para>Improved support for redeclare/replaceable in the compiler
+          frontend</para>
+        </listitem>
+
+        <listitem>
+          <para>Limited support for external functions</para>
+        </listitem>
+
+        <listitem>
+          <para>Support for stream connections (with up to two connectors in a
+          connection)</para>
+        </listitem>
+      </itemizedlist>
+    </section>
+
+    <section>
+      <title>Compilers</title>
+
+      <section>
+        <title>The Modelica compiler</title>
+
+        <section>
+          <title>Arrays</title>
+
+          <para>Slice operations are now supported.</para>
+
+          <para>Array support is now nearly complete. The exceptions
+          are:</para>
+
+          <itemizedlist>
+            <listitem>
+              <para>Functions with array inputs with sizes declared as ':' -
+              only basic support.</para>
+            </listitem>
+
+            <listitem>
+              <para>A few array-related function-like operators are not
+              supported.</para>
+            </listitem>
+
+            <listitem>
+              <para>Connect clauses does not handle arrays of connectors
+              properly.</para>
+            </listitem>
+          </itemizedlist>
+        </section>
+
+        <section>
+          <title>Redecare</title>
+
+          <para>Redeclares as class elements are now supported.</para>
+        </section>
+
+        <section>
+          <title>Conditional components</title>
+
+          <para>Conditional components are now supported.</para>
+        </section>
+
+        <section>
+          <title>Constants and parameters</title>
+
+          <para>Function calls can now be used as binding expressions for
+          parameters and constants. The handling of Integer, Boolean and
+          record type parameters is also improved.</para>
+        </section>
+
+        <section>
+          <title>External functions</title>
+
+          <itemizedlist>
+            <listitem>
+              <para>Basic support for external functions written in C.</para>
+            </listitem>
+
+            <listitem>
+              <para>Annotations for libraries, includes, library directories
+              and include directories supported.</para>
+            </listitem>
+
+            <listitem>
+              <para>Platform directories supported.</para>
+            </listitem>
+
+            <listitem>
+              <para>Can not be used together with CppAD.</para>
+            </listitem>
+
+            <listitem>
+              <para>Arrays as arguments are not yet supported. Functions in
+              Modelica_utilies are also not supported.</para>
+            </listitem>
+          </itemizedlist>
+        </section>
+
+        <section>
+          <title>Stream connectors</title>
+
+          <para>Stream connectors, including the operators inStream and
+          actualStream and connections with up to two stream connectors are
+          supported.</para>
+        </section>
+
+        <section>
+          <title>Miscellaneous</title>
+
+          <para>The error checking has been improved, eliminating many
+          erroneous error messages for correct Modelica code.</para>
+
+          <para>The memory and time usage for the compiler has been greatly
+          reduced for medium and large models, especially for complex class
+          structures.</para>
+        </section>
+      </section>
+
+      <section>
+        <title>The Optimica compiler</title>
+
+        <para>All support mentioned for the Modelica compiler applies to the
+        Optimica compiler as well.</para>
+
+        <section>
+          <title>New class attribute objectiveIntegrand</title>
+
+          <para>Support for the objectiveIntegrand class attribute. In order
+          to encode Lagrange cost functions of the type</para>
+
+          <informalequation>
+            <m:math display="block">
+              <m:mrow>
+                <m:munderover>
+                  <m:mo>∫</m:mo>
+
+                  <m:msub>
+                    <m:mi>t</m:mi>
+
+                    <m:mi>0</m:mi>
+                  </m:msub>
+
+                  <m:msub>
+                    <m:mi>t</m:mi>
+
+                    <m:mi>f</m:mi>
+                  </m:msub>
+                </m:munderover>
+
+                <m:mrow>
+                  <m:mrow>
+                    <m:mi>L</m:mi>
+
+                    <m:mo>⁡</m:mo>
+
+                    <m:mfenced>
+                      <m:mi>.</m:mi>
+                    </m:mfenced>
+                  </m:mrow>
+
+                  <m:mspace depth="0.5ex" height="0.5ex" width="1ex"/>
+
+                  <m:mtext>dt</m:mtext>
+                </m:mrow>
+              </m:mrow>
+            </m:math>
+          </informalequation>
+
+          <para>the Optimica class attribute
+          <literal>objectiveIntegrand</literal> is supported by the Optimica
+          compiler. The expression <emphasis>L</emphasis> may be utilized by
+          optimization algorithms providing dedicated support for Lagrange
+          cost functions.</para>
+        </section>
+
+        <section>
+          <title>Support for minimum time problems</title>
+
+          <para>Optimization problems with free initial and terminal times can
+          now be solved by setting the free attribute of the class attributes
+          startTime and finalTime to true. The Optimica compiler automatically
+          translates the problem into a fixed horizon problems with free
+          parameters for the start en terminal times, which in turn are used
+          to rescale the time of the problem.</para>
+
+          <para>Using this method, no changes are required to the optimization
+          algorithm, since a fixed horizon problem is solved.</para>
+        </section>
+      </section>
+    </section>
+
+    <section>
+      <title>JModelica.org Model Interface (JMI)</title>
+
+      <section>
+        <title>The collocation optimization algorithm</title>
+
+        <section>
+          <title>Dependent parameters</title>
+
+          <para>Support for free dependent parameters in the collocation
+          optimization algorithm is now implemented. In models containing
+          parameter declarations such as:</para>
+
+          <programlisting>parameter Real p1(free=true);
+parameter Real p2 = p1;
+</programlisting>
+
+          <para>where the parameter p2 needs to be considered as being free in
+          the optimization problem, with the additional equality
+          constraint:</para>
+
+          <programlisting>p1 = p2
+</programlisting>
+
+          <para>included in the problem.</para>
+        </section>
+
+        <section>
+          <title>Support for Lagrange cost functions</title>
+
+          <para>The new Optimica class attribute objectiveIntegrand, see
+          above, is supported by the collocation optimization algorithm. The
+          integral cost is approximated by a Radau quadrature formula.</para>
+        </section>
+      </section>
+    </section>
+
+    <section>
+      <title>Assimulo</title>
+
+      <para>Support for simulation of an FMU (see below) using Assimulo.
+      Simulation of an FMU can either be done by using the high-level method
+      *simulate* or creating a model from the FMIModel class together with a
+      problem class, FMIODE which is then passed to CVode.</para>
+    </section>
+
+    <section>
+      <title>FMI compliance</title>
+
+      <para>Improved support for the Functional Mockup Interface (FMI)
+      standard. Support for importing an FMI model, FMU (Functional Mockup
+      Unit). The import consist of loading the FMU into Python and connecting
+      the models C execution interface to Python. Note, strings are not
+      currently supported.</para>
+
+      <para>Imported FMUs can be simulated using the Assimulo package.</para>
+    </section>
+
+    <section>
+      <title>XML model export</title>
+
+      <section>
+        <title><literal>noEvent</literal> operator</title>
+
+        <para>Support for the built-in operator <literal>noEvent</literal> has
+        been implemented.</para>
+      </section>
+
+      <section>
+        <title><literal>static</literal> attribute</title>
+
+        <para>Support for the Optimica attribute static has been
+        implemented.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>Python integration</title>
+
+      <section>
+        <title>High-level functions</title>
+
+        <section>
+          <title>Model files</title>
+
+          <para>Passing more than one model file to high-level functions
+          supported.</para>
+        </section>
+
+        <section>
+          <title>New result object</title>
+
+          <para>A result object is used as return argument for all algorithms.
+          The result object for each algorithm extends the base class
+          <literal>ResultBase</literal> and will therefore (at least) contain:
+          the model object, the result file name, the solver used and the
+          result data object.</para>
+        </section>
+      </section>
+
+      <section>
+        <title>File I/O</title>
+
+        <para>Rewriting xmlparser.py has improved performance when writing
+        simulation result data to file considerably.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>Contributors</title>
+
+      <para>Christian Andersson</para>
+
+      <para>Tove Bergdahl</para>
+
+      <para>Magnus Gäfvert</para>
+
+      <para>Jesper Mattsson</para>
+
+      <para>Roberto Parrotto</para>
+
+      <para>Johan Åkesson</para>
+
+      <para>Philip Reuterswärd</para>
+
+      <section>
+        <title>Previous contributors</title>
+
+        <para>Philip Nilsson</para>
+
+        <para>Jens Rantil</para>
+      </section>
+    </section>
+  </section>
+
+  <section>
+    <title>Release notes for JModelica.org version 1.2</title>
+
+    <section>
+      <title>Highlights</title>
+
+      <itemizedlist>
+        <listitem>
+          <para>Vectors and user defined functions are supported by the
+          Modelica and Optimica compilers</para>
+        </listitem>
+
+        <listitem>
+          <para>New Python functions for easy initialization, simulation and
+          optimization</para>
+        </listitem>
+
+        <listitem>
+          <para>A new Python simulation package, Assimulo, has been integrated
+          to provide increased flexibility and performance</para>
+        </listitem>
+      </itemizedlist>
+    </section>
+
+    <section>
+      <title>Compilers</title>
+
+      <section>
+        <title>The Modelica compiler</title>
+
+        <section>
+          <title>Arrays</title>
+
+          <para>Arrays are now almost fully supported. This includes all
+          arithmetic operations and use of arrays in all places allowed in the
+          language specification. The only exception is slice operations, that
+          are only supported for the last component in an access.</para>
+        </section>
+
+        <section>
+          <title>Function-like operators</title>
+
+          <para>Most function-like operators are now supported. The following
+          list contains the function-like operators that are *not*
+          supported:</para>
+
+          <itemizedlist>
+            <listitem>
+              <para>sign(v)</para>
+            </listitem>
+
+            <listitem>
+              <para>Integer(e)</para>
+            </listitem>
+
+            <listitem>
+              <para>String(...)</para>
+            </listitem>
+
+            <listitem>
+              <para>div(x,y)</para>
+            </listitem>
+
+            <listitem>
+              <para>mod(x,y)</para>
+            </listitem>
+
+            <listitem>
+              <para>rem(x,y)</para>
+            </listitem>
+
+            <listitem>
+              <para>ceil(x)</para>
+            </listitem>
+
+            <listitem>
+              <para>floor(x)</para>
+            </listitem>
+
+            <listitem>
+              <para>integer(x)</para>
+            </listitem>
+
+            <listitem>
+              <para>delay(...)</para>
+            </listitem>
+
+            <listitem>
+              <para>cardinality()</para>
+            </listitem>
+
+            <listitem>
+              <para>semiLinear()</para>
+            </listitem>
+
+            <listitem>
+              <para>Subtask.decouple(v)</para>
+            </listitem>
+
+            <listitem>
+              <para>initial()</para>
+            </listitem>
+
+            <listitem>
+              <para>terminal()</para>
+            </listitem>
+
+            <listitem>
+              <para>smooth(p, expr)</para>
+            </listitem>
+
+            <listitem>
+              <para>sample(start, interval)</para>
+            </listitem>
+
+            <listitem>
+              <para>pre(y)</para>
+            </listitem>
+
+            <listitem>
+              <para>edge(b)</para>
+            </listitem>
+
+            <listitem>
+              <para>reinit(x, expr)</para>
+            </listitem>
+
+            <listitem>
+              <para>scalar(A)</para>
+            </listitem>
+
+            <listitem>
+              <para>vector(A)</para>
+            </listitem>
+
+            <listitem>
+              <para>matrix(A)</para>
+            </listitem>
+
+            <listitem>
+              <para>diagonal(v)</para>
+            </listitem>
+
+            <listitem>
+              <para>product(...)</para>
+            </listitem>
+
+            <listitem>
+              <para>outerProduct(v1, v2)</para>
+            </listitem>
+
+            <listitem>
+              <para>symmetric(A)</para>
+            </listitem>
+
+            <listitem>
+              <para>skew(x)</para>
+            </listitem>
+          </itemizedlist>
+        </section>
+
+        <section>
+          <title>Functions and algorithms</title>
+
+          <para>Both algorithms and pure Modelica functions are supported,
+          with a few exceptions:</para>
+
+          <itemizedlist>
+            <listitem>
+              <para>Use of control structures (if, for, etc.) with test or
+              loop expressions with variability that is higher than parameter
+              is not supported when compiling for CppAD.</para>
+            </listitem>
+
+            <listitem>
+              <para>Indexes to arrays of records with variability that is
+              higher than parameter is not supported when compiling for
+              CppAD.</para>
+            </listitem>
+
+            <listitem>
+              <para>Support for inputs to functions with one or more
+              dimensions declared with ":" is only partial.</para>
+            </listitem>
+          </itemizedlist>
+
+          <para>External functions are not supported.</para>
+        </section>
+
+        <section>
+          <title>Miscellaneous</title>
+
+          <itemizedlist>
+            <listitem>
+              <para>Record constructors are now supported.</para>
+            </listitem>
+
+            <listitem>
+              <para>Limited support for constructs generating events. If
+              expressions are supported.</para>
+            </listitem>
+
+            <listitem>
+              <para>The noEvent operator is supported.</para>
+            </listitem>
+
+            <listitem>
+              <para>The error checking has been expanded to cover more
+              errors.</para>
+            </listitem>
+
+            <listitem>
+              <para>Modelica compliance errors are reported for legal but
+              unsupported language constructs.</para>
+            </listitem>
+          </itemizedlist>
+        </section>
+      </section>
+
+      <section>
+        <title>The Optimica Compiler</title>
+
+        <para>All support mentioned for the Modelica compiler applies to the
+        Optimica compiler as well.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>The JModelica.org Model Interface (JMI)</title>
+
+      <section>
+        <title>General</title>
+
+        <section>
+          <title>Automatic scaling based on the <literal>nominal</literal>
+          attribute</title>
+
+          <para>The Modelica attribute <literal>nominal</literal> can be used
+          to scale variables. This is particularly important when solving
+          optimization problems where poorly scaled systems may result in lack
+          of convergence. Automatic scaling is turned off by default since it
+          introduces a slight computational overhead: setting the compiler
+          option <literal>enable_variable_scaling</literal> to
+          <literal>true</literal> enables this feature.</para>
+        </section>
+
+        <section>
+          <title>Support for event indicator functions</title>
+
+          <para>Support for event indicator functions and switching functions
+          are now provided. These features are used by the new simulation
+          package Assimulo to simulate systems with events. Notice that
+          limitations in the compiler front-end applies, see above.</para>
+        </section>
+
+        <section>
+          <title>Integer and boolean parameters</title>
+
+          <para>Support for event indicator functions and switching functions
+          are now provided. These features are used by the new simulation
+          package Assimulo to simulate systems with events. Notice that
+          limitations in the compiler front-end applies, see above.</para>
+        </section>
+
+        <section>
+          <title>Linearization</title>
+
+          <para>A function for linearization of DAE models is provided. The
+          linearized models are computed using automatic differentiation which
+          gives results at machine precision. Also, for index-1 systems,
+          linearized DAEs can be converted into linear ODE form suitable for
+          e.g., control design.</para>
+        </section>
+      </section>
+    </section>
+
+    <section>
+      <title>The collocation optimization algorithm</title>
+
+      <section>
+        <title>Piecewise constant control signals</title>
+
+        <para>In control applications, in particular model predictive control,
+        it is common to assume piecewise constant control variables, sometimes
+        referred to as blocking factors. Blocking factors are now supported by
+        the collocation-based optimization algorithm, see
+        <literal>jmodelica.examples.cstr_mp</literal>c for an example.</para>
+      </section>
+
+      <section>
+        <title>Free initial conditions allowed</title>
+
+        <para>The restriction that all state initial conditions should be
+        fixed has been relaxed in the optimization algorithm. This enables
+        more flexible formulation of optimization problems.</para>
+      </section>
+
+      <section>
+        <title>Dens output of optimization result</title>
+
+        <para>Functions for retrieving the optimization result from the
+        collocation-based algorithm in a dense format are now provided. Two
+        options are available: either a user defined mesh is provided or the
+        result is given for a user defined number of points inside each finite
+        element. Interpolation of the collocation polynomials are used to
+        obtain the dense output.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>New simulation package: Assimulo</title>
+
+      <para>The simulation based on pySundials have been removed and replaced
+      by the Assimulo package which is also using the Sundials solvers. The
+      main difference between the two is that Assimulo is using Cython to
+      connect to Sundials. This has substantially improved the simulation
+      speed. For more info regarding Assimulo and its features, see: <link
+      xlink:href="http://www.jmodelica.org/assimulo">http://www.jmodelica.org/assimulo</link>.</para>
+    </section>
+
+    <section>
+      <title>FMI compliance</title>
+
+      <para>The Functional Mockup Interface (FMI) standard is partially
+      supported. FMI compliant model meta data XML document can be exported,
+      support for the FMI C model execution interface is not yet
+      supported.</para>
+    </section>
+
+    <section>
+      <title>XML model export</title>
+
+      <para>Models are now exported in XML format. The XML documents contain
+      information on the set of variables, the equations, the user defined
+      functions and for the Optimica´s optimization problems definition of the
+      flattened model. Documents can be validated by a schema designed as an
+      extension of the FMI XML schema.</para>
+    </section>
+
+    <section>
+      <title>Python integration</title>
+
+      <itemizedlist>
+        <listitem>
+          <para>The order of the non-named arguments for the ModelicaCompiler
+          and OptimicaCompiler function <literal>compile_model</literal> has
+          changed. In previous versions the arguments came in the order
+          <literal>(model_file_name, model_class_name, target =
+          "model")</literal> and is now <literal>(model_class_name,
+          model_file_name, target = "model")</literal>.</para>
+        </listitem>
+
+        <listitem>
+          <para>The functions <literal>setparameter</literal> and
+          <literal>getparameter</literal> in <literal>jmi.Model</literal> have
+          been removed. Instead the functions <literal>set_value</literal> and
+          get_value (also in <literal>jmi.Model</literal>) should be
+          used.</para>
+        </listitem>
+
+        <listitem>
+          <para>Caching has been implemented in the xmlparser module to
+          improve execution time for working with jmi.Model objects, which
+          should be noticeable for large models.</para>
+        </listitem>
+      </itemizedlist>
+
+      <section>
+        <title>New high-level functions for optimization and
+        simulation</title>
+
+        <para>New high-level functions for problem initialization,
+        optimization and simulation have been added which wrap the compilation
+        of a model, creation of a model object, setup and running of an
+        initialization/optimization/simulation and returning of a result in
+        one function call. For each function there is an algorithm implemented
+        which will be used by default but there is also the possibility to add
+        custom algorithms. All examples in the example package have been
+        updated to use the high-level functions.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>Contributors</title>
+
+      <para>Christian Andersson</para>
+
+      <para>Tove Bergdahl</para>
+
+      <para>Magnus Gäfvert</para>
+
+      <para>Jesper Mattsson</para>
+
+      <para>Philip Nilsson</para>
+
+      <para>Roberto Parrotto</para>
+
+      <para>Philip Reuterswärd</para>
+
+      <para>Johan Åkesson</para>
+
+      <section>
+        <title>Previous contributors</title>
+
+        <para>Jens Rantil</para>
+      </section>
+    </section>
+  </section>
+</appendix>

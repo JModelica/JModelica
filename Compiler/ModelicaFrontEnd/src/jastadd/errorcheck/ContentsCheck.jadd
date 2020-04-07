@@ -1,0 +1,1009 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import org.jmodelica.util.ErrorCheckType;
+
+import org.jmodelica.common.URIResolver;
+import org.jmodelica.common.URIResolver.URIException;
+
+aspect ContentCheck {
+
+    /**
+     * Check for code that is not allowed in its current context.
+     * 
+     * Examples would be checking that classes follow the requirements of 
+     * their restriction. 
+     */
+    public void ASTNode.contentCheck(ErrorCheckType checkType) {}
+
+    public abstract class ErrorChecker {
+        public static class ContentChecker extends ErrorChecker {
+            public ContentChecker() {
+                super("ContentCheck");
+            }
+
+            @Override
+            public void check(ASTNode node, ErrorCheckType checkType) {
+                node.contentCheck(checkType);
+            }
+        }
+    }
+
+    private static ErrorChecker ASTNode.CONTENT_CHECKER = addErrorChecker(new ErrorChecker.ContentChecker());
+
+	public void FAbstractEquation.contentCheck(ErrorCheckType checkType) {
+		if (inFunction()) 
+			error("Equations are not allowed in functions");
+	}
+	
+	public void FAlgorithm.contentCheck(ErrorCheckType checkType) {}
+	
+	public void InstDerExp.contentCheck(ErrorCheckType checkType) {
+		if (inFunction()) {
+			error("The der() operator is not allowed in functions");
+		} else {
+			try {
+				getFExp().diff(FExp.TIME);
+			} catch (ExpressionDifferentiationException e) {
+				e.generateError();
+			}
+		}
+	}
+    
+    public void FTerminate.contentCheck(ErrorCheckType checkType) {
+        if (inFunction()) 
+            error("The terminate() statement is not allowed in functions");
+    }
+    
+    public void FReinit.contentCheck(ErrorCheckType checkType) {
+        if (!inWhen() || inAlgorithm()) 
+            error("The reinit() operator is only allowed in when clauses that are within an equation section.");
+    }
+	
+	public void InstExternal.contentCheck(ErrorCheckType checkType) {
+        if (!inFunction()) {
+			error("External function declarations are only allowed in functions");
+        }
+        contentCheckDirectoryAnnotation(checkType, "IncludeDirectory");
+        contentCheckDirectoryAnnotation(checkType, "LibraryDirectory");
+    }
+
+    public void InstExternal.contentCheckDirectoryAnnotation(ErrorCheckType checkType, String name) {
+        AnnotationNode libDir = annotation(name);
+        if (libDir.exists()) {
+            if (libDir.isStringValue()) {
+                try {
+                    URIResolver.DEFAULT.resolveChecked(this, libDir.string());
+                } catch (URIException e) {
+                    ASTNode.EXTERNAL_DIRECTORY_ANNOTATION.invoke(this, name, e.getMessage());
+                }
+            } else {
+                ASTNode.EXTERNAL_DIRECTORY_ANNOTATION_TYPE.invoke(this, name);
+            }
+        }
+    }
+
+    public static final SimpleProblemProducer ASTNode.EXTERNAL_DIRECTORY_ANNOTATION =
+            new SimpleErrorProducer("EXTERNAL_DIRECTORY_ANNOTATION", ProblemKind.SEMANTIC,
+                    "%s annotation could not be resolved\n  %s");
+    public static final SimpleProblemProducer ASTNode.EXTERNAL_DIRECTORY_ANNOTATION_TYPE =
+            new SimpleErrorProducer("EXTERNAL_DIRECTORY_ANNOTATION_TYPE", ProblemKind.SEMANTIC,
+                    "%s annotation only allows scalar string values");
+
+	public void FReturnStmt.contentCheck(ErrorCheckType checkType) {
+		if (!inFunction())
+			error("Return statements are only allowed in functions");
+	}
+	
+	public void FWhenStmt.contentCheck(ErrorCheckType checkType) {
+		if (myFAlgorithm().getType().isInitial() || myFAlgorithm().isInitial())
+			error("When statements are not allowed in initial algorithms");
+		else if (inFunction())
+			error("When statements are not allowed in functions");
+		else if (insideBlockStmt())
+			error("When statements are not allowed inside if, for, while and when clauses");
+	}
+	
+	public void FParseArray.contentCheck(ErrorCheckType checkType) {
+		// If not already rewritten to FLongArray, this is an error.
+		error("The array() operator may not be used in function call equations or function call statements");
+	}
+	
+	public void FEndExp.contentCheck(ErrorCheckType checkType) {
+		if (!inArraySubscripts())
+			error("The end operator may only be used in array subscripts");
+	}
+	
+	public void InstPreExp.contentCheck(ErrorCheckType checkType) {
+		if (inFunction()) { 
+			error("The pre() operator may not be used inside functions");
+		}
+	}
+	
+	public void FEdgeExp.contentCheck(ErrorCheckType checkType) {
+		if (inFunction()) { 
+			error("The edge() operator may not be used inside functions");
+		}
+	}
+	
+	public void FChangeExp.contentCheck(ErrorCheckType checkType) {
+		if (inFunction()) { 
+			error("The change() operator may not be used inside functions");
+		}
+	}
+
+    public void InstExtends.contentCheck(ErrorCheckType checkType) {
+        if (myInstClass().isExternalObject())
+            error("Classed derived from ExternalObject can neither be used in an extends-clause nor in a short class defenition");
+        if (myInstClass().isOperatorRecord())
+            contentCheckExtendsOperatorRecord(checkType);
+    }
+
+    @Override
+    public void InstEnum.contentCheck(ErrorCheckType checkType) {
+        if (isUnspecifiedEnum() && !checkType.allowUnspecifiedEnums()) {
+            ASTNode.UNSPECIFIED_ENUM_COMPONENT.invoke(this, this);
+        }
+    }
+
+    /**
+     * Check if this is a valid extends of an operator record.
+     */
+    public void InstExtends.contentCheckExtendsOperatorRecord(ErrorCheckType checkType) {
+        error("Extending operator records is only allowed as a short class declaration");
+    }
+
+    public void InstExtendsShortClass.contentCheckExtendsOperatorRecord(ErrorCheckType checkType) {
+        if (hasInstClassModification())
+            getInstClassModification().contentCheckExtendsOperatorRecord(checkType);
+    }
+
+    public void InstReplacingExtendsShortClass.contentCheckExtendsOperatorRecord(ErrorCheckType checkType) {
+        if (hasInstClassModification())
+            getInstClassModification().contentCheckExtendsOperatorRecord(checkType);
+    }
+
+    /**
+     * Check if this is a valid modification on a short class declaration extending an operator record.
+     * 
+     * Will only generate one error message, iven if there are several problems.
+     */
+    public boolean InstModification.contentCheckExtendsOperatorRecord(ErrorCheckType checkType) {
+        return true;
+    }
+
+    public boolean InstCompleteModification.contentCheckExtendsOperatorRecord(ErrorCheckType checkType) {
+        return getInstClassModification().contentCheckExtendsOperatorRecord(checkType) && 
+                (!hasInstValueModification() || getInstValueModification().contentCheckExtendsOperatorRecord(checkType));
+    }
+
+    public boolean InstClassModification.contentCheckExtendsOperatorRecord(ErrorCheckType checkType) {
+        for (InstArgument arg : getInstArguments())
+            if (!arg.contentCheckExtendsOperatorRecord(checkType))
+                return false;
+        return true;
+    }
+
+    public boolean InstElementModification.contentCheckExtendsOperatorRecord(ErrorCheckType checkType) {
+        return !hasInstModification() || getInstModification().contentCheckExtendsOperatorRecord(checkType);
+    }
+
+    public boolean InstElementRedeclare.contentCheckExtendsOperatorRecord(ErrorCheckType checkType) {
+        error("Short class declarations extending an operator record may only modify attributes of members of the record");
+        return false;
+    }
+
+    public boolean InstComponentRedeclare.contentCheckExtendsOperatorRecord(ErrorCheckType checkType) {
+        if (!getInstComponentDecl().isPrimitive() || !isForOperatorRecordDeclarationMember()) {
+            error("Short class declarations extending an operator record may only modify attributes of members of the record");
+            return false;
+        }
+        return true;
+    }
+
+    public boolean InstComponentModification.contentCheckExtendsOperatorRecord(ErrorCheckType checkType) {
+        if (!hasValue() || isForAttributeOnOperatorRecordDeclarationMember()) {
+            return super.contentCheckExtendsOperatorRecord(checkType);
+        } else {
+            error("Short class declarations extending an operator record may only modify attributes of members of the record");
+            return false;
+        }
+    }
+
+    inh boolean InstModification.isForAttributeOnOperatorRecordDeclarationMember();
+    eq InstNode.getChild().isForAttributeOnOperatorRecordDeclarationMember()                                 = false;
+    eq InstRecordConstructor.getChild().isForAttributeOnOperatorRecordDeclarationMember()                    = false;
+    eq InstCompleteModification.getInstValueModification().isForAttributeOnOperatorRecordDeclarationMember() = // TODO: not needed?
+        isForAttributeOnOperatorRecordDeclarationMember();
+    eq InstElementModification.getInstModification().isForAttributeOnOperatorRecordDeclarationMember()       =
+        getName().myInstComponentDecl().isPrimitive() && isForOperatorRecordDeclarationMember();
+
+    inh boolean InstNamedModification.isForOperatorRecordDeclarationMember();
+    eq InstElementModification.getChild().isForOperatorRecordDeclarationMember() = 
+        getName().isComponentAccess() && isForOperatorRecordDeclarationMember();
+    eq InstClassDecl.getChild().isForOperatorRecordDeclarationMember()           = isOperatorRecord();
+    eq InstExtends.getChild().isForOperatorRecordDeclarationMember()             = myInstClass().isOperatorRecord();
+    eq InstNode.getChild().isForOperatorRecordDeclarationMember()                = false;
+    eq Root.getChild().isForOperatorRecordDeclarationMember()                    = false;
+
+	public void InstFunctionCall.contentCheck(ErrorCheckType checkType) {
+       if (generated) {
+           if (isConstructorCall()) {
+               if (!isBound()) {
+                   error("Constructors for external objects can only be used as binding expressions");
+               }
+           }
+       } else {
+			InstClassDecl target = getName().myInstClassDecl();
+			if (target.isConstructor() || target.isDestructor())
+				error("Constructors and destructors for ExternalObjects can not be used directly");
+		}
+	}
+	
+	public void FConnRootedDep.contentCheck(ErrorCheckType checkType) {
+		warning("The rooted() operator has been deprecated in favor of Connections.rooted()");
+	}
+
+    public void InstComponentDecl.contentCheck(ErrorCheckType checkType) {
+        if (!inFunction()) // Array sizes outside functions should be structural parameters
+            size().forceVariability(checkType, Variability.STRUCTPARAMETER);
+        checkQuotedIdentifier(getSrcComponentDecl(), name());
+        checkAbsoluteValue();
+    }
+
+    public void InstAssignable.contentCheck(ErrorCheckType checkType) {
+        super.contentCheck(checkType);
+        if (isDeclaredInput() || isDeclaredOutput()) {
+            InstComponentDecl inherit = inheritsInputOutputFrom();
+            if (inherit != null)
+                inherit.error("Can't declare %s as %s, since it contains a component declared as input or output", 
+                        name(), (isDeclaredInput() ? "input" : "output"));
+        }
+        if (isDeclaredFlow()) {
+            InstComponentDecl inherit = inheritsFlowFrom();
+            if (inherit != null)
+                inherit.error("Can't declare %s as flow, since it contains a component declared as flow", name());
+        }
+        if (isExternalObject() && hasBindingFExp() && !getBindingFExp().variability().lessOrEqual(variability())) {
+            ASTNode.BINDING_EXPRESSION_VARIABILITY.invoke(this, 
+                getBindingFExp().variability().toStringLiteral(), variability().toStringLiteral());
+        }
+    }
+
+    public static final SimpleProblemProducer ASTNode.BINDING_EXPRESSION_VARIABILITY =
+        new SimpleErrorProducer("BINDING_EXPRESSION_VARIABILITY", ProblemKind.SEMANTIC, 
+            "Variability of binding expression (%s) must be lower or equal to the variability of the component (%s)");
+    
+    public static final SimpleProblemProducer ASTNode.CONSTANT_INPUT =
+        new SimpleErrorProducer("CONSTANT_INPUT", ProblemKind.SEMANTIC, "Function input may not be constant");
+    public static final SimpleProblemProducer ASTNode.EXTERNAL_FUNCTION_ANNOTATION =
+        new SimpleErrorProducer("EXTERNAL_FUNCTION_ANNOTATION", ProblemKind.SEMANTIC,
+            "External function annotations only allowed on external statement annotations. "
+            + "This annotation is attached to a class. There might be a semicolon you want to remove.");
+
+    public void InstClassDecl.contentCheck(ErrorCheckType checkType) {
+        if (isExternalObject()) {
+            checkContentsOKInExternalObject();
+            myConstructor().checkConstructor(this);
+            myDestructor().checkDestructor(this);
+        }
+        
+        if (isFunction()) {
+            for (InstComponentDecl icd : allInstComponentDecls()) {
+                if (icd.definedVariability().constantVariability()) {
+                    if (icd.isInput()) {
+                        ASTNode.CONSTANT_INPUT.invoke(icd);
+                    } else if (icd.hasBindingFExp()) {
+                        icd.getBindingFExp().checkConstantExpression(checkType, "constant", icd.qualifiedName());
+                    }
+                }
+            }
+            for (AnnotationNode an : annotation()) {
+                if (AnnotationNode.EXTERNAL_FUNCTION_ANNOTATIONS.contains(an.name())) {
+                    ASTNode.EXTERNAL_FUNCTION_ANNOTATION.invoke(an.ast());
+                }
+            }
+        }
+        
+        checkQuotedIdentifier(getSrcClassDecl().getName(), name());
+        checkAbsoluteValue();
+    }
+    
+    private static Set<String> AnnotationNode.buildExternalFunctionAnnotations() {
+        Set<String> res = new LinkedHashSet<String>();
+        res.add("Include");
+        res.add("IncludeDirectory");
+        res.add("Library");
+        res.add("LibraryDirectory");
+        return res;
+    }
+    public static final Set<String> AnnotationNode.EXTERNAL_FUNCTION_ANNOTATIONS = buildExternalFunctionAnnotations();
+    
+	public void InstNode.checkContentsOKInExternalObject() {
+		for (InstExtends ie : getInstExtendss())
+			ie.checkContentsOKInExternalObject();
+		boolean ok = true;
+		for (InstClassDecl icd : getInstClassDecls())
+			if (!icd.name().equals("constructor") && !icd.name().equals("destructor"))
+				ok = false;
+		if (getNumInstComponentDecl() > 0)
+			ok = false;
+		if (getNumRedeclaredInstClassDecl() > 0)
+			ok = false;
+		if (getNumFAbstractEquation() > 0)
+			ok = false;
+		if (!ok)
+			error("External object classes may not contain any elements except the constructor and destructor");
+	}
+	
+	public void InstClassDecl.checkDestructor(InstClassDecl parent) {
+		if (isUnknown())
+			return;
+		if (myOutputs().size() != 0 || myInputs().size() != 1 || !myInputs().get(0).type().compatibleDestructor(parent))
+			error("An external object destructor must have exactly one input of the same type as the constructor, and no outputs");
+	}
+	
+	public void InstClassDecl.checkConstructor(InstClassDecl parent) {
+		if (isUnknown())
+			return;
+		if (myOutputs().size() != 1 || !myOutputs().get(0).type().compatibleConstructor(parent))
+			error("An external object constructor must have exactly one output of the same type as the constructor");
+	}
+	
+    syn boolean FType.compatibleConstructor(InstClassDecl icd) = false;
+    eq FExternalObjectType.compatibleConstructor(InstClassDecl icd) = getConstructor().name().equals("." + icd.qualifiedName() + ".constructor");
+    syn boolean FType.compatibleDestructor(InstClassDecl icd) = false;
+    eq FExternalObjectType.compatibleDestructor(InstClassDecl icd) = getDestructor().name().equals("." + icd.qualifiedName() + ".destructor");
+	
+	// TODO: check if this is a builtin function (with bad arguments), error otherwise
+//	public void FBuiltinExternalLanguage.contentCheck(ErrorCheckType checkType) {
+//		error("The \"builtin\" external language specitication may only be used for functions that are a part of the Modelica specification");
+//	}
+	
+	public void FUnknownExternalLanguage.contentCheck(ErrorCheckType checkType) {
+		error("The external language specification \"" + getLanguage() + "\" is not supported");
+	}
+    
+    public static final SimpleErrorProducer ASTNode.NON_PARAMETER_SAMPLE_ARGUMENTS =
+            new SimpleErrorProducer("NON_PARAMETER_SAMPLE_ARGUMENTS", ProblemKind.SEMANTIC, 
+                    "Sample arguments need to be parameter expressions");
+    
+    public void FSampleExp.contentCheck(ErrorCheckType checkType) {
+        for (FExp ch : childFExps()) {
+            if (!ch.variability().parameterOrLess()) {
+                NON_PARAMETER_SAMPLE_ARGUMENTS.invoke(ch);
+            }
+        }
+    }
+
+	inh boolean FIterExp.iterExpUseOK();
+	eq FExp.getChild().iterExpUseOK()          = false;
+	eq Root.getChild().iterExpUseOK()          = false;
+	eq InstNode.getChild().iterExpUseOK()      = false;
+	eq FArray.getChild().iterExpUseOK()        = true;
+	eq FMinMaxExp.getChild().iterExpUseOK()    = true;
+	eq FReductionExp.getChild().iterExpUseOK() = true;
+	
+	public void FIterExp.contentCheck(ErrorCheckType checkType) {
+		if (!iterExpUseOK())
+			error("Reduction-expressions are only allowed with sum(), min(), max() and product()");
+	}
+	
+	public void FOverflowIntLitExp.contentCheck(ErrorCheckType checkType) {
+		warning("Integer literal \"%s\" is too large to represent as 32-bit Integer, using Real instead.", 
+				getString(), getString(), getValue());
+	}
+
+    private static final String ASTNode.OK_ESCAPES = "'\"?\\abfnrtv";
+
+    public void ASTNode.checkEscapeSequences(ASTNode node, String str, String type) {
+        for (int p = str.indexOf('\\'); p > -1 && p < str.length(); p = str.indexOf('\\', p + 2))
+            if (OK_ESCAPES.indexOf(str.charAt(p + 1)) == -1)
+                node.error("Illegal escape sequence at position %d in %s: '\\%c'", p + 1, type, str.charAt(p + 1));
+    }
+
+    public void ASTNode.checkQuotedIdentifier(ASTNode node, String str) {
+        if (str.charAt(0) == '\'')
+            checkEscapeSequences(node, str, "quoted identifier");
+    }
+
+    public void FStringLitExp.contentCheck(ErrorCheckType checkType) {
+        super.contentCheck(checkType);
+        checkEscapeSequences(this, getString(), "string");
+    }
+
+    public void InstNamedAccess.contentCheck(ErrorCheckType checkType) {
+        super.contentCheck(checkType);
+        checkQuotedIdentifier(this, getID());
+    }
+    
+	/**
+	 * Check if this equation may legally contain a connect clause.
+	 */
+    public void FAbstractEquation.checkMayContainConnect(ErrorCheckType checkType, FConnectClause connect) {
+        FAbstractEquation context = surroundingFAbstractEquation();
+        if (context != null) {
+            context.checkMayContainConnect(checkType, connect);
+        }
+    }
+    
+    public void FWhenEquation.checkMayContainConnect(ErrorCheckType checkType, FConnectClause connect) {
+        super.checkMayContainConnect(checkType, connect);
+        connect.error("Connect clauses are not allowed in when equations");
+    }
+    
+    public void FIfEquation.checkMayContainConnect(ErrorCheckType checkType, FConnectClause connect) {
+        super.checkMayContainConnect(checkType, connect);
+        TypePrefixVariability v = getTest().variability();
+        if (!v.fixedParameterOrLess()) {
+            connect.error("Connect clauses are not allowed in if equations with non-parameter or non-fixed conditions");
+        } else {
+            if (!getTest().canCeval()) {
+                getTest().error("Could not evaluate test expression for if equation containing connect clause");
+            }
+            getTest().markAsStructuralParameter(checkType);
+        }
+    }
+    
+    inh FAbstractEquation FConnectClause.surroundingFAbstractEquation();
+    inh FAbstractEquation FAbstractEquation.surroundingFAbstractEquation();
+    eq FAbstractEquation.getChild().surroundingFAbstractEquation() = this;
+    eq FClass.getChild().surroundingFAbstractEquation()            = null;
+    eq InstNode.getChild().surroundingFAbstractEquation()          = null;
+    
+	public void FConnectClause.contentCheck(ErrorCheckType checkType) {
+		super.contentCheck(checkType);
+        if (!lockBranch(checkType)) {
+            checkMayContainConnect(checkType, this);
+        }
+	}
+	
+	public void FWhenEquation.contentCheck(ErrorCheckType checkType) {
+		// TODO: check that two when clauses do not assign the same variable
+		super.contentCheck(checkType);
+		if (inWhen())
+			error("Nestled when clauses are not allowed");
+		else if (getType().isInitial() || isInitial()) {
+			error("When equations are not allowed in initial equation sections");
+		} else {
+			if (!isBalancedAssignments())
+				error("All branches in when equation must assign the same variables");
+		}
+	}
+    
+    public void InstNamedModification.contentCheck(ErrorCheckType checkType) {
+        if (getName().hasFArraySubscripts() && !getName().getFArraySubscripts().isFullSize())
+            error("Modifiers of specific array elements are not allowed");
+    }
+    
+    public void InstComponentRedeclare.contentCheck(ErrorCheckType checkType) {}
+	
+	public static final String FIfEquation.UNBALANCED_ERROR = 
+		"All branches in if equation with non-parameter tests must have the same number of equations";
+	public static final String FIfEquation.UNBALANCED_ERROR_WHEN = 
+		"All branches in if equation with non-parameter tests within when equation must assign the same variables";
+
+    public void FIfEquation.contentCheck(ErrorCheckType checkType) {
+        super.contentCheck(checkType);
+        if (isTopWhenIfEquation()) {
+            boolean inWhen = inWhen();
+            boolean balanced = inWhen ? isBalancedAssignments() : isBalancedEquations();
+            boolean functionCallEqu = hasFunctionCallEquations(); 
+            if (canSelectBranch()) {
+                forceTestVariability(checkType, balanced ? Variability.TESTPARAMETER : Variability.STRUCTPARAMETER);
+            } else {
+                if (!balanced) {
+                    error(inWhen ? UNBALANCED_ERROR_WHEN : UNBALANCED_ERROR);
+                }
+            }
+        }
+    }
+
+    syn boolean FIfWhenElseEquation.canSelectBranch() = true;
+    eq FIfWhenEquation.canSelectBranch()              = getTest().variability().fixedParameterOrLess() 
+            && (!hasElse() || getElse().canSelectBranch());
+
+	public void FEquation.contentCheck(ErrorCheckType checkType) {
+		super.contentCheck(checkType);
+		if (inWhen() && !isAssignmentEqn())
+			error("Only assignment equations are allowed in when clauses");
+	}
+
+    protected void FIfWhenElseEquation.forceTestVariability(ErrorCheckType checkType, TypePrefixVariability v) {}
+
+    @Override
+    protected void FIfEquation.forceTestVariability(ErrorCheckType checkType, TypePrefixVariability v) {
+        getTest().forceVariability(checkType, v);
+        if (hasElse()) {
+            getElse().forceTestVariability(checkType, v);
+        }
+    }
+
+	syn boolean FIfWhenElseEquation.isBalancedEquations() = true; 
+	eq FIfEquation.isBalancedEquations() = hasElse() ? elseIsBalancedEquations() : numScalarEquations() == 0;
+	
+	syn boolean FIfWhenEquation.elseIsBalancedEquations() = 
+		numScalarEquations() == getElse().numScalarEquations() && 
+		getElse().isBalancedEquations();
+	
+	syn boolean FIfWhenElseEquation.isBalancedAssignments() = true; 
+	eq FIfEquation.isBalancedAssignments()   = hasElse() ? elseIsBalancedAssignments() : numScalarEquations() == 0;
+	eq FWhenEquation.isBalancedAssignments() = !hasElse() || elseIsBalancedAssignments();
+	
+	syn boolean FIfWhenEquation.elseIsBalancedAssignments() = 
+		assignedSet().equals(getElse().assignedSet()) && getElse().isBalancedAssignments();
+
+
+    protected static Set<InstComponentDecl> FAbstractEquation.assignedSetFromEqns(List<FAbstractEquation> eqns) {
+        Set<InstComponentDecl> res = new HashSet<InstComponentDecl>();
+        for (FAbstractEquation eqn : eqns)
+            res.addAll(eqn.assignedSet());
+        return res;
+    }
+
+    /**
+     * Gives the set of components assigned in this equation.
+     * 
+     * Only works in instance tree.
+     * For if and when equations, only the first branch is considered.
+     */
+    syn lazy Set<InstComponentDecl> FAbstractEquation.assignedSet() = Collections.emptySet();
+    eq InstForClauseE.assignedSet()      = assignedSetFromEqns(getFAbstractEquations());
+    eq FIfWhenElseEquation.assignedSet() = assignedSetFromEqns(getFAbstractEquations());
+    eq FEquation.assignedSet()           = getLeft().accessedVarSet();
+    eq FFunctionCallEquation.assignedSet() {
+        LinkedHashSet<InstComponentDecl> s = new LinkedHashSet<InstComponentDecl>();
+        for (FFunctionCallLeft left : getLefts()) {
+            if (left.hasFExp()) {
+                s.addAll(left.getFExp().accessedVarSet());
+            }
+        }
+        return s;
+    }
+
+    /**
+     * If this is an instance tree access, return set containing accessed var, otherwise empty set.
+     */
+    syn Set<InstComponentDecl> FExp.accessedVarSet() = Collections.emptySet();
+    eq InstAccessExp.accessedVarSet()                = getInstAccess().accessedVarSet();
+
+    /**
+     * If this is an instance tree access, return set containing accessed var, otherwise empty set.
+     */
+    syn Set<InstComponentDecl> InstAccess.accessedVarSet() = Collections.singleton(myInstComponentDecl());
+
+
+    inh boolean FIfEquation.isTopWhenIfEquation();
+    eq FClass.getChild().isTopWhenIfEquation()              = true;
+    eq InstClassDecl.getChild().isTopWhenIfEquation()       = true;
+    eq FIfWhenElseEquation.getChild().isTopWhenIfEquation() = true;
+    eq FIfWhenEquation.getElse().isTopWhenIfEquation()      = false;
+
+	syn boolean FAbstractEquation.isAssignmentEqn() = false;
+	eq FEquation.isAssignmentEqn()                  = getLeft().isAccess();
+	
+	syn boolean FAbstractEquation.hasFunctionCallEquations() = false;
+	eq FFunctionCallEquation.hasFunctionCallEquations()      = true;
+	eq FIfWhenEquation.hasFunctionCallEquations()            = 
+		super.hasFunctionCallEquations() || (hasElse() && getElse().hasFunctionCallEquations());
+	eq FIfWhenElseEquation.hasFunctionCallEquations() {
+		for (FAbstractEquation equ : getFAbstractEquations())
+			if (equ.hasFunctionCallEquations())
+				return true;
+		return false;
+	}
+	eq FForClauseE.hasFunctionCallEquations() {
+		for (FAbstractEquation equ : getFAbstractEquations())
+			if (equ.hasFunctionCallEquations())
+				return true;
+		return false;
+	}
+	
+	syn boolean FAbstractEquation.hasFunctionCallEquationsWithLefts() = false;
+	eq FFunctionCallEquation.hasFunctionCallEquationsWithLefts()      = getNumLeft() > 0;
+	eq FIfWhenEquation.hasFunctionCallEquationsWithLefts()            = 
+		super.hasFunctionCallEquationsWithLefts() || (hasElse() && getElse().hasFunctionCallEquationsWithLefts());
+	eq FIfWhenElseEquation.hasFunctionCallEquationsWithLefts() {
+		for (FAbstractEquation equ : getFAbstractEquations())
+			if (equ.hasFunctionCallEquationsWithLefts())
+				return true;
+		return false;
+	}
+	eq FForClauseE.hasFunctionCallEquationsWithLefts() {
+		for (FAbstractEquation equ : getFAbstractEquations())
+			if (equ.hasFunctionCallEquationsWithLefts())
+				return true;
+		return false;
+	}
+
+
+    public void InstMPackage.contentCheck(ErrorCheckType checkType) {
+        if (!myInstClassDecl().isOkPackage())
+            error("Packages may only contain classes and constants");
+        super.contentCheck(checkType);
+    }
+
+    public void InstOperatorRecord.contentCheck(ErrorCheckType checkType) {
+        for (InstClassDecl op : operatorMap().values())
+            op.checkRestriction(checkType);
+        for (InstClassDecl cls : myInstClassDecl().allInstClassDecls())
+            if (cls.hasInstRestriction())
+                cls.getInstRestriction().checkIfAllowedInOperator(checkType);
+        super.contentCheck(checkType);
+    }
+
+    public void InstRestriction.checkIfAllowedInOperator(ErrorCheckType checkType) {
+        error("Classes other than operators, operator functions, functions and packages are not allowed in operator record classes");
+    }
+
+    public void InstMPackage.checkIfAllowedInOperator(ErrorCheckType checkType) {
+        for (InstClassDecl cls : myInstClassDecl().allInstClassDecls())
+            if (cls.hasInstRestriction())
+                cls.getInstRestriction().checkIfAllowedInOperator(checkType);
+        for (InstComponentDecl comp : myInstClassDecl().allInstComponentDecls())
+            comp.error("Components are not allowed in packages in operator records");
+    }
+
+    public void InstOperator.checkIfAllowedInOperator(ErrorCheckType checkType) {}
+    public void InstFunction.checkIfAllowedInOperator(ErrorCheckType checkType) {}
+
+    /**
+     * Perform content checks that are common to 'operator' and 'operator function'.
+     * 
+     * @param checkType  the kind of error checking being done
+     */
+    public void InstRestriction.contentCheckAsOperator(ErrorCheckType checkType) {
+        InstClassDecl rec = myInstClassDecl().myOperatorRecord();
+        String name = myInstClassDecl().name();
+        if (rec == null)
+            error("Operator classes are only allowed in operator records and packages in operator records");
+        else
+            for (InstClassDecl f : operatorFunctions())
+                f.contentCheckAsOperatorFunction(checkType, rec.recordType(), name);
+        if (name.equals(FExp.OP_ZERO) && operatorFunctions().size() > 1)
+            error("The '0' operator may not contain more than one function, but has %d", operatorFunctions().size());
+        if (!FExp.OPERATORS.contains(name))
+            error("Invalid name for operator class: %s", name);
+        if (!myInstClassDecl().isEncapsulated())
+            error("Operator classes must be encapsulated");
+    }
+
+    /**
+     * Perform content checks that are common to functions in operators and operator functions.
+     * 
+     * @param checkType  the kind of error checking being done
+     */
+    public void InstClassDecl.contentCheckAsOperatorFunction(ErrorCheckType checkType, FType type, String name) {
+        boolean constr = FExp.CONSTRUCTOR_OPERATORS.contains(name);
+        boolean conv   = FExp.CONVERSION_OPERATORS.contains(name);
+        boolean binary = FExp.BINARY_OPERATORS.contains(name);
+        boolean unary  = FExp.UNARY_OPERATORS.contains(name);
+        int mandatory = 0;
+        for (InstComponentDecl input : myInputs()) 
+            if (!input.hasBindingFExp())
+                mandatory++;
+        
+        String funcName = isOperator() ? "" : (name() + " ");
+        if (myOutputs().size() != 1)
+            error("Operator functions must have exactly one output, but %s has %d", name(), myOutputs().size());
+        else if (constr && !myOutputs().get(0).type().equivalentTo(type))
+            myOutputs().get(0).error("Output of operator record constructor must be of the type of the operator record the constructor belongs to");
+        else if (conv) {
+            FType expected = null;
+            if (name.equals(FExp.OP_STR))
+                expected = fStringScalarType();
+            if (expected != null && !myOutputs().get(0).type().equivalentTo(expected))
+                error("%s operator functions must have one output of type %s, but %sreturns %s", name, expected, funcName, myOutputs().get(0).type());
+        }
+        if (constr) {
+            if (name.equals(FExp.OP_ZERO)) {
+                if (!myInputs().isEmpty())
+                    error("The '0' operator record constructor may not have any inputs, but %shas %d", funcName, myOutputs().size());
+            } else if (mandatory == 1) {
+                FType otherType = myInputs().get(0).type();
+                if (otherType.matchOverloadedConstructor(type) != null) 
+                    error("Ambiguous overloaded constructors in %s and %s", type, otherType);
+            }
+        } else {
+            boolean typeOk = false;
+            boolean orderOk = true;
+            for (int i = 0, n = myInputs().size(); i < n; i++) { 
+                InstComponentDecl inp = myInputs().get(i);
+                if ((!conv || i == 0) && inp.type().scalarType().equivalentTo(type))
+                    typeOk = true;
+                if (inp.hasBindingFExp() && mandatory > i)
+                    orderOk = false;
+            }
+            if (!typeOk)
+                error((conv ? "First argument of conversion operator functions must be" : "Operator functions must have at least one argument that is") + 
+                        " of the type of the operator record the function belongs to");
+            if (!orderOk)
+                error("All inputs without default value in operator function must be before all inputs with default value");
+        }
+        if (binary && unary) {
+            if (mandatory < 1 || mandatory > 2)
+                error("Operator functions for operators that are both unary and binary must have exactly 1 or 2 inputs without default value, but %s has %d", 
+                        name(), mandatory);
+        } else if (binary) {
+            if (mandatory != 2)
+                error("Operator functions for binary operators must have exactly 2 inputs without default value, but %s has %d", 
+                        name(), mandatory);
+        } else if (unary) {
+            if (mandatory != 1)
+                error("Operator functions for unary operators must have exactly 1 input without default value, but %s has %d", 
+                        name(), mandatory);
+        }
+    }
+
+    public void InstOperator.contentCheck(ErrorCheckType checkType) {
+        contentCheckAsOperator(checkType);
+        super.contentCheck(checkType);
+    }
+
+    public void InstOperatorFunction.contentCheck(ErrorCheckType checkType) {
+        contentCheckAsOperator(checkType);
+        super.contentCheck(checkType);
+    }
+    
+    public void FExternalStmt.contentCheck(ErrorCheckType checkType) {
+        getFExternalLanguage().contentCheck(checkType, this);
+    }
+    
+    public void FExternalLanguage.contentCheck(ErrorCheckType checkType, FExternalStmt stmt) {
+        
+    }
+    
+    public void FFortran77ExternalLanguage.contentCheck(ErrorCheckType checkType, FExternalStmt stmt) {
+        for (FExp arg : stmt.getArgs()) {
+            arg.type().contentCheckFortranArg(checkType, stmt);
+        }
+        if (stmt.hasReturnVar()) {
+            stmt.getReturnVar().type().contentCheckFortranArg(checkType, stmt);
+        }
+    }
+    
+    public void FType.contentCheckFortranArg(ErrorCheckType checkType, FExternalStmt stmt) {
+        
+    }
+    
+    public void FRecordType.contentCheckFortranArg(ErrorCheckType checkType, FExternalStmt stmt) {
+        stmt.error("Passing records to external fortran functions is not allowed");
+    }
+    
+    public void FStringType.contentCheckFortranArg(ErrorCheckType checkType, FExternalStmt stmt) {
+        String funcName = stmt.containingInstClassDecl().qualifiedName();
+        boolean islapack = funcName.startsWith("Modelica.Math.Matrices.LAPACK");
+        if (!islapack) {
+            stmt.error("Passing strings to external fortran functions is not allowed");
+        }
+    }
+    
+    public void FCExternalLanguage.contentCheck(ErrorCheckType checkType, FExternalStmt stmt) {
+        for (FExp arg : stmt.getArgs()) {
+            arg.type().contentCheckCArg(checkType, stmt);
+        }
+        if (stmt.hasReturnVar()) {
+            stmt.getReturnVar().type().contentCheckCArg(checkType, stmt);
+        }
+    }
+    
+    public void FType.contentCheckCArg(ErrorCheckType checkType, FExternalStmt stmt) { }
+    public void FRecordType.contentCheckCArg(ErrorCheckType checkType, FExternalStmt stmt) {
+        if (!externalValid()) {
+            stmt.error("Record type used as input or output to external function can only contain scalar record or scalar simple types");
+        }
+    }
+    
+    syn boolean FType.externalValid() = externalValid(false);
+    syn boolean FType.externalValid(boolean rec)  = false;
+    eq FExternalObjectType.externalValid(boolean rec) = !rec || !isArray();
+    eq FPrimitiveType.externalValid(boolean rec)      = !rec || !isArray();
+    eq FRecordType.externalValid(boolean rec) {
+        if (isArray()) {
+            return false;
+        }
+        for (FRecordComponentType frct : getComponents()) {
+            if (!frct.getFType().externalValid(true)) {
+                return false;
+            }
+        }
+        return true;
+    }
+    
+    /**
+     * Get the class this restriction is attached to.
+     */
+    inh InstClassDecl InstRestriction.myInstClassDecl();
+    eq InstBaseClassDecl.getInstRestriction().myInstClassDecl() = this;
+
+    /**
+     * Check if this class fulfills the requirements of a package.
+     */
+    syn boolean InstNode.isOkPackage() {
+        for (InstComponentDecl icd : getInstComponentDecls()) {
+            if (!icd.isConstant()) {
+                return false;
+            }
+        }
+        if (getNumFAbstractEquation() != 0) {
+            return false;
+        }
+        for (InstExtends ie : getInstExtendss()) {
+            if (!ie.isOkPackage()) {
+                return false;
+            }
+        }
+        return true;
+    }
+    eq InstSimpleShortClassDecl.isOkPackage() = actualInstClass().isOkPackage();
+    eq InstLibNode.isOkPackage()              = actualInstClass().isOkPackage();
+
+    /**
+     * If this class is in an operator record or in a package in an operator record, find that operator record.
+     */
+    inh InstClassDecl InstClassDecl.myOperatorRecord();
+    eq InstClassDecl.getChild().myOperatorRecord()     = isOperatorRecord() ? this : (isPackage() ? myOperatorRecord() : null);
+    eq InstComponentDecl.getChild().myOperatorRecord() = null;
+    eq InstRoot.getChild().myOperatorRecord()          = null;
+    eq Root.getChild().myOperatorRecord()              = null;
+
+    /**
+     * If this class is in an operator record or in a package in an operator record.
+     */
+     syn boolean SrcClassDecl.hasOperatorRecord() = getSrcRestriction().isOperatorRecord() ? true : (isPackage() ? hasOperatorRecord() : false);
+    inh boolean SrcClassDecl.hasOperatorRecordHelper();
+    eq SrcLibNode.getChild().hasOperatorRecordHelper()    = hasOperatorRecordHelper();
+    eq SrcClassDecl.getChild().hasOperatorRecordHelper()  {
+        if (hasSrcRestriction()) {
+            if (getSrcRestriction().isOperatorRecord()) {
+                return true;
+            }
+            return isPackage() ? hasOperatorRecordHelper() : false;
+        }
+        return false;
+    }
+    eq Root.getChild().hasOperatorRecordHelper()          = false;
+
+    syn boolean SrcRestriction.isOperatorRecord() = false;
+    eq SrcOperatorRecord.isOperatorRecord() = true;
+}
+
+aspect ForceVariability {
+
+    private TypePrefixVariability InstAssignable.forcedVariability = Variability.CONTINUOUS;
+
+    public void FExp.markAsStructuralParameter(ErrorCheckType checkType) {
+        forceVariability(checkType, Variability.STRUCTPARAMETER);
+    }
+
+    public void FExp.forceVariability(ErrorCheckType checkType,  TypePrefixVariability v) {
+        if (!inFunction()) {
+            forceUsesVariability(checkType, v);
+        }
+    }
+
+    public void FArraySubscripts.forceVariability(ErrorCheckType checkType,  TypePrefixVariability v) {}
+    public void FArrayExpSubscripts.forceVariability(ErrorCheckType checkType,  TypePrefixVariability v) {
+        for (FSubscript s : getFSubscripts()) {
+            s.forceVariability(checkType, v);
+        }
+    }
+
+    public void FSubscript.forceVariability(ErrorCheckType checkType,  TypePrefixVariability v) {}
+
+    public void FExpSubscript.forceVariability(ErrorCheckType checkType,  TypePrefixVariability v) {
+        getFExp().forceVariability(checkType, v);
+    }
+
+
+    public void InstComponentDecl.forceVariability(ErrorCheckType checkType, TypePrefixVariability v) {}
+
+    public void InstAssignable.forceVariability(ErrorCheckType checkType, TypePrefixVariability v) {
+        if (forcedVariability.lessOrEqual(v)) {
+            return;
+        }
+        TypePrefixVariability currentVariability = variability().combine();
+        if (!currentVariability.parameterVariability() || inFunction() || isForIndex())
+            return;
+        if (indices().numElements() > 0 && currentVariability.initialParameterVariability()) {
+            compliance("Parameters with fixed=false can not be used as structural parameters");
+            return;
+        }
+        forcedVariability = forcedVariability.combineDown(v);
+        // Flush cache for variability()
+        setVariabilityNotCalculated();
+        if (hasBindingFExp()) {
+            if (v.structParameterVariability()) {
+                getBindingFExp().checkConstantExpression(checkType, forcedVariability.toStringLiteral(), qualifiedName());
+            }
+            getBindingFExp().forceUsesVariability(checkType, v);
+        }
+    }
+
+    public void InstRecord.forceVariability(ErrorCheckType checkType, TypePrefixVariability v) {
+        for (InstComponentDecl icd : allInstComponentDecls()) {
+            icd.forceVariability(checkType, v);
+        }
+    }
+
+    public void InstExternalObject.forceVariability(ErrorCheckType checkType, TypePrefixVariability v) {}
+
+
+    public void Size.forceVariability(ErrorCheckType checkType, TypePrefixVariability v) {}
+
+    public void MutableSize.forceVariability(ErrorCheckType checkType, TypePrefixVariability v) {
+        for (FExp e : exps) {
+            if (e != null) {
+                e.forceVariability(checkType, v);
+            }
+        }
+    }
+
+
+    public void ASTNode.forceUsesVariability(ErrorCheckType checkType, TypePrefixVariability v) {
+        for (ASTNode n : this) {
+            n.forceUsesVariability(checkType, v);
+        }
+    }
+
+    public void FAbstractExp.forceUsesVariability(ErrorCheckType checkType, TypePrefixVariability v) {
+        super.forceUsesVariability(checkType, v);
+        setVariabilityNotCalculated();
+    }
+
+    public void FSizeExp.forceUsesVariability(ErrorCheckType checkType, TypePrefixVariability v) {
+        getDimOpt().forceUsesVariability(checkType, v);
+    }
+
+    public void FNdimsExp.forceUsesVariability(ErrorCheckType checkType, TypePrefixVariability v) {}
+
+    public void InstAccess.forceUsesVariability(ErrorCheckType checkType, TypePrefixVariability v) {
+        myInstComponentDecl().forceVariability(checkType, v);
+        forceUsesInSubscriptsVariability(checkType, v);
+    }
+
+    public void InstAccess.forceUsesInSubscriptsVariability(ErrorCheckType checkType, TypePrefixVariability v) {}
+
+    public void InstDot.forceUsesInSubscriptsVariability(ErrorCheckType checkType, TypePrefixVariability v) {
+        for (InstAccess ia : getInstAccesss()) {
+            ia.forceUsesInSubscriptsVariability(checkType, v);
+        }
+    }
+
+    public void InstArrayAccess.forceUsesInSubscriptsVariability(ErrorCheckType checkType, TypePrefixVariability v) {
+        getFArraySubscripts().forceUsesVariability(checkType, v);
+    }
+
+
+    public void InstComponentDecl.setVariabilityNotCalculated() {
+        if (!variability_computed) {
+            return;
+        }
+        InstComponentDecl icd = enclosingInstComponentDecl();
+        if (icd != null) {
+            icd.setVariabilityNotCalculated();
+        }
+        variability_computed = false;
+    }
+
+    public void FAbstractExp.setVariabilityNotCalculated() {
+        variability_computed = false;
+    }
+
+}

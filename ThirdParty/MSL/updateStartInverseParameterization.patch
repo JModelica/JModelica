@@ -1,0 +1,12 @@
+Index: Modelica/Fluid/Examples/InverseParameterization.mo
+===================================================================
+--- Modelica/Fluid/Examples/InverseParameterization.mo	(revision 9254)
++++ Modelica/Fluid/Examples/InverseParameterization.mo	(working copy)
+@@ -19,6 +19,7 @@
+     annotation (Placement(transformation(extent={{-76,14},{-64,26}})));
+   Modelica.Fluid.Machines.ControlledPump pump(
+     m_flow_nominal=1,
++    m_flow_start=0.5,
+     control_m_flow=false,
+     use_p_set=true,
+     redeclare package Medium = Medium,

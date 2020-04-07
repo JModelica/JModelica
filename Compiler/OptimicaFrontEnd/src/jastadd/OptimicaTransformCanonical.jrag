@@ -1,0 +1,233 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect OptimicaTransformCanonical {
+	
+	public void FOptClass.transformCanonical() {
+        if (doneTransformCanonical)
+            return;
+        doneTransformCanonical = true;
+    	beginStep("transformCanonical()");
+		
+		if (myOptions().getBooleanOption("convert_free_dependent_parameters_to_algebraics")) {
+			for (FVariable fv : freeDependentParameters()) {
+				fv.setTypePrefixVariability(Variability.CONTINUOUS);
+                for (FAccessExp use : fv.uses())
+                    if (use.inObjective())
+                        use.replaceMe(new FTimedVariable(use.getFAccess().treeCopy(), new FStartTimeExp()));
+			}
+		}
+
+		root().flushAllRecursive();
+		
+		FAttribute startTime_attr = findMatching(getFAttributes(), "startTime");
+		FAttribute finalTime_attr = findMatching(getFAttributes(), "finalTime");
+		
+		FRealVariable fv_startTime = addExperimentTimeParameter("startTime", startTime_attr, 0.0);
+		FRealVariable fv_finalTime = addExperimentTimeParameter("finalTime", finalTime_attr, 1.0);
+
+		if (myOptions().getBooleanOption("normalize_minimum_time_problems")) {
+			// Add 'finalTime' parameter if free
+			
+			// If either startTime or finalTime is free, and the 
+			// option canonicalize_minimum_time_problems is true then the
+			// optimization interval should be [0,1]. Notice that attributes
+			// being reset here have been copied to the parameters with names
+			// startTime and finalTime.
+			if (finalTimeFreeAttribute() || startTimeFreeAttribute()) {				
+
+				// Attributes set for startTime?
+				if (startTime_attr!=null) {
+					// Fixed interval starting at 0.0
+					startTime_attr.setValue(new FRealLitExp(0.0));
+					FExp initialGuess_exp = null;
+					for (FAttribute a : startTime_attr.getFAttributes()) {
+						// Remove binding expression if startTime is free
+						if (startTimeFreeAttribute()) {
+							fv_startTime.setBindingExpOpt(new Opt());
+						}
+						// Set free to false
+						if (a.getName().name().equals("free")) {
+							a.setValue(new FBooleanLitExpFalse());
+							a.setAttributeSet(false);
+						}
+						// Set start to 0.0
+						if (a.getName().name().equals("start")) {
+							a.setValue(new FRealLitExp(0.0));
+							a.setAttributeSet(false);
+						}					
+						// Set initialGuess to 0.0
+						if (a.getName().name().equals("initialGuess")) {
+							initialGuess_exp = a.getValue().fullCopy();
+							a.setValue(new FRealLitExp(0.0));
+							a.setAttributeSet(false);
+						}
+					}
+					// If the start attribute is not explicitly set, then it
+					// should be set to the value of the initialGuess attribute.
+					if (!fv_startTime.startAttributeSet()) {
+						fv_startTime.addFAttribute(new FAttribute(new FAccessString("Real"),
+	                            new FIdDecl(new FAccessString("start")),
+	                            initialGuess_exp != null ? initialGuess_exp : new FRealLitExp(0.0),
+	                            true,
+	                            Integer.MAX_VALUE));											
+					}
+				} 
+				// Same as for startTime
+				if (finalTime_attr!=null) {
+					finalTime_attr.setValue(new FRealLitExp(1.0));
+					FExp initialGuess_exp = null;
+					for (FAttribute a : finalTime_attr.getFAttributes()) {
+						if (finalTimeFreeAttribute()) {
+							fv_finalTime.setBindingExpOpt(new Opt());
+						}
+						if (a.getName().name().equals("free")) {
+							a.setValue(new FBooleanLitExpFalse());
+							a.setAttributeSet(false);
+						}
+						if (a.getName().name().equals("start")) {
+							a.setValue(new FRealLitExp(1.0));
+							a.setAttributeSet(false);
+						}					
+						if (a.getName().name().equals("initialGuess")) {
+							initialGuess_exp = a.getValue().fullCopy();
+							a.setValue(new FRealLitExp(1.0));
+							a.setAttributeSet(false);
+						}	
+					}	
+					if (!fv_finalTime.startAttributeSet()) {
+						fv_finalTime.addFAttribute(new FAttribute(new FAccessString("Real"),
+	                            new FIdDecl(new FAccessString("start")),
+	                            initialGuess_exp != null ? initialGuess_exp : new FRealLitExp(1.0),
+	                            true,
+	                            Integer.MAX_VALUE));											
+					}
+				}
+				enableStartAndFinalTimeRewrite();
+			}
+			// Flush to reset cashes
+			root().flushAllRecursive();
+		}
+		transformCanonicalBase();
+	    transformCanonicalCleanup();
+
+    	endStep("transformCanonical()");
+	}
+	
+	eq FOptClass.shouldPerformMatchingsAndBLT() = false;
+	
+	private FRealVariable FOptClass.addExperimentTimeParameter(
+			String name, FAttribute attr, double defaultValue) {
+        TypePrefixVariability v = Variability.FIXEDPARAMETER;
+        if (attr != null) {
+            FAttribute freeAttr = findMatching(attr.getFAttributes(), FAttribute.FREE);
+            if (freeAttr != null && freeAttr.hasValue() && freeAttr.getValue().ceval().booleanValue()) {
+                v = Variability.OPTPARAMETER;
+            }
+        }
+        FRealVariable fv = new FRealVariable(VisibilityType.PUBLIC, v, new FAccessString(name));
+		if (attr != null) 
+			fv.setFAttributeList(attr.getFAttributeList().fullCopy());
+		if (attr != null && attr.hasValue())
+			fv.setBindingExp(attr.getValue().fullCopy());
+		else 
+			fv.setBindingExp(new FRealLitExp(defaultValue));
+		addFVariable(fv);
+		return fv;
+	}
+	
+	// Don't add initial equations for optimization problems
+	public void FOptClass.addInitialEquations() {}
+	
+    @Override
+    protected void FOptClass.scalarizeVars(Scalarizer.Variable s) {
+        super.scalarizeVars(s);
+        scalarizeConstraints(s.sc);
+        scalarizeClassAttributes(s.sp);
+    }
+
+    protected void FOptClass.scalarizeConstraints(Scalarizer.Equation s) {
+        List<FConstraint> constr = new List<FConstraint>();
+        for (FConstraint c : getFConstraints()) {
+            c.scalarize(s, constr);
+        }
+        setFConstraintList(constr);
+    }
+
+    protected void FOptClass.scalarizeClassAttributes(Scalarizer.Equation s) {
+        List<FAttribute> al = new List<FAttribute>();
+        for (FAttribute a : getFAttributes()) {
+            a.scalarize(al, Index.NULL, s);
+        }
+        setFAttributeList(al);
+    }
+
+    /**
+     * Scalarize constraint and put all scalarized equations in list eqns.
+     */
+    public void FConstraint.scalarize(Scalarizer.Equation s, List<FConstraint> constr) {}
+
+    public void FRelationConstraint.scalarize(Scalarizer.Equation s, List<FConstraint> constr) {
+        createArrayTemporaries(s);
+        for (Index i : indices()) {
+            constr.add(createNode(getLeft().cell(i).scalarize(s), getRight().cell(i).scalarize(s)));
+        }
+	}
+
+    public FExp FTimedVariable.scalarizeExp(Scalarizer s) { 
+        return new FTimedVariable(getName().scalarize(s, null), getArg().scalarize(s));  
+    }
+
+    eq FOptClass.indexReductionErrorsAsWarnings() = true;
+
+}
+
+aspect NormalizeFinalTimeProblems {
+
+	boolean FDerExp.rewriteStartAndFinalTime = false;
+	public void ASTNode.enableStartAndFinalTimeRewrite() {
+		for (ASTNode n : this)
+			n.enableStartAndFinalTimeRewrite();
+	}
+	
+	public void FDerExp.enableStartAndFinalTimeRewrite() {
+		super.enableStartAndFinalTimeRewrite();
+		rewriteStartAndFinalTime = true;
+		is$Final = false;
+	}
+	
+	boolean FDerExp.rewritten = false;
+	
+	rewrite FDerExp {when (rewriteStartAndFinalTime && !rewritten) to FExp {
+			FDivExp e = new FDivExp(this,new FSubExp(new FAccessExp(new FAccessString("finalTime")),
+					new FAccessExp(new FAccessString("startTime"))));
+			rewritten = true;
+			return e;
+		}
+	}
+}
+
+aspect OptimicaVariabilityPropagation {
+	
+	refine VariabilityPropagation eq FEquation.canPropagate(FVariable var, FExp solution) {
+		for (FVariable expVar : solution.referencedFVariablesInFExp())
+			if (expVar.freeAttribute())
+				return false;
+		return true;
+	}
+	
+}
+

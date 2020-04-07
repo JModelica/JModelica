@@ -1,0 +1,634 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.DirectoryStream;
+import java.nio.file.InvalidPathException;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+
+import org.jmodelica.common.options.AbstractOptionRegistry;
+import org.jmodelica.util.problemHandling.ProblemProducer;
+import org.jmodelica.api.problemHandling.ProblemKind;
+import org.jmodelica.api.problemHandling.ProblemSeverity;
+
+aspect Library {
+
+    syn lazy List InstProgramRoot.getInstLibClassDeclList() = new List();
+
+    public class SrcLibNode {
+        public enum LoadReason { COMMANDLINE, MODELICAPATH };
+    }
+
+    /**
+     * Is this SrcLibNode loaded because the library was passed to the compiler as an argument?
+     */
+    syn boolean SrcLibNode.fromCommandLine() = getReason() == LoadReason.COMMANDLINE;
+
+    /**
+     * Is this SrcLibNode loaded because the library was found on MODELICAPATH?
+     */
+    syn boolean SrcLibNode.fromModelicaPath() = getReason() == LoadReason.MODELICAPATH;
+
+    inh SrcLibNode.LoadReason SrcBaseNode.loadReason();
+    eq SrcLibNode.getChild().loadReason() = getReason();
+    // Assume command line if not in a SrcLibNode.
+    eq SourceRoot.getChild().loadReason() = SrcLibNode.LoadReason.COMMANDLINE;
+    // Override the inherited method and use direct!
+    syn SrcLibNode.LoadReason SrcLibNode.loadReason() = getReason();
+    
+    public static final String SrcLibNode.PACKAGE_FILE = "package.mo";
+    public static final String SrcLibNode.PACKAGE_ORDER_FILE = "package.order";
+
+    /**
+     * getSrcStoredDefinition is not lazy due to the needed to control
+     * the life time of loaded files which needs to outlive
+     * other attributes. 
+     */
+    private SrcStoredDefinition SrcLibNode.srcStoredDefinition = null;
+
+    syn SrcStoredDefinition SrcLibNode.getSrcStoredDefinition() {
+        if (srcStoredDefinition != null) {
+            return srcStoredDefinition;
+        }
+        
+        /* If structured
+                a. Read all files
+                b. Check for package.mo
+                c. Parse package.mo
+                d. Read all .mo files
+                e. Add SrcLibNodes to the SrcLibClassDecl
+                f. Return the SrcLibClassDecl
+           If unstructured
+                a. Parse the .mo file
+                b. Return the resulting SrcFullClassDecl
+        */
+        
+        String fileName = fileName();
+        String name = name();
+        // TODO: Error if more than one class in file
+        try {
+            UtilInterface util = root().getUtilInterface();
+            SourceRoot sr = util.getParserHandler().parseFile(util, getLoadInfo().withPath(Paths.get(fileName)));
+            SrcStoredDefinition entity = sr.getProgram().getUnstructuredEntity(0);
+            SrcClassDecl cd = extractClassDecl(entity, name);
+            if (shouldProduceProblem(entity, name)) {
+                LIBRARY_FILE_CONTENTS.invoke(this, entity);
+                
+                // If the name is the wrong case, update it (since we only give a warning for that).
+                if (entity != null && entity.getNumSrcClassDecl() == 1) {
+                    String actualName = entity.getSrcClassDecl(0).name();
+                    if (!name.equals(actualName) && name.equalsIgnoreCase(actualName)) {
+                        getNameNoTransform().setID(actualName);
+                    }
+                }
+            }
+            if (cd == null) {
+                srcStoredDefinition = createErrorStoredDefinition();
+                return srcStoredDefinition;
+            }
+            if (getStructured()) {
+                String dirName = dirName();
+                File baseDir = new File(dirName);
+                SrcFullClassDecl fcd = (SrcFullClassDecl) cd;
+                LibraryList ll = new LibraryList();
+                ll.addLibraryDirectory(getLoadInfo().withPath(Paths.get(dirName)), getReason());
+
+                SrcLibClassDecl lcd = new SrcLibClassDecl(fcd, ll.createLibNodeList());
+                lcd.readOrderFile(baseDir, util);
+                entity.setSrcClassDecl(lcd, 0);
+            }
+            srcStoredDefinition = entity;
+            return srcStoredDefinition;
+        } catch (ParserException e) {
+            problem(e.getProblem());
+            srcStoredDefinition = createErrorStoredDefinition();
+            return srcStoredDefinition;
+        } catch (Exception e) {
+            String msg = "Error when parsing file: '" + fileName + "':\n" + 
+                    "   " + e.getClass().getName() + "\n";
+            if (e.getMessage() != null)
+                msg = msg + "   " + e.getMessage();
+            error(msg);
+            log.debug(e);
+            srcStoredDefinition = createErrorStoredDefinition();
+            return srcStoredDefinition;
+        } 
+    }
+
+    public void SrcLibClassDecl.readOrderFile(File baseDir, UtilInterface util) {
+        File orderFile = new File(baseDir, SrcLibNode.PACKAGE_ORDER_FILE);
+        if (orderFile.isFile()) {
+            try (BufferedReader in = 
+                    new BufferedReader(util.getParserHandler().fileReader(util, orderFile))) {
+                order = new ArrayList<String>();
+                String line;
+                while ((line = in.readLine()) != null) {
+                    order.add(line);
+                }
+                needsOrderCorrection = true;
+            } catch (IOException e) {
+                // TODO: Add a warning about failing to load package.order
+            }
+        }
+    }
+
+    private SrcClassDecl SrcLibNode.extractClassDecl(SrcStoredDefinition entity, String name) {
+        if (entity == null) {
+            return null;
+        } else {
+            SrcClassDecl match = null;
+            SrcClassDecl wrongCase = null;
+            for (SrcClassDecl cd : entity.getSrcClassDecls()) {
+                if (name.equals(cd.name())) {
+                    if (match == null) {
+                        match = cd;
+                    }
+                } else if (name.equalsIgnoreCase(cd.name())) {
+                    if (wrongCase == null) {
+                        wrongCase = cd;
+                    }
+                }
+            }
+            return (match == null) ? wrongCase : match;
+        }
+    }
+
+    private boolean SrcLibNode.shouldProduceProblem(SrcStoredDefinition entity, String name) {
+        return entity == null || entity.getNumSrcClassDecl() != 1 || 
+                !entity.getSrcClassDecl(0).name().equals(name);
+    }
+
+    public static final LibraryContentErrorProducer ASTNode.LIBRARY_FILE_CONTENTS = 
+            new LibraryContentErrorProducer();
+
+    public class ASTNode {
+        public static class LibraryContentErrorProducer extends ProblemProducer<SrcLibNode> {
+            private static final String BASE_MSG = 
+                    "Class '%s' must be alone at top level of library file, but the file %s.";
+
+            public LibraryContentErrorProducer() {
+                super("LIBRARY_FILE_CONTENTS", ProblemKind.SEMANTIC);
+            }
+
+            public void invoke(SrcLibNode src, SrcStoredDefinition sd) {
+                String name = src.name();
+                invoke(src, severity(sd, name), BASE_MSG, name, detailMsg(sd, name));
+            }
+
+            private String detailMsg(SrcStoredDefinition sd, String name) {
+                if (sd == null) {
+                   return "was empty";
+                } else {
+                    int correct = 0;
+                    ArrayList<String> wrong = new ArrayList<String>();
+                    for (SrcClassDecl cd : sd.getSrcClassDecls()) {
+                        String n = cd.name();
+                        if (n.equals(name)) {
+                            correct++;
+                        } else {
+                            wrong.add(n);
+                        }
+                    }
+                    
+                    StringBuilder buf = new StringBuilder();
+                    if (correct == 1 && !wrong.isEmpty()) {
+                        buf.append("also ");
+                    }
+                    buf.append("contains");
+                    if (correct > 1) {
+                        buf.append(' ');
+                        buf.append(correct);
+                        buf.append(" classes of that name");
+                        if (!wrong.isEmpty()) {
+                            buf.append(", and also");
+                        }
+                    }
+                    for (int i = 0, n = wrong.size(); i < n; i++) {
+                        if (i > 0) {
+                            buf.append((i < n - 1) ? "," : " and");
+                        }
+                        buf.append(" '");
+                        buf.append(wrong.get(i));
+                        buf.append("'");
+                    }
+                    if (correct == 0) {
+                        buf.append(" instead");
+                    }
+                    return buf.toString();
+                }
+            }
+
+            public ProblemSeverity severity(SrcStoredDefinition sd, String name) {
+                // If the class simply has the wrong case, give a warning instead
+                boolean warn = sd != null && sd.getNumSrcClassDecl() == 1 && 
+                        sd.getSrcClassDecl(0).name().equalsIgnoreCase(name);
+                return warn ? ProblemSeverity.WARNING : ProblemSeverity.ERROR;
+            }
+
+            @Override
+            public String description() {
+                return "Library file contains wrong class(es).";
+            }
+
+            @Override
+            public ProblemSeverity severity() {
+                return null;
+            }
+        }
+    }
+
+    /**
+     * Check if a path points to a structured library.
+     */
+    public static boolean SrcLibNode.isStructuredLib(Path f) {
+        return Files.isDirectory(f) && Files.isRegularFile(f.resolve(PACKAGE_FILE));
+    }
+
+    public static boolean SrcLibNode.isUnstructuredLib(Path f) {
+        String name = f.getFileName().toString();
+        return Files.isRegularFile(f) && SrcLibNode.isUnstructuredLibName(name);
+    }
+
+    private static boolean SrcLibNode.isUnstructuredLibName(String name) {
+        return name.endsWith(".mo") && !name.equals(PACKAGE_FILE);
+    }
+
+    private Path SrcLibNode.myPackageFile() {
+        return Paths.get(dirName(), myPackageFileName());
+    }
+    
+    private String SrcLibNode.myPackageFileName() {
+        return SrcLibNode.PACKAGE_FILE;
+    }
+    
+    public static Path SrcLibNode.packageFile(Path f) {
+        Path l = f.resolve(SrcLibNode.PACKAGE_FILE);
+        if (!Files.exists(l)) {
+             return null;
+        }
+        return l;
+    }
+    
+    static boolean SrcLibNode.isPackageFile(Path f) {
+        return f.getFileName().toString().equals(SrcLibNode.PACKAGE_FILE);
+    }
+
+    syn SrcClassDecl SrcLibNode.classDecl() = 
+        (getSrcStoredDefinition().getNumSrcClassDecl() > 0) 
+            ? getSrcStoredDefinition().getSrcClassDecl(0) 
+            : createErrorClass();
+
+    private java.util.List<String> SrcLibClassDecl.order = Collections.emptyList();
+
+    private SrcStoredDefinition SrcLibNode.createErrorStoredDefinition() {
+        return new SrcStoredDefinition(new Opt(), new List(createErrorClass()), getLoadInfo());
+    }
+
+    private SrcBadClassDecl SrcLibNode.createErrorClass() {
+        return new SrcBadClassDecl(name());
+    }
+
+    public SrcLibClassDecl.SrcLibClassDecl(SrcFullClassDecl fcd, List<SrcLibNode> lib) {
+        super(fcd);
+        setSrcLibNodeList(lib);
+    }
+
+    eq SrcLibClassDecl.getSrcLibNode().enclosingClassDecl() = this;   
+    eq SrcLibClassDecl.getSrcLibNode().classNamePrefix() = classNamePrefix().equals("")?
+                                                      name(): classNamePrefix() + "." + name();
+
+    private LibraryList Program.libraryList;
+    
+    public LibraryList Program.getLibraryList() {
+        if (libraryList == null)
+            libraryList = new DefaultLibraryList(myOptions());
+        return libraryList;
+    }
+    
+    public void Program.setLibraryList(LibraryList list) {
+        libraryList = list;
+    }
+    
+    syn lazy List Program.getSrcLibNodeList() = getLibraryList().createLibNodeList();
+    
+    public class LibraryList {
+
+        protected Set<LibraryDef> set;
+        
+        public LibraryList() {
+            set = new LinkedHashSet<LibraryDef>();
+        }
+        
+        public void reset() {
+            set.clear();
+        }
+        
+        public Set<LibraryDef> availableLibraries() {
+            return set;
+        }
+        
+        public List<SrcLibNode> createLibNodeList() {
+            List<SrcLibNode> res = new List<SrcLibNode>();
+            for (LibraryDef def : availableLibraries())
+                res.add(def.createLibNode());
+            return res;
+        }
+        
+        /**
+         * Add the library found in {@link LoadInfo#getPath()} to the list of libraries. 
+         * 
+         * @param loadInfo  a LoadInfo object
+         * @param reason    reason this library are added
+         * @return <code>true</code> if a library was added 
+         */
+        public boolean addLibrary(LoadInfo loadInfo, SrcLibNode.LoadReason reason) {
+            return add(loadInfo, false, reason);
+        }
+        
+        
+        /**
+         * Add each library found in {@link LoadInfo#getPath()} to the list of libraries. 
+         * 
+         * @param loadInfo  a LoadInfo object
+         * @param reason    reason these libraries are added
+         * @return <code>true</code> if any libraries were added 
+         */
+        public boolean addLibraryDirectory(LoadInfo loadInfo, SrcLibNode.LoadReason reason) {
+            return add(loadInfo, true, reason);
+        }
+        
+        /**
+         * Add each library found in the collection of loadInfos to the list of libraries. 
+         * 
+         * @param loadInfo  a collection of LoadInfo objects
+         * @param reason    reason these libraries are added
+         * @return <code>true</code> if any libraries were added 
+         */
+        public boolean addLibraries(Collection<LoadInfo> loadInfos, SrcLibNode.LoadReason reason) {
+            return addAll(loadInfos, false, reason);
+        }
+        
+        /**
+         * Add each library found in each of the {@link LoadInfo#getPath()} directories to the list of libraries. 
+         * 
+         * @param loadInfo  a collection of LoadInfo objects
+         * @param reason    reason these libraries are added
+         * @return <code>true</code> if any libraries were added 
+         */
+        public boolean addLibraryDirectories(Collection<LoadInfo> loadInfos, SrcLibNode.LoadReason reason) {
+            return addAll(loadInfos, true, reason);
+        }
+        
+        protected boolean addAll(Collection<LoadInfo> loadInfos, boolean directories, SrcLibNode.LoadReason reason) {
+            boolean res = false;
+            for (LoadInfo loadInfo : loadInfos)
+                if (add(loadInfo, directories, reason))
+                    res = true;
+            return res;
+        }
+
+        /**
+         * Add the path found in {@link LoadInfo#getPath()} to the list of libraries. 
+         * 
+         * @param loadInfo   a LoadInfo object
+         * @param directory  if <code>true</code>, add all libraries found in the directory 
+         *                   <code>path</code>, else add <code>path</code>
+         * @param reason     reason for loading this library
+         * @return <code>true</code> if any libraries were added 
+         */
+        protected boolean add(LoadInfo loadInfo, boolean directory, SrcLibNode.LoadReason reason) {
+            Path base = loadInfo.getPathAsPath();
+            if (directory) {
+                boolean res = false;
+                try(DirectoryStream<Path> files = Files.newDirectoryStream(base)) {
+                    for (Path file : files) {
+                        if (add(file, reason, loadInfo)) {
+                            res = true;
+                        }
+                    }
+                } catch (SecurityException e) {
+                    // TODO: should probably do something constructive here, log an error or something
+                } catch (IOException e) {
+                    // TODO: should probably do something constructive here as well
+                    // Note: Cannot use "catch multiple", JastAdd doesn't support it yet
+                }
+                return res;
+            } else {
+                return add(base, reason, loadInfo);
+            }
+        }
+
+        protected boolean add(Path path, SrcLibNode.LoadReason reason, LoadInfo loadInfo) {
+            try {
+                return add(LibraryDef.create(path, reason, loadInfo));
+            } catch (SecurityException e) {
+                // TODO: should probably do something constructive here, log an error or something
+                return false;
+            }
+        }
+        
+        protected boolean add(LibraryDef def) {
+            boolean res = def != null;
+            if (res) {
+                if (!set.contains(def)) {
+                    set.add(def);
+                }
+            }
+            return res;
+        }
+        
+        
+    }
+
+    public class LoadInfo {
+
+        private static final LoadInfo EMPTY = create("");
+
+        // Only one of path or otherDesc can be non-null. The issue is when switching from File to Path,
+        // invalid path names (e.g., containing '<') started causing an exception, so other load descriptions than
+        // valid path names could not be used any longer. 
+        // Also, converting a path to/from String is not a good solution, as that implicitly limits to using
+        // the default file system.
+        // We should figure out if using a non-file name is really needed as load description,
+        // and if not - get rid of otherDesc.
+        private final Path path;
+        private final String otherDesc;
+
+        @Deprecated
+        public String getPath() {
+            return path != null ? path.toString() : otherDesc;
+        }
+        
+        public Path getPathAsPath() {
+            if (otherDesc != null) {
+                throw new IllegalStateException("Cannot retrieve the path as a path - it is an invalid path name");
+            }
+            return path;
+        }
+        
+        @Deprecated
+        public static LoadInfo create(String path) {
+            try {
+                return new LoadInfo(path != null ? Paths.get(path) : null);
+            } catch (InvalidPathException e) {
+                return new LoadInfo(path);
+            }
+        }
+        
+        public static LoadInfo create(Path path) {
+            return new LoadInfo(path);
+        }
+        
+        public static LoadInfo empty() {
+            return EMPTY;
+        }
+    }
+
+    private LoadInfo.LoadInfo(Path path) {
+        this.path = path;
+        this.otherDesc = null;
+    }
+    
+    private LoadInfo.LoadInfo(String otherDesc) {
+        this.path = null;
+        this.otherDesc = otherDesc;
+    }
+
+    /** Create a new LoadInfo with the specified path, keeping the other attributes of this object. */
+    public LoadInfo LoadInfo.withPath(Path path) {
+        return new LoadInfo(path);
+    }
+
+    public class LibraryDef implements Comparable<LibraryDef> {
+        public final String name;
+        public final String version;
+        public final boolean structured;
+        public final SrcLibNode.LoadReason reason;
+        public final LoadInfo loadInfo;
+        
+        public SrcLibNode createLibNode() {
+            return new SrcLibNode(new SrcIdDecl(name), structured, "", reason, loadInfo);
+        }
+        
+        public int hashCode() {
+            return path().hashCode();
+        }
+        
+        public boolean equals(Object o) {
+            return o instanceof LibraryDef && path().equals(((LibraryDef) o).path());
+        }
+        
+        public int compareTo(LibraryDef def) {
+            int res = name.compareTo(def.name);
+            return res == 0 ? path().compareTo(def.path()) : res;
+        }
+        
+        public String path() {
+            return loadInfo.getPath();
+        }
+        
+        public String toString() {
+            return name;
+        }
+        
+        private LibraryDef(String name, String version, boolean structured, SrcLibNode.LoadReason reason, LoadInfo loadInfo) {
+            this.name = name;
+            this.version = version;
+            this.structured = structured;
+            this.reason = reason;
+            this.loadInfo = loadInfo;
+        }
+    }
+
+    public static LibraryDef LibraryDef.create(Path path, SrcLibNode.LoadReason reason, LoadInfo loadInfo) {
+        boolean structured;
+        if (SrcLibNode.isStructuredLib(path)) {
+            structured = true;
+        } else if (SrcLibNode.isUnstructuredLib(path)) {
+            structured = false;
+        } else {
+            return null;
+        }
+        String name = path.getFileName().toString();
+        String version;
+        if (!structured) {
+            name = name.substring(0, name.lastIndexOf('.'));
+        }
+        String[] parts = name.split(" ", 2);
+        if (parts.length > 1) {
+            name = parts[0];
+            version = parts[1];
+        } else {
+            version = null;
+        }
+        return new LibraryDef(name, version, structured, reason, loadInfo.withPath(path));
+    }
+
+    public class DefaultLibraryList extends LibraryList {
+        
+        protected OptionRegistry options;
+        protected boolean calculated;
+        
+        public static final String[] LIBRARY_OPTIONS = 
+            new String[] { "MODELICAPATH", "extra_lib_dirs" };
+        
+        public DefaultLibraryList(OptionRegistry options) {
+            this.options = options;
+            calculated = false;
+        }
+        
+        public Set<LibraryDef> availableLibraries() {
+            search();
+            return set;
+        }
+        
+        public void reset() {
+            super.reset();
+            calculated = false;
+        }
+        
+        protected void search() {
+            if (!calculated) {
+                for (String opt : LIBRARY_OPTIONS)
+                    addFromOption(opt);
+                calculated = true;
+            }
+        }
+    
+        protected void addFromOption(String name) {
+            try {
+                String paths = options.getStringOption(name);
+                ASTNode.log.info(name + " = " + paths);
+                Collection<LoadInfo> loadInfos = new ArrayList<>();
+                for (String path : paths.split(File.pathSeparator)) {
+                    if (!path.isEmpty()) {
+                        loadInfos.add(LoadInfo.create(path));
+                    }
+                }
+                addLibraryDirectories(loadInfos, SrcLibNode.LoadReason.MODELICAPATH);
+            } catch (AbstractOptionRegistry.UnknownOptionException e) {}
+        }
+
+    }
+
+}

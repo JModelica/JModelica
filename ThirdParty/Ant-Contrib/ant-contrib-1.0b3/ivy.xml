@@ -1,0 +1,44 @@
+<ivy-module version="1.1">
+    <info organisation="sourceforge" module="ant-contrib" />
+    
+    <configurations>
+        <conf name="default" />
+        <conf name="provided" extends="default" />
+        <conf name="test" extends="default" />
+    </configurations>
+    <publications>
+        <artifact name="ant-contrib" type="jar" />
+    </publications>
+    
+    
+    <dependencies>
+        <dependency org="apache"
+                    name="bcel"
+                    rev="5.1"
+                    conf="default->default" />
+        <dependency org="apache"
+                    name="ant"
+                    rev="1.6.5"
+                    conf="provided->default" />
+        <dependency org="apache"
+                    name="xercesImpl"
+                    rev="2.6.2"
+                    conf="provided->default" />
+        <dependency org="apache"
+                    name="commons-httpclient"
+                    rev="3.0.1"
+                    conf="default->default" />
+        <dependency org="apache"
+                    name="commons-logging"
+                    rev="1.0.4"
+                    conf="default->default" />
+        <dependency org="jayasoft"
+                    name="ivy"
+                    rev="1.3.1"
+                    conf="default->default" />
+        <dependency org="junit"
+                    name="junit"
+                    rev="3.8.1"
+                    conf="test->default" />
+    </dependencies>
+</ivy-module>

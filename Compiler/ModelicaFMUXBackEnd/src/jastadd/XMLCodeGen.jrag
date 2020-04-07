@@ -1,0 +1,769 @@
+/*
+Copyright (C) 2009 Modelon AB
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, version 3 of the License.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import java.io.PrintStream;
+import java.io.ByteArrayOutputStream;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+aspect XMLCodeGen {
+
+    /**
+     * Static printer instance.
+     */
+    public static XMLPrettyPrinter ASTNode.printer_XML = new XMLPrettyPrinter();
+
+	public class XMLPrettyPrinter extends Printer {
+		public XMLPrettyPrinter() {
+			super("\t");
+		}
+		
+ 		public void print(ASTNode node, CodeStream str, String indent) { 
+ 			node.prettyPrint_XML(this, str, indent); 
+ 		}
+	}
+	
+	public String ASTNode.prettyPrint_XML(String indent) {
+		ByteArrayOutputStream os = new ByteArrayOutputStream();
+		CodeStream str = new CodeStream(os);
+		prettyPrint_XML(str, indent);
+		return os.toString();
+	}
+
+    public void ASTNode.prettyPrint_XML(CodeStream str, String indent) {
+        prettyPrint_XML(printer_XML, str, indent);
+    }
+
+	public void ASTNode.prettyPrint_XML(Printer p, CodeStream str, String indent) {
+		prettyPrint(p, str, indent);
+	}
+
+	
+	//------------------------ Helpers -------------------------
+	
+	private static final String ASTNode.XML_TAG_OPEN_FORMAT    = "%s<%s:%s>";
+	private static final String ASTNode.XML_TAG_OPEN_FORMAT_NL = "%s<%s:%s>\n";
+	private static final String ASTNode.XML_TAG_CLOSE_FORMAT   = "%s</%s:%s>\n";
+	private static final String ASTNode.XML_TAG_SINGLE_FORMAT  = "%s<%s:%s/>\n";
+	
+	public void ASTNode.tag_XML(CodeStream str, String format, String indent) {
+		str.format(format, indent, xmlNamespace(), xmlTag());
+	}
+	
+	public void ASTNode.tag_XML(CodeStream str, String format, String indent, String tag) {
+		str.format(format, indent, xmlNamespace(), tag);
+	}
+	
+	public void ASTNode.tag_XML(CodeStream str, String format, String indent, Map<String, String> attr) {
+		str.format(format, indent, xmlNamespace(), addAttrs_XML(xmlTag(), attr));
+	}
+	
+	public void ASTNode.tag_XML(CodeStream str, String format, String indent, String tag, Map<String, String> attr) {
+		str.format(format, indent, xmlNamespace(), addAttrs_XML(tag, attr));
+	}
+
+	private static String ASTNode.addAttrs_XML(String tag, Map<String, String> attr) {
+		StringBuilder buf = new StringBuilder(tag);
+		for (String name : attr.keySet()) {
+			buf.append(' ');
+			buf.append(name);
+			buf.append('=');
+			buf.append(attr.get(name));
+		}
+		return buf.toString();
+	}
+	
+	public void ASTNode.open_XML(CodeStream str, String indent) {
+		tag_XML(str, XML_TAG_OPEN_FORMAT_NL, indent);
+	}
+	
+	public void ASTNode.open_XML(CodeStream str, String indent, String tag) {
+		tag_XML(str, XML_TAG_OPEN_FORMAT_NL, indent, tag);
+	}
+	
+	public void ASTNode.open_XML(CodeStream str, String indent, Map<String, String> attr) {
+		tag_XML(str, XML_TAG_OPEN_FORMAT_NL, indent, attr);
+	}
+	
+	public void ASTNode.open_XML(CodeStream str, String indent, String tag, Map<String, String> attr) {
+		tag_XML(str, XML_TAG_OPEN_FORMAT_NL, indent, tag, attr);
+	}
+	
+	public void ASTNode.openLine_XML(CodeStream str, String indent) {
+		tag_XML(str, XML_TAG_OPEN_FORMAT, indent);
+	}
+	
+	public void ASTNode.openLine_XML(CodeStream str, String indent, Map<String, String> attr) {
+		tag_XML(str, XML_TAG_OPEN_FORMAT, indent, attr);
+	}
+	
+	public void ASTNode.close_XML(CodeStream str) {
+		close_XML(str, "");
+	}
+	
+	public void ASTNode.close_XML(CodeStream str, String indent) {
+		tag_XML(str, XML_TAG_CLOSE_FORMAT, indent);
+	}
+	
+	public void ASTNode.close_XML(CodeStream str, String indent, String tag) {
+		tag_XML(str, XML_TAG_CLOSE_FORMAT, indent, tag);
+	}
+	
+	public void ASTNode.single_XML(CodeStream str, String indent) {
+		tag_XML(str, XML_TAG_SINGLE_FORMAT, indent);
+	}
+	
+	public void ASTNode.single_XML(CodeStream str, String indent, String tag) {
+		tag_XML(str, XML_TAG_SINGLE_FORMAT, indent, tag);
+	}
+	
+	public void ASTNode.single_XML(CodeStream str, String indent,  Map<String, String> attr) {
+		tag_XML(str, XML_TAG_SINGLE_FORMAT, indent, attr);
+	}
+	
+	public void ASTNode.single_XML(CodeStream str, String indent, String tag, Map<String, String> attr) {
+		tag_XML(str, XML_TAG_SINGLE_FORMAT, indent, tag, attr);
+	}
+	
+	public void ASTNode.enclose_XML(Printer p, CodeStream str, String indent, String tag, ASTNode node) {
+		open_XML(str, indent, tag);
+		p.print(node, str, indent);
+		close_XML(str, indent, tag);
+	}
+	
+	public void ASTNode.enclose_XML(Printer p, CodeStream str, String indent, String tag, ASTNode node, Map<String, String> attr) {
+		open_XML(str, indent, tag, attr);
+		p.print(node, str, indent);
+		close_XML(str, indent, tag);
+	}
+	
+	public static Map<String,String> ASTNode.attr_XML(String... args) {
+		switch (args.length / 2) {
+		case 0:
+			return Collections.emptyMap();
+		case 1:
+			return Collections.singletonMap(args[0], args[1]);
+		default:
+			Map<String,String> res = new LinkedHashMap<String,String>();
+			for (int i = 0; i < args.length - 1; i += 2)
+				res.put(args[i], args[i + 1]);
+			return res;
+		}
+	}
+	
+	
+	//------------------------ Expressions -------------------------
+	
+	public void FLitExp.prettyPrint_XML(Printer p, CodeStream str, String indent){
+		String namespace ="exp";
+		String tag = this.xmlTag();
+		
+		if (tag.equals("FBooleanLitExpTrue") || tag.equals("FBooleanLitExpFalse") )
+			tag="FBooleanLitExp";
+			
+		str.print(indent + "<" + namespace + ":" + tag + ">");
+		prettyPrint(p,str,"");
+		str.println("</"+ namespace + ":" + tag + ">");
+		
+	}
+	
+	public void FExp.prettyPrint_XML(Printer p, CodeStream str, String indent) {
+		String indent2 = p.indent(indent);
+		open_XML(str, indent);
+		for (FExp child : childFExps())
+			p.print(child, str, indent2);
+		close_XML(str, indent);
+	}
+	
+	
+	public void FAccessExp.prettyPrint_XML(Printer p, CodeStream str, String indent) {	
+		p.print(getFAccess(), str, p.indent(indent));
+	}
+	
+	public void FDerExp.prettyPrint_XML(Printer p, CodeStream str, String indent) {	
+		open_XML(str, indent);
+		p.print(getFAccess(), str, p.indent(indent));
+		close_XML(str, indent);
+	}
+	
+
+	public void FEnumLitExp.prettyPrint_XML(Printer p, CodeStream str, String indent) {
+		open_XML(str, indent);
+		p.print(new FAccessFull(getEnum(), getValue()), str, p.indent(indent));
+		close_XML(str, indent);
+	}
+	
+	public void FTimeExp.prettyPrint_XML(Printer p, CodeStream str, String indent) {
+		openLine_XML(str, indent);
+		prettyPrint(str, "");
+		close_XML(str);
+	}
+    
+	public void FFunctionCall.prettyPrint_XML(Printer p, CodeStream str, String indent) {
+		String indent2 = p.indent(indent);
+		open_XML(str, indent);
+		enclose_XML(p, str, indent2, "Name", getName());
+		enclose_XML(p, str, indent2, "Arguments", getArgs());
+		close_XML(str, indent);
+	}
+	
+	//------------------------ Equations -------------------------
+	
+	private static final FSubExp FEquation.EXP_TEMPLATE = new FSubExp();
+	
+	public void FEquation.prettyPrint_XML(Printer p, CodeStream str, String indent) {
+		String indent2 = p.indent(indent);
+		String indent3 = p.indent(indent2);
+		open_XML(str, indent);
+		EXP_TEMPLATE.open_XML(str, indent2);
+		p.print(getLeft(), str, indent3);
+		p.print(getRight(), str, indent3);
+		EXP_TEMPLATE.close_XML(str, indent2);
+		close_XML(str, indent);
+	}
+		
+	public void FFunctionCallEquation.prettyPrint_XML(Printer p, CodeStream str, String indent) {
+		if (!getCall().isIgnoredXML()) {
+			String indent2 = p.indent(indent);
+			open_XML(str, indent);
+			for (FFunctionCallLeft f : this.getLeftList())
+				p.print(f, str, indent2);
+			p.print(getCall(), str, indent2);
+			close_XML(str, indent);
+		}
+	}
+	
+	syn boolean FExp.isIgnoredXML()   = false;
+	eq FIgnoredBuiltIn.isIgnoredXML() = true;	
+	
+	//-------------------- Functions ---------------------------
+	
+    public void FFunctionDecl.prettyPrint_XML(Printer p, CodeStream str, String indent) {
+		String indent2 = p.indent(indent);
+		open_XML(str, indent);
+		enclose_XML(p, str, indent2, "Name", getFAccess());
+		p.print(myOutputs(), str, indent2);
+		p.print(myInputs(), str, indent2);
+		p.print(myProtected(), str, indent2);
+		p.print(getFAlgorithm(), str, indent2);
+		close_XML(str, indent);
+    }
+    
+    public void FFunctionVariable.prettyPrint_XML(Printer p, CodeStream str, String indent) {
+		String indent2 = p.indent(indent);
+		String indent3 = p.indent(indent2);
+		open_XML(str, indent, attr_XML("type", getType().scalarType().toString()));
+		enclose_XML(p, str, indent2, "Name", getFAccess());
+		
+		Size s = size();
+		for (int i = 0; i < s.ndims(); i++) {
+			open_XML(str, indent2, "Size");
+			if (s.hasValue(i))
+				p.print(s.createFExp(i), str, indent3);
+			else
+				str.format("%s<exp:UndefinedDimension/>", indent3);
+			close_XML(str, indent2, "Size");
+		}
+
+		if (hasBindingExp())
+			enclose_XML(p, str, indent2, "BindingExpression", getBindingExp());
+		close_XML(str, indent);
+    }
+	
+	public void FFunctionCallLeft.prettyPrint_XML(Printer p, CodeStream str, String indent) {
+		open_XML(str, indent);
+		if (hasFExp())
+			p.print(getFExp(), str, p.indent(indent));
+		else
+			single_XML(str, p.indent(indent), "EmptyOutputArgument");
+		close_XML(str, indent);
+	}
+
+	
+    //-------------------- Algorithms ---------------------------
+    public void FAlgorithm.prettyPrint_XML(Printer p, CodeStream str, String indent) {
+		open_XML(str, indent);
+		p.print(getFStatements(), str, p.indent(indent));
+		close_XML(str, indent);
+    }
+    
+    public void FStatement.prettyPrint_XML(Printer p, CodeStream str, String indent) {
+    	single_XML(str, indent);
+    }
+    
+    public void FAssignStmt.prettyPrint_XML(Printer p, CodeStream str, String indent) {
+		String indent2 = p.indent(indent);
+		open_XML(str, indent);
+		p.print(getLeft(), str, indent2);
+		enclose_XML(p, str, indent2, "Expression", getRight());
+		close_XML(str, indent);
+    }
+    
+    public void FIfStmt.prettyPrint_XML(Printer p, CodeStream str, String indent){
+        String namespace="fun";
+        String tag = this.xmlTag();
+        String elseIfTag = "ElseIf";
+        String elseTag = "Else";
+        
+        //opening tag
+        str.println(indent + "<" + namespace + ":" + tag + ">"); 
+        
+        //then branch
+        this.getFIfWhenClause(0).prettyPrint_XML(str,p.indent(indent));
+        
+        //elseif branches
+        if(this.getNumFIfWhenClause()>1){
+        	for (int i=1; i< this.getNumFIfWhenClause(); i++){
+        		str.println(indent + "\t<" + namespace + ":" + elseIfTag + ">");
+        		this.getFIfWhenClause(i).prettyPrint_XML(str,p.indent(indent+"\t"));
+        		str.println(indent + "\t</" + namespace + ":" + elseIfTag + ">");
+        	}
+        }
+        
+       //else branch
+        if (this.getNumElseStmt()!=0){
+            str.println(indent + "\t<" + namespace + ":" + elseTag + ">");
+        	for (FStatement s : this.getElseStmtList())
+        		s.prettyPrint_XML(str,p.indent(indent+"\t"));
+    		str.println(indent + "\t</" + namespace + ":" + elseTag + ">");
+        }
+	
+		//closing tag
+        str.println(indent + "</" + namespace + ":" + tag + ">");        
+    }
+    
+    public void FIfWhenClause.prettyPrint_XML(Printer p, CodeStream str, String indent){
+        String namespace="fun";
+        String testTag = "Condition";
+        String stmtTag = "Statements";
+        
+        str.println(indent + "<" + namespace + ":" + testTag + ">"); 
+        this.getTest().prettyPrint_XML(str,p.indent(indent));
+        str.println(indent + "</" + namespace + ":" + testTag + ">");  
+        
+        str.println(indent + "<" + namespace + ":" + stmtTag + ">"); 
+    	for (FStatement s : this.getFStatementList())
+    		s.prettyPrint_XML(str,p.indent(indent));
+        str.println(indent + "</" + namespace + ":" + stmtTag + ">");  
+    }
+    
+    public void FForStmt.prettyPrint_XML(Printer p, CodeStream str, String indent){
+        String namespace="fun";
+        String tag = this.xmlTag();
+        String stmtTag = "Statements";
+        
+        str.println(indent + "<" + namespace + ":" + tag + ">"); 
+        //Index
+        this.getIndex().prettyPrint_XML(str,p.indent(indent));
+        //Statements
+        str.println(indent + "\t<" + namespace + ":" + stmtTag + ">");
+    	for (FStatement s : this.getForStmtList())
+    		s.prettyPrint_XML(str,p.indent(indent+"\t"));
+		str.println(indent + "\t</" + namespace + ":" + stmtTag + ">");;
+    	
+        str.println(indent + "</" + namespace + ":" + tag + ">"); 
+     
+    }
+    
+    public void FForIndex.prettyPrint_XML(Printer p, CodeStream str, String indent){
+        String namespace="fun";
+        String tag = "Index";      
+        String varTag = "IterationVariable";
+        FAccess qVarName = this.getFVariable().getFAccess();
+        String expTag = "IterationSet";       
+        
+        str.println(indent + "<" + namespace + ":" + tag + ">"); 
+        
+        str.println(indent + "\t<" + namespace + ":" + varTag + ">"); 
+        qVarName.prettyPrint_XML(str,p.indent(indent+"\t"));
+        str.println(indent + "\t</" + namespace + ":" + varTag + ">"); 
+        
+        str.println(indent + "\t<" + namespace + ":" + expTag + ">");
+        this.getFExp().prettyPrint_XML(str,p.indent(indent+"\t"));
+        str.println(indent + "\t</" + namespace + ":" + expTag + ">");
+        str.println(indent + "</" + namespace + ":" + tag + ">"); 
+     
+    }
+      
+    public void FWhileStmt.prettyPrint_XML(Printer p, CodeStream str, String indent){
+        String namespace="fun";
+        String tag = this.xmlTag();
+        String testTag = "Condition";
+        String stmtTag = "Statements";
+        
+        str.println(indent + "<" + namespace + ":" + tag + ">"); 
+        //test
+        str.println(indent + "\t<" + namespace + ":" + testTag + ">"); 
+        this.getTest().prettyPrint_XML(str,p.indent(indent+"\t"));
+        str.println(indent + "\t</" + namespace + ":" + testTag + ">");  
+        //statements
+        str.println(indent + "\t<" + namespace + ":" + stmtTag + ">"); 
+    	for (FStatement s : this.getWhileStmtList())
+    		s.prettyPrint_XML(str,p.indent(indent+"\t"));
+        str.println(indent + "\t</" + namespace + ":" + stmtTag + ">"); 
+        
+        str.println(indent + "</" + namespace + ":" + tag + ">"); 
+    }
+    
+	public void FFunctionCallStmt.prettyPrint_XML(Printer p, CodeStream str, String indent) {
+		if (!getCall().isIgnored()) {
+			FFunctionCall call = (FFunctionCall)this.getCall();
+			String tag = this.xmlTag();
+			String namespace = "fun";
+			
+			str.println(indent + "<" + namespace + ":" + tag  + ">");
+			
+			for (FFunctionCallLeft f : this.getLeftList()){
+				
+				str.println(indent + "\t<" + namespace + ":OutputArgument>");
+				
+				if(!f.hasFExp()){
+					str.println(indent + "\t\t<" + namespace + ":EmptyOutputArgument/>");
+				}else{
+					f.getFExp().prettyPrint_XML(str,p.indent(indent+"\t"));
+				}
+				
+				str.println(indent + "\t</" + namespace + ":OutputArgument>");
+			}
+			
+			call.prettyPrint_XML(str,p.indent(indent+"\t"));
+		
+			str.println(indent + "</" + namespace + ":" + tag  + ">");
+		}
+	}
+	
+	//-------------------- Qualified Names ---------------------------
+	
+	public void FAccess.prettyPrint_XML(Printer p, CodeStream str, String indent) {
+		throw new UnsupportedOperationException();
+	}
+	
+	public void FAccessString.prettyPrint_XML(Printer p, CodeStream str, String indent) {
+		// TODO: Should probably be changed in schema, a simple string should be enough here
+		for (String part : getName().split("\\."))
+			str.println("<exp:QualifiedNamePart name=\"" + part + "\"/>");
+	}
+	
+	public void FAccessFull.prettyPrint_XML(Printer p, CodeStream str, String indent) {
+		for (FAccessPart np : getFAccessParts())
+			np.prettyPrint_XML(str,p.indent(indent));
+	}
+	
+	public void FAccessPart.prettyPrint_XML(Printer p, CodeStream str, String indent) {
+		String namespace = "exp";
+		String tag = this.xmlTag();
+		String nameAttr = " name=\"" + this.getName() + "\"";
+		
+		if (this.hasFArraySubscripts()){
+			str.println(indent + "<" + namespace + ":" + tag + nameAttr + ">");
+			this.getFArraySubscripts().prettyPrint_XML(str,p.indent(indent));	
+			str.println(indent + "</" + namespace + ":" + tag + ">");
+		}else{
+			str.println(indent + "<" + namespace + ":" + tag + nameAttr + "/>");
+		}
+
+	}
+	
+    public void FArraySubscripts.prettyPrint_XML(Printer p, CodeStream str, String indent){
+        if (numSubscript()>0) {
+            String namespace = "exp";
+            String tag = this.xmlTag();
+            
+            str.println(indent + "<" + namespace + ":" + tag + ">");
+            
+            for (Subscript s : this.subscripts()) {
+                s.prettyPrint_XML(str,p.indent(indent+"\t"));
+            }
+            
+            str.println(indent + "</" + namespace + ":" + tag + ">");
+            
+        }
+    }
+    
+	public void FSubscript.prettyPrint_XML(Printer p, CodeStream str, String indent){
+		return;
+	}
+	
+	public void FColonSubscript.prettyPrint_XML(Printer p, CodeStream str, String indent){
+		String namespace = "exp";
+		String tag = this.xmlTag();
+		
+		str.println(indent + "<" + namespace + ":" + tag + "/>");
+	}
+	
+	public void FExpSubscript.prettyPrint_XML(Printer p, CodeStream str, String indent){
+		String namespace = "exp";
+		String tag = this.xmlTag();
+		
+		str.println(indent + "<" + namespace + ":" + tag +  ">");
+		this.getFExp().prettyPrint_XML(str,p.indent(indent));
+		str.println(indent + "</" + namespace + ":" + tag +  ">");
+			
+	}
+
+	public void FIntegerSubscript.prettyPrint_XML(Printer p, CodeStream str, String indent){
+		String namespace = "exp";
+		String tag = this.xmlTag();
+		
+		str.println(indent + "<" + namespace + ":" + tag +  ">");
+		
+		FIntegerLitExp fi = new FIntegerLitExp(getValue());
+		fi.prettyPrint_XML(str,p.indent(indent));
+		str.println(indent + "</" + namespace + ":" + tag +  ">");
+			
+	}
+
+    public void IntegerSubscript.prettyPrint_XML(CodeStream str, String indent){
+        FIntegerSubscript fs = new FIntegerSubscript(value);
+        fs.prettyPrint_XML(str, indent);
+    }
+
+    syn String FVariable.quantity_XML()    =  quantityAttribute();
+    syn String FVariable.unit_XML()        =  unitAttribute();
+    syn String FVariable.displayUnit_XML() =  displayUnitAttribute();
+    syn String FVariable.variability_XML() {
+        if (variability().knownParameterOrLess()) {
+            return "constant";
+        } else if (isParameter()) {
+            return "parameter";
+        } else if (isDiscrete()) {
+            return "discrete";
+        } else {
+            //default
+            return "continuous";
+        }
+    }
+    syn String FVariable.causality_XML() {
+        if (isInput()) {
+            return "input";
+        } else if (isOutput()) {
+            return "output";
+        } else {
+            //default
+            return "internal";
+        }
+    }
+    syn String FVariable.alias_XML() {
+        if (isAlias()) {
+            if (isNegated()) {
+                return "negatedAlias";
+            } else {
+                return "alias";
+            }
+        } else {
+            return "noAlias";
+        }
+    }
+
+    
+    public void FVariable.genDecl_XML(XMLGenerator gen, CodeStream str) {
+        throw new IllegalArgumentException("FVariable.genDecl_XML() is not implemented for " + getClass().getSimpleName() + "!");
+    }
+
+    @Override
+    public void FRealVariable.genDecl_XML(XMLGenerator gen, CodeStream str) {
+        // Start of tag
+        gen.generateTagStart("Real", str);
+        gen.addRealAttributes(str, this);
+        // Close tag
+        gen.generateClosedEnd(str);
+    }
+    
+
+    @Override
+    public void FIntegerVariable.genDecl_XML(XMLGenerator gen, CodeStream str) {
+        // Start of tag
+        gen.generateTagStart("Integer", str);
+        gen.addIntegerAttributes(str, this);
+        // Close tag
+        gen.generateClosedEnd(str);
+    }
+
+    @Override
+    public void FEnumVariable.genDecl_XML(XMLGenerator gen, CodeStream str) {
+        // Start of tag
+        gen.generateTagStart("Enumeration", str);
+        gen.addEnumAttributes(str, this);
+        // Close tag
+        gen.generateClosedEnd(str);
+    }
+
+    @Override
+    public void FBooleanVariable.genDecl_XML(XMLGenerator gen, CodeStream str) {
+        // Start of tag
+        gen.generateTagStart("Boolean", str);
+        gen.addBooleanAttributes(str, this);
+        // Close tag
+        gen.generateClosedEnd(str);
+    }
+
+    @Override
+    public void FStringVariable.genDecl_XML(XMLGenerator gen, CodeStream str) {
+        // Start of tag
+        gen.generateTagStart("String", str);
+        gen.addStringAttributes(str, this);
+        // Close tag
+        gen.generateClosedEnd(str);
+    }
+
+    syn String FVariable.category_XML() {
+        if (isDerivativeVariable()) {
+            return "derivative";
+        } else if (isDifferentiatedVariable()) {
+            return "state";
+        } else if (isDependentConstant()) {
+            return "dependentConstant";
+        } else if (isIndependentConstant()) {
+            return "independentConstant";
+        } else if (isDependentParameter()) {
+            return "dependentParameter";
+        } else if (isIndependentParameter()) {
+            return "independentParameter";
+        } else {
+            return "algebraic";
+        }
+    }
+
+    
+}//aspect end
+
+aspect XMLTagBinding{
+           
+        //XML tags
+        syn String ASTNode.xmlTag() = null;
+       
+        //literals and identifiers
+        eq CommonAccess.xmlTag() = "Identifier";
+        eq CommonAccessExp.xmlTag() = "Identifier";
+        eq FEnumLitExp.xmlTag() = "Identifier";	
+        eq FIntegerLitExp.xmlTag() = "IntegerLiteral";
+        eq FRealLitExp.xmlTag() = "RealLiteral";
+        eq FBooleanLitExpFalse.xmlTag() = "BooleanLiteral";
+        eq FBooleanLitExpTrue.xmlTag() = "BooleanLiteral";
+        eq FStringLitExp.xmlTag() = "StringLiteral";
+        //operators
+        eq FAddExp.xmlTag() = "Add";
+        eq FSubExp.xmlTag() = "Sub";
+        eq FMulExp.xmlTag() = "Mul";
+        eq FDivExp.xmlTag() = "Div";
+        eq FPowExp.xmlTag() = "Pow";
+        eq FDotAddExp.xmlTag() = "DotAdd";
+        eq FDotSubExp.xmlTag() = "DotSub";
+        eq FDotMulExp.xmlTag() = "DotMul";
+        eq FDotDivExp.xmlTag() = "DotDiv";
+        eq FDotPowExp.xmlTag() = "DotPow";
+        eq FNegExp.xmlTag() = "Neg";
+        eq FLtExp.xmlTag() = "LogLt";
+        eq FLeqExp.xmlTag() = "LogLeq";
+        eq FGtExp.xmlTag() = "LogGt";
+        eq FGeqExp.xmlTag()= "LogGeq";
+        eq FEqExp.xmlTag()= "LogEq";
+        eq FNeqExp.xmlTag()= "LogNeq";
+        eq FNotExp.xmlTag() = "Not";
+        eq FOrExp.xmlTag() = "Or";
+        eq FAndExp.xmlTag() = "And";
+        //built-in functions
+        eq FMinExp.xmlTag() = "Min";
+        eq FMaxExp.xmlTag() = "Max";
+        eq FAbsExp.xmlTag() = "Abs";
+        eq FDerExp.xmlTag() = "Der";
+        eq FSinExp.xmlTag() = "Sin";
+        eq FCosExp.xmlTag() = "Cos";
+        eq FTanExp.xmlTag() = "Tan";
+        eq FAsinExp.xmlTag() = "Asin";
+        eq FAcosExp.xmlTag() = "Acos";
+        eq FAtanExp.xmlTag() = "Atan";
+        eq FSinhExp.xmlTag() = "Sinh";
+        eq FCoshExp.xmlTag() = "Cosh";
+        eq FTanhExp.xmlTag() = "Tanh";
+        eq FExpExp.xmlTag() = "Exp";
+        eq FLogExp.xmlTag() = "Log";
+        eq FLog10Exp.xmlTag() = "Log10";
+        eq FSqrtExp.xmlTag() = "Sqrt";
+        eq FAtan2Exp.xmlTag() = "Atan2";       
+        eq FTimeExp.xmlTag() = "Time";
+        eq FRangeExp.xmlTag() = "Range";
+        eq FNoEventExp.xmlTag() = "NoEvent";
+        //other expressions
+        eq FArray.xmlTag() = "Array";   
+        eq FFunctionCall.xmlTag() = "FunctionCall";
+        eq FAssert.xmlTag() = "Assert";
+        eq FReinit.xmlTag() = "Reinit";
+        //unsupported expressions       
+        eq FExp.xmlTag() = "Unsupported";
+       
+        //equations
+        eq FEquation.xmlTag() = "Equation";
+        eq FFunctionCallEquation.xmlTag() = "FunctionCallEquation";
+       
+        //functions
+        eq FFunctionDecl.xmlTag() = "Function";
+        eq FFunctionCallLeft.xmlTag() = "OutputArgument";
+        eq FAlgorithm.xmlTag() = "Algorithm";
+        eq FBreakStmt.xmlTag() = "Break";
+        eq FReturnStmt.xmlTag() = "Return";
+        eq FAssignStmt.xmlTag() = "Assign";
+        eq FFunctionCallStmt.xmlTag() = "FunctionCallStatement";
+        eq FIfStmt.xmlTag() = "If";
+        eq FForStmt.xmlTag() = "For";
+        eq FWhileStmt.xmlTag() = "While";
+        eq FFunctionVariable.xmlTag() = 
+        	isOutput() ? "OutputVariable" : (isInput() ? "InputVariable" : "ProtectedVariable"); 
+       
+        //qualified names
+        eq FAccess.xmlTag() = "QualifiedName";
+        eq FAccessPart.xmlTag() = "QualifiedNamePart";
+        eq FArraySubscripts.xmlTag() = "ArraySubscripts";
+        eq FColonSubscript.xmlTag() = "UndefinedDimension";
+        eq FExpSubscript.xmlTag() = "IndexExpression";
+        eq FIntegerSubscript.xmlTag() = "IndexExpression";
+        
+        eq InstForStmt.xmlTag() = "For";
+        eq FExternalStmt.xmlTag() = "External";
+        eq FWhenStmt.xmlTag() = "When";
+    	
+    	
+    	syn String ASTNode.xmlNamespace() = null;
+    	eq FExp.xmlNamespace()              = "exp";
+    	eq CommonAccess.xmlNamespace()            = "exp";
+    	eq FAbstractEquation.xmlNamespace() = "equ";
+    	eq FFunctionVariable.xmlNamespace() = "fun";
+    	eq FFunctionDecl.xmlNamespace()     = "fun";
+    	eq FAlgorithm.xmlNamespace()        = "fun";
+    	eq FStatement.xmlNamespace()        = "fun";
+    	eq FFunctionCallLeft.xmlNamespace() = parentXmlNamespace();
+    	
+    	
+    	inh String BaseNode.parentXmlNamespace();
+    	eq BaseNode.getChild().parentXmlNamespace() = xmlNamespace();
+	    
+	    /**
+	     * Convert to a string represenation to use in attributes in XML files.
+	     * 
+	     * @return Representation of value for XML attributes.	     
+	     */
+    	public String CValue.xmlValue() {
+    		return stringValue();
+    	}
+    	
+    	public String CValueEnum.xmlValue() {
+    		return Integer.toString(intValue());
+    	}
+
+        //log.warning("Warning: the model can cointains unsopported expressions and the generated XML document can be unvalid");
+   
+}

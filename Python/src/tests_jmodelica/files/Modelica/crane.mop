@@ -1,0 +1,77 @@
+package Crane
+
+model Crane "three-dimensional crane with load"
+    parameter Real M = 0.5;     // crane mass
+    parameter Real m = 0.1;     // load mass
+    parameter Real g = 9.81;
+    parameter Real Dx = 0.0;    // damping coefficient, x
+    parameter Real Dy = 0.0;    // damping coefficient, y
+    parameter Real Dl = 0.0;    // damping coefficient, l
+    parameter Real cx = 1.0;
+    parameter Real cy = 1.0;
+    parameter Real cl = 1.0;
+    Real px;                    // crane position, x
+    Real py;                    // crane position, y
+    Real vx;                    // crane velocity, x
+    Real vy;                    // crane velocity, y
+    Real tx;                    // load angle, x
+    Real ty;                    // load angle, y
+    Real wx;                    // load angular velocity, x
+    Real wy;                    // load angular velocity, y
+    Real l;                     // rope length
+    Real der_l;
+    Real lx;                    // load position, x
+    Real ly;                    // load position, y
+    Real lz;                    // load position, z
+    Modelica.Blocks.Interfaces.RealInput ux;
+    Modelica.Blocks.Interfaces.RealInput uy;
+    Modelica.Blocks.Interfaces.RealInput ul;
+equation
+    der(px) = vx;
+    der(py) = vy;
+    der(tx) = wx;
+    der(ty) = wy;
+    der(l) = der_l;
+    
+    (M+m)*der(vx) + m*l*cos(tx)*cos(ty)*der(wx) - m*l*sin(tx)*sin(ty)*der(wy)
+    + m*sin(tx)*cos(ty)*der(der_l) + Dx*vx + 2*m*cos(tx)*cos(ty)*der_l*wx
+    - 2*m*sin(tx)*sin(ty)*der_l*wy - m*l*sin(tx)*cos(ty)*wx^2
+    - 2*m*l*cos(tx)*sin(ty)*wx*wy - m*l*sin(tx)*cos(ty)*wy^2 = cx*ux;
+    
+    m*l^2*cos(ty)^2*der(wx) + m*l*cos(tx)*cos(ty)*der(vx) + 2*m*l*cos(ty)^2*der_l*wx
+    - 2*m*l^2*sin(ty)*cos(ty)*wx*wy + m*g*l*sin(tx)*cos(ty) = 0;
+    
+    (M+m)*der(vy) + m*l*cos(ty)*der(wy) + m*sin(ty)*der(der_l) + Dy*vy
+    + 2*m*cos(ty)*der_l*wy - m*l*sin(ty)*wy^2 = cy*uy;
+    
+    m*l^2*der(wy) + m*l*cos(ty)*der(vy) - m*l*sin(tx)*sin(ty)*der(vx) + 2*m*l*der_l*wy
+    + m*l^2*cos(ty)*sin(ty)*wx^2 + m*g*l*cos(tx)*sin(ty) = 0;
+    
+    (M+m)*der(der_l) + m*sin(tx)*cos(ty)*der(vx) + m*sin(ty)*der(vy) + Dl*der_l
+    - m*l*cos(ty)^2*wx^2 - m*l*wy^2 - m*g*cos(tx)*cos(ty) = cl*ul;
+    
+    lx = px + l*sin(tx)*cos(ty);
+    ly = py + l*sin(ty);
+    lz = -l*cos(tx)*cos(ty);
+end Crane;
+    
+model Crane_MPC_Model
+    extends Crane;
+    parameter Real lx_ref = 0.0;
+    parameter Real ly_ref = 0.0;
+    parameter Real lz_ref = -1.0;
+    parameter Real Q_x = 1.0;
+    parameter Real Q_u = 0.01;
+    parameter Real P[10, 10] = fill(0, 10, 10);
+end Crane_MPC_Model;
+
+optimization Crane_MPC(objectiveIntegrand = Q_x*((lx-lx_ref)^2 + (ly-ly_ref)^2 + (lz-lz_ref)^2) + Q_u*(ux^2 + uy^2 + (ul+m*g)^2),
+                       startTime = 0.0, finalTime = 10.0)
+    extends Crane_MPC_Model(ux(min = -5, max = 5, nominal = 1),
+                            uy(min = -5, max = 5, nominal = 1),
+                            ul(min = -5, max = 5, nominal = 1));
+constraint
+    vx^2 + vy^2 <= 1;
+end Crane_MPC;
+
+end Crane;

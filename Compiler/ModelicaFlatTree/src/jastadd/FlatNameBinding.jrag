@@ -1,0 +1,376 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.HashMap;
+
+aspect FlatNameBinding {
+
+    syn lazy FAbstractVariable FAccessExp.myFV() = getFAccess().myFV();
+    eq FAbstractDerExp.myFV()                   = myDerFV(order());
+    syn FAbstractVariable FReinit.myFV()        = getVar().asFAccessExp().myFV();
+
+    syn FAbstractVariable      FAccess    .myTopFV() = myFV();
+    syn lazy FAbstractVariable FAccessFull.myTopFV() = getFAccessPart(0).myFV();
+
+    syn FAbstractVariable FAccessExp.myDerFV(int index) = getFAccess().myDerFV(index);
+    syn FAbstractVariable FAccess.myDerFV(int index)    = lookupFV(derName(index));
+
+    syn FAbstractVariable FAccess.myPreFV() = lookupFV(preName());
+
+    syn CommonVariableDecl CommonAccessExp.myCommonVarDecl();
+    eq  FAccessExp.myCommonVarDecl()    = getFAccess().myFV();
+    eq  InstAccessExp.myCommonVarDecl() = getInstAccess().myInstComponentDecl();
+
+    inh FAbstractVariable FAccess.lookupFV(String name);
+    eq Root.getChild().lookupFV(String name)          = null;
+    eq FClass.getChild().lookupFV(String name)        = lookupFV(name);
+    eq FFunctionDecl.getChild().lookupFV(String name) = lookupFV(name);
+    eq FRecordDecl.getChild().lookupFV(String name)   = lookupFV(name);
+	
+    syn FAbstractVariable FClass.lookupFV(String name)      = nullUnknown(variablesMap().lookup(name));
+    syn FAbstractVariable FRecordDecl.lookupFV(String name) = nullUnknown(variablesMap().lookup(name));
+    syn FAbstractVariable FFunctionDecl.lookupFV(String name) {
+        FAbstractVariable res = (tempLookupMap == null) ? null : tempLookupMap.lookup(name);
+        if (res == null) {
+			res = variablesMap().lookup(name);
+        }
+		return nullUnknown(res);
+	}
+
+	private FlatVariableMap FFunctionDecl.tempLookupMap = null;
+
+    inh FAbstractVariable FForIndex.lookupFV(String name);
+    inh FAbstractVariable FIterExp.lookupFV(String name);
+
+    eq FForStmt.getForStmt().lookupFV(String name)              = getIndex().localLookupFV(name);
+    eq FIterExp.getFExp().lookupFV(String name)                 = getForIndex(getNumForIndex() - 1).localLookupFV(name);
+    eq FIterExp.getForIndex(int i).lookupFV(String name)        =
+            i == 0 ? lookupFV(name) : getForIndex(i - 1).localLookupFV(name);
+
+    syn FAbstractVariable CommonForIndex.localLookupFV(String name) = null;
+    syn FAbstractVariable FForIndex.localLookupFV(String name) {
+        if (getFVariable().name().equals(name)) {
+            return getFVariable();
+        }
+        return lookupFV(name);
+    }
+
+	/**
+	 * Return unknown if variable is null, variable otherwise.
+	 * 
+	 * Convenience method to facilitate one-liners.
+	 */
+	public FAbstractVariable ASTNode.nullUnknown(FAbstractVariable variable) {
+		return (variable == null) ? unknownFVariable() : variable;
+	}
+	
+    syn lazy FlatVariableMap FClass.variablesMap()        = new FlatVariableMap(getFVariables(), getAliasVariables());
+    syn lazy FlatVariableMap FClass.globalVariablesMap() = new FlatVariableMap(getFGlobalVariables());
+    syn lazy FlatVariableMap FFunctionDecl.variablesMap() = new FlatVariableMap(getFFunctionVariables());
+    syn lazy FlatVariableMap FRecordDecl.variablesMap()   = new FlatVariableMap(getFVariables());
+
+    public class FlatVariableMap {
+
+        private Map<String, FAbstractVariable> flatMap = new HashMap<String, FAbstractVariable>();
+
+        public FlatVariableMap(Iterable<? extends FAbstractVariable>... fvss) {
+            for (Iterable<? extends FAbstractVariable> fvs : fvss) {
+                for (FAbstractVariable fv : fvs) {
+                    addVariable(fv);
+                }
+            }
+        }
+
+        public void addVariable(FAbstractVariable fv) {
+            flatMap.put(fv.name(), fv);
+        }
+
+        public FAbstractVariable lookup(String name) {
+            return flatMap.get(name);
+        }
+    }
+    syn FAbstractVariable FAccess.myFV();
+    eq FAccess    .myFV() = isGlobalAccess() ? lookupGlobalVariable(name()) : lookupFV(name());
+    eq FAccessFull.myFV() = getFAccessPart(getNumFAccessPart() - 1).myFV();
+
+    syn FAbstractVariable FAccess.myOutermostFV() = myFV();
+    eq FAccessFull.myOutermostFV()                = getFAccessPart(0).myFV();
+    
+    inh FAbstractVariable FAccessPart.lookupFV(String name);
+    
+    syn FAbstractVariable FAccessPart.myFV() {
+        FAbstractVariable res = myContextFV();
+        if (res == null) {
+            if (isGlobalAccess()) {
+                res = lookupGlobalVariable(name());
+            } else {
+                res = lookupFV(name());
+            }
+        } else if (!res.isUnknown()) {
+            res = res.myFRecordDecl().lookupFV(name());
+        }
+        return res;
+    }
+
+    inh FAbstractVariable FAccessPart.myContextFV();
+    eq FAccessFull.getFAccessPart(int i).myContextFV() = 
+            i == 0 ? null : getFAccessPart(i - 1).myFV();
+
+    inh FAbstractVariable FAccess.lookupGlobalVariable(String name);
+    inh FAbstractVariable FAccessPart.lookupGlobalVariable(String name);
+    eq Root.getChild().lookupGlobalVariable(String name)   = null;
+    eq FClass.getChild().lookupGlobalVariable(String name) = globalVariablesMap().lookup(name);
+
+    inh boolean FAccess.isGlobalAccess();
+    inh boolean FAccessPart.isGlobalAccess();
+    eq BaseNode.getChild().isGlobalAccess() = false;
+    eq FAccessFull.getChild().isGlobalAccess() = isGlobalAccess();
+    eq FGlobalAccessExp.getChild().isGlobalAccess() = true;
+
+	syn boolean CommonAccess.isForIndex();
+	syn boolean CommonAccessExp.isForIndex() = getAccess().isForIndex();
+	eq FAccess.isForIndex()             = myFV().isForIndex();
+	eq InstAccess.isForIndex()         = myInstComponentDecl().isForIndex();
+    inh boolean FAbstractVariable.isForIndex();
+    inh boolean InstComponentDecl.isForIndex();
+    eq FForIndex.getFVariable().isForIndex()        = true;
+    eq InstForIndex.getInstPrimitive().isForIndex() = true;
+    eq ASTNode.getChild().isForIndex()              = false;
+
+}
+
+aspect ParameterEquations {
+
+	syn boolean FAbstractVariable.hasBindingExp() = false;
+	
+	syn boolean FAbstractVariable.hasParameterEquation() = 
+		!hasBindingExp() && parameterEquation() != null;
+	
+	inh lazy FAbstractEquation FAbstractVariable.parameterEquation();
+	eq FClass.getFVariable(int i).parameterEquation()     = 
+		parameterEquationsMap().get(getFVariable(i));
+	eq FClass.getAliasVariable(int i).parameterEquation() = 
+		parameterEquationsMap().get(getAliasVariable(i));
+	eq FForIndex.getChild().parameterEquation()           = null;
+	eq FFunctionDecl.getChild().parameterEquation()       = null;
+	eq FRecordDecl.getChild().parameterEquation()         = null;
+    eq FClass.getChild().parameterEquation()              = null;
+	
+	syn lazy Map<FAbstractVariable,FAbstractEquation> FClass.parameterEquationsMap() {
+		Map<FAbstractVariable,FAbstractEquation> map = new HashMap<FAbstractVariable,FAbstractEquation>();
+		for (FAbstractEquation equ : getParameterEquations())
+			equ.addToParameterEquationsMap(map);
+		return map;
+	}
+	
+	public void FAbstractEquation.addToParameterEquationsMap(
+            Map<FAbstractVariable,FAbstractEquation> map) {
+        for (FVariable fv : referencedFVariablesInLHS()) {
+            fv.addToParameterEquationsMap(map, this);
+        }
+    }
+	
+	public void FEquation.addToParameterEquationsMap(
+			Map<FAbstractVariable,FAbstractEquation> map) {
+		getLeft().addToParameterEquationsMap(map, this);
+	}
+	
+	public void FFunctionCallEquation.addToParameterEquationsMap(
+			Map<FAbstractVariable,FAbstractEquation> map) {
+		for (FFunctionCallLeft left : getLefts())
+			if (left.hasFExp())
+				left.getFExp().addToParameterEquationsMap(map, this);
+	}
+    
+	public void FExp.addToParameterEquationsMap(
+			Map<FAbstractVariable,FAbstractEquation> map, FAbstractEquation equ) {
+		for (FExp e : childFExps())
+			e.addToParameterEquationsMap(map, equ);
+	}
+	
+	public void FAccessExp.addToParameterEquationsMap(
+			Map<FAbstractVariable,FAbstractEquation> map, FAbstractEquation equ) {
+        getFAccess().myFV().addToParameterEquationsMap(map, equ);
+	}
+	
+    public void FAbstractVariable.addToParameterEquationsMap(
+            Map<FAbstractVariable,FAbstractEquation> map, FAbstractEquation equ) {
+        if (!isUnknown()) {
+            map.put(this, equ);
+        }
+    }
+	
+	/**
+	 * Is this expression in a parameter equation?
+	 */
+	inh boolean FExp.inParameterEquation();
+	eq FClass.getParameterEquation().inParameterEquation() = true;
+	eq FClass.getChild().inParameterEquation()              = false;
+	eq FFunctionDecl.getChild().inParameterEquation()       = false;
+	eq Root.getChild().inParameterEquation()                = false;
+	
+	/**
+	 * Is this expression in the value of an attribute?
+	 */
+	inh boolean FExp.inAttributeValue();
+	eq FAttribute.getValue().inAttributeValue()    = true;
+	eq FClass.getChild().inAttributeValue()        = false;
+	eq FFunctionDecl.getChild().inAttributeValue() = false;
+	eq Root.getChild().inAttributeValue()          = false;
+	
+}
+
+aspect FlatFunctionBinding {
+    
+    syn FCallable FFunctionCall.myFCallable()       = getName().myFCallable();
+    syn FCallable CommonAccess.myFCallable()              = lookupFCallable(name());
+    syn FCallable FFunctionVariable.myFCallable()   = lookupFCallable(type().name());
+    
+    inh FCallable CommonAccess.lookupFCallable(String name);
+    inh FCallable FFunctionDecl.lookupFCallable(String name);
+    inh FCallable FFunctionType.lookupFCallable(String name);
+    inh FCallable FFunctionVariable.lookupFCallable(String name);
+    eq Root.getChild().lookupFCallable(String name)          = null;
+    eq FClass.getChild().lookupFCallable(String name)        = lookupFunc(name);
+    eq FFunctionDecl.getChild().lookupFCallable(String name) = lookupFunc(name);
+    
+	syn FFunctionDecl FClass.lookupFunc(String name) {
+		for (FFunctionDecl f : getFFunctionDecls())
+			if (f.name().equals(name))
+				return f;
+		return null;
+	}
+    
+    syn FCallable FFunctionDecl.lookupFunc(String name) {
+        for (FFunctionVariable ffv : getFFunctionVariables())
+            if (ffv.name().equals(name) && ffv.type().isFunction())
+                return ffv;
+        return lookupFCallable(name);
+    }
+    
+}
+
+aspect FlatRecordBinding {
+	
+	syn lazy FRecordDecl FAbstractVariable.myFRecordDecl() = null;
+    eq FGlobalVariable.myFRecordDecl()   = type().myFRecordDecl();
+	eq FRecordVariable.myFRecordDecl()   = lookupFRec(getRecord().name());
+	eq FFunctionVariable.myFRecordDecl() = type().myFRecordDecl();
+    eq FVariable.myFRecordDecl() = containingRecordDecl();
+	
+	syn lazy FRecordDecl FRecordAccess.myFRecordDecl() = lookupFRec(name());
+    
+    syn FRecordDecl FType.myFRecordDecl() = null;
+    syn lazy FRecordDecl FRecordType.myFRecordDecl()  = 
+            (getFClass() != null) ? getFClass().lookupFRec(getName()) : lookupFRec(getName());
+    syn FFunctionDecl FType.myFFunctionDecl() = null;
+    syn lazy FFunctionDecl FFunctionType.myFFunctionDecl() = 
+            (getFClass() != null) ? getFClass().lookupFunc(getName()) : (FFunctionDecl)lookupFCallable(getName());
+    
+	inh FRecordDecl FRecordVariable.lookupFRec(String name);
+	inh FRecordDecl FRecordType.lookupFRec(String name);
+	inh FRecordDecl CommonAccess.lookupFRec(String name);
+	eq Root.getChild().lookupFRec(String name) = null;
+	eq FClass.getChild().lookupFRec(String name) = lookupFRec(name);
+	syn FRecordDecl FClass.lookupFRec(String name) {
+		for (FRecordDecl r : getFRecordDecls())
+			if (r.name().equals(name))
+				return r;
+		return null;
+	}
+	
+}
+
+aspect FlatEnumBinding {
+	
+	syn lazy FEnumDecl FAbstractVariable.myFEnumDecl() = null;
+	eq FEnumVariable.myFEnumDecl()     = lookupFEnum(getEnum().name());
+	eq FFunctionVariable.myFEnumDecl() = type().myFEnumDecl();
+	eq FEnumLiteral.myFEnumDecl()      = retrieveFEnumDecl();
+	
+	inh FEnumDecl FEnumLiteral.retrieveFEnumDecl();
+	eq FEnumDecl.getChild().retrieveFEnumDecl() = this;
+	eq FlatRoot.getChild().retrieveFEnumDecl()  = null;
+	
+	syn lazy FEnumDecl FEnumLitExp.myFEnumDecl() = lookupFEnum(getEnum());
+	syn lazy FEnumDecl FType.myFEnumDecl()       = null;
+	eq FEnumType.myFEnumDecl()                   = lookupFEnum(getName());
+	
+	inh FEnumDecl FEnumVariable.lookupFEnum(String name);
+	inh FEnumDecl FEnumType.lookupFEnum(String name);
+	inh FEnumDecl FEnumLitExp.lookupFEnum(String name);
+	inh FEnumDecl CommonAccess.lookupFEnum(String name);
+	eq Root.getChild().lookupFEnum(String name) = null;
+	eq FClass.getChild().lookupFEnum(String name) = lookupFEnum(name);
+	syn FEnumDecl FClass.lookupFEnum(String name) {
+		for (FEnumDecl r : getFEnumDecls()) {
+			if (r.name().equals(name))
+				return r;
+		}
+		return null;
+	}
+	/*
+	syn FAbstractVariable FEnumDecl.findComponent(FAccess name) {
+		UnknownFVariable unknown = unknownFVariable();
+		FEnumDecl rec = this;
+		FAbstractVariable res = unknown;
+		for (FAccessPart p : name.getFAccessParts()) {
+			if (rec == null)
+				return unknown;
+			res = unknown;
+			for (FVariable v : rec.getFVariables()) {
+				if (v.getFAccess().getFAccessPart(0).getName().equals(p.getName())) {
+					res = v;
+					rec = v.myFEnumDecl();
+					break;
+				}
+			}
+			if (res == unknown)
+				return unknown;
+		}
+		return res;
+	}
+	*/
+}
+
+aspect FlatExternalObjectBinding {
+    
+    syn FExternalStmt FExternalObjectType.myConstructorStmt() = getConstructor().myFExternalStmt();
+    syn FExternalStmt FExternalObjectType.myDestructorStmt()  = getDestructor().myFExternalStmt();
+    
+    syn FExternalStmt CommonAccess.myFExternalStmt()     = myFCallable().asFFunctionDecl().getFAlgorithm().getFExternalStmt();
+    syn FExternalStmt InstAccess.myFExternalStmt() = myInstClassDecl().findFunctionExternal().getFAlgorithm().getFExternalStmt();
+}
+
+aspect FlatPreBinding {
+	syn FAbstractVariable FPreExp.myFV()       = lookupFV(getFAccess().preName());
+	syn FAbstractVariable FPreExp.myNonPreFV() = getFAccess().myFV();
+}
+
+aspect UnknownFVariables {
+
+	syn lazy UnknownFVariable FClass.getUnknownFVariable() = new UnknownFVariable();
+
+	syn UnknownFVariable ASTNode.unknownFVariable() = root().unknownFVariable();
+	eq FlatRoot.unknownFVariable() = getFClass().getUnknownFVariable();
+
+	syn boolean FAbstractVariable.isUnknown() = false;
+	eq UnknownFVariable.isUnknown() = true;
+	   
+}
+

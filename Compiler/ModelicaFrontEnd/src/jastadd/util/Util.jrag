@@ -1,0 +1,2161 @@
+/*
+    Copyright (C) 2009-2017 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.NoSuchElementException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.InputStreamReader;
+import java.io.PrintStream;
+import java.io.Reader;
+import java.io.UnsupportedEncodingException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.charset.Charset;
+
+import org.jmodelica.util.formatting.FormattingRecorder;
+import org.jmodelica.util.formatting.DefaultFormattingRecorder;
+import org.jmodelica.util.logging.StreamingLogger;
+import org.jmodelica.util.logging.Level;
+import org.jmodelica.util.AbstractModelicaScanner;
+import org.jmodelica.util.collections.ChainedIterable;
+import org.jmodelica.util.collections.TransformerIterable;
+
+import org.jmodelica.common.URIResolver;
+
+aspect RootAccess {
+
+    syn String SourceRoot.language() = "Modelica";
+    public static String ASTNode.JMODELICA_VENDOR_NAME = "JModelica.org";
+    public static String ASTNode.vendorName() {
+        return ASTNode.JMODELICA_VENDOR_NAME;
+    }
+
+    inh Root ASTNode.retrieveRoot();
+    eq Root.getChild().retrieveRoot() = this;
+    syn Root ASTNode.root()  = retrieveRoot();
+    syn Root BaseNode.root() = retrieveRoot();
+    eq Root.root()           = this;
+
+    syn SourceRoot InstNode.sourceRoot() = (SourceRoot) root();
+
+    // TODO: When uses of ArrayList has been generalised to List, replace with Collections.emptyList()
+    public static final ArrayList ASTNode.EMPTY_ARRAY_LIST = new ArrayList(0);
+    syn ArrayList ASTNode.emptyArrayList() = EMPTY_ARRAY_LIST;
+
+    public boolean ASTNode.hasRoot() { return (getParent() == null) ? false : getParent().hasRoot(); }
+    public boolean Root.hasRoot()    { return true; }
+
+}
+
+aspect Logging {
+
+    public static ModelicaLogger ASTNode.log = ModelicaCompiler.log;
+    
+}
+
+aspect NodeMethods {
+
+    /**
+     * Implementing {@link ASTNode#iterator()} is required as of JastAdd 2.2.0.
+     */
+    public class ASTNode<T extends ASTNode> implements Iterable<T> {
+        @Override
+        public Iterator<T> iterator() {
+            return astChildIterator();
+        }
+    }
+
+    public class ASTNode {
+        /**
+         * Copies the member variables defining the location within 
+         *        the source to another node.
+         *        
+         * @param n  the node to copy the location to
+         * @return   the node given as <code>n</code>, for convenience
+         */
+        public <N extends ASTNode> N copyLocationTo(N n) {
+      	    n.setLocation(this, this);
+            return n;
+        }
+    }
+    
+    /**
+     * Sets the member variables defining the location of the node within 
+     *        the source to values copied another node.
+     */
+    public void ASTNode.setLocation(ASTNode node) {
+  	    setLocation(node, node);
+    }
+    
+    /**
+     * Sets the member variables defining the location of the node within 
+     *        the source to values copied from two other nodes.
+     * 
+     * @param start  the node to copy the <code>start</code> member from.
+     * @param end    the node to copy the <code>end</code> member from.
+     */
+    public void ASTNode.setLocation(ASTNode start, ASTNode end) {
+        this.start = start.start;
+        this.end = end.end;
+    }
+    
+    /**
+     * Sets the member variables defining the location of the node within 
+     *        the source to values copied from two other nodes.
+     * 
+     * @param start  the node to copy the <code>start</code> and <code>fName</code> 
+     *               members from.
+     * @param end    the node to copy the <code>end</code> member from.
+     */
+    public void BaseNode.setLocation(ASTNode start, ASTNode end) {
+        super.setLocation(start, end);        
+        fName = start.fileNames();
+    }
+    
+    /**
+     * Sets the member variables defining the location of the node within 
+     *        the source to values copied another node, that might not be in a 
+     *        proper AST.
+     */
+    public void ASTNode.setLocationNoTree(ASTNode node) {
+  	    setLocationNoTree(node, node);
+    }
+    
+    /**
+     * Sets the member variables defining the location of the node within 
+     *        the source to values copied from two other nodes, that might not be 
+     *        in a proper AST.
+     * 
+     * @param start  the node to copy the <code>start</code> member from.
+     * @param end    the node to copy the <code>end</code> member from.
+     */
+    public void ASTNode.setLocationNoTree(ASTNode start, ASTNode end) {
+        setLocation(start, end);
+    }
+    
+    /**
+     * Sets the member variables defining the location of the node within 
+     *        the source to values copied from two other parser symbols, 
+     *        that might not be AST nodes.
+     * 
+     * @param start  the node to copy the <code>start</code> member from.
+     * @param end    the node to copy the <code>end</code> member from.
+     */
+    public void ASTNode.setLocationNoTree(Symbol start, Symbol end) {
+        this.start = start.getStart();
+        this.end = end.getEnd();
+    }
+    
+    /**
+     * Sets the member variables defining the location of the node within 
+     *        the source to values copied from two other nodes, that might not be 
+     *        in a proper AST.
+     * 
+     * @param start  the node to copy the <code>start</code> and <code>fName</code> 
+     *               members from.
+     * @param end    the node to copy the <code>end</code> member from.
+     */
+    public void BaseNode.setLocationNoTree(ASTNode start, ASTNode end) {
+    	setLocationNoTree(start, end, start);
+    }
+    
+    /**
+     * Sets the member variables defining the location of the node within
+     *        the source to values copied from two other nodes, that might not be
+     *        in a proper AST.
+     * @param start      the node to copy the <code>start</code> member from.
+     * @param end        the node to copy the <code>end</code> member from.
+     * @param fNameNode  the node to copy the <code>fName</code> member from.
+     */
+    public void BaseNode.setLocationNoTree(ASTNode start, ASTNode end, ASTNode fNameNode) {
+        super.setLocation(start, end);
+        if (fNameNode instanceof BaseNode)
+        	fName = ((BaseNode) fNameNode).fName;
+    }
+    
+    protected <T extends ASTNode> T ASTNode.setLocationOf(T node) {
+        node.setLocationNoTree(this);
+        return node;
+    }
+    
+    protected void BaseNode.addLocation(ASTNode node){
+    	int l1 = 0;
+    	int l2 = 0;
+    	SourceLocation[] sourceA, sourceA2;
+    	if(node == null)
+    		return;
+    	if(fName == null || !(node instanceof BaseNode)){
+    		setLocationNoTree(node);
+    		return;
+    	}
+    	BaseNode sourceNode = (BaseNode)node; 
+    	if(fName instanceof String){
+    		l1 = 1;
+    		sourceA = new SourceLocation[1];
+    		sourceA[0] = new SourceLocation((String)fName, start, end);
+    	}else{
+    		l1 = ((SourceLocation[])fName).length;
+    		sourceA = ((SourceLocation[])fName);
+    	}
+    	if(sourceNode.fName == null){
+    		return;
+    	}else if(sourceNode.fName instanceof String){
+    		l2 = 1;
+    		sourceA2 = new SourceLocation[1];
+    		sourceA2[0] = new SourceLocation((String)sourceNode.fName, sourceNode.start, sourceNode.end);
+    	}else{
+    		l2 = ((SourceLocation[])sourceNode.fName).length;
+    		sourceA2 = ((SourceLocation[])sourceNode.fName).clone();
+    	}
+    	
+    	ArrayList<SourceLocation> tempLocations = new ArrayList<SourceLocation>();
+    	for(int i = 0; i < l1; i++){
+    		boolean ignoreSourceA = false; 
+			for(int j = 0; j < l2; j++){
+				if(sourceA2[j] == null){
+					continue;
+				}
+				if(sourceA[i].locationContainedBy(sourceA2[j])){
+					tempLocations.add(sourceA2[j]);
+					sourceA2[j] = null;
+					ignoreSourceA = true;
+				}
+				else if(!sourceA2[j].locationContainedBy(sourceA[i])){
+					tempLocations.add(sourceA2[j]);
+					sourceA2[j] = null;
+				}
+			}
+			if(!ignoreSourceA)
+				tempLocations.add(sourceA[i]);
+		}
+    	if(tempLocations.size() == 1){
+    		fName = tempLocations.get(0).getFile();
+    		start = tempLocations.get(0).getStart();
+    		end = tempLocations.get(0).getEnd();
+    	}else{
+    		fName = tempLocations.toArray(sourceA);    		
+    	}
+    	
+    }
+    
+    
+    syn boolean BaseNode.locationContainedBy() {
+    	if(!(fName instanceof String))
+    		return false;
+    	BaseNode parentWithLocation = parentWithLocation();
+    	if (parentWithLocation == null) {
+    		return false;
+    	}
+		return fName.equals(parentWithLocation.fName) && start >= parentWithLocation.start && end <= parentWithLocation.end;		
+    }
+    inh BaseNode BaseNode.parentWithLocation();
+    eq BaseNode.getChild().parentWithLocation() {
+    	if (fName != null) {
+    		return this;
+    	} else {
+    		return parentWithLocation();
+    	}
+    }
+    eq Root.getChild().parentWithLocation() = null;
+
+    
+    public boolean SourceLocation.locationContainedBy(SourceLocation location){
+    	if(fName == null || location.fName == null)
+    		return false;
+    	if(fName.equals(location.fName) && start >= location.start && end <= location.end){
+			return true;
+		}
+    	return false;
+    }
+    
+    
+    public void FExp.collectLocations(BaseNode collector){
+		return;
+	}
+    
+    public void FEquation.collectLocations(BaseNode collector){
+    	collector.addLocation(this);
+		getLeft().collectLocations(collector);
+		getRight().collectLocations(collector);
+		return;
+	}
+    
+	public void FUnaryExp.collectLocations(BaseNode collector){
+		collector.addLocation(this);
+		getFExp().collectLocations(collector);
+	}
+	
+	public void FBinExp.collectLocations(BaseNode collector){
+		collector.addLocation(this);
+		getLeft().collectLocations(collector);
+		getRight().collectLocations(collector);
+	}
+	
+	public void FLitExp.collectLocations(BaseNode collector){
+		collector.addLocation(this);
+	}
+	
+	public void FAccessExp.collectLocations(BaseNode collector){
+		FAbstractVariable fv = myFV();
+		if(fv.hasBindingExp()){
+    		collector.addLocation(((FVariable)fv).getBindingExp());
+    	}
+	}
+
+    /**
+     * Returns the starting line for this node, or zero if positional
+     * information is unavailable.
+     */
+    syn int ASTNode.beginLine()   = getLine(getStart());
+    /**
+     * Returns the starting column for this node, or zero if positional
+     * information is unavailable.
+     */
+    syn int ASTNode.beginColumn() = getColumn(getStart());
+    /**
+     * Returns the ending line for this node, or zero if positional
+     * information is unavailable.
+     */
+    syn int ASTNode.endLine()     = getLine(getEnd());
+    /**
+     * Returns the ending column for this node, or zero if positional
+     * information is unavailable.
+     */
+    syn int ASTNode.endColumn()   = getColumn(getEnd());
+
+    /**
+     * Returns the starting line for this node, or if unavailable, will make a
+     * recursive call to the parent and ask for its starting line. Zero is
+     * returned if positional information is unavailable for this node and its
+     * parents.
+     */
+    syn int ASTNode.beginLineRecursive() = (start != 0 || getParent() == null)
+            ? beginLine() : getParent().beginLineRecursive();
+    /**
+     * Returns the starting column for this node, or if unavailable, will make
+     * a recursive call to the parent and ask for its starting column. Zero is
+     * returned if positional information is unavailable for this node and its
+     * parents.
+     */
+    syn int ASTNode.beginColumnRecursive() = (start != 0 || getParent() == null)
+            ? beginColumn() : getParent().beginColumnRecursive();
+    /**
+     * Returns the ending line for this node, or if unavailable, will make a
+     * recursive call to the parent and ask for its ending line. Zero is
+     * returned if positional information is unavailable for this node and its
+     * parents.
+     */
+    syn int ASTNode.endLineRecursive() = (end != 0 || getParent() == null)
+            ? endLine() : getParent().endLineRecursive();
+    /**
+     * Returns the ending column for this node, or if unavailable, will make a
+     * recursive call to the parent and ask for its ending column. Zero is
+     * returned if positional information is unavailable for this node and its
+     * parents.
+     */
+    syn int ASTNode.endColumnRecursive() = (end != 0 || getParent() == null)
+            ? endColumn() : getParent().endColumnRecursive();
+
+    public class List {
+
+	    /**
+	     * Creates a new ArrayList containing all the elements in this list, in the same order.
+	     */
+	    public ArrayList<T> toArrayList() {
+	        ArrayList<T> l = new ArrayList<T>(getNumChild());
+	        for (T e : this)
+	            l.add(e);
+	        return l;
+	    }
+	    
+	    /**
+	     * Adds all nodes in an iterable to the list.
+	     */
+//	    public void addAll(Iterable<? extends T> list) {
+//	        for (T e : list)
+//	            add(e);
+//	    }
+	    
+	    /**
+	     * Adds all nodes in an array to the list.
+	     */
+	     public <S extends T> void addAll(S[] list) {
+	         for (S e : list)
+	             add(e);
+	    }
+	    
+    }
+
+    
+    /**
+     * Replace <code>from</code> with <code>to</code>.
+     * 
+     * Search through children after <code>from</code>. If it is found, 
+     * replace it with <code>to</code> and return <code>true</code>.
+     * Comparisons are done with ==, not with equals().
+     */
+    public boolean List.replaceChild(T oldNode, T newNode) {
+    	int n = getNumChildNoTransform();
+        for (int i = 0; i < n; i++) {
+            if (getChildNoTransform(i) == oldNode) {
+                setChild(newNode, i);
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * Return a copy of node that is not in any tree.
+     * 
+     * Returns <code>this</code> if node has no parent, <code>fullCopy()</code> otherwise.
+     */
+    public ASTNode ASTNode.unboundCopy() {
+        return (parent == null) ? this : fullCopy();
+    }
+    
+    /**
+     * Check if this node is a direct child (only List/Opt between) of <code>parent</code>.
+     */
+    public boolean ASTNode.isChildOf(BaseNode parent) {
+        ASTNode par = getParent();
+        return par != null && par.isChildOfHelper(parent);
+    }
+    
+    /**
+     * Helper method for {@link #isChildOf(BaseNode parent)}, should not be called directly.
+     */
+    protected boolean ASTNode.isChildOfHelper(BaseNode parent) {
+        return isChildOf(parent);
+    }
+
+    protected boolean BaseNode.isChildOfHelper(BaseNode parent) {
+        return parent == this;
+    }
+
+    /**
+     * Returns an iterable, that has an iterator that iterates over all direct FExp children.
+     * 
+     * The iterator passes through Lists and Opts.
+     */
+    public Iterable<FExp> FExp.childFExps() {
+        return new ChildTypedIterable(FExp.class);
+    }
+
+    /**
+     * Returns an iterable, that has an iterator that iterates over all direct SrcExp children.
+     * 
+     * The iterator passes through Lists and Opts.
+     */
+    public Iterable<SrcExp> SrcExp.childSrcExps() {
+        return new ChildTypedIterable(SrcExp.class);
+    }
+    public Iterable<SrcExp> SrcArrayConstructor.childSrcExps() {
+        return getSrcFunctionArguments().childSrcExps();
+    }
+
+    /**
+     * Returns an iterable, that has an iterator that iterates over the SrcExps 
+     * that comprise this set of arguments.
+     * 
+     * Note that this is different from the function with the same name on SrcExp.
+     */
+    public Iterable<SrcExp> SrcFunctionArguments.childSrcExps() {
+        Iterable<SrcExp> namedPart = 
+                new TransformerIterable<SrcNamedArgument, SrcExp>(getSrcNamedArguments())
+            {
+                protected SrcExp transform(SrcNamedArgument a) {
+                    return a.getSrcExp();
+                }
+            };
+        return new ChainedIterable(getSrcExps(), namedPart);
+    }
+
+    public class ASTNode {
+        
+        protected class ChildTypedIterable<S extends ASTNode<?>> implements Iterable<S> {
+            private Class<S> type;
+            
+            public ChildTypedIterable(Class<S> type) {
+                this.type = type;
+            }
+            
+            public Iterator<S> iterator() {
+                return new ChildTypedIterator(type);
+            }
+        }
+        
+        
+        private class ChildTypedIterator<S extends ASTNode<?>> implements Iterator<S> {
+            
+            private Iterator<T> it1;
+            private Iterator<ASTNode> it2;
+            private S next = null;
+            private Class<S> type;
+            
+            public ChildTypedIterator(Class<S> type) {
+                this.type = type;
+                it1 = iterator();
+                it2 = null;
+                update();
+            }
+            
+            private void update() {
+                boolean cont = true;
+                ASTNode node = null;
+                while (cont) {
+                    node = null;
+                    if (it2 == null) {
+                        if (it1.hasNext())
+                            node = it1.next();
+                        else 
+                            cont = false;
+                        if (node instanceof List || node instanceof Opt)
+                            it2 = node.iterator();
+                    } else {
+                        if (it2.hasNext()) 
+                            node = it2.next();
+                        else 
+                            it2 = null;
+                    }
+                    if (type.isInstance(node)) 
+                        cont = false;
+                }
+                next = (S) node;
+            }
+
+            public boolean hasNext() {
+                return next != null;
+            }
+
+            public S next() {
+                S res = next;
+                update();
+                return res;
+            }
+
+            public void remove() {
+                throw new UnsupportedOperationException();
+            }
+            
+        }
+        
+    }
+
+}
+
+/**
+ * Utility methods.
+ */
+aspect Utility {
+
+    /**
+     * Utility methods available from every class.
+     */
+    public class ASTNode {
+        /**
+         * Returns the intersection of two sets.
+         * 
+         * @param a
+         *          A set.
+         * @param b
+         *          A set.
+         * @return
+         *          A set containing elements that exist in both {@code a} and {@code b}.
+         */
+        public static <T> Set<T> intersection(Set<T> a, Set<T> b) {
+            // TODO: use runtime type of a instead - problematic if it is something like HashMap.KeySet.
+            Set<T> res = new HashSet<T>();
+            res.addAll(a);
+            res.retainAll(b);
+            return res;
+        }
+
+        /**
+         * Short-hand method for sorting a collection.
+         * 
+         * @param elems
+         *          The elements to sort.
+         * @param cmp
+         *          The {@link Comparator} to use when calculating the ordering of {@code elems}.
+         */
+        public static <T> ArrayList<T> toSortedList(Collection<T> elems, Comparator<? super T> cmp) {
+            ArrayList<T> res = new ArrayList<T>(elems.size());
+            res.addAll(elems);
+            Collections.sort(res, cmp);
+            return res;
+        }
+
+    }
+
+}
+
+aspect FileNames {
+    
+    protected Object BaseNode.fName = null;
+    
+    public class SourceLocation{
+    	private String fName;
+    	private int start;
+    	private int end;
+    	public SourceLocation(String fName, int start, int end){
+    		setLocation(fName, start, end);
+    	}
+    	public String getFile(){ return fName; }
+    	public int getStart(){ return start; }
+    	public int getEnd(){ return end; }
+    	public void setLocation(String fName, int start, int end){
+    		this.fName = fName;
+    		this.start = start;
+    		this.end = end;	
+    	}
+    	public int getStartLine(){ return Symbol.getLine(start); }
+    	public int getStartColumn(){ return Symbol.getColumn(start); }
+    	public int getEndLine(){ return Symbol.getLine(end); }
+    	public int getEndColumn(){ return Symbol.getColumn(end); }
+    }
+    
+    
+    public Object BaseNode.fileNames() {
+    	if (fName == null)
+    	    fName = retrieveFileName();
+   		return fName;
+    }
+    public Object ASTNode.fileNames() {
+    	return fileName();
+    }
+    
+
+    public String ASTNode.fileName() { 
+    	return retrieveFileName(); 
+    }
+    public String BaseNode.fileName() {
+    	if (fName == null){
+    	    fName = retrieveFileName();
+    	}
+    	if(fName instanceof SourceLocation[]){
+    		return ((SourceLocation[])this.fName)[0].getFile();
+    	}
+   		return (String)fName;
+    }
+    public String Root.fileName() {
+    	if(fName instanceof SourceLocation[]){
+			return ((SourceLocation[])fName)[0].getFile();
+		}
+		return (String)fName;
+    	
+    }
+    public String SrcLibNode.fileName() {
+        return getStructured() ? myPackageFile().toString() : getLoadInfo().getPath();
+    }
+    public String InstLibNode.fileName() {
+        return actualInstClass().fileName();
+    }
+    
+    syn String ASTNode.dirName() = 
+    	fileName().replaceFirst("^[^\\\\/]*$", ".").replaceFirst("[\\\\/][^\\\\/]*$", "");
+    eq SrcLibNode.dirName() = getStructured() ? getLoadInfo().getPath() : super.dirName();
+
+    inh String ASTNode.retrieveFileName();
+    eq BaseNode.getChild().retrieveFileName()         = fileName();
+    eq SrcLibNode.getChild().retrieveFileName()       = fileName();
+    eq InstLibNode.getChild().retrieveFileName()      = getSrcClassDecl().fileName();
+    eq Program.getAnonymousClass().retrieveFileName() = ParserHandler.ANONYMOUS_CLASS_FILENAME.getPath();
+    
+    public void Root.setFileName(String fName)             { this.fName = fName; }
+    public void SrcStoredDefinition.setFileName(String fName) { this.fName = fName; }
+}
+    
+aspect Names {
+  // simple names
+  syn String SrcIdDecl.name()            = getID();
+  syn String SrcAccess.name();
+  eq SrcNamedAccess.name()               = getID();
+  syn lazy String SrcGlobalAccess.name() = "." + getSrcAccessNoTransform().name();
+  syn lazy String SrcDot.name() {
+	  StringBuilder buf = new StringBuilder();
+	  List<SrcNamedAccess> l = getSrcNamedAccessListNoTransform();
+	  for (int i = 0; i < l.getNumChildNoTransform(); i++) {
+		  buf.append(l.getChildNoTransform(i).name());
+		  buf.append('.');
+	  }
+	  return buf.substring(0, buf.length() - 1);
+  }
+  
+   // simple names of InstAccess:es
+  syn String InstAccess.name();
+  eq InstNamedAccess.name()               = getID();
+  syn lazy String InstGlobalAccess.name() = "." + getInstAccessNoTransform().name();
+  syn lazy String InstDot.name() {
+	  StringBuilder buf = new StringBuilder();
+	  List<InstAccess> l = getInstAccessListNoTransform();
+	  for (int i = 0; i < l.getNumChildNoTransform(); i++) {
+		  buf.append(l.getChildNoTransform(i).name());
+		  buf.append('.');
+	  }
+	  return buf.substring(0, buf.length() - 1);
+  }
+  
+  syn String InstNamedModification.name() = getNameNoTransform().name();
+
+    syn String SrcAccess.qualifiedName();
+    eq SrcNamedAccess.qualifiedName()   = getID();
+    eq SrcGlobalAccess.qualifiedName()  = "." + getSrcAccess().qualifiedName();
+    eq SrcDot.qualifiedName() {
+        StringBuilder buf = new StringBuilder();
+        for (SrcNamedAccess a : getSrcNamedAccesss()) {
+            buf.append(a.qualifiedName());
+            buf.append('.');
+        }
+        return buf.substring(0, buf.length() - 1);
+    }
+
+  syn String InstAccess.qualifiedName();
+  eq InstNamedAccess.qualifiedName()           = getID();
+  eq InstDot.qualifiedName() {
+	  StringBuilder buf = new StringBuilder();
+	  for (InstAccess ia : getInstAccesss()) {
+		  buf.append(ia.qualifiedName());
+		  buf.append('.');
+	  }
+	  return buf.substring(0, buf.length() - 1);
+  }
+  eq InstGlobalAccess.qualifiedName()         = "." + getInstAccess().qualifiedName();
+
+    syn String SrcElement.name()       = null;
+    syn String SrcComponentDecl.name() = getNameNoTransform().getID();
+    eq SrcClassDecl.name()             = getNameNoTransform().getID();
+    eq SrcExtendsClause.name()         = getSuperNoTransform().name();
+
+  syn String SrcFunctionCall.name() = getNameNoTransform().name();
+  
+  syn String InstImport.name();
+  eq InstImportQualified.name()   = getPackageNameNoTransform().lastName();
+  eq InstImportRename.name()      = 
+	  ((SrcImportClauseRename) getSrcImportClause()).getSrcIdDeclNoTransform().getID();
+  eq InstImportUnqualified.name() = "*";    // To avoid returning null
+  
+  syn String SrcAccess.lastName() = name();
+  eq SrcDot.lastName()            = getSrcNamedAccessListNoTransform().lastChildNoTransform().lastName();
+  eq SrcGlobalAccess.lastName()   = getSrcAccessNoTransform().lastName();
+  
+  syn String InstAccess.lastName() = name();
+  eq InstDot.lastName()            = getInstAccessListNoTransform().lastChildNoTransform().lastName();
+  eq InstGlobalAccess.lastName()   = getInstAccessNoTransform().lastName();
+  
+  public T List.lastChildNoTransform() {
+	  return getChildNoTransform(getNumChildNoTransform() - 1);
+  }
+
+    syn String SrcClassDecl.qualifiedName() = combineName(classNamePrefix(), name());
+    syn String SrcComponentDecl.qualifiedName() = combineName(classNamePrefix(), name());
+    inh String SrcClassDecl.classNamePrefix();
+    inh String SrcComponentDecl.classNamePrefix();
+    eq SrcFullClassDecl.getChild().classNamePrefix() = combineName(classNamePrefix(), name());
+    eq SrcBuiltInClassDecl.qualifiedName() = getName().getID();
+
+    // For proxy
+    public String SourceRoot.computeClassNamePrefix() {
+        return "";
+    }
+
+    eq SourceRoot.getProgram().classNamePrefix() = computeClassNamePrefix();
+    eq Root.getChild().classNamePrefix() = "";
+
+    /**
+     * Compose a dotted name of two components.
+     * 
+     * Each component can be a dotted name, a single name or empty.
+     */
+    public static String ASTNode.combineName(String first, String second) {
+        if (first.isEmpty())
+            return second;
+        if (second.isEmpty())
+            return first;
+        return first + "." + second;
+    }
+
+    syn String InstClassDecl.primitiveName() = name();
+    eq InstLibNode.primitiveName()           = resolveLib().name();
+
+    eq InstFullClassDecl.primitiveName() {
+        if (extendsPrimitive())
+            return getInstExtends(0).myInstClass().finalClass().primitiveName();
+        else 
+            return name();
+    }
+
+    syn String InstForIndex.name() = getInstPrimitiveNoTransform().name();
+    syn String FForIndex.name()    = getFVariableNoTransform().name();
+
+    syn String InstAccess.enclosingName() = "";
+    eq InstDot.enclosingName()           = name().substring(0, name().lastIndexOf('.'));
+    eq InstGlobalAccess.enclosingName()  = name().substring(0, name().lastIndexOf('.'));
+
+    eq InstComponentDecl.getInstModification().calcInstanceName() = buildInstanceName(surroundingInstClass(), getFAccessPrefix());
+    eq InstComponentDecl.getChild().calcInstanceName()            = buildInstanceName(surroundingInstClass(), getFAccess());
+    eq InstClassDecl.getChild().calcInstanceName()                = buildInstanceName(this, new FAccessEmpty());
+    eq InstProgramRoot.getChild().calcInstanceName() {
+        throw new UnsupportedOperationException("Missing equation for inh calcInstanceName().");
+    }
+
+    /**
+     * Create an instance name from a class declaration and a suffix.
+     */
+    syn String InstNode.buildInstanceName(InstClassDecl cls, FAccess suffix) =
+        (suffix.numParts() == 0) ? cls.name() : cls.name() + '.' + suffix.name();
+
+  inh String InstExternal.packageName();
+  inh String InstBaseClassDecl.packageName();
+  eq InstBaseClassDecl.getChild().packageName() = isPackage() ? qualifiedName() : packageName();
+  eq Root.getChild().packageName() = null;
+  
+  syn String InstExternal.libraryName() = findLibraryName();
+  syn String InstNode.libraryName() {
+	  InstClassDecl icd = myInstClass();
+	  String res = icd.isUnknown() ? findLibraryName() : icd.findLibraryName();
+	  return (res == null) ? name() : res;
+  }
+  
+  inh String InstExternal.findLibraryName();
+  inh String InstNode.findLibraryName();
+  eq InstNode.getChild().findLibraryName() = libraryName();
+  eq InstRoot.getChild().findLibraryName() = null;
+  eq Root.getChild().findLibraryName()     = null;
+
+    inh String ASTNode.packagePath(String name);
+    eq Root.getChild().packagePath(String name) = null;
+    eq InstNode.getChild().packagePath(String name) {
+        InstLookupResult<InstClassDecl> icd = lookupInstClassQualifiedGlobal(name);
+        return icd.successful() ? icd.target().dirName() : null;
+    }
+    eq SrcFullClassDecl.getChild().packagePath(String name) {
+        SrcClassDecl cd = simpleLookupClass(new QualifiedName(name, true));
+        return (cd == null || cd.isUnknown()) ? null : cd.dirName();
+    }
+
+  inh String ASTNode.topPackagePath();
+  eq Root.getChild().topPackagePath() = null;
+  eq InstClassDecl.getChild().topPackagePath() {
+      String path = topPackagePath();
+	  return (path == null) ? dirName() : path;
+  }
+  eq SrcFullClassDecl.getChild().topPackagePath() {
+	  String path = topPackagePath();
+	  return (path == null) ? dirName() : path;
+  }
+
+    ASTNode implements URIResolver.PackageNode;
+
+    public String ASTNode.resolveURI(String str) throws URIException {
+        return URIResolver.DEFAULT.resolveURIChecked(this, str);
+    }
+
+	syn boolean InstNode.isLibNode() = false;
+    eq InstLibNode.isLibNode()       = true; 
+
+	/**
+	 * Any closest ancestor instClass but not stopping at InstComponents and returning it's class
+	 * as opposed to enclosingInstClassDecl().
+	 */ 
+    inh InstClassDecl InstNode.containingInstClass();
+    eq InstClassDecl.getChild().containingInstClass() = this;
+    eq InstRoot.getChild().containingInstClass()      = unknownInstClassDecl();
+
+    inh InstNode InstNode.enclosingInstNode();
+    eq InstNode.getChild().enclosingInstNode() = this;
+    
+    inh InstClassDecl ASTNode.enclosingInstClassDecl();
+    eq SourceRoot.getProgram().enclosingInstClassDecl()      = null;
+    eq FlatRoot.getChild().enclosingInstClassDecl()          = null;
+    eq InstBaseClassDecl.getChild().enclosingInstClassDecl() = this;
+    eq InstComponentDecl.getChild().enclosingInstClassDecl() = myInstClass();
+
+    /**
+     * Any closest ancestor InstanceComponent which is a parent to this one.
+     * This method doesn't stop at classes which enclosingInstComponent does.
+     */
+
+    inh InstComponentDecl InstComponentDecl.parentInstComponent();
+    eq InstRoot.getChild().parentInstComponent()          = null;
+    eq InstComponentDecl.getChild().parentInstComponent() = this;
+
+    /**
+     * The closest ancestor instComponentDecl if there is one before the closest class.
+     * This method stops at classes.
+     */
+    inh InstComponentDecl InstComponentDecl.enclosingInstComponentDecl();
+    inh InstComponentDecl InstExtends.enclosingInstComponentDecl();
+    eq BaseNode.getChild().enclosingInstComponentDecl()          = null;
+    eq InstExtends.getChild().enclosingInstComponentDecl()       = enclosingInstComponentDecl();
+    eq InstComponentDecl.getChild().enclosingInstComponentDecl() = this;
+
+    inh SrcBaseClassDecl ASTNode.enclosingClassDecl();
+    eq Root.getChild().enclosingClassDecl() = null;
+
+    eq SrcFullClassDecl.getSrcClause().enclosingClassDecl()         = this;
+    eq SrcFullClassDecl.getSrcAnnotation().enclosingClassDecl()     = this; 
+    eq SrcFullClassDecl.getSrcExternalClause().enclosingClassDecl() = this;
+
+    eq SrcShortClassDecl.getSrcExtendsClauseShortClass().enclosingClassDecl() = this;
+    
+    inh Set<SrcClassDecl> SrcClassDecl.enclosingClassDecls();
+    inh Set<SrcClassDecl> SrcComponentDecl.enclosingClassDecls();
+    eq Root.getChild().enclosingClassDecls() = Collections.emptySet();
+    eq SrcClassDecl.getChild().enclosingClassDecls() {
+        Set<SrcClassDecl> enclosingClassDecls = new HashSet<>(enclosingClassDecls());
+        enclosingClassDecls.add(this);
+        return enclosingClassDecls;
+    }
+
+    inh FStatement FStatement.enclosingLoop();
+    eq FAlgorithm.getChild().enclosingLoop()     = null;
+    eq Root.getChild().enclosingLoop()           = null;
+    eq FWhileStmt.getWhileStmt().enclosingLoop() = this;
+    eq FForStmt.getForStmt().enclosingLoop()     = this;
+    eq InstForStmt.getForStmt().enclosingLoop()  = this;
+
+
+    /**
+     * Access method for the last SrcAccess of a qualified or
+     * unqualified name.
+     */ 
+    syn SrcAccess SrcAccess.getLastAccess() = this;
+    eq SrcDot.getLastAccess()            = getSrcNamedAccess(getNumSrcNamedAccess() - 1);
+    eq SrcGlobalAccess.getLastAccess()   = getSrcAccess().getLastAccess();
+    
+    syn InstAccess InstAccess.getLastInstAccess() = this;
+    eq InstDot.getLastInstAccess()                = getInstAccess(getNumInstAccessNoTransform() - 1);
+    eq InstGlobalAccess.getLastInstAccess()       = getInstAccess().getLastInstAccess();
+    
+    /**
+     * Access method for the first SrcAccess of a qualified or
+     * unqualified name.
+     */
+    syn SrcAccess SrcAccess.getFirstAccess() = this;
+    eq SrcDot.getFirstAccess()            = getSrcNamedAccess(0);
+    eq SrcGlobalAccess.getFirstAccess()   = getSrcAccess().getFirstAccess();
+
+    // For proxy
+    public SrcAccess SourceRoot.computeNextAccess() {
+        return null;
+    }
+    
+    inh SrcAccess SrcAccess.getNextAccess();
+    eq SrcDot.getSrcNamedAccess(int i).getNextAccess()    = (i >= getNumSrcNamedAccess() - 1) ? null : getSrcNamedAccess(i + 1);
+    eq SourceRoot.getProgram().getNextAccess() = computeNextAccess();
+    eq Root.getChild().getNextAccess()         = null;
+
+    /**
+     * SrcAccess method for the first SrcAccess of a qualified or
+     * unqualified name.
+     */
+    syn InstAccess InstAccess.getFirstInstAccess() = this;
+    eq InstDot.getFirstInstAccess()                = getInstAccess(0);
+    eq InstGlobalAccess.getFirstInstAccess()       = getInstAccess().getFirstInstAccess();
+   
+    inh InstAccess InstAccess.getNextInstAccess();
+    eq InstDot.getInstAccess(int i).getNextInstAccess() = 
+    		(i >= getNumInstAccessNoTransform() - 1) ? null : getInstAccess(i + 1);
+    eq BaseNode.getChild().getNextInstAccess()          = null;
+    
+    /**
+     * Iterable of all parts of this access
+     */
+    syn Iterable<InstAccess> InstAccess.allParts() = Arrays.asList(this);
+    eq InstDot.allParts() = getInstAccessList();
+    
+    /**
+     * Find the parent access for this subscript 
+     */
+    inh InstAccess FSubscript.myInstAccess();
+    eq Root.getChild().myInstAccess() = null;
+    eq InstNode.getChild().myInstAccess() = null;
+    eq InstAccess.getChild().myInstAccess() = this;
+    
+    /**
+     * stripFirstAccess removes the first access in a qualified
+     * name. If the name is not qualified, null is returned. 
+     */
+    public SrcAccess SrcAccess.stripFirstAccess() {
+        return null;
+    }
+    
+    public SrcAccess SrcDot.stripFirstAccess() {
+    	int n = getNumSrcNamedAccess();
+    	if (n <= 2)
+    		return getSrcNamedAccess(n - 1);
+    	List<SrcNamedAccess> l = new List<>();
+    	for (int i = 1; i < n; i++)
+    		l.add(getSrcNamedAccess(i));
+        return new SrcDot(l);
+    }
+    
+    public SrcAccess SrcGlobalAccess.stripFirstAccess() {
+    	return getSrcAccess().stripFirstAccess();
+    }
+    
+    syn boolean SrcAccess.isQualified() = false;
+    eq SrcDot.isQualified()             = true;
+    eq SrcGlobalAccess.isQualified()    = getSrcAccess().isQualified();
+    
+    /**
+     * Get the top node in an access (possibly qualified).
+     */
+    syn SrcAccess SrcAccess.getTopAccess() = retrieveTopAccess(this);
+    
+    inh SrcAccess SrcAccess.retrieveTopAccess(SrcAccess pre);
+    eq ASTNode.getChild().retrieveTopAccess(SrcAccess pre)      = pre;
+    eq SrcDot.getChild().retrieveTopAccess(SrcAccess pre)          = retrieveTopAccess(this);
+    eq SrcGlobalAccess.getChild().retrieveTopAccess(SrcAccess pre) = retrieveTopAccess(this);
+    
+    syn boolean SrcAccess.isGlobal() = false;
+    eq SrcGlobalAccess.isGlobal()    = true;
+    
+    syn boolean InstAccess.isTopInstAccess() = this == getTopInstAccess();
+    
+    /**
+     * Get the top node in an access (possibly qualified).
+     */
+    syn InstAccess InstAccess.getTopInstAccess() = retrieveTopInstAccess(this);
+    
+    inh InstAccess InstAccess.retrieveTopInstAccess(InstAccess pre);
+    eq BaseNode.getChild().retrieveTopInstAccess(InstAccess pre)         = pre;
+    eq InstDot.getChild().retrieveTopInstAccess(InstAccess pre)          = retrieveTopInstAccess(this);
+    eq InstGlobalAccess.getChild().retrieveTopInstAccess(InstAccess pre) = this;
+
+    /**
+     * Check if this access is a name part of a qualified access.
+     */
+    inh boolean SrcAccess.inQualified();
+    inh boolean InstAccess.inQualified();
+    eq SrcDot.getSrcNamedAccess().inQualified()         = true;
+    eq InstDot.getInstAccess().inQualified() = true;
+    eq BaseNode.getChild().inQualified()     = false;
+
+    /**
+     * Get the array subscripts of the last name part.
+     */
+    syn FArraySubscripts InstAccess.getLastFArraySubscripts() = 
+        getLastInstAccess().getFArraySubscripts();
+    
+    syn FArraySubscripts InstAccess.getFArraySubscripts() = null;
+    eq InstDot.getFArraySubscripts() = getLastInstAccess().getFArraySubscripts();
+
+    syn boolean InstAccess.hasFArraySubscripts() = false;
+    eq InstArrayAccess.hasFArraySubscripts() = true;
+    eq InstDot.hasFArraySubscripts() = getLastInstAccess().hasFArraySubscripts();
+
+    /**
+     * Is this an access to a component?
+     */
+    syn boolean InstAccess.isComponentAccess() = false;
+    eq InstComponentAccess.isComponentAccess() = true;
+
+    /**
+     * Is this an access to a class?
+     */
+    syn boolean InstAccess.isClassAccess() = false;
+    eq InstClassAccess.isClassAccess()     = true;
+
+    /**
+     * Copy this access, append a name part to the copy and return the copy.
+     */
+    public InstDot InstAccess.copyAndAppend(String id) {
+    	InstAccess left = fullCopy();
+    	InstAccess right = createPartToAppend(id);
+        return new InstDot(new List<InstAccess>().add(left).add(right));
+    }
+    
+    public InstDot InstDot.copyAndAppend(String id) {
+    	InstDot res = fullCopy();
+    	res.addInstAccess(createPartToAppend(id));
+    	return res;
+    }
+    
+    /**
+     * Create an InstAccess suitable for appending to this access.
+     */
+    public InstAccess InstAccess.createPartToAppend(String id) {
+    	return new InstParseAccess(id);
+    }
+    
+    public InstAccess InstComponentAccess.createPartToAppend(String id) {
+    	return new InstComponentAccess(id);
+    }
+    
+}
+
+aspect Slices {
+    
+    /**
+     * Check if this is a slice operation.
+     */
+    syn boolean FExp.isSlice() = true;
+    eq CommonAccessExp.isSlice() = isArray() && getAccess().isSlice();
+    eq FSubscriptedExp.isSlice() = isArray();
+    
+    syn boolean CommonAccess.isSlice();
+    eq InstAccess.isSlice() {
+        java.util.List<FArraySubscripts> l = allFArraySubscripts();
+        int last = l.size() - 1;
+        for (int i = 0; i < last; i++) {
+            if (l.get(i).accessNdims() > 0) {
+                return true;
+            }
+        }
+        return l.get(last).isSlice();
+    }
+    
+    syn boolean FArraySubscripts.isSlice() = ndims() > 0;
+    eq FArrayExpSubscripts.isSlice() {
+        for (FSubscript fs : getFSubscripts()) {
+            if (fs.isSlice()) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    syn boolean FSubscript.isSlice() = true;
+    eq FColonSubscript.isSlice()     = false;
+    eq FExpSubscript.isSlice()       = getFExp().isSliceFAS(mySize());
+    
+    syn boolean FExp.isSliceFAS(Size size) = true;
+    eq FRangeExp.isSliceFAS(Size size) =
+         !getFExp(0).isLiteral(1) ||
+         (getNumFExp() > 2 && !getFExp(1).isLiteral(1)) ||
+         size.isSliceFAS(getFExp(getNumFExp()-1));
+    
+    public boolean Size.isSliceFAS(FExp exp) {
+        return isUnknown() || !exp.isLiteral(get(0));
+    }
+    
+    syn boolean FExp.isLiteral(int i)  = false;
+    eq FIntegerLitExp.isLiteral(int i) = getValue() == i;
+    
+    /**
+     * Check if this is a slice operation.
+     */
+    eq FAccess.isSlice() = false;
+    eq FAccessFull.isSlice() {
+    	int n = getNumFAccessPart() - 1;
+    	for (int i = 0; i < n; i++) {
+    		FAccessPart part = getFAccessPart(i);
+    		if (part.hasFArraySubscripts())
+    			for (Subscript s : part.getFArraySubscripts().subscripts())
+    				if (s.ndims() > 0)
+    					return true;
+    	}
+		FAccessPart part = getFAccessPart(n);
+        return part.hasFArraySubscripts() && part.getFArraySubscripts().isSlice();
+    }
+}
+
+
+aspect DebugHelpers {
+    
+    /**
+     * Convert to string. Primarily useful for debugging.
+     * 
+     * Default implementation uses prettyPrint().
+     */
+    public String ASTNode.toString() {
+        return prettyPrint("");
+    }
+
+    /**
+     * Override simple expressions for performance reasons
+     */
+
+    public String FRealLitExp.toString()         { return Double.toString(getValue()); }
+    public String FIntegerLitExp.toString()      { return Integer.toString(getValue()); }
+    public String FBooleanLitExpTrue.toString()  { return "true"; }
+    public String FBooleanLitExpFalse.toString() { return "false"; }
+    public String FStringLitExp.toString()       { return "\"" + getString() + "\""; }
+    public String FEnumLitExp.toString()         { return getEnum() + "." + getValue(); }
+
+    public String FAccessString.toString()        { return getName(); }
+
+}
+
+
+aspect Visibility {
+
+    inh boolean SrcElement.isPublic();
+    inh boolean SrcComponentDecl.isPublic();
+    inh boolean SrcExtendsClause.isPublic();
+    eq SrcPublicElementList.getSrcElement().isPublic()    = true;
+    eq SrcProtectedElementList.getSrcElement().isPublic() = false;
+    eq SourceRoot.getProgram().isPublic()           = true; 
+    eq Root.getChild().isPublic()                   = true; 
+
+    syn boolean InstNode.isPublic();
+    eq InstRoot.isPublic()          = true;
+    eq InstClassDecl.isPublic()     = getSrcClassDecl().isPublic();
+    eq InstComponentDecl.isPublic() = getSrcComponentDecl().isPublic();
+    eq InstExtends.isPublic()       = getSrcExtendsClause().isPublic();
+
+    syn boolean SrcElement.isProtected()        = !isPublic();
+    syn boolean SrcComponentDecl.isProtected()  = !isPublic();
+    syn boolean InstClassDecl.isProtected()     = getSrcClassDecl().isProtected();
+    syn boolean InstComponentDecl.isProtected() = getSrcComponentDecl().isProtected();
+
+    inh boolean InstNode.inProtectedComponent();
+    eq InstComponentDecl.getChild().inProtectedComponent()     = isProtected() || inProtectedComponent();
+    eq InstClassDecl.getChild().inProtectedComponent()         = false;
+    eq Root.getChild().inProtectedComponent()                  = false;
+    eq InstRecordConstructor.getChild().inProtectedComponent() = false;
+
+    syn boolean InstAssignable.isPublicVar() = isPublic() && !inProtectedComponent();
+
+
+    syn boolean FVariable.isPublic()    = getVisibilityType().isPublic();
+    syn boolean FVariable.isProtected() = getVisibilityType().isProtected();
+
+    syn boolean FAbstractVariable.isTemporary() = false;
+    eq FVariable.isTemporary()                  = getVisibilityType().isTemporary();
+
+    syn boolean FAbstractVariable.isInterface() = false;
+    eq FVariable.isInterface()                  = getVisibilityType().isInterface();
+
+    syn boolean FAbstractVariable.isFromExpandableConnector() = false;
+    eq FVariable.isFromExpandableConnector()                  = 
+        getVisibilityType().isFromExpandableConnector();
+
+}
+
+
+aspect ComponentDeclMethods {
+
+    inh boolean InstComponentDecl.isConnectorVariable();
+    eq InstClassDecl.getChild().isConnectorVariable() = isConnector();
+    eq InstComponentDecl.getChild().isConnectorVariable() = isConnector() || isConnectorVariable();
+    eq InstRoot.getChild().isConnectorVariable() = false;
+
+    /**
+     * Check if a SrcComponentDecl is declared flow.
+     */
+    syn boolean SrcComponentDecl.isFlow()  = hasSrcTypePrefixFlow() && getSrcTypePrefixFlow().isFlow();
+    syn boolean SrcTypePrefixFlow.isFlow() = false;
+    eq SrcFlow.isFlow()                    = true;
+
+    /**
+     * Check if a SrcComponentDecl is declared stream.
+     */
+    syn boolean SrcComponentDecl.isStream()  = hasSrcTypePrefixFlow() && getSrcTypePrefixFlow().isStream();
+    syn boolean SrcTypePrefixFlow.isStream() = false;
+    eq SrcStream.isStream()                  = true;
+
+    /**
+     * Check if a SrcComponentDecl is declared flow or stream.
+     */
+    syn boolean SrcComponentDecl.hasFlowOrStream() = hasSrcTypePrefixFlow();
+
+    /**
+     * Check if a SrcComponentDecl is declared inner.
+     */
+    syn boolean SrcComponentDecl.isInner() = hasInner();
+
+    /**
+     * Check if a SrcComponentDecl is declared outer.
+     */
+    syn boolean SrcComponentDecl.isOuter() = hasOuter();
+
+    /**
+     * Check if a SrcComponentDecl is declared inner or outer.
+     */
+    syn boolean SrcComponentDecl.hasInnerOrOuter() = hasInner() || hasOuter();
+
+    /**
+     * Check if a SrcClassDecl is declared inner.
+     */
+    syn boolean SrcClassDecl.isInner() = false;
+    eq SrcBaseClassDecl.isInner() = getInner();
+
+    /**
+     * Check if a SrcClassDecl is declared outer.
+     */
+    syn boolean SrcClassDecl.isOuter() = false;
+    eq SrcBaseClassDecl.isOuter() = getOuter();
+
+    /**
+     * Check if a SrcClassDecl is declared inner or outer.
+     */
+    syn boolean SrcClassDecl.hasInnerOrOuter() = false;
+    eq SrcBaseClassDecl.hasInnerOrOuter()      = getInner() || getOuter();
+    
+
+    /**
+     * Check if this component is declared parameter.
+     */
+    syn boolean SrcComponentDecl.isParameter() = hasSrcTypePrefixVariability() && getSrcTypePrefixVariability().parameterVariability();
+    
+    /**
+     * Check if this component is declared constant.
+     */
+    syn boolean SrcComponentDecl.isConstant() = hasSrcTypePrefixVariability() && getSrcTypePrefixVariability().constantVariability();
+    
+    /**
+     * Check if this component clause is declared constant.
+     */
+    syn boolean SrcComponentClause.isConstant() = hasSrcTypePrefixVariability() && getSrcTypePrefixVariability().constantVariability();
+    
+    /**
+     * Check if this component is declared discrete.
+     */
+    syn boolean SrcComponentDecl.isDiscrete() = hasSrcTypePrefixVariability() && getSrcTypePrefixVariability().discreteVariability();
+
+    /**
+     * Check if this component is an input component.
+     */
+    syn boolean InstComponentDecl.isInput() = isDeclaredInput() || inheritsInput();
+    
+    /**
+     * Check if this component inherits input from the surrounding component.
+     */
+    syn boolean InstComponentDecl.inheritsInput() {
+        InstComponentDecl source = inheritsInputOutputFrom();
+        return source != null && source.isDeclaredInput();
+    }
+
+    /**
+     * Check if this component or its class is declared input.
+     */
+    syn boolean InstComponentDecl.isDeclaredInput() = 
+        (isComponentDeclaredInput() || myInstClass().isInput()) && !inExpandableConnector();
+
+    /**
+     * Check if this component is declared input.
+     */
+    syn boolean InstComponentDecl.isComponentDeclaredInput() = getSrcComponentDecl().isInput();
+    eq InstReplacingComposite.isComponentDeclaredInput()     = 
+        getSrcComponentDecl().hasSrcTypePrefixInputOutput() ? getSrcComponentDecl().isInput() : getOriginalInstComponent().isDeclaredInput();
+    eq InstReplacingRecord.isComponentDeclaredInput()        = 
+        getSrcComponentDecl().hasSrcTypePrefixInputOutput() ? getSrcComponentDecl().isInput() : getOriginalInstComponent().isDeclaredInput();
+    eq InstReplacingPrimitive.isComponentDeclaredInput()     = 
+        getSrcComponentDecl().hasSrcTypePrefixInputOutput() ? getSrcComponentDecl().isInput() : getOriginalInstComponent().isDeclaredInput();
+
+    /**
+     * Check if this component is declared input.
+     */
+    syn boolean SrcComponentDecl.isInput() = hasSrcTypePrefixInputOutput() && getSrcTypePrefixInputOutput().isInput();
+    
+    /**
+     * Check if this prefix is "input".
+     */
+    syn boolean SrcTypePrefixInputOutput.isInput() = false;
+    eq SrcInput.isInput()                          = true;
+
+    /**
+     * Check if this component is an output component.
+     */
+    syn boolean InstComponentDecl.isOutput() = 
+        (isDeclaredOutput() || inheritsOutput()) && !inExpandableConnector();
+    
+    /**
+     * Check if this component inherits output from the surrounding component.
+     */
+    syn boolean InstComponentDecl.inheritsOutput() {
+        InstComponentDecl source = inheritsInputOutputFrom();
+        return source != null && source.isDeclaredOutput();
+    }
+ 
+    /**
+     * Check if this component is declared output.
+     */
+    syn boolean InstComponentDecl.isDeclaredOutput() = getSrcComponentDecl().isOutput() || myInstClass().isOutput();
+
+    /**
+     * Check if this component is declared output.
+     */
+    syn boolean SrcComponentDecl.isOutput() = hasSrcTypePrefixInputOutput() && getSrcTypePrefixInputOutput().isOutput();
+    
+    /**
+     * Check if this prefix is "output".
+     */
+    syn boolean SrcTypePrefixInputOutput.isOutput() = false;
+    eq SrcOutput.isOutput()                         = true;
+    
+    /**
+     * Find the component that this component inherits input or output from, if any.
+     */
+    inh InstComponentDecl InstComponentDecl.inheritsInputOutputFrom();
+    eq InstComponentDecl.getChild().inheritsInputOutputFrom() {
+        return (isDeclaredInput() || isDeclaredOutput()) ? this : inheritsInputOutputFrom();
+    }
+    eq InstPartialFunction.getChild().inheritsInputOutputFrom()    = null;
+    eq InstArrayComponentDecl.getChild().inheritsInputOutputFrom() = inheritsInputOutputFrom();
+    eq InstClassDecl.getChild().inheritsInputOutputFrom()     = null;
+    eq InstRoot.getChild().inheritsInputOutputFrom()          = null;
+    eq Root.getChild().inheritsInputOutputFrom()              = null;
+    
+    /**
+     * Check if this component is part of a component that is declared input or output on the top level.
+     */
+    syn boolean InstComponentDecl.isTopLevelInputOutput() = false;
+    eq InstAssignable.isTopLevelInputOutput() = isTopLevel() && !inExpandableConnector() && 
+            (isInput() || isOutput() || isConnectorVariable()) && !isProtected() && isPublicVar();
+
+    syn boolean InstComponentDecl.isTopLevel() = isInTopLevel();
+
+    inh boolean InstComponentDecl.isInTopLevel();
+    eq InstComponentDecl.getChild().isInTopLevel() = (isAssignable() || isConnector()) && isTopLevel();
+    eq InstClassDecl.getChild().isInTopLevel()     = true;
+    eq Root.getChild().isInTopLevel()              = false;
+
+    /**
+     * Check if this equation is declared initial.
+     */
+    inh boolean SrcAbstractEquation.isInitial();
+    eq SrcEquationClause.getSrcAbstractEquation().isInitial()        = false;
+    eq SrcInitialEquationClause.getSrcAbstractEquation().isInitial() = true;
+
+    /**
+     * Check if this equation is declared initial.
+     */
+    syn boolean SrcAlgorithm.isInitial() = false;
+    eq SrcInitialAlgorithm.isInitial()   = true;
+
+    /**
+     * Check if this component is a flow component.
+     */
+    syn boolean InstComponentDecl.isFlow() = isDeclaredFlow() || inheritsFlow();
+    
+    /**
+     * Check if this component inherits output from the surrounding component.
+     */
+    syn boolean InstComponentDecl.inheritsFlow() = inheritsFlowFrom() != null;
+    
+    /**
+     * Find the component that this component inherits input or output from, if any.
+     */
+    inh InstComponentDecl InstComponentDecl.inheritsFlowFrom();
+    eq InstComponentDecl.getChild().inheritsFlowFrom() = isDeclaredFlow() ? this : inheritsFlowFrom();
+    eq InstClassDecl.getChild().inheritsFlowFrom()     = null;
+    eq InstRoot.getChild().inheritsFlowFrom()          = null;
+    eq Root.getChild().inheritsFlowFrom()              = null;
+
+    /**
+     * Check if this component is declared flow.
+     */
+    syn boolean InstComponentDecl.isDeclaredFlow() = getSrcComponentDecl().isFlow();
+    eq InstReplacingComposite.isDeclaredFlow()     = 
+        getSrcComponentDecl().hasFlowOrStream() ? getSrcComponentDecl().isFlow() : getOriginalDecl().isFlow();
+    eq InstReplacingRecord.isDeclaredFlow()        = 
+        getSrcComponentDecl().hasFlowOrStream() ? getSrcComponentDecl().isFlow() : getOriginalDecl().isFlow();
+    eq InstReplacingPrimitive.isDeclaredFlow()     = 
+        getSrcComponentDecl().hasFlowOrStream() ? getSrcComponentDecl().isFlow() : getOriginalDecl().isFlow();
+
+    /**
+     * Check if this component is declared stream.
+     */
+    syn boolean InstComponentDecl.isStream() = getSrcComponentDecl().isStream();
+    eq InstReplacingComposite.isStream()     = 
+        getSrcComponentDecl().hasFlowOrStream() ? getSrcComponentDecl().isStream() : getOriginalDecl().isStream();
+    eq InstReplacingRecord.isStream()        = 
+        getSrcComponentDecl().hasFlowOrStream() ? getSrcComponentDecl().isStream() : getOriginalDecl().isStream();
+    eq InstReplacingPrimitive.isStream()     = 
+        getSrcComponentDecl().hasFlowOrStream() ? getSrcComponentDecl().isStream() : getOriginalDecl().isStream();
+
+    /**
+     * Check if this component is declared inner.
+     */
+    syn boolean InstComponentDecl.isInner() = getSrcComponentDecl().isInner() || isGeneratedInner();
+    eq InstReplacingComposite.isInner()     = 
+        getSrcComponentDecl().hasInnerOrOuter() ? getSrcComponentDecl().isInner() : getOriginalDecl().isInner();
+    eq InstReplacingRecord.isInner()        = 
+        getSrcComponentDecl().hasInnerOrOuter() ? getSrcComponentDecl().isInner() : getOriginalDecl().isInner();
+    eq InstReplacingPrimitive.isInner()     = 
+        getSrcComponentDecl().hasInnerOrOuter() ? getSrcComponentDecl().isInner() : getOriginalDecl().isInner();
+
+    /**
+     * Check if this component is declared outer.
+     */
+    syn boolean InstComponentDecl.isOuter() = getSrcComponentDecl().isOuter() && !isGeneratedInner();
+    eq InstReplacingComposite.isOuter()     = 
+        getSrcComponentDecl().hasInnerOrOuter() ? getSrcComponentDecl().isOuter() : getOriginalDecl().isOuter();
+    eq InstReplacingRecord.isOuter()        = 
+        getSrcComponentDecl().hasInnerOrOuter() ? getSrcComponentDecl().isOuter() : getOriginalDecl().isOuter();
+    eq InstReplacingPrimitive.isOuter()     = 
+        getSrcComponentDecl().hasInnerOrOuter() ? getSrcComponentDecl().isOuter() : getOriginalDecl().isOuter();
+
+    /**
+     * Check if this class is declared inner.
+     */
+    syn boolean InstClassDecl.isInner()            = getSrcClassDecl().isInner();
+    eq InstReplacingFullClassDecl.isInner()        = 
+        getSrcClassDecl().hasInnerOrOuter() ? getSrcClassDecl().isInner() : getOriginalClassDecl().isInner();
+    eq InstReplacingShortClassDecl.isInner()       = 
+        getSrcClassDecl().hasInnerOrOuter() ? getSrcClassDecl().isInner() : getOriginalClassDecl().isInner();
+    eq InstReplacingSimpleShortClassDecl.isInner() = 
+        getSrcClassDecl().hasInnerOrOuter() ? getSrcClassDecl().isInner() : getOriginalClassDecl().isInner();
+
+    /**
+     * Check if this component is declared outer.
+     */
+    syn boolean InstClassDecl.isOuter() = getSrcClassDecl().isOuter();
+    eq InstReplacingFullClassDecl.isOuter()        = 
+        getSrcClassDecl().hasInnerOrOuter() ? getSrcClassDecl().isOuter() : getOriginalClassDecl().isOuter();
+    eq InstReplacingShortClassDecl.isOuter()       = 
+        getSrcClassDecl().hasInnerOrOuter() ? getSrcClassDecl().isOuter() : getOriginalClassDecl().isOuter();
+    eq InstReplacingSimpleShortClassDecl.isOuter() = 
+        getSrcClassDecl().hasInnerOrOuter() ? getSrcClassDecl().isOuter() : getOriginalClassDecl().isOuter();
+
+    /**
+     * Check if this component is disabled by a conditional clause
+     */
+    syn boolean InstComponentDecl.isDisabled() {
+        if (hasConditionalAttribute()) {
+            try {
+                CValue cval = getConditionalAttribute().ceval();
+                return cval.hasBooleanValue() && !cval.booleanValue();
+            } catch (ConstantEvaluationException e) {}
+        }
+        return false;
+    }
+    
+    syn boolean InstAccess.isDisabled() = false;
+    eq InstComponentAccess.isDisabled() = myInstComponentDecl().isDisabled();
+    eq InstComponentArrayAccess.isDisabled() = myInstComponentDecl().isDisabled();
+    eq InstDot.isDisabled() {
+    	for (InstAccess ia : getInstAccesss())
+    		if (ia.isDisabled())
+    			return true;
+    	return false;
+    }
+
+    /**
+     * Check if this node is in a disabled condition component.
+     * 
+     * Only valid in instance tree.
+     */
+    inh boolean ASTNode.inDisabledComponent();
+    eq Root.getChild().inDisabledComponent()              = false;
+    eq InstClassDecl.getChild().inDisabledComponent()     = false;
+    eq InstComponentDecl.getChild().inDisabledComponent() = isDisabled() || inDisabledComponent();
+
+}
+
+aspect ClassDeclMethods {
+    public boolean InstClassDecl.extendsClass(InstClassDecl icd) {
+        if (equals(icd))
+            return true;
+        for (InstExtends ie : getInstExtendss()) {
+            if (ie.myInstClass().extendsClass(icd))
+                return true;
+        }
+        return false;
+    }
+
+    /**
+     * check if this node has a SrcLibNode as parent
+     */
+    inh boolean SrcClassDecl.isLib();
+    eq SourceRoot.getChild().isLib() = false;
+    eq SrcLibNode.getChild().isLib() = true;
+    eq SrcFullClassDecl.getChild().isLib() = false;
+
+    syn boolean SrcClassDecl.isLibNode() = false;
+    eq SrcLibNode.isLibNode()            = true;
+}
+
+
+aspect MultiDeclMethods {
+    
+    InstClassDecl implements InstCallable;
+    InstPartialFunction  implements InstCallable;
+    public interface InstCallable {
+        public boolean isCallable();
+        public boolean isCompleteFunction();
+        public boolean canBeReplacedForMe(InstNode node);
+        public void    collectErrors(ErrorCheckType checkType);
+
+        public boolean isRecord();
+        public boolean isPrimitive();
+        public boolean isExternalObject();
+        public boolean isOperatorRecord();
+        public boolean isUnknown();
+        
+        public InstClassDecl    asInstClassDecl();
+        public InstNode         asInstNode();
+        public InstCallable actualInstCallable();
+        public InstClassDecl    actualInstClassDecl();
+        
+        public String qualifiedName();
+        public String name();
+        
+        public ArrayList<InstComponentDecl> myCallInputs();
+        public ArrayList<InstComponentDecl> myInputs();
+        public ArrayList<InstComponentDecl> myOutputs();
+        public ArrayList<InstComponentDecl> myNonInputs();
+        
+        public void flattenFunction(Flattener f);
+    }
+    
+    syn InstClassDecl InstClassDecl.asInstClassDecl() = this;
+    syn InstClassDecl InstPartialFunction.asInstClassDecl()  = unknownInstClassDecl();
+    
+    syn InstCallable InstClassDecl.actualInstCallable()       = actualInstClass();
+    syn InstCallable InstPartialFunction.actualInstCallable() = this;
+    
+    syn InstClassDecl InstClassDecl.actualInstClassDecl()       = actualInstClass();
+    syn InstClassDecl InstPartialFunction.actualInstClassDecl() = myInstClass().actualInstClass();
+    
+    syn InstNode InstClassDecl.asInstNode() = this;
+    syn InstNode InstPartialFunction.asInstNode()  = this;
+    
+    syn InstCallable InstFunctionCall.myInstCallable() = getName().myInstCallable();
+    
+    syn InstCallable InstAccess.myInstCallable() = myInstLookupCallable().target(INST_UNKNOWN_CALLABLE, this);
+    
+    syn InstLookupResult<InstCallable> InstAccess.myInstLookupCallable() = myInstLookup().asCallable();
+    
+    public InstLookupResult<InstCallable> InstLookupResult.asCallable() {
+        if (isNotFound()) {
+            return InstLookupResult.<InstCallable>notFound();
+        }
+        InstCallable ic = target().asCallable();
+        if (ic == null) {
+            return InstLookupResult.<InstCallable>notFound();
+        }
+        return create(ic);
+    }
+    
+    syn InstCallable InstClassDecl.asCallable()     = this;
+    eq InstLibNode.asCallable()                     = resolveLib();
+    syn InstCallable InstComponentDecl.asCallable() = null;
+    eq InstPartialFunction.asCallable()             = this;
+}
+
+aspect ShortClassUtil {
+
+    syn InstClassDecl InstClassDecl.finalClass() = this;
+    eq InstShortClassDecl.finalClass()           = myTargetInstClassDecl().finalClass();
+    eq InstSimpleShortClassDecl.finalClass()     = actualInstClass().finalClass();
+    eq InstLibNode.finalClass()                  = actualInstClass().finalClass();
+
+
+    syn boolean SrcClassDecl.isInput() = false;
+    eq SrcShortClassDecl.isInput()     = 
+        hasInputOrOutput() && getSrcExtendsClauseShortClass().getSrcTypePrefixInputOutput().isInput();
+
+    syn boolean SrcClassDecl.isOutput() = false;
+    eq SrcShortClassDecl.isOutput()     = 
+        hasInputOrOutput() && getSrcExtendsClauseShortClass().getSrcTypePrefixInputOutput().isOutput();
+
+    syn boolean SrcClassDecl.hasInputOrOutput() = false;
+    eq SrcShortClassDecl.hasInputOrOutput()     = getSrcExtendsClauseShortClass().hasSrcTypePrefixInputOutput();
+
+    syn boolean InstClassDecl.isInput()            = false;
+    eq InstShortClassDecl.isInput()                = 
+        getSrcClassDecl().isInput() || myTargetInstClassDecl().isInput();
+    eq InstSimpleShortClassDecl.isInput()          = actualInstClass().isInput();
+    eq InstLibNode.isInput()                       = actualInstClass().isInput();
+    eq InstReplacingShortClassDecl.isInput()       = 
+        (super.isInput() || super.isOutput()) ? super.isInput() : getOriginalInstClass().isInput();
+    eq InstReplacingSimpleShortClassDecl.isInput() = 
+        (super.isInput() || super.isOutput()) ? super.isInput() : getOriginalInstClass().isInput();
+
+    syn boolean InstClassDecl.isOutput()            = false;
+    eq InstShortClassDecl.isOutput()                =
+        getSrcClassDecl().isOutput() || myTargetInstClassDecl().isOutput();
+    eq InstSimpleShortClassDecl.isOutput()          = actualInstClass().isOutput();
+    eq InstLibNode.isOutput()                       = actualInstClass().isOutput();
+    eq InstReplacingShortClassDecl.isOutput()       = 
+        (super.isInput() || super.isOutput()) ? super.isOutput() : getOriginalInstClass().isOutput();
+    eq InstReplacingSimpleShortClassDecl.isOutput() = 
+        (super.isInput() || super.isOutput()) ? super.isOutput() : getOriginalInstClass().isOutput();
+
+    syn boolean SrcComponentDecl.isEnumLiteral() = false;
+    eq SrcEnumLiteralDecl.isEnumLiteral() = true;
+    syn boolean InstComponentDecl.isEnumLiteral() = false;
+    eq InstEnumLiteral.isEnumLiteral() = true;
+
+}
+
+
+aspect LineOffsets {
+    private int[] SrcStoredDefinition.lineBreakMap;
+    
+    public void SrcStoredDefinition.setLineBreakMap(int[] map) {
+        lineBreakMap = map;
+    }
+}
+
+
+aspect NodeSearch {
+    
+    /**
+     * Does node match <code>string</code>? Override for node types that 
+     * need to be searched for.
+     * 
+     * Base implementation always returns <code>false</code.
+     * Generally, this is implemented with something like 
+     * <code>str.equals(name())</code>.
+     * 
+     * @param str  the string to match
+     * @return     <code>true</code if <code>str</code> matches this node, 
+     *             <code>false</code> otherwise
+     */
+    syn boolean ASTNode.matches(String str) = false;
+    eq SrcAccess.matches(String str)           = name().equals(str);
+    eq InstAccess.matches(String str)       = name().equals(str);
+    
+    
+    public class ASTNode {
+        
+        /**
+         * Searches <code>set</code> for a node that returns <code>true</code> for 
+         * <code>node.matches(str)</code>.
+         * 
+         * @param set  the container to search for a matching node
+         * @param str  the string to match nodes to
+         * @return     a matching node if one is found, <code>null</code> otherwise
+         */
+        public static <T extends ASTNode> T findMatching(Iterable<T> set, String str) {
+            for (T node : set) 
+                if (node.matches(str)) 
+                    return node;
+            return null;
+        }
+        
+    }
+    
+}
+
+
+aspect Strings {
+
+    /**
+     * Get the value of this string literal with all escape sequences 
+     *        replaced with their actual meaning.
+     */
+    syn String SrcStringLitExp.unEscape() = unEscape(getSTRING());
+
+    /**
+     * Get the value of this string literal with all escape sequences 
+     *        replaced with their actual meaning.
+     */
+    syn String FStringLitExp.unEscape() = unEscape(getString());
+
+    /**
+     * Replace all escape sequences with their actual meaning.
+     */
+    public static String ASTNode.unEscape(String str) {
+        return patternedReplace(str, UN_ESCAPE_PATTERN, unEscapeReplacements());
+    }
+
+    /**
+     * Replace all characters that should be escaped in a Modelica String with 
+     * their escape sequences.
+     */
+    public static String ASTNode.escape(String str) {
+        return patternedReplace(str, ESCAPE_PATTERN, escapeReplacements());
+    }
+
+    private static final Pattern ASTNode.UN_ESCAPE_PATTERN = Pattern.compile("\\\\(.)");
+
+    private static Map<String,String> ASTNode.unEscapeReplacements() {
+        if (UN_ESCAPE_REPLACEMENTS == null) {
+            UN_ESCAPE_REPLACEMENTS = new HashMap<String,String>();
+            UN_ESCAPE_REPLACEMENTS.put("'", "'");
+            UN_ESCAPE_REPLACEMENTS.put("\"", "\"");
+            UN_ESCAPE_REPLACEMENTS.put("?", "?");
+            UN_ESCAPE_REPLACEMENTS.put("\\", Matcher.quoteReplacement("\\"));
+            UN_ESCAPE_REPLACEMENTS.put("a", "\007");
+            UN_ESCAPE_REPLACEMENTS.put("b", "\b");
+            UN_ESCAPE_REPLACEMENTS.put("f", "\f");
+            UN_ESCAPE_REPLACEMENTS.put("n", "\n");
+            UN_ESCAPE_REPLACEMENTS.put("r", "\r");
+            UN_ESCAPE_REPLACEMENTS.put("v", "\013");
+            UN_ESCAPE_REPLACEMENTS.put("t", "\t");
+        }
+        return UN_ESCAPE_REPLACEMENTS;
+    }
+
+    private static Map<String,String> ASTNode.UN_ESCAPE_REPLACEMENTS = null;
+
+    private static final Pattern ASTNode.ESCAPE_PATTERN = 
+            Pattern.compile("([\"'\\\\\007\b\f\n\r\013\t])");
+
+    private static Map<String,String> ASTNode.escapeReplacements() {
+        if (ESCAPE_REPLACEMENTS == null) {
+            ESCAPE_REPLACEMENTS = new HashMap<String,String>();
+            ESCAPE_REPLACEMENTS.put("'",    Matcher.quoteReplacement("\\'"));
+            ESCAPE_REPLACEMENTS.put("\"",   Matcher.quoteReplacement("\\\""));
+            ESCAPE_REPLACEMENTS.put("\\",   Matcher.quoteReplacement("\\\\"));
+            ESCAPE_REPLACEMENTS.put("\007", Matcher.quoteReplacement("\\a"));
+            ESCAPE_REPLACEMENTS.put("\b",   Matcher.quoteReplacement("\\b"));
+            ESCAPE_REPLACEMENTS.put("\f",   Matcher.quoteReplacement("\\f"));
+            ESCAPE_REPLACEMENTS.put("\n",   Matcher.quoteReplacement("\\n"));
+            ESCAPE_REPLACEMENTS.put("\r",   Matcher.quoteReplacement("\\r"));
+            ESCAPE_REPLACEMENTS.put("\013", Matcher.quoteReplacement("\\v"));
+            ESCAPE_REPLACEMENTS.put("\t",   Matcher.quoteReplacement("\\t"));
+        }
+        return ESCAPE_REPLACEMENTS;
+    }
+
+    private static Map<String,String> ASTNode.ESCAPE_REPLACEMENTS = null;
+
+    private static String ASTNode.patternedReplace(
+            String str, Pattern pattern, Map<String,String> repl) {
+        StringBuffer buf = new StringBuffer();
+        Matcher m = pattern.matcher(str);
+        while (m.find())
+            m.appendReplacement(buf, repl.get(m.group(1)));
+        m.appendTail(buf);
+        return buf.toString();
+    }
+
+}
+
+
+aspect SrcStringComments {
+	
+	syn boolean       SrcClassDecl.hasSrcStringComment() = false;
+	syn SrcStringComment SrcClassDecl.getSrcStringComment() = null;
+	
+	eq SrcShortClassDecl.hasSrcStringComment() = getSrcExtendsClauseShortClass().getSrcComment().hasSrcStringComment();
+	eq SrcShortClassDecl.getSrcStringComment() = getSrcExtendsClauseShortClass().getSrcComment().getSrcStringComment();
+	
+}
+
+
+aspect Sorting {
+    
+	public static final Comparator<FAbstractVariable> FAbstractVariable.NAME_COMPARATOR = 
+		new Comparator<FAbstractVariable>() {
+			public int compare(FAbstractVariable fv1, FAbstractVariable fv2) {
+				String n1 = (fv1 == null) ? null : fv1.name();
+				String n2 = (fv2 == null) ? null : fv2.name();
+				if (n1 != null)
+					return n1.compareTo(n2);
+				else
+					return (n2 != null) ? 1 : 0;
+			}
+			
+			public boolean equals(Object obj) { 
+				return obj == this; 
+			}
+		};
+	    
+		public static final Comparator<ASTNode> ASTNode.CHILD_ORDER_COMPARATOR =
+		    new Comparator<ASTNode>() {
+				public int compare(ASTNode n1, ASTNode n2) {
+			    	return childIndex(n1) - childIndex(n2);
+			    }
+				
+				private int childIndex(ASTNode n) {
+					return (n.parent == null) ? 0 : n.parent.getIndexOfChild(n);
+				}
+			    
+				public boolean equals(Object obj) { 
+			    	return obj == this; 
+			    }
+			};
+		    
+		public static final Comparator<ASTNode> ASTNode.TOSTRING_COMPARATOR =
+		    new Comparator<ASTNode>() {
+				public int compare(ASTNode n1, ASTNode n2) {
+			    	return n1.toString().compareTo(n2.toString());
+			    }
+			    
+				public boolean equals(Object obj) { 
+			    	return obj == this; 
+			    }
+			};
+
+}
+
+
+aspect GeneralHelpers {
+
+    abstract public FExp FExp.copy();
+    abstract public InstAccess InstAccess.copy();
+
+    public FExp FExp.unboundCopy() { return (FExp) super.unboundCopy(); }
+
+	inh boolean ASTNode.isFirst();
+	eq List.getChild(int i).isFirst()    = i == 0;
+	eq ASTNode.getChild(int i).isFirst() = true;
+	
+	inh boolean ASTNode.isLast();
+	eq List.getChild(int i).isLast()     = i == getNumChild() - 1;
+	eq ASTNode.getChild(int i).isLast()  = true;
+	
+	public class ASTNode {
+		
+		/**
+		 * Used to iterate over the children of an AST node without triggering rewrites.
+		 */
+		public Iterable<T> noTransform() { 
+			return new Iterable<T>() {
+				public Iterator<T> iterator() {
+					return new NoTransformIterator();
+				}
+			};
+		}
+		
+		/**
+		 * Used to iterate over the children of an AST node without triggering rewrites.
+		 */
+		public class NoTransformIterator implements Iterator<T> {
+			
+			private int i = 0;
+			private int n = getNumChildNoTransform();
+			
+			public boolean hasNext() {
+				return i < n;
+			}
+			
+			public T next() {
+				return getChildNoTransform(i++);
+			}
+			
+			public void remove() {
+				throw new UnsupportedOperationException();
+			}
+			
+		}
+		
+	}
+
+    /**
+     * Adds all children to a Collection.
+     */
+    public void ASTNode.addAllTo(Collection<? super T> col) {
+        for (T n : this) {
+            col.add(n);
+        }
+    }
+
+    /**
+     * Create an array list with all children.
+     */
+     public ArrayList<T> ASTNode.createArrayList() {
+        ArrayList<T> res = new ArrayList<>(getNumChild());
+        addAllTo(res);
+        return res;
+     }
+
+	/**
+     * Check if this when equation is the else part of another when equation.
+     */
+    inh boolean FIfWhenElseEquation.isElse();
+    eq FIfWhenEquation.getElse().isElse()    = true;
+    eq FAbstractEquation.getChild().isElse() = false;
+    eq FClass.getChild().isElse()            = false;
+    eq InstNode.getChild().isElse()          = false;
+
+	/**
+	 * Round a number to 2 decimals if it is < 10, 1 decimal otherwise.
+	 */
+	public static double ASTNode.roundFriendly(double val) {
+		double round = val < 10.0 ? 100.0 : 10.0;
+		return Math.round(val * round) / round;
+	}
+
+	/**
+	 * Create a human-readable memory size string (e.g. 2.34 kB).
+	 * 
+	 * @param mem  size to format, in bytes. May be negative.
+	 */
+	public static String ASTNode.formatMem(long mem) {
+		int i = 0;
+		double scaledMem = Math.abs(mem);
+		for (; i < 4 && scaledMem >= 1000.0; i++)
+			scaledMem /= 1024.0;
+		StringBuilder buf = new StringBuilder();
+		if (i == 0) {
+			buf.append(mem);
+		} else {
+			if (mem < 0)
+				buf.append('-');
+			buf.append(roundFriendly(scaledMem));
+		}
+		buf.append(memUnits[i]);
+		return buf.toString();
+	}
+
+	/**
+	 * Parse a human-readable memory size string (e.g. 2.34 kB).
+	 * 
+	 * @param str  string to parse
+	 * @return  the amount of memory described by the string
+	 */
+	public static long ASTNode.parseMem(String str) {
+		Matcher m = memPattern.matcher(str);
+		if (m.matches()) {
+			double val = Double.parseDouble(m.group(1));
+			String suff = m.group(4);
+			if (suff != null && !suff.isEmpty()) {
+				char sc = Character.toLowerCase(suff.charAt(0));
+				for (int i = 0; i < memUnits.length && Character.toLowerCase(memUnits[i].charAt(1)) != sc; i++)
+					val *= 1024.0;
+			}
+			if (val < Long.MAX_VALUE && val > Long.MIN_VALUE)
+				return (long) val;
+		}
+		throw new IllegalArgumentException(str);
+	}
+	
+	private static final String[] ASTNode.memUnits = { 
+		" B", " kB", " MB", " GB", " TB" , " PB" , " EB" };
+	private static final Pattern ASTNode.memPattern = 
+			Pattern.compile("([0-9]+(\\.[0-9]*)?)(([kKmMgGtTpPeE])?[bB]?)?");
+
+}
+
+aspect DebugHelpers {
+
+	/**
+	 * Check if the list contains an instance of the specified class.
+	 */
+	public boolean List.containsInstance(Class c) {
+		 for (ASTNode n : children)
+			 if (c.isInstance(n))
+				 return true;
+		 return false;
+	}
+
+}
+
+aspect UtilInterface {
+    
+    private UtilInterface Root.utilInterface = null;
+    
+    public void Root.setUtilInterface(UtilInterface utilInterface) {
+        if (this.utilInterface != null || utilInterface == null) {
+            throw new UnsupportedOperationException();
+        }
+        this.utilInterface = utilInterface;
+    }
+    
+    public UtilInterface Root.getUtilInterface() {
+        return utilInterface;
+    }
+    
+    /**
+     * Provides easy access to non-ast utils via the AST root.
+     */
+    public class UtilInterface {
+        
+        private ModelicaCompiler mc;
+        private OptionRegistry options;
+        private IErrorHandler eh;
+        private ExternalFunctionCache efc;
+        private GUIDManager guidManager;
+        private File compilationOutputPath;
+        
+        protected UtilInterface(ModelicaCompiler mc, OptionRegistry options, IErrorHandler eh, ExternalFunctionCache efc, File compilationOutputPath) {
+            this.mc = mc;
+            this.options = options;
+            this.eh = eh;
+            this.efc = efc;
+            this.compilationOutputPath = compilationOutputPath;
+            guidManager = new GUIDManager(ASTNode.vendorName(), options.getStringOption("compiler_version"));
+        }
+        
+        public ModelicaCompiler getModelicaCompiler() {
+            return mc;
+        }
+        
+        public OptionRegistry getOptionRegistry() {
+            return options;
+        }
+        
+        public IErrorHandler getErrorHandler() {
+            return eh;
+        }
+        
+        public ExternalFunctionCache getExternalFunctionCache() {
+            return efc;
+        }
+        
+        public GUIDManager getGuidManager() {
+            return guidManager;
+        }
+        
+        public File getCompilationOutputPath() {
+            return compilationOutputPath;
+        }
+        
+        public void setCompilationOutputPath(File compilationOutputPath) {
+            this.compilationOutputPath = compilationOutputPath;
+        }
+    }
+    
+    UtilInterface ModelicaCompiler.createUtilInterface() {
+        return UtilInterface.create(this);
+    }
+    
+    public static UtilInterface UtilInterface.create(ModelicaCompiler mc) {
+        return create(mc, mc.getOptions(), mc.getErrorHandler(), mc.getExternalFunctionCache(), null);
+    }
+    
+    public static UtilInterface UtilInterface.create(UtilInterface other) {
+        return create(other.getModelicaCompiler(), other.getOptionRegistry().copy(), 
+                other.getErrorHandler(), other.getExternalFunctionCache(), other.getCompilationOutputPath());
+    }
+    
+    public static UtilInterface UtilInterface.create(OptionRegistry options) {
+        return create(null, options, new DefaultErrorHandler(), null, null);
+    }
+    
+    public static UtilInterface UtilInterface.create(OptionRegistry options, IErrorHandler eh) {
+        return create(null, options, eh, null, null);
+    }
+    
+    private static UtilInterface UtilInterface.create(ModelicaCompiler mc, OptionRegistry options,
+            IErrorHandler eh, ExternalFunctionCache efc, File path) {
+        return new UtilInterface(mc, options, eh, efc, path);
+    }
+    
+    public void Root.transferRoot(Root other) {
+        other.getUtilInterface().transferRoot(this);
+    }
+    
+    public void UtilInterface.transferRoot(Root root) {
+        clean();
+        root.setUtilInterface(UtilInterface.create(this));
+    }
+    
+    public void UtilInterface.tearDown() {
+        clean();
+    }
+    
+    public void UtilInterface.clean() {
+        ExternalFunctionCache efc = getExternalFunctionCache();
+        if (efc != null) {
+            efc.destroyProcesses();
+        }
+    }
+    
+}

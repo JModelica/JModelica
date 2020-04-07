@@ -1,0 +1,135 @@
+/*
+    Copyright (C) 2016-2017 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect Components {
+    
+    /**
+     * Extract a subcomponent of this record expression. Creates new nodes when necessary.
+     * Similar to getArray() for arrays.
+     */
+    syn FExp FExp.component(String name) = dynamicFExp(extractRecordFExp(name));
+    eq InstRecordConstructor.component(String name) {
+        int i = 0;
+        for (InstComponentDecl icd : myInstClassDecl().allInstComponentDecls()) {
+            if (icd.name().equals(name)) {
+                break;
+            }
+            i++;
+        }
+        return getArg(i).getFExp();
+    }
+    eq FRecordConstructor.component(String name)    = getRecord().myFRecordDecl().extractArg(this, name);
+    eq FSubscriptedExp.component(String name) {
+        if (indexVariability().indexParameterOrLess()) {
+            try {
+                return dynamicFExp(select().extractRecordFExp(name));
+            } catch (ConstantEvaluationException e) {
+                
+            }
+        }
+        FExp e = getFExp().component(name);
+        FArrayExpSubscripts fas = getFArraySubscripts().copyAsFArrayExpSubscripts();
+        int numFSubscripts = fas.getNumFSubscriptNoTransform();
+        for (int i = 0; i < e.ndims() - numFSubscripts; i++) {
+            fas.addFSubscriptNoTransform(new FColonSubscript());
+        }
+        return dynamicFExp(new FSubscriptedExp(e.treeCopy(), fas));
+    }
+    
+    eq FAssert.component(String name) = dynamicFExp(new FAssert(
+            getTest().component(name).treeCopy(), getMsg().treeCopy(), getLevelOpt().treeCopy()));
+    
+    eq FBinExp.component(String name) = dynamicFExp(createNode(getLeft().component(name), getRight().component(name)));
+    
+    eq FFunctionCall.component(String name) {
+        FClass fc = myFClass();
+        if (!isComposite() || fc == null) {
+            return super.component(name);
+        }
+        return tempExp().component(name);
+    }
+    
+    /**
+     * Create an FExp that represents a specific component of this record expression.
+     * 
+     * TODO: merge into FExp.component()
+     * 
+     * @param suffix    the suffix to add to a use of the record to access the specific component
+     */
+    public FExp FExp.extractRecordFExp(String suffix) {
+        return new FComponentExp(treeCopy(), suffix);
+    }
+    
+    public InstAccessExp InstAccessExp.extractRecordFExp(String suffix) {
+        return new InstAccessExp(getInstAccess().extractRecordFExp(suffix));
+    }
+    
+    public FAccessExp FAccessExp.extractRecordFExp(String suffix) {
+        return createNode(getFAccess().extractRecordFExp(suffix));
+    }
+    
+    public abstract CommonAccess CommonAccess.extractRecordFExp(String suffix);
+    
+    public FAccess FAccess.extractRecordFExp(String suffix) {
+        return copyAsFAccessFull().append(suffix);
+    }
+    
+    public InstAccess InstAccess.extractRecordFExp(String suffix) {
+        return copyAndAppend(suffix);
+    }
+    
+    public FExp FRecordConstructor.extractRecordFExp(String suffix) {
+        return component(suffix).fullCopy();
+    }
+    
+    public FExp InstRecordConstructor.extractRecordFExp(String suffix) {
+        return component(suffix).fullCopy();
+    }
+    
+    public FExp FArray.extractRecordFExp(String suffix) {
+        FArray res = createEmptyNode();
+        for (FExp e : getFExps())
+            res.addFExp(e.extractRecordFExp(suffix));
+        return res;
+    }
+    
+    public FExp FIterExp.extractRecordFExp(String suffix) {
+        return new FIterExp(getFExp().extractRecordFExp(suffix), getForIndexList().treeCopy());
+    }
+    
+    public FExp FAbstractCat.extractRecordFExp(String suffix) {
+        FInfArgsFunctionCall res = createEmptyNode();
+        for (FExp e : getFExps())
+            res.addFExp(e.extractRecordFExp(suffix));
+        return res;
+    }
+    
+    public FExp FCatExp.extractRecordFExp(String suffix) {
+        FCatExp res = (FCatExp) super.extractRecordFExp(suffix);
+        res.setDim(getDim().fullCopy());
+        return res;
+    }
+    
+    public FExp FNoEventExp.extractRecordFExp(String suffix) {
+        return createNode(getFExp().extractRecordFExp(suffix));
+    }
+
+    public FExp FIfExp.extractRecordFExp(String suffix) {
+        return createNode(getIfExp().treeCopy(),
+                getThenExp().extractRecordFExp(suffix),
+                getElseExp().extractRecordFExp(suffix));
+    }
+}

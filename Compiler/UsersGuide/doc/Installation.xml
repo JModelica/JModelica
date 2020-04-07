@@ -1,0 +1,439 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<chapter version="5.0" xmlns="http://docbook.org/ns/docbook"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns:xs="http://www.w3.org/2001/XMLSchema"
+         xmlns:xlink="http://www.w3.org/1999/xlink"
+         xmlns:xi="http://www.w3.org/2001/XInclude"
+         xmlns:svg="http://www.w3.org/2000/svg"
+         xmlns:m="http://www.w3.org/1998/Math/MathML"
+         xmlns:html="http://www.w3.org/1999/xhtml"
+         xmlns:db="http://docbook.org/ns/docbook">
+  <title>Installation</title>
+
+  <section xml:id="inst_sec_supported_platforms">
+    <title>Supported platforms</title>
+
+    <para>JModelica.org is supported on Linux and Windows (7, 10) with
+    32-bit or 64-bit architectures.</para>
+  </section>
+
+  <section xml:id="inst_sec_win">
+    <title>Installation on Windows</title>
+
+    <para>Pre-built binary distributions for Windows are available in the
+    Download section of <link
+    xlink:href="www.jmodelica.org">www.jmodelica.org</link>.</para>
+
+    <para>The Windows installer contains a binary distribution of
+    JModelica.org, bundled with all required third-party software components.
+    A list of the third-party dependencies can be found in <xref
+    linkend="inst_sec_win_deps"/>. The installer sets up a pre-configured
+    complete environment with convenient start menu shortcuts. Installation
+    instructions are found in <xref linkend="inst_sec_win_inst"/>.</para>
+
+    
+
+    <section xml:id="inst_sec_win_inst">
+      <title>Installation</title>
+
+      <para>Follow these step-by-step instructions to install JModelica.org
+      using the Windows binary distribution.</para>
+
+      <procedure>
+        <step>
+          <para>Download a <link
+          xlink:href="http://www.jmodelica.org/binary">JModelica.org Windows
+          binary installer</link> and save the executable file somewhere on
+          your computer.</para>
+        </step>
+
+        <step>
+          <para>Run the file by double-clicking and selecting "Run" if
+          prompted with a security warning. This will launch an installer
+          which should be self-explanatory.</para>
+        </step>
+      </procedure>
+      
+      <para>Note that during installation of JModelica.org you will
+      be asked whether to install Graybox OPC Automation Wrapper or not.
+      If you choose <emphasis>yes</emphasis>, the Graybox OPC Automation Wrapper dlls
+      will be added to the windows registry. Uninstalling the OPC server during 
+      uninstallation of this JModelica.org distribution affects other installations
+      of JModelica.org. More information on the OPC capabilities can be found in 
+      <xref linkend="opc-sec"/>.</para>
+    </section>
+
+    <section>
+      <title>Verifying the installation</title>
+
+        <para>
+            Test the installation by starting a IPython or pylab shell from
+            the JModelica.org start menu and run a few examples. Starting the Python
+            session from the Windows start menu will set all the environment
+            variables required to run the JModelica.org Python
+            interface.
+        </para>
+
+        <programlisting language="python">
+# Import and run the fmi_bouncing_ball example and plot results
+from pyfmi.examples import fmi_bouncing_ball
+fmi_bouncing_ball.run_demo()
+
+# Import and run the CSTR example using CasADi and plot results
+from pyjmi.examples import cstr_casadi
+cstr_casadi.run_demo()
+        </programlisting>
+
+    </section>
+
+    <section>
+      <title>Compilation from sources</title>
+
+        <para>
+            For compiling JModelica.org from sources on Windows there is a
+            <link xlink:href="http://www.jmodelica.org/sdk">Software Development
+            Kit</link> (SDK) available for download. The SDK is a bundle of tools
+            used to build JModelica.org from source code on Windows, please see the
+            SDK User's guide, which can be reached from the download site, for more
+            information.
+        </para>
+    </section>
+  </section>
+
+  <section xml:id="inst_sec_sdk">
+    <title>Installation on Linux systems</title>
+
+    <para>This section describes a procedure for compiling JModelica.org from
+    sources on Linux. The instructions have been verified to work on Ubuntu
+    Linux release 16.04, 64bit.</para>
+
+    <section xml:id="inst_sec_sdk_prereq">
+      <title>Prerequisites</title>
+
+      <section>
+        <title>Installing pre-compiled packages</title>
+
+        <para>It is convenient to use a package management system, if
+        available, of the Linux distribution to install the prerequisites. On
+        Ubuntu systems, the apt-get command line program may be used:</para>
+
+        <programlisting>sudo apt-get -y install g++
+sudo apt-get -y install subversion
+sudo apt-get -y install gfortran
+sudo apt-get -y install ipython
+sudo apt-get -y install cmake
+sudo apt-get -y install swig
+sudo apt-get -y install ant
+sudo apt-get -y install openjdk-8-jdk
+sudo apt-get -y install python-dev
+sudo apt-get -y install python-numpy
+sudo apt-get -y install python-scipy
+sudo apt-get -y install python-matplotlib
+sudo apt-get -y install cython
+sudo apt-get -y install python-lxml
+sudo apt-get -y install python-nose
+sudo apt-get -y install python-jpype
+sudo apt-get -y install zlib1g-dev
+sudo apt-get -y install libboost-dev
+</programlisting>
+
+        <para>The following versions of each package have been tested and
+        verified to work. Please note that in some cases, the listed version is
+        the minimum required.</para>
+
+        <table xml:id="inst_tab_versions_ubuntu">
+          <title>Package versions for Ubuntu</title>
+
+          <tgroup cols="3">
+            <colspec align="left" colname="col–package" colwidth="3*"/>
+
+            <colspec align="left" colname="col–version" colwidth="1*"/>
+
+            <colspec align="left" colname="col–note" colwidth="2*"/>
+
+            <thead>
+              <row>
+                <entry align="center">Package</entry>
+
+                <entry align="center">Version</entry>
+
+                <entry align="center">Note</entry>
+              </row>
+            </thead>
+
+            <tbody>
+              <row>
+                <entry><literal>g++</literal></entry>
+
+                <entry><literal>5.4.0</literal></entry>
+
+                <entry>Tested version</entry>
+              </row>
+
+              <row>
+                <entry><literal>subversion</literal></entry>
+
+                <entry><literal>1.9.3</literal></entry>
+
+                <entry>Tested version</entry>
+              </row>
+
+              <row>
+                <entry><literal>gfortran</literal></entry>
+
+                <entry><literal>5.4.0</literal></entry>
+
+                <entry>Tested version</entry>
+              </row>
+
+              <row>
+                <entry><literal>ipython</literal></entry>
+
+                <entry><literal>5.3.0</literal></entry>
+
+                <entry>Tested version</entry>
+              </row>
+
+              <row>
+                <entry><literal>cmake</literal></entry>
+
+                <entry><literal>2.8.6</literal></entry>
+
+                <entry>Minimum version</entry>
+              </row>
+
+              <row>
+                <entry><literal>swig</literal></entry>
+
+                <entry><literal>3.0.8</literal></entry>
+
+                <entry>Tested version</entry>
+              </row>
+
+              <row>
+                <entry><literal>ant</literal></entry>
+
+                <entry><literal>1.8.2</literal></entry>
+
+                <entry>Tested version</entry>
+              </row>
+
+              <row>
+                <entry><literal>python-dev</literal></entry>
+
+                <entry><literal>2.7.11</literal></entry>
+
+                <entry>Tested version</entry>
+              </row>
+
+              <row>
+                <entry><literal>python-numpy</literal></entry>
+
+                <entry><literal>1.6.1</literal></entry>
+
+                <entry>Tested version</entry>
+              </row>
+
+              <row>
+                <entry><literal>python-scipy</literal></entry>
+
+                <entry><literal>0.9.0</literal></entry>
+
+                <entry>Tested version</entry>
+              </row>
+
+              <row>
+                <entry><literal>python-matplotlib</literal></entry>
+
+                <entry><literal>1.1.1</literal></entry>
+
+                <entry>Tested version</entry>
+              </row>
+
+              <row>
+                <entry><literal>cython</literal></entry>
+
+                <entry><literal>0.15</literal></entry>
+
+                <entry>Minimum version</entry>
+              </row>
+
+              <row>
+                <entry><literal>python-lxml</literal></entry>
+
+                <entry><literal>2.3.2</literal></entry>
+
+                <entry>Tested version</entry>
+              </row>
+
+              <row>
+                <entry><literal>python-nose</literal></entry>
+
+                <entry><literal>1.1.2</literal></entry>
+
+                <entry>Tested version</entry>
+              </row>
+
+              <row>
+                <entry><literal>python-jpype</literal></entry>
+
+                <entry><literal>0.5.4.2</literal></entry>
+
+                <entry>Tested version</entry>
+              </row>
+
+              <row>
+                <entry><literal>zlib1g-dev</literal></entry>
+
+                <entry><literal>1:1.2.8</literal></entry>
+
+                <entry>Tested version</entry>
+              </row>
+
+              <row>
+                <entry><literal>libboost-dev</literal></entry>
+
+                <entry><literal>1.58.0</literal></entry>
+
+                <entry>Tested version</entry>
+              </row>
+
+              <row>
+                <entry><literal>jcc</literal></entry>
+
+                <entry><literal>2.16</literal></entry>
+
+                <entry>Minimum version</entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </table>
+      </section>
+
+      <section>
+        <title>Compiling Ipopt</title>
+
+        <para>While Ipopt is available as a pre-compiled package for Ubuntu,
+        it is recommended to build Ipopt from sources. The Ipopt packages
+        provided for Ubuntu have had flaws that prevented usage with JModelica.org. Also, compiling
+        Ipopt from sources is required when using the linear solvers MA27 or
+        MA57 from the HSL library, since these are not available as open
+        source software.</para>
+
+        <para>First, download the Ipopt sources from <link
+        xlink:href="https://projects.coin-or.org/Ipopt">https://projects.coin-or.org/Ipopt</link>
+        and unpack the content:</para>
+
+        <programlisting>tar xvf Ipopt-3.10.2.tgz</programlisting>
+
+        <para>Then, retrieve the third party dependencies:</para>
+
+        <programlisting>cd Ipopt-3.10.2/ThirdParty/Blas
+./get.Blas
+cd ../Lapack
+./get.Lapack
+cd ../Mumps
+./get.Mumps
+cd ../Metis
+./get.Metis
+cd ../../
+</programlisting>
+
+        <para>If you have access to the HSL solvers MA57 or MA27, copy their
+        sources into the directory <literal>ThirdParty/HSL</literal>. In the
+        next step, configure and compile Ipopt:</para>
+
+        <programlisting>mkdir build
+cd build
+../configure --prefix=/home/&lt;user_name&gt;/&lt;ipopt_installation_location&gt;
+make install
+</programlisting>
+
+        <para>where <literal>&lt;user_name&gt;</literal> and
+        <literal>&lt;ipopt_installation_location&gt;</literal> are replaced by
+        the user directory and the installation directory of choice for
+        Ipopt.</para>
+      </section>
+
+      <section>
+        <title>Installing JModelica.org with WORHP (optional)</title>
+
+        <para>As an alternative to IPOPT for optimization, the CasADi
+        framework in JModelica.org also has support for the solver WORHP. Note
+        that WORHP is closed source, but offers free personal academic
+        licenses. To compile JModelica.org with support for WORHP, first
+        obtain the WORHP binaries and a license file from <link
+        xlink:href="http://www.worhp.de">http://www.worhp.de</link>. Set the
+        environment variables <literal>$WORHP</literal> to your directory
+        containing the binaries and <literal>$WORHP_LICENSE_FILE</literal> to
+        your license file.</para>
+
+        <para>Normally, this would be sufficient, but for now the following
+        additional measures are needed. Find the following six lines in
+        <literal>$JMODELICA_SRC/ThirdParty/CasADi/CasADi/interface/worhp/worhp_internal.cpp</literal>
+        and remove them:</para>
+
+        <programlisting>addOption("CutLength",OT_REAL,worhp_p_.CutLength,"Scaling factor for Cut recovery strategy");
+addOption("Ma57PivotThresh",OT_REAL,worhp_p_.Ma57PivotThresh,"Pivoting tolerance for MA57 = CNTL(1)");
+if (hasSetOption("CutLength")) worhp_p_.CutLength = getOption("CutLength");
+if (hasSetOption("Ma57PivotThresh")) worhp_p_.Ma57PivotThresh = getOption("Ma57PivotThresh");
+setOption("CutLength",worhp_p_.CutLength);
+setOption("Ma57PivotThresh",worhp_p_.Ma57PivotThresh);</programlisting>
+
+        <para>Find the line</para>
+
+        <programlisting>option(WITH_WORHP "Compile the WORHP interface" OFF)</programlisting>
+
+        <para>in
+        <literal>$JMODELICA_SRC/ThirdParty/CasADi/CasADi/CMakeLists.txt</literal>
+        and change OFF to ON.</para>
+      </section>
+    </section>
+
+    <section>
+      <title>Compiling</title>
+
+      <para>Make sure that all prerequisites are installed before compiling
+      the JModelica.org platform. First, check out the JModelica.org
+      sources:</para>
+
+      <programlisting>svn co https://svn.jmodelica.org/trunk JModelica.org
+</programlisting>
+
+      <para>Then configure and build JModelica.org:</para>
+
+      <programlisting>cd JModelica.org
+mkdir build
+cd build
+../configure --prefix=/home/&lt;user_name&gt;/&lt;jmodelica_install_location&gt; \
+             --with-ipopt=/home/&lt;user_name&gt;/&lt;ipopt_install_location&gt; 
+make install
+make casadi_interface
+</programlisting>
+
+      <para>where <literal>&lt;user_name&gt;</literal> and
+      <literal>&lt;jmodelica_installation_location&gt;</literal> are replaced
+      by the user directory and the installation directory of choice for
+      JModelica.org.</para>
+    </section>
+
+    <section>
+      <title>Testing JModelica.org</title>
+
+      <para>In order to verify that JModelica.org has been installed
+      correctly, start an IPython shell using the command
+      <literal>/home/&lt;user_name&gt;/&lt;jmodelica_install_location&gt;/bin/jm_ipython</literal>
+      and run a few examples:</para>
+
+        <programlisting language="python">
+# Import and run the fmi_bouncing_ball example and plot results
+from pyfmi.examples import fmi_bouncing_ball
+fmi_bouncing_ball.run_demo()
+
+# Import and run the CSTR example using CasADi and plot results
+from pyjmi.examples import cstr_casadi
+cstr_casadi.run_demo()
+        </programlisting>
+    </section>
+  </section>
+</chapter>

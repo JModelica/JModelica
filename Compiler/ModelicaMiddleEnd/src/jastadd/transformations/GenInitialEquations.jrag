@@ -1,0 +1,54 @@
+/*
+    Copyright (C) 2009-2017 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect GenInitialEquations {
+
+    public class FClass {
+        /**
+         * Generate initial equations from variables with fixed start
+         * attributes.
+         * 
+         * Intitial equations corresponding to explicitly set start attributes of 
+         * differentiated variables are also generated, without taking the fixed
+         * attribute into account.
+         */
+        public class genInitialEquations extends Transformation {
+            public void perform() {
+                // TODO: Isn't there always a value for fv.startAttributeExp() now?
+                for (FVariable fv : variables()) {
+                    boolean generate = false;
+                    if (!myOptions().getBooleanOption("state_initial_equations") &&
+                            fv.isDifferentiatedVariable() && (fv.isFixed() ||
+                            myOptions().getBooleanOption("state_start_values_fixed")))
+                        generate = true;
+                    else if (!myOptions().getBooleanOption("state_initial_equations") &&
+                            fv.isAlgebraicContinousRealVariable() && fv.isFixed())
+                        generate = true;
+                    else if (fv.isDiscrete() && fv.isFixed()) {
+                        generate = true;
+                    }
+                    
+                    if (generate) {
+                        FExp lhs = fv.setLocationOf(fv.isDiscrete() ? fv.createFPreExp() : fv.createAccessExp());
+                        FExp rhs = fv.setLocationOf(fv.startAttributeSet() ? fv.startAttributeExp().fullCopy() : fv.type().zeroLiteral());
+                        addFInitialEquation(new FEquation(lhs, rhs));
+                    }
+                }
+                root().flushAllRecursive();
+            }
+        }
+    }
+}

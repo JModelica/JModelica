@@ -1,0 +1,261 @@
+<project
+	name="ant-contrib"
+	default="dist"
+	basedir="."
+	xmlns:ivy="antlib:fr.jayasoft.ivy.ant">
+
+	<property file="build.properties" />
+	
+	<property name="root.dir" location="." />
+	<property name="src.dir" location="src" />
+	<property name="src.java.dir" location="${src.dir}/java" />
+	<property name="test.dir" location="test" />
+	<property name="test.src.dir" location="${test.dir}/src" />
+	<property name="test.resources.dir" location="${test.dir}/resources" />
+	<property name="docs.dir" location="docs" />
+	<property name="target.dir" location="target" />
+	<property name="target.classes.dir" location="${target.dir}/classes" />
+	<property name="target.test-classes.dir" location="${target.dir}/test-classes" />
+	<property name="target.docs.dir" location="${target.dir}/docs" />
+	<property name="dist.dir" location="dist" />
+	<property name="target.stage.dir" location="${target.dir}/stage" />
+	
+	<target name="init">
+        <path id="ivy.lib.path">
+            <fileset dir="lib/ivy/jars" includes="ivy-1.3.1.jar"/>
+            <fileset dir="lib/commons-cli/jars" includes="commons-cli-1.0.jar"/>
+            <fileset dir="lib/commons-codec/jars" includes="commons-codec-1.3.jar"/>
+            <fileset dir="lib/commons-httpclient/jars" includes="commons-httpclient-3.0.1.jar"/>
+            <fileset dir="lib/commons-logging/jars" includes="commons-logging-1.0.4.jar"/>
+            <fileset dir="lib/oro/jars" includes="oro-2.0.8.jar"/>
+        </path>
+	    
+        <taskdef resource="fr/jayasoft/ivy/ant/antlib.xml"
+                 uri="antlib:fr.jayasoft.ivy.ant"
+       	         classpathref="ivy.lib.path"/>
+	</target>
+	
+	<target name="configure" depends="init">
+		<ivy:configure file="ivy-conf.xml" />
+    </target>
+		
+	<target name="resolve" depends="configure">
+		<ivy:resolve />
+    </target>
+    
+	<target name="classpath" depends="resolve">
+		<ivy:cachepath id="compile.classpath" type="jar" conf="provided" />
+		<ivy:cachepath id="runtime.classpath" type="jar" conf="default" />
+		<ivy:cachepath id="test.classpath" type="jar" conf="test" />
+		<ivy:cachefileset setid="compile.fileset" type="jar" conf="provided" />
+		<ivy:cachefileset setid="runtime.fileset" type="jar" conf="default" />
+		<ivy:cachefileset setid="test.fileset" type="jar" conf="test" />
+	</target>
+		
+	<target name="compile" depends="classpath">
+		<mkdir dir="${target.classes.dir}" />
+		<javac srcdir="${src.java.dir}"
+		       destdir="${target.classes.dir}"
+		       debug="true"
+		       classpathref="compile.classpath"
+		       source="${jdk.source}"
+		       target="${jdk.target}"
+		  />
+		
+		<copy todir="${target.classes.dir}">
+		    <fileset dir="${src.java.dir}"
+		             includes="**/*.properties,**/*.xml" />
+		</copy>
+    </target>
+		
+	<target name="compile-tests" depends="classpath,compile">
+		<mkdir dir="${target.test-classes.dir}" />
+		<javac srcdir="${test.src.dir}"
+		       destdir="${target.test-classes.dir}"
+		       debug="true"
+		       source="${jdk.source}"
+		       target="${jdk.target}">
+			<classpath>
+				<path refid="test.classpath" />
+				<pathelement location="${target.classes.dir}" />
+			</classpath>
+		</javac>
+		
+		<copy todir="${target.test-classes.dir}">
+		    <fileset dir="${test.src.dir}"
+		             includes="**/*.properties,**/*.xml" />
+		    <fileset dir="${test.resources.dir}"
+		             includes="**/*.java,**/*.properties,**/*.xml"
+		             excludes="**/design/src/**/*" />
+		    <fileset dir="${test.resources.dir}/design/src"
+		             includes="**/design/src/**/*" />
+		</copy>
+    </target>
+
+    <target name="jar" depends="compile">
+		<mkdir dir="${target.dir}" />
+    	<tstamp>
+    	    <format property="tstamp" pattern="dd/MM/yyyy HH:mm:ss" />
+    	</tstamp>
+		<jar file="${target.dir}/${jar.name}">
+			<manifest>
+                <attribute name="Version" value="${project.version}"/>
+                <attribute name="Build-Timestamp" value="${tstamp}"/>
+			</manifest>
+			<fileset dir="${target.classes.dir}" />
+		</jar>
+	</target>
+		
+	<target name="clean">
+		<delete includeemptydirs="true">
+			<fileset dir="${target.dir}" includes="**/*" />
+			<fileset dir="${dist.dir}" includes="**/*" />
+		</delete>
+	</target>
+	
+	<target name="javadoc" depends="classpath">
+	    <javadoc sourcepath="${src.java.dir}"
+	             destdir="${target.docs.dir}/api"
+	             packagenames="net.sf.antcontrib.*"
+	             author="true"
+	             version="true"
+	             windowtitle="Ant Contrib"
+	    	classpathref="compile.classpath">
+	      <tag name="ant.task" enabled="false" description="Task:" scope="types"/>
+	      <tag name="ant.datatype" enabled="false"
+	           description="Data type:" scope="types"/>
+	      <tag name="ant.attribute" enabled="false"
+	           description="Attribute:" scope="types"/>
+	      <tag name="ant.attribute.group" enabled="false"
+	           description="Attribute group:" scope="types"/>
+	      <tag name="ant.element" enabled="false"
+	           description="Nested element:" scope="types"/>
+	    </javadoc>
+	</target>
+		
+	<target name="docs" depends="javadoc">
+		<mkdir dir="${target.docs.dir}" />
+		<copy todir="${target.docs.dir}">
+			<fileset dir="${docs.dir}" includes="**/*" />
+		</copy>
+    </target>
+		
+	<target name="dist-stage" depends="jar,docs">
+		<mkdir dir="${target.stage.dir}" />
+		<mkdir dir="${target.stage.dir}/lib" />
+		
+                <copy file="${target.dir}/${jar.name}" 
+                      tofile="${target.stage.dir}/${jar.name.versioned}" />
+
+		<copy todir="${target.stage.dir}">
+			<fileset dir="${root.dir}" includes="README.txt" />
+			<fileset dir="${target.dir}" includes="docs/**/*" />
+		</copy>		
+		<copy todir="${target.stage.dir}/lib" flatten="true">
+		    <fileset refid="runtime.fileset" />
+		</copy>		
+	</target>
+		
+	<target name="zip" depends="dist-stage">
+		<mkdir dir="${dist.dir}" />
+		<zip file="${dist.dir}/${project.name}-${project.version}-bin.zip">
+			<zipfileset prefix="ant-contrib" dir="${target.stage.dir}" 
+			    includes="**/*" />
+		</zip>
+		
+		<zip file="${dist.dir}/${project.name}-${project.version}-src.zip">
+			<zipfileset prefix="ant-contrib"
+				dir="${root.dir}" 
+			    includes="**/*"
+			    excludes="target,target/**/*,dist,dist/**/*" />
+		</zip>
+	</target>
+
+	<target name="tar.gz" depends="dist-stage">
+		<mkdir dir="${dist.dir}" />
+
+		<tar destfile="${dist.dir}/${project.name}-${project.version}-bin.tar.gz"
+			 compression="gzip">
+			<tarfileset prefix="ant-contrib"
+				dir="${target.stage.dir}" 
+			    includes="**/*" />
+		</tar>
+		
+		<tar destfile="${dist.dir}/${project.name}-${project.version}-bin.tar.bz2"
+			 compression="bzip2">
+			<tarfileset prefix="ant-contrib"
+				dir="${target.stage.dir}" 
+			    includes="**/*" />
+		</tar>
+
+		<tar destfile="${dist.dir}/${project.name}-${project.version}-src.tar.gz"
+			 compression="gzip">
+			<tarfileset prefix="ant-contrib"
+				dir="${root.dir}" 
+			    includes="**/*"
+			    excludes="target,target/**/*,dist,dist/**/*" />
+		</tar>
+		
+		<tar destfile="${dist.dir}/${project.name}-${project.version}-src.tar.bz2"
+			 compression="bzip2">
+			<tarfileset prefix="ant-contrib"
+				dir="${root.dir}" 
+			    includes="**/*"
+			    excludes="target,target/**/*,dist,dist/**/*" />
+		</tar>
+
+	</target>
+	
+	<target name="package" depends="tar.gz,zip">
+        <checksum fileext=".md5">
+            <fileset dir="${dist.dir}">
+                <include name="*.zip"/>
+                <include name="*.tar.bz2"/>
+                <include name="*.tar.gz"/>
+            </fileset>
+        </checksum>
+	</target>
+	
+	<target name="dist" depends="package">
+	</target>
+	
+	<target name="run-test" depends="compile-tests, jar">
+	    <junit haltonfailure="false" haltonerror="false"
+	           errorproperty="junit.error" failureproperty="junit.failure">
+	      <formatter type="brief" usefile="false"/>
+	      <batchtest>
+	        <fileset dir="${target.test-classes.dir}" excludes="${skip-tests}">
+	          <exclude name="**/antclipse/**" unless="eclipse.present"/>
+	        </fileset>
+	      </batchtest>
+	      <sysproperty key="antcontrib.jar" file="${target.dir}/${jar.name}"/>
+		  <classpath>
+			  <path refid="test.classpath" />
+			  <pathelement location="${target.classes.dir}" />
+			  <pathelement location="${target.test-classes.dir}" />
+		  </classpath>
+	    </junit>
+
+	      <fail message="JUnit error (${junit.error}) encountered." if="junit.error" />
+	      <fail message="JUnit failure (${junit.failure}) encountered." if="junit.failure" />
+	</target>
+	
+	<target name="test-all" depends="compile-tests">
+	    <antcall target="run-test">
+	        <param name="skip-tests" value="**/BuildFileTestBase.class"/>
+	    </antcall>
+	</target>
+
+
+	<target name="gump-safe-test" depends="compile-tests">
+	      <!--   all AntServerTest tests started failing on Gump 
+	             with IOException at 2004-12-06T15:00:16 
+	            after successfully completing at 2004-12-06T03:00:19 -->
+	    <antcall target="run-test">
+	      <param name="skip-tests" value="**/AntServerTest.class **/BuildFileTest*.class"/>
+	    </antcall>
+	</target>
+	  
+	  <target name="test" depends="gump-safe-test"/>
+	
+</project>

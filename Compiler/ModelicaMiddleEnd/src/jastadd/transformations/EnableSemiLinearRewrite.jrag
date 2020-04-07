@@ -1,0 +1,264 @@
+/*
+    Copyright (C) 2009-2017 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect SemiLinear {
+
+    public class FClass {
+        public class enableSemiLinearRewrite extends Transformation {
+            private boolean changed = false;
+            
+            public void perform() {
+                setFAbstractEquationList(transform(getFAbstractEquations()));
+                setFInitialEquationList(transform(getFInitialEquations()));
+                setParameterEquationList(transform(getParameterEquations()));
+                
+                // Change all remaining semiLinear exps to if exps.
+                Set<FSemiLinearExp> fsls = collectSemiLinearExps();
+                changed = changed || fsls.size() > 0;
+                for (FSemiLinearExp exp: fsls)
+                    exp.replaceMe(exp.asIfExp());
+                
+                if (changed) {
+                    change();
+                }
+            }
+            
+            /**
+             * Applies zero flow transformations to a list of equations.
+             */
+            private List<FAbstractEquation> transform(List<FAbstractEquation> equations) {
+                ListMap<String, FEquation> rule1 = new LinkedHashListMap<String, FEquation>();
+                ArrayList<FEquation> rule2 = new ArrayList<FEquation>();
+                List<FAbstractEquation> newEquations = new List<FAbstractEquation>();
+                
+                // Find zero flow equations
+                for (FAbstractEquation equation : equations) {
+                    if (equation.isConstantZeroFlow()) {
+                        rule2.add((FEquation) equation);
+                    } else if (equation.isZeroFlowForm()) {
+                        FEquation e = (FEquation) equation;
+                        rule1.add(e.zeroFlowGetKey(), e);
+                    }
+                }
+                
+                // Chained zero flow transformations (Rule 1)
+                for (java.util.List<FEquation> l : rule1.values()) {
+                    if (l.size() > 1) {
+                        transformChain(newEquations, buildChain(l));
+                        changed = true;
+                    }
+                }
+                
+                changed = changed || rule2.size() > 0;
+                
+                // Constant zero flow transformations (Rule 2)
+                for (FEquation equation : rule2) {
+                    equation.setLeft(equation.zeroFlowGetPos());
+                    equation.setRight(equation.zeroFlowGetNeg());
+                }
+                
+                List<FAbstractEquation> res = removeMarkedEqns(equations);
+                res.addAll(newEquations);
+                return res;
+            }
+            
+            /**
+             * Order the equations in <code>l</code> by matching the slopes in
+             * the semiLinear expressions. If any equation cannot be ordered an
+             * error is given.
+             */
+            private ArrayList<FEquation> buildChain(java.util.List<FEquation> l) {
+                ArrayList<FEquation> chain = new ArrayList<FEquation>();
+                FEquation eq1 = l.remove(0);
+                chain.add(eq1);
+                
+                boolean change = true;
+                while (change) {
+                    change = false;
+                    Iterator<FEquation> it = l.iterator();
+                    while (it.hasNext()) {
+                        FEquation eq2 = it.next();
+                        if (addToChain(chain, eq2)) {
+                            change = true;
+                            it.remove();
+                        }
+                    }
+                }
+                
+                if (l.size() > 0) {
+                    StringBuilder sb = new StringBuilder();
+                    sb.append("Could not construct zero flow chain for a set of semilinear equations."
+                            + " This leads to an undetermined system. Involved equations:\n");
+                    
+                    for (FEquation e : chain) {
+                        sb.append(e.prettyPrint(""));
+                        sb.append("\n");
+                    }
+                    for (FEquation e : l) {
+                        sb.append(e.prettyPrint(""));
+                        sb.append("\n");
+                    }
+                    
+                    l.get(0).error(sb.toString());
+                }
+                return chain;
+            }
+            
+            /**
+             * Add an equation to the chain if the slopes match
+             */
+            private boolean addToChain(ArrayList<FEquation> chain, FEquation equation) {
+                FExp pos = equation.zeroFlowGetPos();
+                FExp neg = equation.zeroFlowGetNeg();
+                FExp chainNeg = chain.get(chain.size()-1).zeroFlowGetNeg();
+                FExp chainPos = chain.get(0).zeroFlowGetPos();
+                
+                if (chainNeg.prettyPrint("").equals(pos.prettyPrint(""))) {
+                    chain.add(equation);
+                    return true;
+                } else if (chainPos.prettyPrint("").equals(neg.prettyPrint(""))) {
+                    chain.add(0, equation);
+                    return true;
+                }
+                return false;
+            }
+            
+            /**
+             * Build new equations to represent the chain of semiLinears
+             */
+            private void transformChain(List<FAbstractEquation> newEquations, ArrayList<FEquation> chain) {
+                for (FEquation e : chain)
+                    e.markedForRemoval = true;
+                
+                FEquation first = chain.get(0);
+                FEquation last  = chain.remove(chain.size()-1);
+                FExp chainPos   = first.zeroFlowGetPos();
+                FExp chainNeg   = last.zeroFlowGetNeg();
+                FExp chainX     = first.zeroFlowGetX();
+                
+                // S(1) = if X >= 0 SA else SB
+                newEquations.add(new FEquation(
+                        first.zeroFlowGetNeg().fullCopy(), 
+                        new FIfExp(new FGeqExp(chainX.fullCopy(), new FIntegerLitExp(0)),
+                                chainPos.fullCopy(),
+                                chainNeg.fullCopy()
+                                )));
+                
+                // S(n+1) = S(n)
+                FEquation pre_e = null;
+                for (FEquation e : chain) {
+                    if (pre_e != null)
+                        newEquations.add(new FEquation(e.zeroFlowGetNeg().fullCopy(), pre_e.zeroFlowGetNeg().fullCopy()));
+                    pre_e = e;
+                }
+                
+                // Y = semiLinear(X,SA,SB)
+                FExp slExp = new FSemiLinearExp(chainX.fullCopy(), chainPos.fullCopy(), chainNeg.fullCopy());
+                newEquations.add(new FEquation(
+                        first.zeroFlowGetLeft().fullCopy(),
+                        slExp.negated(first.zeroFlowNegated())
+                        ));
+            }
+        }
+    }
+    
+    syn boolean FAbstractEquation.isZeroFlowForm() = false;
+    eq FEquation.isZeroFlowForm() { 
+        FExp l = getLeft().stripNegations();
+        FExp r = getRight().stripNegations();
+        return l.isZeroFlowForm(r) || r.isZeroFlowForm(l);
+    }
+    
+    syn boolean FExp.isZeroFlowForm(FExp other) = false;
+    eq FAccessExp.isZeroFlowForm(FExp other) = other.isSemiLinear(); 
+    
+    syn boolean FAbstractEquation.isConstantZeroFlow() = false;
+    eq FEquation.isConstantZeroFlow() { 
+        FExp l = getLeft().stripNegations();
+        FExp r = getRight().stripNegations();
+        
+        if (l.isZeroLiteral() && r.isSemiLinear()) {
+            return ((FSemiLinearExp) r).getX().isZeroLiteral();
+        }
+        if (r.isZeroLiteral() && l.isSemiLinear()) {
+            return ((FSemiLinearExp) l).getX().isZeroLiteral();
+        }
+        
+        return false;
+    }
+    
+    syn FAccessExp FEquation.zeroFlowGetLeft() {
+        FExp l = getLeft().stripNegations();
+        FExp r = getRight().stripNegations();
+        return (l.isSemiLinear() ? r : l).asFAccessExp();
+    } 
+    
+    syn FSemiLinearExp FEquation.zeroFlowGetRight() {
+        FExp l = getLeft().stripNegations();
+        FExp r = getRight().stripNegations();
+        return (FSemiLinearExp) (l.isSemiLinear() ? l : r);
+    } 
+    syn FExp FEquation.zeroFlowGetX()     = zeroFlowGetRight().getX().stripNegations();
+    syn FExp FEquation.zeroFlowGetPos()   = zeroFlowGetRight().getX().isNegated() ? zeroFlowGetRight().getNegSlope() : zeroFlowGetRight().getPosSlope();
+    syn FExp FEquation.zeroFlowGetNeg()   = zeroFlowGetRight().getX().isNegated() ? zeroFlowGetRight().getPosSlope() : zeroFlowGetRight().getNegSlope();
+    
+    syn boolean FEquation.zeroFlowNegated() = isNegated() ^ zeroFlowGetRight().getX().isNegated();
+    
+    syn String FEquation.zeroFlowGetKey() {
+        StringBuilder sb = new StringBuilder();
+        if (zeroFlowNegated())
+            sb.append("-");
+        sb.append(zeroFlowGetLeft().prettyPrint(""));
+        sb.append("$");
+        sb.append(zeroFlowGetX().prettyPrint(""));
+        return sb.toString();
+    }
+    
+	
+	syn boolean FExp.isSemiLinear() = false;
+	eq FSemiLinearExp.isSemiLinear() = true;
+
+    syn FExp FSemiLinearExp.asIfExp() {
+        FExp exp = new FIfExp(new FGeqExp(getX().treeCopy(), new FIntegerLitExp(0)),
+            new FMulExp(getX().treeCopy(), getPosSlope().treeCopy()),
+            new FMulExp(getX().treeCopy(), getNegSlope().treeCopy()));
+        if (isSmoothInSemiLinear()) {
+            exp = new FNoEventExp(exp);
+        }
+        return exp;
+    }
+
+    /**
+     * Checks if this expression allows a semiLinear() with it as argument to be smooth(0, ...).
+     */
+    syn boolean FExp.isSmoothInSemiLinear()  = false;
+    eq FAccessExp.isSmoothInSemiLinear()      = true;
+    eq FLitExp.isSmoothInSemiLinear()        = true;
+    eq FSmoothExp.isSmoothInSemiLinear()     = true;
+    eq FNegExp.isSmoothInSemiLinear()        = getFExp().isSmoothInSemiLinear();
+    eq FSemiLinearExp.isSmoothInSemiLinear() = 
+        getX().isSmoothInSemiLinear() && getPosSlope().isSmoothInSemiLinear() && getNegSlope().isSmoothInSemiLinear();
+
+	/**
+	 * Collects semiLinear expressions.
+	 */
+	coll HashSet<FSemiLinearExp> FClass.collectSemiLinearExps() 
+		[new HashSet<FSemiLinearExp>()] with add root FClass;
+	FSemiLinearExp contributes this
+		to FClass.collectSemiLinearExps()
+		for myFClass();
+}
+

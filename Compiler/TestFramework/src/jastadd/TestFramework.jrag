@@ -1,0 +1,150 @@
+/*
+    Copyright (C) 2009 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect TestFramework {
+    
+    public boolean ASTNode.collectTestCases(TestSuite ts, String className) {
+        for (ASTNode n : this)
+            if (n.collectTestCases(ts, className))
+                return true;
+        return false;
+    }
+
+    public boolean SrcClassDecl.collectTestCases(TestSuite ts, String className) {
+        if (qualifiedName().equals(className)) {
+            collectTestCases(ts);
+            return true;
+        }
+        return false;
+    }
+
+    public boolean SrcFullClassDecl.collectTestCases(TestSuite ts, String className) {
+        if (super.collectTestCases(ts, className)) 
+            return true;
+        return getSrcClauseList().collectTestCases(ts, className);
+    }
+
+    public boolean SrcClause.collectTestCases(TestSuite ts, String className) {
+        return false;
+    }
+
+    public boolean SrcElementList.collectTestCases(TestSuite ts, String className) {
+        return getSrcElementList().collectTestCases(ts, className);
+    }
+
+    public boolean SrcElement.collectTestCases(TestSuite ts, String className) {
+        return false;
+    }
+
+    public void ASTNode.collectTestCases(TestSuite ts) {
+        for (ASTNode n : this)
+            n.collectTestCases(ts);
+    }
+
+    public void SrcClassDecl.collectTestCases(TestSuite ts) {
+        ts.enterClass(name());
+        AnnotationNode a1 = annotation("__JModelica/UnitTesting/tests");
+        if (a1.exists()) {
+            for (AnnotationNode a2 : a1) 
+                generateTestCase(ts, a2);
+        }
+        ts.exitClass();
+    }
+
+    public void SrcFullClassDecl.collectTestCases(TestSuite ts) {
+        ts.enterClass(name());
+        AnnotationNode a1 = annotation("__JModelica/UnitTesting/tests");
+        if (a1.exists()) {
+            for (AnnotationNode a2 : a1) 
+                generateTestCase(ts, a2);
+        } else {
+            getSrcClauseList().collectTestCases(ts);
+        }
+        ts.exitClass();
+    }
+
+    public void SrcClause.collectTestCases(TestSuite ts) {
+    }
+
+    public void SrcElementList.collectTestCases(TestSuite ts) {
+        getSrcElementList().collectTestCases(ts);
+    }
+
+    public void SrcElement.collectTestCases(TestSuite ts) {
+    }
+
+    public void SrcClassDecl.generateTestCase(TestSuite ts, AnnotationNode a) {
+        String name = a.name();
+        String className = name.substring(name.lastIndexOf('.') + 1);
+        String fullName = TestCase.class.getName().replace("TestCase", className);
+        String attrName = null;
+        try {
+            // Get a class object for the test case class
+            Class cl = Class.forName(fullName);
+            
+            // Check if it is a test case
+            if (TestCase.class.isAssignableFrom(cl)) {
+                // Create an object of the new test case class
+                TestCase tc = (TestCase) cl.newInstance();
+                
+                // Add all attributes
+                for (AnnotationNode attr : a) {
+                    attrName = attr.name();
+                    boolean isOpt = attrName.indexOf('_') >= 0;
+                    String methodName = isOpt ? null : 
+                        "set" + Character.toUpperCase(attrName.charAt(0)) + attrName.substring(1);
+                    
+                    Object value = attr.isAccess() ? attr.valueToString() : attr.ceval().objectValue();
+                    Class type = TestCase.unwrapClass(value.getClass());
+                    if (isOpt) {
+                        Method m = cl.getMethod("setOption", String.class, type);
+                        m.invoke(tc, attrName, value);
+                    } else {
+                        Method m = cl.getMethod(methodName, type);
+                        m.invoke(tc, value);
+                    }
+                }
+                
+                // Set generic information of the test case and add to list
+                tc.setSourceFileName(fileName());
+                tc.setClassName(qualifiedName());
+                tc.setBeginLine(beginLine());
+                ts.add(tc);
+                log.debug("Created test case '" + className + "' for class '" + tc.getClassName() + "'");
+            }
+        } catch (ClassNotFoundException e) {
+            // TODO: Maybe we should throw exceptions instead of log?
+            // No such class was found - log that
+            testCaseError(className, "class not found");
+        } catch (NoSuchMethodException e) {
+            // No such method was found - log that
+            testCaseError(className, "attribute '" + attrName + "' not found or used with wrong type of expression");
+        } catch (ConstantEvaluationException e) {
+            // Could not evaluate attribute - log that
+            testCaseError(className, "evaluation of attribute '" + attrName + "' failed");
+        } catch (Exception e) {
+            // The test case class did not behave as expected - log that
+            testCaseError(className, "malformed test case class");
+        }
+    }
+    
+    
+    public void SrcClassDecl.testCaseError(String className, String msg) {
+        String[] fn = fileName().split("[/\\\\]Compiler[/\\\\]");
+        log.error("%s:%d: Creating test case '%s' - %s", fn[fn.length - 1], beginLine(), className, msg);
+    }
+
+}

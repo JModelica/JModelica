@@ -1,0 +1,26 @@
+optimization LeadTransport
+    //"Constants"
+    constant Real k01 = 0.0211;
+    constant Real k02 = 0.0162;
+    constant Real k21 = 0.0111;
+    constant Real k12 = 0.0124;
+    constant Real k31 = 0.0039;
+    constant Real k13 = 0.000035;
+    constant Real b1 = 49.3;
+
+    //"Parameters for initial conditions"
+    parameter Real p2(free=true)=0.0;
+    parameter Real p1(free=true)=0.0;
+    parameter Real p3(free=true)=0.0;
+    
+    //"States"
+    Real y1(start=p1+p2,fixed=true);
+    Real y2(start=p2,fixed=true);
+    Real y3(start=p3,fixed=true);
+
+equation
+    der(y1) = -(k01+k21+k31)*y1+k12*y2+k13*y3+b1;
+    der(y2) = k21*y1 - (k02+k12)*y2;
+    der(y3) = k31*y1-k13*y3;
+
+end LeadTransport;

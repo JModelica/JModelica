@@ -1,0 +1,392 @@
+package VDP_pack
+    
+   model VDP
+    // State start values
+    parameter Real x1_0 = 0;
+    parameter Real x2_0 = 1;
+
+    // The states
+    Real x1(start = x1_0);
+    Real x2(start = x2_0);
+
+    // The control signal
+    input Real u;
+
+  equation
+    der(x1) = (1 - x2^2) * x1 - x2 + u;
+    der(x2) = x1;
+  end VDP;
+    
+    
+  optimization VDP_Opt (objective = cost(finalTime),
+                         startTime = 0,
+                         finalTime = 20)
+
+    parameter Real p1 = 1;             // Parameter 1 
+    parameter Real p2 = 1;             // Parameter 2 
+    parameter Real p3 = 2;             // Parameter 3 
+
+    // The states
+    Real x1(start=0,fixed=true);
+    Real x2(start=1,fixed=true);
+
+    // The control signal
+    input Real u;
+
+    Real cost(start=0,fixed=true);
+
+  equation
+    der(x1) = (1 - x2^2) * x1 - x2 + u;
+    der(x2) = p1*x1;
+    der(cost) = exp(p3) * (x1^2 + x2^2 + u^2);
+  constraint 
+     u<=0.75;
+  end VDP_Opt;
+        
+    optimization VDP_Opt_Simple (objectiveIntegrand = x1^2 + x2^2 + u^2,
+                      startTime = 0,
+                      finalTime = 20)
+      // The states
+      Real x1(start=0,fixed=true);
+      Real x2(start=1,fixed=true);
+      // The control signal
+      input Real u;
+    equation
+      der(x1) = (1 - x2^2) * x1 - x2 + u;
+      der(x2) = x1;
+    constraint 
+       u<=0.75;
+    end VDP_Opt_Simple;
+  
+  optimization VDP_Opt2 (objective = cost(finalTime),
+                         startTime = 0,
+                         finalTime = 20)
+
+    parameter Real p1 = 1;             // Parameter 1 
+    parameter Real p2 = 1;             // Parameter 2 
+    parameter Real p3 = 2;             // Parameter 3 
+
+    // The states
+    Real x1(start=0,fixed=true);
+    Real x2(start=1,fixed=true);
+
+    // The control signal
+    input Real u(max=0.75);
+
+    Real cost(start=0,fixed=true,min=0);
+
+  equation
+    der(x1) = (1 - x2^2) * x1 - x2 + u;
+    der(x2) = p1*x1;
+    der(cost) = exp(p3) * (x1^2 + x2^2 + u^2);
+  end VDP_Opt2;
+  
+  optimization VDP_Opt_Bounds_Lagrange(
+        objectiveIntegrand=x1^2 + x2^2 + u^2,
+        startTime=0, finalTime=20)
+    
+    Real x1(start=0, fixed=true) "First state";
+    Real x2(start=1, fixed=true) "Second state";
+    
+    input Real u(max=0.75) "Control signal";
+  
+  equation
+    der(x1) = (1 - x2^2) * x1 - x2 + u;
+    der(x2) = x1;
+  end VDP_Opt_Bounds_Lagrange;
+  
+  optimization VDP_Opt_Bounds_Lagrange_Renamed_Input(
+        objectiveIntegrand=x1^2 + x2^2 + q^2,
+        startTime=0, finalTime=20)
+    
+    Real x1(start=0, fixed=true) "First state";
+    Real x2(start=1, fixed=true) "Second state";
+    
+    input Real q(max=0.75) "Control signal";
+  
+  equation
+    der(x1) = (1 - x2^2) * x1 - x2 + q;
+    der(x2) = x1;
+  end VDP_Opt_Bounds_Lagrange_Renamed_Input;
+  
+  optimization VDP_Opt_Constraints_Lagrange (
+        objectiveIntegrand = x1^2 + x2^2 + u^2,
+        startTime=0, finalTime=20)
+    
+    Real x1(start=0, fixed=true) "First state";
+    Real x2(start=1, fixed=true) "Second state";
+    
+    input Real u "Control signal";
+  
+  equation
+    der(x1) = (1 - x2^2) * x1 - x2 + u;
+    der(x2) = x1;
+  
+  constraint 
+    u^4 <= 0.1 + x1^2 * x2^2;
+  
+  end VDP_Opt_Constraints_Lagrange;
+  
+  optimization VDP_Opt_Bounds_Mayer(objective=cost(finalTime),
+                                    startTime=0, finalTime=20)
+    
+    Real x1(start=0, fixed=true) "First state";
+    Real x2(start=1, fixed=true) "Second state";
+    
+    input Real u(max=0.75) "Control signal";
+    
+    Real cost(start=0, fixed=true) "Cost state";
+
+  equation
+    der(x1) = (1 - x2^2) * x1 - x2 + u;
+    der(x2) = x1;
+    der(cost) = x1^2 + x2^2 + u^2;
+  end VDP_Opt_Bounds_Mayer;
+  
+  optimization VDP_Opt_Constraints_Mayer(objective=cost(finalTime),
+                                         startTime=0, finalTime=20)
+    
+    Real x1(start=0, fixed=true) "First state";
+    Real x2(start=1, fixed=true) "Second state";
+    
+    input Real u "Control signal";
+    
+    Real cost(start=0, fixed=true) "Cost state";
+  
+  equation
+    der(x1) = (1 - x2^2) * x1 - x2 + u;
+    der(x2) = x1;
+    der(cost) = x1^2 + x2^2 + u^2;
+  
+  constraint
+    u^4 <= 0.1 + x1^2 * x2^2;
+  
+  end VDP_Opt_Constraints_Mayer;
+
+  optimization VDP_Opt_Min_Time (objective = tf,
+                         startTime = 0,
+                         finalTime = 1) 
+
+    // The time is scaled so that the new
+    // time variable, call it \tau,
+    // is related to the original time,
+    // call it t as \tau=tf*t where tf
+    // is a parameter to be minimized 
+    // subject to the dynamics
+    // \dot x = tf*f(x,u)
+    parameter Real tf(free=true,min=0.2)=1 "Final time";
+
+    // The states
+    Real x1(start=0);
+    Real x2(start=1);
+    
+    // The control signal with bounds
+    input Real u(min=-1,max=1);
+  equation
+    der(x1) = 1*tf*((1 - x2^2) * x1 - x2 + u);
+    der(x2) = 1*tf*(x1);
+  constraint
+    // terminal constraints
+    x1(finalTime)=0;
+    x2(finalTime)=0;
+  end VDP_Opt_Min_Time;
+  
+  optimization VDP_Opt_Scaled_Min_Time(objective=tf) 
+
+    parameter Real tf(free=true, min=0.2, initialGuess=2);
+
+    Real x1(start=0, fixed=true);
+    Real x2(start=1, fixed=true);
+    
+    input Real u(min=-1, max=1);
+  
+  equation
+    der(x1) = tf * ((1 - x2^2) * x1 - x2 + u);
+    der(x2) = tf * x1;
+  
+  constraint
+    x1(finalTime) = 0;
+    x2(finalTime) = 0;
+  
+  end VDP_Opt_Scaled_Min_Time;
+  
+  optimization VDP_Opt_Unscaled_Min_Time(objective=finalTime, startTime=0,
+      finalTime(min=0.2, free=true, initialGuess=2))
+                                                   
+    
+    Real x1(start=0, fixed=true) "First state";
+    Real x2(start=1, fixed=true) "Second state";
+    
+    input Real u(min=-1, max=1) "Control signal";
+  
+  equation
+    der(x1) = (1 - x2^2) * x1 - x2 + u;
+    der(x2) = x1;
+  
+  constraint
+    x1(finalTime) = 0;
+    x2(finalTime) = 0;
+  
+  end VDP_Opt_Unscaled_Min_Time;
+  
+  optimization VDP_Opt_Unscaled_Min_Time_FMUX(objective=finalTime, startTime=0,
+      finalTime(min=0.2, free=true, initialGuess=2))
+                                                   
+    
+    Real x1(start=0, fixed=true) "First state";
+    Real x2(start=1, fixed=true) "Second state";
+    
+    input Real u(min=-1, max=1) "Control signal";
+  
+  equation
+    der(x1) = (1 - x2^2) * x1 - x2 + u;
+    der(x2) = x1;
+  
+  constraint
+    x1(1) = 0;
+    x2(1) = 0;
+  
+  end VDP_Opt_Unscaled_Min_Time_FMUX;
+
+  optimization VDP_Opt_Min_Time_Nonzero_Start(
+      objectiveIntegrand=1, startTime=5,
+      finalTime(min=5.2, free=true, initialGuess=7))
+                                                   
+    
+    Real x1(start=0, fixed=true) "First state";
+    Real x2(start=1, fixed=true) "Second state";
+    
+    input Real u(min=-1, max=1) "Control signal";
+  
+  equation
+    der(x1) = (1 - x2^2) * x1 - x2 + u;
+    der(x2) = x1;
+  
+  constraint
+    x1(finalTime) = 0;
+    x2(finalTime) = 0;
+  
+  end VDP_Opt_Min_Time_Nonzero_Start;
+  
+  optimization VDP_Opt_Min_Time_Nonzero_Start_FMUX(
+      objectiveIntegrand=1, startTime=5,
+      finalTime(min=5.2, free=true, initialGuess=7))
+                                                   
+    
+    Real x1(start=0, fixed=true) "First state";
+    Real x2(start=1, fixed=true) "Second state";
+    
+    input Real u(min=-1, max=1) "Control signal";
+  
+  equation
+    der(x1) = (1 - x2^2) * x1 - x2 + u;
+    der(x2) = x1;
+  
+  constraint
+    x1(1) = 0;
+    x2(1) = 0;
+  
+  end VDP_Opt_Min_Time_Nonzero_Start_FMUX;
+  
+  optimization VDP_Opt_Initial_Equations(
+        objectiveIntegrand=x1^2 + x2^2 + u^2,
+        startTime=0, finalTime=20)
+    
+    Real x1 "First state";
+    Real x2 "Second state";
+    
+    input Real u(max=0.75) "Control signal";
+  
+  equation
+    der(x1) = (1 - x2^2) * x1 - x2 + u;
+    der(x2) = x1;
+  
+  initial equation
+    x1 * der(x1)= -3;
+    x2 = 1;
+  
+  end VDP_Opt_Initial_Equations;
+
+  optimization VDP_Opt_DAE(
+        objectiveIntegrand=x1^2 + x2^2 + u^2,
+        startTime=0, finalTime=20)
+    
+    Real x1(start=0, fixed=true) "First state";
+    Real x2(start=1, fixed=true) "Second state";
+    Real w;
+    
+    input Real u(max=0.75) "Control signal";
+  
+  equation
+    der(x1) = (1 - x2^2) * x1 - x2 + u;
+    der(x2) = w/2;
+    w = 2*x1;
+  end VDP_Opt_DAE;
+  
+  optimization VDP_Opt_Function(
+        objectiveIntegrand=x1^2 + x2^2 + u^2,
+        startTime=0, finalTime=20)
+    
+    Real x1(start=0, fixed=true) "First state";
+    Real x2(start=1, fixed=true) "Second state";
+    Real der_x1;
+    Real der_x2;
+    
+    input Real u(max=0.75) "Control signal";
+    
+    function RHS
+      input Real x1;
+      input Real x2;
+      input Real u;
+      output Real der_x1;
+      output Real der_x2;
+    algorithm
+      der_x1 := (1 - x2^2) * x1 - x2 + u;
+      der_x2 := x1;
+    end RHS;
+  
+  equation
+    (der_x1, der_x2) = RHS(x1, x2, u);
+    der(x1) = der_x1;
+    der(x2) = der_x2;
+  end VDP_Opt_Function;
+  
+  optimization VDP_Opt_Function_global_constant(
+        objectiveIntegrand=x1^2 + x2^2 + u^2,
+        startTime=0, finalTime=20)
+    
+    Real x1(start=0, fixed=true) "First state";
+    Real x2(start=1, fixed=true) "Second state";
+    Real der_x1;
+    Real der_x2;
+    
+    input Real u(max=0.75) "Control signal";
+    
+    package P
+        constant Real[2] c = {1,2};
+    end P; 
+    
+    function f
+        input Real[2] x;
+        output Real y = x[2];
+    algorithm
+    end f;
+    
+    function RHS
+      input Real x1;
+      input Real x2;
+      input Real u;
+      output Real der_x1;
+      output Real der_x2;
+    algorithm
+      der_x1 := (P.c[1] - x2^f(P.c)) * x1 - x2 + u;
+      der_x2 := x1;
+    end RHS;
+  
+  equation
+    (der_x1, der_x2) = RHS(x1, x2, u);
+    der(x1) = der_x1;
+    der(x2) = der_x2;
+  end VDP_Opt_Function_global_constant;
+  
+end VDP_pack;

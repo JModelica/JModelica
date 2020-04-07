@@ -1,0 +1,70 @@
+/*
+    Copyright (C) 2010 Modelon AB
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, version 3 of the License.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+aspect XMLTestAnnotationizer {
+
+abstract public class TestAnnotationizerHelper {
+
+	/**
+	 * An XML code generation test.
+	 */
+	public static class XMLCodeGenTestCase extends CodeGenTestCase {
+
+        /**
+         * Constructor for XML code generation test.
+         * 
+         * Delegates to super class.
+         */
+        public XMLCodeGenTestCase(String filePath, String className, String description,
+                String platform, String[] opts, Object[] data) throws Exception {
+
+            super(filePath, className, description, platform, opts, data);
+        }
+
+		/**
+		 * Test regeneration constructor for XML code generation test.
+		 * 
+		 * Delegates to superclass implementation.
+		 * 
+		 * @param filePath     the path to the Modelica file containing the test model
+		 * @param className    the name of the test model
+		 */
+		public XMLCodeGenTestCase(SrcClassDecl cd, String filePath, String className) throws Exception {
+			super(cd, filePath, className);
+		}
+		
+		/**
+		 * Prints a usage message for this test case type.
+		 */
+		public static void usage(String cl, String extra) {
+			TestAnnotationizerHelper.usage(cl, "XML code template");
+		}
+
+        /**
+         * Create the code generator to use.
+         * 
+         * Creates an XMLGenerator.
+         */
+        @Override
+        public AbstractGenerator createGenerator(FClass fc) {
+            return new XMLGenerator(ASTNode.prettyPrinter, '$', fc);
+        }
+        
+    }
+
+}
+
+}

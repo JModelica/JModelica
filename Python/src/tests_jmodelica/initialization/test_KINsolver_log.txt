@@ -1,0 +1,5 @@
+FMIL: module = FMICAPI, log level = 5: Calling fmiFreeModelInstance
+FMIL: module = FMILIB, log level = 5: Releasing FMU CAPI interface
+FMIL: module = FMICAPI, log level = 5: Successfully unloaded FMU binary
+FMIL: module = FMILIB, log level = 5: Releasing allocated library resources
+FMIL: module = JMPRT, log level = 5: Removing c:\users\emil\appdata\local\temp\JModelica.org\jm_tmpdrapal

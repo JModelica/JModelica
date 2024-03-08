@@ -18998,7 +18998,7 @@ $as_echo " " >&6; }
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ipopt/include/coin/IpStdCInterface.h" >&5
 $as_echo_n "checking for $ipopt/include/coin/IpStdCInterface.h... " >&6; }
 if eval \${$as_ac_File+:} false; then :
-  $as_echo_n "(cached) " >&6
+  $as_echo_n "(cached) " >&6 
 else
   test "$cross_compiling" = yes &&
   as_fn_error $? "cannot check for file existence when cross compiling" "$LINENO" 5
@@ -19043,6 +19043,17 @@ IPOPT_HOME=$ipopt
 
 # Checks for libraries.
 
+# Check the operating system
+OS=$(uname)
+
+# Conditionally set the $coin variable based on the operating system
+if [ "$OS" = "Darwin" ]; then
+    coin="coin-or"
+else
+    coin="coin"
+fi
+
+
 # Check whether --with-ipopt64 was given.
 if test "${with_ipopt64+set}" = set; then :
   withval=$with_ipopt64; ipopt64=$withval
@@ -19073,15 +19084,15 @@ $as_echo "* --with-ipopt64 option specified - compiling with IPOPT64 support    
 $as_echo "***********************************************************************" >&6; }
        { $as_echo "$as_me:${as_lineno-$LINENO}: result:  " >&5
 $as_echo " " >&6; }
-       as_ac_File=`$as_echo "ac_cv_file_$ipopt64/include/coin/IpStdCInterface.h" | $as_tr_sh`
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ipopt64/include/coin/IpStdCInterface.h" >&5
-$as_echo_n "checking for $ipopt64/include/coin/IpStdCInterface.h... " >&6; }
+       as_ac_File=`$as_echo "ac_cv_file_$ipopt64/include/$coin/IpStdCInterface.h" | $as_tr_sh`
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ipopt64/include/$coin/IpStdCInterface.h" >&5
+$as_echo_n "checking for $ipopt64/include/$coin/IpStdCInterface.h... " >&6; }
 if eval \${$as_ac_File+:} false; then :
   $as_echo_n "(cached) " >&6
 else
   test "$cross_compiling" = yes &&
   as_fn_error $? "cannot check for file existence when cross compiling" "$LINENO" 5
-if test -r "$ipopt64/include/coin/IpStdCInterface.h"; then
+if test -r "$ipopt64/include/$coin/IpStdCInterface.h"; then
   eval "$as_ac_File=yes"
 else
   eval "$as_ac_File=no"
@@ -19115,7 +19126,7 @@ fi
 
 
 
-IPOPT64_INC=$ipopt64/include/coin
+IPOPT64_INC=$ipopt64/include/$coin
 IPOPT64_LIB=$ipopt64/lib
 IPOPT64_HOME=$ipopt64
 

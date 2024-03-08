@@ -64,21 +64,25 @@ ZBLAS2 = zgemv.o zhemv.o ztrsv.o zgerc.o zher2.o
 all: single double complex complex16
 
 single: $(SBLAS1) $(SBLAS2) $(SBLAS3)
+	mkdir -p ../lib
 	$(ARCH) $(ARCHFLAGS) $(BLASLIB) $(SBLAS1) $(ALLBLAS) \
 		$(SBLAS2) $(SBLAS3)
 	$(RANLIB) $(BLASLIB)
 
 double: $(DBLAS1) $(DBLAS2) $(DBLAS3)
+	mkdir -p ../lib
 	$(ARCH) $(ARCHFLAGS) $(BLASLIB) $(DBLAS1) $(ALLBLAS) \
 		$(DBLAS2) $(DBLAS3)
 	$(RANLIB) $(BLASLIB)
 
 complex: $(CBLAS1) $(CBLAS2) $(CBLAS3)
+	mkdir -p ../lib
 	$(ARCH) $(ARCHFLAGS) $(BLASLIB) $(CBLAS1) $(ALLBLAS) \
 		$(CBLAS2) $(CBLAS3)
 	$(RANLIB) $(BLASLIB)
 
 complex16: $(ZBLAS1) $(ZBLAS2) $(ZBLAS3)
+	mkdir -p ../lib
 	$(ARCH) $(ARCHFLAGS) $(BLASLIB) $(ZBLAS1) $(ALLBLAS) \
 		$(ZBLAS2) $(ZBLAS3)
 	$(RANLIB) $(BLASLIB)

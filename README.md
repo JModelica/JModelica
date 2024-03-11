@@ -21,7 +21,8 @@ The following tools need to be installed:
 - Subversion
 - Apache Ant
   - on Ubuntu `sudo apt install ant`
-- Cmake
+- Cmake (for Sundials)
+  - on Ubuntu `sudo apt-get install cmake`
 - SWIG
 - Java development kit
   - on Ubuntu `sudo apt install default-jdk`

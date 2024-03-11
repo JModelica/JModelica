@@ -20,9 +20,11 @@ The following tools need to be installed:
 - The gcc compiler suite
 - Subversion
 - Apache Ant
+  - on Ubuntu `sudo apt install ant`
 - Cmake
 - SWIG
 - Java development kit
+  - on Ubuntu `sudo apt install default-jdk`
 - Python 2.7 (with development headers)
 
 The list of required Python packages can be found in the User's Guide.
@@ -69,6 +71,7 @@ directory for building the platform
 > cd JModelica
 > chmod +x ./configure
 > chmod +x ./run_java.sh
+> chmod +x ./config.sub
 > mkdir build
 > cd build
 > ../configure --with-ipopt=/path/to/ipopt-install-dir \
@@ -76,6 +79,10 @@ directory for building the platform
 on macOS:
 
 > ../configure --with-ipopt64=/usr/local/opt/ipopt
+
+If you have installed IPOPT via `sudo apt install coinor-libipopt-dev` on Ubuntu, then:
+
+> ../configure --with-ipopt64=/usr
 
 You may want to give additional arguments to configure.
 Type configure --help for information. By default, the

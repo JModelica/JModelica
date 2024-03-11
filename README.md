@@ -27,6 +27,7 @@ The following tools need to be installed:
 - Java development kit
   - on Ubuntu `sudo apt install default-jdk`
 - Python 2.7 (with development headers)
+  - on Ubuntu `sudo apt install python2`
 
 The list of required Python packages can be found in the User's Guide.
 It is available at http://www.jmodelica.org/page/236.

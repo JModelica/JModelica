@@ -19905,16 +19905,6 @@ else $as_nop
   with_ipopt=no
 fi
 
-# Check the operating system
-OS=$(uname)
-
-# Conditionally set the $coin variable based on the operating system
-if [ "$OS" = "Darwin" ]; then
-    coin="coin-or"
-else
-    coin="coin"
-fi
-
 
 if test "x$with_ipopt" = xno
 then :
@@ -19939,16 +19929,16 @@ printf "%s\n" "* --with-ipopt option specified - compiling with IPOPT support   
 printf "%s\n" "***********************************************************************" >&6; }
        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result:  " >&5
 printf "%s\n" " " >&6; }
-       as_ac_File=`printf "%s\n" "ac_cv_file_$ipopt/include/$coin/IpStdCInterface.h" | $as_tr_sh`
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ipopt/include/$coin/IpStdCInterface.h" >&5
-printf %s "checking for $ipopt/include/$coin/IpStdCInterface.h... " >&6; }
+       as_ac_File=`printf "%s\n" "ac_cv_file_$ipopt/include/coin/IpStdCInterface.h" | $as_tr_sh`
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ipopt/include/coin/IpStdCInterface.h" >&5
+printf %s "checking for $ipopt/include/coin/IpStdCInterface.h... " >&6; }
 if eval test \${$as_ac_File+y}
 then :
   printf %s "(cached) " >&6
 else $as_nop
   test "$cross_compiling" = yes &&
   as_fn_error $? "cannot check for file existence when cross compiling" "$LINENO" 5
-if test -r "$ipopt/include/$coin/IpStdCInterface.h"; then
+if test -r "$ipopt/include/coin/IpStdCInterface.h"; then
   eval "$as_ac_File=yes"
 else
   eval "$as_ac_File=no"
@@ -19983,7 +19973,7 @@ fi
 
 
 
-IPOPT_INC=$ipopt/include/$coin
+IPOPT_INC=$ipopt/include/coin
 IPOPT_LIB=$ipopt/lib
 IPOPT_HOME=$ipopt
 
@@ -20022,16 +20012,16 @@ printf "%s\n" "* --with-ipopt64 option specified - compiling with IPOPT64 suppor
 printf "%s\n" "***********************************************************************" >&6; }
        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result:  " >&5
 printf "%s\n" " " >&6; }
-       as_ac_File=`printf "%s\n" "ac_cv_file_$ipopt64/include/$coin/IpStdCInterface.h" | $as_tr_sh`
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ipopt64/include/$coin/IpStdCInterface.h" >&5
-printf %s "checking for $ipopt64/include/$coin/IpStdCInterface.h... " >&6; }
+       as_ac_File=`printf "%s\n" "ac_cv_file_$ipopt64/include/coin/IpStdCInterface.h" | $as_tr_sh`
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ipopt64/include/coin/IpStdCInterface.h" >&5
+printf %s "checking for $ipopt64/include/coin/IpStdCInterface.h... " >&6; }
 if eval test \${$as_ac_File+y}
 then :
   printf %s "(cached) " >&6
 else $as_nop
   test "$cross_compiling" = yes &&
   as_fn_error $? "cannot check for file existence when cross compiling" "$LINENO" 5
-if test -r "$ipopt64/include/$coin/IpStdCInterface.h"; then
+if test -r "$ipopt64/include/coin/IpStdCInterface.h"; then
   eval "$as_ac_File=yes"
 else
   eval "$as_ac_File=no"
@@ -20066,7 +20056,7 @@ fi
 
 
 
-IPOPT64_INC=$ipopt64/include/$coin
+IPOPT64_INC=$ipopt64/include/coin
 IPOPT64_LIB=$ipopt64/lib
 IPOPT64_HOME=$ipopt64
 

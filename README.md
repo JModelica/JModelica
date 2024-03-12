@@ -28,11 +28,11 @@ The following tools need to be installed:
   - on Ubuntu `sudo apt install default-jdk`
 - Python 2.7 (with development headers)
   - on Ubuntu 
-    - `sudo apt install python2` 
+    - `sudo apt install python2 python2.7-dev` 
     - `sudo apt install python-pip`
     - `python2 -m pip install virtualenv`
     - Use `virtualenv` to create a virtual environment with Python 2 isolated from your system's default Python `~/.local/bin/virtualenv --python=/usr/bin/python2 jmodelica_env` and then activate the virtual environment to use the isolated Python installation within it `source jmodelica_env/bin/activate`
-    - then `python2 -m pip install numpy` and `python2 -m pip install numpy`
+    - then `python2 -m pip install numpy` and `python2 -m pip install --upgrade Cython==0.25.2`
 
 The list of required Python packages can be found in the User's Guide.
 It is available at http://www.jmodelica.org/page/236.

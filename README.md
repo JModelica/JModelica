@@ -18,6 +18,7 @@ Depending on your operating system, different procedures are required.
 The following tools need to be installed:
 
 - The gcc compiler suite
+  - on macOS install Autotools via `brew install autoconf automake libtool`
 - Subversion
 - Apache Ant
   - on Ubuntu `sudo apt install ant`
@@ -27,8 +28,8 @@ The following tools need to be installed:
 - Java development kit
   - on Ubuntu `sudo apt install default-jdk`
 - Python 2.7 (with development headers)
-  - on Ubuntu 
-    - `sudo apt install python2 python2.7-dev` 
+  - on Ubuntu
+    - `sudo apt install python2 python2.7-dev`
     - `sudo apt install python-pip`
     - `python2 -m pip install virtualenv`
     - Use `virtualenv` to create a virtual environment with Python 2 isolated from your system's default Python `~/.local/bin/virtualenv --python=/usr/bin/python2 jmodelica_env` and then activate the virtual environment to use the isolated Python installation within it `source jmodelica_env/bin/activate`
@@ -76,6 +77,9 @@ Run the configure script. It is recommended that you create a new
 directory for building the platform
 
 > cd JModelica
+> aclocal
+> autoconf
+> automake --add-missing
 > chmod +x ./configure
 > chmod +x ./run_java.sh
 > chmod +x ./config.sub

@@ -78,6 +78,7 @@ directory for building the platform
 
 > cd JModelica
 > aclocal
+> autoupdate
 > autoconf
 > automake --add-missing
 > chmod +x ./configure

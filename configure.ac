@@ -115,24 +115,34 @@ AC_SUBST(CP)
 CP="cp -au"
 AC_SUBST(CURR_DIR)
 CURR_DIR=`pwd`
-case $build in
-  *-cygwin*)
-    echo "Cygwin detected"   
-    SHAREDEXT=".dll";
-    SHARED_LDFLAGS=" -shared ";
-    SEP='\;'
-    AC_LIBTOOL_WIN32_DLL
+
+AC_DEFUN([CONFIG_CYGWIN],[
+    echo "Cygwin detected"
+    SHAREDEXT=".dll"
+    SHARED_LDFLAGS=" -shared "
+    SEP=';'
+    LT_INIT([win32-dll])
     WIN32=yes
     AC_DEFINE([WIN32],[1],[Building on a win32 system (detected Cygwin).])
+])
+
+AC_DEFUN([CONFIG_MINGW],[
+    echo "MinGW detected"
+    SHAREDEXT=".dll"
+    SHARED_LDFLAGS=" -shared "
+    SEP=';'
+    LT_INIT([win32-dll])
+    WIN32=yes
+    AC_DEFINE([WIN32],[1],[Building on a win32 system (detected MinGW).])
+])
+
+
+case $build in
+  *-cygwin*)
+    CONFIG_CYGWIN
     ;;
   *-mingw*)
-    echo "MinGW detected"   
-    SHAREDEXT=".dll";
-    SHARED_LDFLAGS=" -shared ";
-    SEP='\;'
-    AC_LIBTOOL_WIN32_DLL
-    WIN32=yes
-    AC_DEFINE([WIN32],[1],[Building on a win32 system (detected MinGW).])    
+    CONFIG_MINGW 
     ;;
   *-apple*)
     echo "Mac OS X detected"   
@@ -155,7 +165,7 @@ case $build in
     CXXFLAGS=" -fPIC $CXXFLAGS"
     ;;  
 esac
-AC_PROG_LIBTOOL
+LT_INIT
 
 AC_PREFIX_DEFAULT(["/usr/local/jmodelica"])
 
@@ -183,6 +193,15 @@ AC_ARG_WITH([$1],
    [$1=$withval],
    [$3=no])
 
+case "$host_os" in
+  darwin*)
+    coin="coin-or"
+    ;;
+  *)
+    coin="coin"
+    ;;
+esac
+
 AS_IF([test "x$$3" = xno],
       [AC_MSG_RESULT([ ])
        AC_MSG_RESULT([***********************************************************************])
@@ -194,7 +213,7 @@ AS_IF([test "x$$3" = xno],
        AC_MSG_RESULT([* --$2 option specified - compiling with $4 support        *])
        AC_MSG_RESULT([***********************************************************************])
        AC_MSG_RESULT([ ])
-       AC_CHECK_FILE($$1/include/coin/IpStdCInterface.h,
+       AC_CHECK_FILE($$1/include/$coin/IpStdCInterface.h,
                      [],
                      [AC_MSG_FAILURE([--$2 option was specified but does not seem to point at a valid IPOPT installation])])])
 
@@ -205,7 +224,7 @@ AC_SUBST($5)
 AC_SUBST($6)
 AC_SUBST($7)
 
-$5=$$1/include/coin
+$5=$$1/include/$coin
 $6=$$1/lib
 $7=$$1
 ])

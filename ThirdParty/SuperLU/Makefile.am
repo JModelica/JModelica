@@ -8,14 +8,14 @@ SUPERLU_DIR64=../../superlu_build64
 $(SUPERLU_DIR):
 	mkdir -p $(SUPERLU_DIR) && \
 	cd $(SUPERLU_DIR)
-	cp -r $(abs_top_srcdir)/ThirdParty/SuperLU/superlu_mt_3.1/* $(abs_builddir)/../../superlu_build/
+	cp -r $(abs_top_srcdir)/ThirdParty/SuperLU/superlu/* $(abs_builddir)/../../superlu_build/
 
 if JM_WIN64
 
 $(SUPERLU_DIR64):
 	mkdir -p $(SUPERLU_DIR64)
 	cd $(SUPERLU_DIR64)
-	cp -r $(abs_top_srcdir)/ThirdParty/SuperLU/superlu_mt_3.1/* $(abs_builddir)/../../superlu_build64/
+	cp -r $(abs_top_srcdir)/ThirdParty/SuperLU/superlu/* $(abs_builddir)/../../superlu_build64/
 
 all-local: $(SUPERLU_DIR) $(SUPERLU_DIR64)
 	cd $(SUPERLU_DIR) && make blaslib EXTRA_CFLAGS=-m32 $(AM_MAKEFLAGS) DESTDIR= && make superlulib EXTRA_CFLAGS=-m32 $(AM_MAKEFLAGS) DESTDIR=

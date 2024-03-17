@@ -16,10 +16,10 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ(2.62)
-AC_INIT([jmodelica.org], 0.0.0, BUG-REPORT-ADDRESS)
+AC_PREREQ([2.71])
+AC_INIT([jmodelica.org],[0.0.0],[BUG-REPORT-ADDRESS])
 AM_INIT_AUTOMAKE
-AC_CONFIG_HEADER([config.h])
+AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 
 
@@ -97,6 +97,14 @@ AM_CONDITIONAL([WITH_OPENMP],[test "x$OPENMP_CFLAGS" != x])
 # Checks for programs.
 AC_PROG_CXX
 AC_PROG_F77([gfortran])
+AC_PROG_AWK
+AC_PROG_CPP
+AC_PROG_INSTALL
+AC_PROG_LN_S
+AC_PROG_MAKE_SET
+AC_PROG_MKDIR_P
+# AC_PROG_RANLIB
+AC_PROG_YACC
 
 # Acquire information about the platform
 AC_CANONICAL_BUILD
@@ -115,24 +123,33 @@ AC_SUBST(CP)
 CP="cp -au"
 AC_SUBST(CURR_DIR)
 CURR_DIR=`pwd`
-case $build in
-  *-cygwin*)
-    echo "Cygwin detected"   
-    SHAREDEXT=".dll";
-    SHARED_LDFLAGS=" -shared ";
-    SEP='\;'
-    AC_LIBTOOL_WIN32_DLL
+
+AC_DEFUN([CONFIG_CYGWIN],[
+    echo "Cygwin detected"
+    SHAREDEXT=".dll"
+    SHARED_LDFLAGS=" -shared "
+    SEP=';'
+    LT_INIT([win32-dll])
     WIN32=yes
     AC_DEFINE([WIN32],[1],[Building on a win32 system (detected Cygwin).])
+])
+
+AC_DEFUN([CONFIG_MINGW],[
+    echo "MinGW detected"
+    SHAREDEXT=".dll"
+    SHARED_LDFLAGS=" -shared "
+    SEP=';'
+    LT_INIT([win32-dll])
+    WIN32=yes
+    AC_DEFINE([WIN32],[1],[Building on a win32 system (detected MinGW).])
+])
+
+case $build in
+  *-cygwin*)
+    CONFIG_CYGWIN
     ;;
   *-mingw*)
-    echo "MinGW detected"   
-    SHAREDEXT=".dll";
-    SHARED_LDFLAGS=" -shared ";
-    SEP='\;'
-    AC_LIBTOOL_WIN32_DLL
-    WIN32=yes
-    AC_DEFINE([WIN32],[1],[Building on a win32 system (detected MinGW).])    
+    CONFIG_MINGW 
     ;;
   *-apple*)
     echo "Mac OS X detected"   
@@ -155,7 +172,7 @@ case $build in
     CXXFLAGS=" -fPIC $CXXFLAGS"
     ;;  
 esac
-AC_PROG_LIBTOOL
+LT_INIT
 
 AC_PREFIX_DEFAULT(["/usr/local/jmodelica"])
 
@@ -177,6 +194,18 @@ AM_CONDITIONAL([JM_WIN64],[test "$jm_win64" = yes])
 AC_DEFUN([IPOPT_ARG_CHECK],
 [
 # Checks for libraries.
+
+AC_FUNC_ERROR_AT_LINE
+AC_FUNC_ALLOCA
+AC_FUNC_MALLOC
+AC_FUNC_REALLOC
+AC_FUNC_MBRTOWC
+AC_FUNC_MKTIME
+AC_FUNC_STRTOD
+
+AC_CHECK_FUNCS([atexit bzero clock_gettime floor ftime getcwd gethrtime gettimeofday isascii localeconv memchr memmove memset mkdir pow putenv realpath rmdir setlocale sqrt strchr strdup strerror strpbrk strrchr strstr strtol utime])
+
+
 AC_ARG_WITH([$1],
    [AS_HELP_STRING([--$2],
      [IPOPT installation directory @<:@default=check@:>@])],
@@ -371,12 +400,34 @@ AC_SUBST(JVMDLL64_HOME)
 JVMDLL64_HOME=$jvmdll64_home
 
 # Checks for header files.
-AC_HEADER_STDC
-AC_CHECK_HEADERS([stdlib.h])
+m4_warn([obsolete],
+[The preprocessor macro `STDC_HEADERS' is obsolete.
+  Except in unusual embedded environments, you can safely include all
+  ISO C90 headers unconditionally.])dnl
+# Autoupdate added the next two lines to ensure that your configure
+# script's behavior did not change.  They are probably safe to remove.
+AC_CHECK_INCLUDES_DEFAULT
+AC_PROG_EGREP
+
+AC_CHECK_HEADERS([stdlib.h fcntl.h inttypes.h libintl.h mach/mach.h malloc.h stdint.h sys/time.h sys/timeb.h unistd.h utime.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_HEADER_STDBOOL
 AC_C_CONST
+AC_C_INLINE
+AC_C_RESTRICT
+AC_CHECK_TYPES([ptrdiff_t])
+
+AC_TYPE_INT16_T
+AC_TYPE_INT32_T
+AC_TYPE_INT64_T
+AC_TYPE_INT8_T
+AC_TYPE_OFF_T
+AC_TYPE_SSIZE_T
+AC_TYPE_UINT16_T
+AC_TYPE_UINT32_T
+AC_TYPE_UINT64_T
+AC_TYPE_UINT8_T
 
 #AC_CONFIG_SUBDIRS([ThirdParty/Sundials/sundials-2.5.0])
 

@@ -191,10 +191,6 @@ AS_IF([test "$WIN32" = yes],
       ])
 AM_CONDITIONAL([JM_WIN64],[test "$jm_win64" = yes])
 
-AC_DEFUN([IPOPT_ARG_CHECK],
-[
-# Checks for libraries.
-
 AC_FUNC_ERROR_AT_LINE
 AC_FUNC_ALLOCA
 AC_FUNC_MALLOC
@@ -205,6 +201,21 @@ AC_FUNC_STRTOD
 
 AC_CHECK_FUNCS([atexit bzero clock_gettime floor ftime getcwd gethrtime gettimeofday isascii localeconv memchr memmove memset mkdir pow putenv realpath rmdir setlocale sqrt strchr strdup strerror strpbrk strrchr strstr strtol utime])
 
+
+
+
+AC_DEFUN([IPOPT_ARG_CHECK],
+[
+
+  case "$host_os" in
+  darwin*)
+    coin="coin-or"
+    ;;
+  *)
+    coin="coin"
+    ;;
+  esac
+# Checks for libraries.
 
 AC_ARG_WITH([$1],
    [AS_HELP_STRING([--$2],
@@ -223,9 +234,15 @@ AS_IF([test "x$$3" = xno],
        AC_MSG_RESULT([* --$2 option specified - compiling with $4 support        *])
        AC_MSG_RESULT([***********************************************************************])
        AC_MSG_RESULT([ ])
-       AC_CHECK_FILE($$1/include/coin/IpStdCInterface.h,
-                     [],
-                     [AC_MSG_FAILURE([--$2 option was specified but does not seem to point at a valid IPOPT installation])])])
+      #  AC_CHECK_FILE($$1/include/coin/IpStdCInterface.h,
+      #                [],
+      #                [AC_MSG_FAILURE([--$2 option was specified but does not seem to point at a valid IPOPT installation])])
+       AC_MSG_CHECKING([for $$1/include/$coin/IpStdCInterface.h])
+       AS_IF([test -f "$$1/include/$coin/IpStdCInterface.h"],
+             [AC_MSG_RESULT([found])],
+             [AC_MSG_RESULT([not found])
+              AC_MSG_ERROR([--$2 option was specified but does not seem to point at a valid IPOPT installation])])
+       ])
 
 AM_CONDITIONAL([$8],[test "x$$3" != xno])
 
@@ -234,7 +251,7 @@ AC_SUBST($5)
 AC_SUBST($6)
 AC_SUBST($7)
 
-$5=$$1/include/coin
+$5=$$1/include/$coin
 $6=$$1/lib
 $7=$$1
 ])
@@ -272,9 +289,16 @@ AC_ARG_WITH([casadi],
 
 AS_IF([test "x$with_casadi" = xno],
       [AC_MSG_RESULT([CasADi installation not specified.])],
-      [AC_CHECK_FILE($casadi/casadi/casadi.py,
-                     [],
-                     [AC_MSG_FAILURE([CasADi installation specifed, but seems to be corrupt!])])])
+      [
+        # AC_CHECK_FILE($casadi/casadi/casadi.py,
+        #              [],
+        #              [AC_MSG_FAILURE([CasADi installation specifed, but seems to be corrupt!])])
+        AC_MSG_CHECKING([for $casadi/casadi/casadi.py])
+        AS_IF([test -f "$casadi/casadi/casadi.py"],
+          [AC_MSG_RESULT([found])],
+          [AC_MSG_RESULT([not found])
+          AC_MSG_ERROR([CasADi installation specifed, but seems to be corrupt!])])
+      ])
 
 # Set output variables to be exported to the Makefiles
 AC_SUBST(CASADI_HOME)
@@ -308,9 +332,16 @@ AS_IF([test "x$MINGW_HOME" != x],
 
 AS_IF([test "x$with_mingw" = xno],
       [AC_MSG_RESULT([MinGW installation not specified.])],
-      [AC_CHECK_FILE($mingw/bin/gcc.exe,
-                     [],
-                     [AC_MSG_FAILURE([MinGW installation specifed, but seems to be corrupt!])])])
+      [
+        # AC_CHECK_FILE($mingw/bin/gcc.exe,
+        #              [],
+        #              [AC_MSG_FAILURE([MinGW installation specifed, but seems to be corrupt!])])
+        AC_MSG_CHECKING([for $mingw/bin/gcc.exe])
+        AS_IF([test -f "$mingw/bin/gcc.exe"],
+          [AC_MSG_RESULT([found])],
+          [AC_MSG_RESULT([not found])
+          AC_MSG_ERROR([MinGW installation specifed, but seems to be corrupt!])])
+      ])
 
 AM_CONDITIONAL([WITH_MINGW],[test "x$with_mingw" != xno])
 

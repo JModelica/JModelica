@@ -4,6 +4,10 @@
 ### Autotools ###
 # http://www.gnu.org/software/automake
 
+m4/
+missing
+depcomp
+
 Makefile.in
 /ar-lib
 /mdate-sh

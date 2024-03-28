@@ -13,7 +13,7 @@ set(WINPTHREADS_BUILD_DIR ${CMAKE_BINARY_DIR}/winpthreads_build)
 set(WINPTHREADS_BUILD_DIR64 ${CMAKE_BINARY_DIR}/winpthreads_build64)
 
 # Define the build process for winpthreads
-function(build_winpthreads TARGET_DIR FLAGS)
+function(build_winpthreads TARGET_NAME TARGET_DIR FLAGS)
     # Create the target directory
     file(MAKE_DIRECTORY ${TARGET_DIR})
     
@@ -21,7 +21,7 @@ function(build_winpthreads TARGET_DIR FLAGS)
     file(COPY ${WINPTHREADS_SRC_DIR}/ DESTINATION ${TARGET_DIR})
     
     # Add a custom target for configuring and building winpthreads
-    add_custom_target(${TARGET_DIR} ALL
+    add_custom_target(${TARGET_NAME} ALL
         COMMAND ./configure
         COMMAND make CFLAGS=${FLAGS} LDFLAGS=${FLAGS} RCFLAGS='-F pe-i386'
         WORKING_DIRECTORY ${TARGET_DIR}
@@ -30,23 +30,24 @@ endfunction()
 
 # Build for 32-bit or 64-bit based on JM_WIN64
 if(JM_WIN64)
-    build_winpthreads(${WINPTHREADS_BUILD_DIR64} "")
+    build_winpthreads(winpthreads64 ${WINPTHREADS_BUILD_DIR64} "")
 else()
-    build_winpthreads(${WINPTHREADS_BUILD_DIR} "-m32")
+    build_winpthreads(winpthreads ${WINPTHREADS_BUILD_DIR} "-m32")
 endif()
 
-# Test and clean targets (optional, for example purposes)
+# Add a custom target for testing (example)
 add_custom_target(check
     COMMAND $(MAKE) test
     WORKING_DIRECTORY ${WINPTHREADS_BUILD_DIR}
 )
 
-add_custom_target(clean
+# Add custom targets for cleaning, avoiding reserved names
+add_custom_target(clean_winpthreads
     COMMAND $(MAKE) clean
     WORKING_DIRECTORY ${WINPTHREADS_BUILD_DIR}
 )
 if(JM_WIN64)
-    add_custom_target(clean64
+    add_custom_target(clean_winpthreads64
         COMMAND $(MAKE) clean
         WORKING_DIRECTORY ${WINPTHREADS_BUILD_DIR64}
     )

@@ -237,6 +237,10 @@ AS_IF([test "x$$3" = xno],
       #  AC_CHECK_FILE($$1/include/coin/IpStdCInterface.h,
       #                [],
       #                [AC_MSG_FAILURE([--$2 option was specified but does not seem to point at a valid IPOPT installation])])
+      # AC_CHECK_HEADER ($$1/include/$coin/IpStdCInterface.h, 
+      #   [], 
+      #   [], 
+      #   [])
        AC_MSG_CHECKING([for $$1/include/$coin/IpStdCInterface.h])
        AS_IF([test -f "$$1/include/$coin/IpStdCInterface.h"],
              [AC_MSG_RESULT([found])],

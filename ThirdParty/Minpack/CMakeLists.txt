@@ -4,6 +4,9 @@ cmake_minimum_required(VERSION 3.0)
 # Project name and version
 project(MinpackProject VERSION 1.3.2)
 
+set(MINPACK_HOME "${CMAKE_SOURCE_DIR}/ThirdParty/Minpack/cminpack-1.3.2" CACHE PATH "Minpack home directory")
+message(STATUS "Using Minpack from ${MINPACK_HOME}")
+
 # Specify the CMake module path if necessary
 # set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 
@@ -33,7 +36,7 @@ include(ExternalProject)
 
 # Add Minpack as an external project
 ExternalProject_Add(Minpack
-    SOURCE_DIR ${CMINPACK_SOURCE_DIR}
+    SOURCE_DIR ${MINPACK_HOME}
     BINARY_DIR ${MINPACK_DIR}
     CMAKE_ARGS
         -DCMAKE_INSTALL_PREFIX=${MINPACK_INSTALL_DIR}
@@ -87,3 +90,22 @@ if(JM_WIN64)
         COMMENT "Cleaning Minpack64 build directory"
     )
 endif()
+
+
+# Assuming you have a target that needs to link to Minpack's libraries
+# Here we use find_library to locate the Minpack library after it's built
+# Replace `your_target` with your actual target name
+
+# Example of how you might set up to find and link the Minpack library
+# find_library(MINPACK_LIB NAMES minpack PATHS ${MINPACK_INSTALL_DIR}/lib)
+# if(NOT MINPACK_LIB)
+#     message(FATAL_ERROR "Minpack library not found")
+# endif()
+
+# add_executable(your_target source_file.cpp)
+# add_dependencies(your_target Minpack)
+# target_link_libraries(your_target ${MINPACK_LIB})
+
+# Use add_dependencies to ensure Minpack is built before your_target
+# add_dependencies(your_target Minpack)
+

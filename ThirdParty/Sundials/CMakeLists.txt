@@ -27,8 +27,8 @@ else()
 endif()
 
 # Function to configure and build Sundials
-function(configure_sundials SUNDIALS_DIR ADDON_FLAGS)
-    file(MAKE_DIRECTORY ${SUNDIALS_DIR})
+function(configure_sundials BUILD_DIR ADDON_FLAGS)
+    file(MAKE_DIRECTORY ${BUILD_DIR})
     set(CMAKE_ARGS -DEXAMPLES_ENABLE=OFF -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=${CMAKE_SOURCE_DIR}/../../sundials_install)
 
     if(ADDON_FLAGS)
@@ -45,19 +45,19 @@ function(configure_sundials SUNDIALS_DIR ADDON_FLAGS)
 
     include(ExternalProject)
     ExternalProject_Add(
-        sundials_build
+        ${BUILD_DIR}  # This should be a unique target name for each build configuration
         SOURCE_DIR ${CMAKE_SOURCE_DIR}/ThirdParty/Sundials/sundials-${SUNDIALS_VERSION}
-        BINARY_DIR ${SUNDIALS_DIR}
+        BINARY_DIR ${BUILD_DIR}
         CMAKE_ARGS ${CMAKE_ARGS}
         INSTALL_DIR ${CMAKE_SOURCE_DIR}/../../sundials_install
     )
 endfunction()
 
 # Configure Sundials builds
-configure_sundials(${SUNDIALS_DIR} ${SUPERLU_ADDON})
+configure_sundials("sundials_build" "${SUPERLU_ADDON}")
 
 if(JM_WIN64)
-    configure_sundials(${SUNDIALS_DIR64} ${SUPERLU_ADDON64})
+    configure_sundials("sundials_build64" "${SUPERLU_ADDON64}")
 endif()
 
 # Custom targets for make install and make test, if needed

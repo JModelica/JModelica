@@ -14,15 +14,20 @@ function(build_superlu target_dir extra_cflags)
     file(MAKE_DIRECTORY ${target_dir})
     file(COPY ${SUPERLU_SOURCE_DIR}/ DESTINATION ${target_dir})
 
+    # Normalize the directory name to create a valid target name
+    string(REPLACE "/" "_" normalized_target_dir ${target_dir})
+    string(REPLACE "C:_" "" normalized_target_dir ${normalized_target_dir}) # Remove 'C:_' if present
+
     # Compile the blaslib and superlulib
-    add_custom_target(blaslib_${target_dir}
+    add_custom_target(blaslib_${normalized_target_dir}
         COMMAND ${CMAKE_COMMAND} -E chdir ${target_dir} make blaslib EXTRA_CFLAGS=${extra_cflags}
     )
-    add_custom_target(superlulib_${target_dir}
+    add_custom_target(superlulib_${normalized_target_dir}
         COMMAND ${CMAKE_COMMAND} -E chdir ${target_dir} make superlulib EXTRA_CFLAGS=${extra_cflags}
     )
-    add_dependencies(superlulib_${target_dir} blaslib_${target_dir})
+    add_dependencies(superlulib_${normalized_target_dir} blaslib_${normalized_target_dir})
 endfunction()
+
 
 if(JM_WIN64)
     build_superlu(${SUPERLU_DIR64} "")

@@ -27,7 +27,9 @@ set(OpenMP_CXX_LIB_NAMES "libomp")
 
 
 # Assuming Python is required
-find_package(PythonInterp REQUIRED)
+# find_package(PythonInterp REQUIRED)
+find_package(Python COMPONENTS Interpreter REQUIRED)
+
 
 # Add subdirectories for third-party libraries
 # Note: You will need to add CMakeLists.txt in these directories or handle them appropriately

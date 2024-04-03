@@ -504,6 +504,11 @@ JAVA_OC_CASADI_ANT_FILE=$(COMPILER_DIR)/OptimicaCompilerCasADi/build.xml
 all-local: build-python-packages build-compiler
 	$(abs_top_srcdir)/get_version.sh $(abs_top_srcdir) https://svn.jmodelica.org > $(abs_builddir)/version.txt
 	if [ "$(BUILD_EXTRA)" ]; then exec "$(BUILD_EXTRA)" "$(abs_top_srcdir)" "$(DESTDIR)$(prefix)"; fi
+	cd $(abs_builddir)/ThirdParty/SuperLU/superlu && \
+    cmake -E make_directory build && \
+    cmake -E chdir build cmake .. -DCMAKE_INSTALL_PREFIX=$(DESTDIR) && \
+    cmake --build build --target all && \
+    cmake --build build --target install
 
 install-exec-local: install-python-packages install-compiler install-modules
 	[ $(abs_top_srcdir) == $(DESTDIR)$(prefix) ] && echo "Installing in dist directory, don't copy LICENSE file" || cp $(abs_top_srcdir)/LICENSE $(DESTDIR)$(prefix)/ 

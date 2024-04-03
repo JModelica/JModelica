@@ -98,6 +98,10 @@ AM_CONDITIONAL([WITH_OPENMP],[test "x$OPENMP_CFLAGS" != x])
 AC_PROG_CXX
 AC_PROG_F77([gfortran])
 
+# Check for CMake (required for SuperLU)
+AC_CHECK_PROG([CMAKE], [cmake], [yes], [no])
+AS_IF([test "x$CMAKE" = "xno"], [AC_MSG_ERROR([CMake is required for SuperLU])])
+
 # Acquire information about the platform
 AC_CANONICAL_BUILD
 AC_CANONICAL_HOST

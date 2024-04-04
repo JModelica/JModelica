@@ -177,6 +177,9 @@ AM_CONDITIONAL([JM_WIN64],[test "$jm_win64" = yes])
 AC_DEFUN([IPOPT_ARG_CHECK],
 [
 # Checks for libraries.
+
+AC_CHECK_FUNCS([atexit bzero clock_gettime floor ftime getcwd gethrtime gettimeofday isascii localeconv memchr memmove memset mkdir pow putenv realpath rmdir setlocale sqrt strchr strdup strerror strpbrk strrchr strstr strtol utime])
+
 AC_ARG_WITH([$1],
    [AS_HELP_STRING([--$2],
      [IPOPT installation directory @<:@default=check@:>@])],
@@ -372,11 +375,36 @@ JVMDLL64_HOME=$jvmdll64_home
 
 # Checks for header files.
 AC_HEADER_STDC
-AC_CHECK_HEADERS([stdlib.h])
+AC_CHECK_HEADERS([stdlib.h fcntl.h inttypes.h libintl.h mach/mach.h malloc.h stdint.h sys/time.h sys/timeb.h unistd.h utime.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_HEADER_STDBOOL
 AC_C_CONST
+AC_C_INLINE
+AC_C_RESTRICT
+AC_FUNC_ALLOCA
+AC_FUNC_ERROR_AT_LINE
+AC_FUNC_MALLOC
+AC_FUNC_MBRTOWC
+AC_FUNC_MKTIME
+AC_FUNC_REALLOC
+AC_FUNC_STRTOD
+AC_PROG_CPP
+AC_PROG_RANLIB
+AC_PROG_YACC
+AC_TYPE_INT16_T
+AC_TYPE_INT32_T
+AC_TYPE_INT64_T
+AC_TYPE_INT8_T
+AC_TYPE_OFF_T
+AC_TYPE_SIZE_T
+AC_TYPE_SSIZE_T
+AC_TYPE_UINT16_T
+AC_TYPE_UINT32_T
+AC_TYPE_UINT64_T
+AC_TYPE_UINT8_T
+
+AC_CHECK_TYPES([ptrdiff_t]) #wanted by: ThirdParty/CasADi/CasADi/external_packages/tinyxml-2.6.2/tinyxmlparser.cpp:448
 
 #AC_CONFIG_SUBDIRS([ThirdParty/Sundials/sundials-2.5.0])
 

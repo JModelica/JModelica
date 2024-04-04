@@ -115,30 +115,33 @@ AC_SUBST(CP)
 CP="cp -au"
 AC_SUBST(CURR_DIR)
 CURR_DIR=`pwd`
-case $build in
-  *-cygwin*)
-    echo "Cygwin detected"   
-    SHAREDEXT=".dll";
-    SHARED_LDFLAGS=" -shared ";
-    SEP='\;'
-    AC_REQUIRE(AC_CANONICAL_HOST)_LT_SET_OPTION([LT_INIT],[win32-dll])
-m4_warn([obsolete],[AC_LIBTOOL_WIN32_DLL: Remove this warning and the call to _LT_SET_OPTION when you
-put the 'win32-dll' option into LT_INIT's first parameter.])
-
+AC_DEFUN([CONFIG_CYGWIN],[
+    echo "Cygwin detected"
+    SHAREDEXT=".dll"
+    SHARED_LDFLAGS=" -shared "
+    SEP=';'
+    LT_INIT([win32-dll])
     WIN32=yes
     AC_DEFINE([WIN32],[1],[Building on a win32 system (detected Cygwin).])
+])
+
+AC_DEFUN([CONFIG_MINGW],[
+    echo "MinGW detected"
+    SHAREDEXT=".dll"
+    SHARED_LDFLAGS=" -shared "
+    SEP=';'
+    LT_INIT([win32-dll])
+    WIN32=yes
+    AC_DEFINE([WIN32],[1],[Building on a win32 system (detected MinGW).])
+])
+
+
+case $build in
+  *-cygwin*)
+    CONFIG_CYGWIN
     ;;
   *-mingw*)
-    echo "MinGW detected"   
-    SHAREDEXT=".dll";
-    SHARED_LDFLAGS=" -shared ";
-    SEP='\;'
-    AC_REQUIRE(AC_CANONICAL_HOST)_LT_SET_OPTION([LT_INIT],[win32-dll])
-m4_warn([obsolete],[AC_LIBTOOL_WIN32_DLL: Remove this warning and the call to _LT_SET_OPTION when you
-put the 'win32-dll' option into LT_INIT's first parameter.])
-
-    WIN32=yes
-    AC_DEFINE([WIN32],[1],[Building on a win32 system (detected MinGW).])    
+    CONFIG_MINGW 
     ;;
   *-apple*)
     echo "Mac OS X detected"   

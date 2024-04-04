@@ -16,10 +16,10 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ(2.62)
-AC_INIT([jmodelica.org], 0.0.0, BUG-REPORT-ADDRESS)
+AC_PREREQ([2.71])
+AC_INIT([jmodelica.org],[0.0.0],[BUG-REPORT-ADDRESS])
 AM_INIT_AUTOMAKE
-AC_CONFIG_HEADER([config.h])
+AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 
 
@@ -121,7 +121,10 @@ case $build in
     SHAREDEXT=".dll";
     SHARED_LDFLAGS=" -shared ";
     SEP='\;'
-    AC_LIBTOOL_WIN32_DLL
+    AC_REQUIRE(AC_CANONICAL_HOST)_LT_SET_OPTION([LT_INIT],[win32-dll])
+m4_warn([obsolete],[AC_LIBTOOL_WIN32_DLL: Remove this warning and the call to _LT_SET_OPTION when you
+put the 'win32-dll' option into LT_INIT's first parameter.])
+
     WIN32=yes
     AC_DEFINE([WIN32],[1],[Building on a win32 system (detected Cygwin).])
     ;;
@@ -130,7 +133,10 @@ case $build in
     SHAREDEXT=".dll";
     SHARED_LDFLAGS=" -shared ";
     SEP='\;'
-    AC_LIBTOOL_WIN32_DLL
+    AC_REQUIRE(AC_CANONICAL_HOST)_LT_SET_OPTION([LT_INIT],[win32-dll])
+m4_warn([obsolete],[AC_LIBTOOL_WIN32_DLL: Remove this warning and the call to _LT_SET_OPTION when you
+put the 'win32-dll' option into LT_INIT's first parameter.])
+
     WIN32=yes
     AC_DEFINE([WIN32],[1],[Building on a win32 system (detected MinGW).])    
     ;;
@@ -155,7 +161,7 @@ case $build in
     CXXFLAGS=" -fPIC $CXXFLAGS"
     ;;  
 esac
-AC_PROG_LIBTOOL
+LT_INIT
 
 AC_PREFIX_DEFAULT(["/usr/local/jmodelica"])
 
@@ -374,7 +380,15 @@ AC_SUBST(JVMDLL64_HOME)
 JVMDLL64_HOME=$jvmdll64_home
 
 # Checks for header files.
-AC_HEADER_STDC
+m4_warn([obsolete],
+[The preprocessor macro `STDC_HEADERS' is obsolete.
+  Except in unusual embedded environments, you can safely include all
+  ISO C90 headers unconditionally.])dnl
+# Autoupdate added the next two lines to ensure that your configure
+# script's behavior did not change.  They are probably safe to remove.
+AC_CHECK_INCLUDES_DEFAULT
+AC_PROG_EGREP
+
 AC_CHECK_HEADERS([stdlib.h fcntl.h inttypes.h libintl.h mach/mach.h malloc.h stdint.h sys/time.h sys/timeb.h unistd.h utime.h])
 
 # Checks for typedefs, structures, and compiler characteristics.

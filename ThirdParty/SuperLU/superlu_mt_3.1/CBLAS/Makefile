@@ -63,22 +63,22 @@ ZBLAS2 = zgemv.o zhemv.o ztrsv.o zgerc.o zher2.o
 
 all: single double complex complex16
 
-single: $(SBLAS1) $(SBLAS2) $(SBLAS3)
+single: directories $(SBLAS1) $(SBLAS2) $(SBLAS3)
 	$(ARCH) $(ARCHFLAGS) $(BLASLIB) $(SBLAS1) $(ALLBLAS) \
 		$(SBLAS2) $(SBLAS3)
 	$(RANLIB) $(BLASLIB)
 
-double: $(DBLAS1) $(DBLAS2) $(DBLAS3)
+double: directories $(DBLAS1) $(DBLAS2) $(DBLAS3)
 	$(ARCH) $(ARCHFLAGS) $(BLASLIB) $(DBLAS1) $(ALLBLAS) \
 		$(DBLAS2) $(DBLAS3)
 	$(RANLIB) $(BLASLIB)
 
-complex: $(CBLAS1) $(CBLAS2) $(CBLAS3)
+complex: directories $(CBLAS1) $(CBLAS2) $(CBLAS3)
 	$(ARCH) $(ARCHFLAGS) $(BLASLIB) $(CBLAS1) $(ALLBLAS) \
 		$(CBLAS2) $(CBLAS3)
 	$(RANLIB) $(BLASLIB)
 
-complex16: $(ZBLAS1) $(ZBLAS2) $(ZBLAS3)
+complex16: directories $(ZBLAS1) $(ZBLAS2) $(ZBLAS3)
 	$(ARCH) $(ARCHFLAGS) $(BLASLIB) $(ZBLAS1) $(ALLBLAS) \
 		$(ZBLAS2) $(ZBLAS3)
 	$(RANLIB) $(BLASLIB)
@@ -88,3 +88,7 @@ complex16: $(ZBLAS1) $(ZBLAS2) $(ZBLAS3)
 
 clean:	
 	rm -f *.o
+
+directories:
+	mkdir -p ../lib
+

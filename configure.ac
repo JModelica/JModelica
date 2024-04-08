@@ -131,7 +131,7 @@ AC_DEFUN([CONFIG_MINGW],[
     SHAREDEXT=".dll"
     SHARED_LDFLAGS=" -shared "
     SEP=';'
-    LT_INIT([win32-dll])
+    # LT_INIT([win32-dll])
     WIN32=yes
     AC_DEFINE([WIN32],[1],[Building on a win32 system (detected MinGW).])
 ])

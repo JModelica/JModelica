@@ -115,12 +115,13 @@ AC_SUBST(CP)
 CP="cp -au"
 AC_SUBST(CURR_DIR)
 CURR_DIR=`pwd`
+
 AC_DEFUN([CONFIG_CYGWIN],[
     echo "Cygwin detected"
     SHAREDEXT=".dll"
     SHARED_LDFLAGS=" -shared "
     SEP=';'
-    LT_INIT([win32-dll])
+    # LT_INIT([win32-dll])
     WIN32=yes
     AC_DEFINE([WIN32],[1],[Building on a win32 system (detected Cygwin).])
 ])
@@ -164,7 +165,7 @@ case $build in
     CXXFLAGS=" -fPIC $CXXFLAGS"
     ;;  
 esac
-LT_INIT
+# LT_INIT
 
 AC_PREFIX_DEFAULT(["/usr/local/jmodelica"])
 
@@ -408,7 +409,7 @@ AC_FUNC_REALLOC
 AC_FUNC_STRTOD
 AC_PROG_CPP
 # AC_PROG_RANLIB
-LT_INIT
+# LT_INIT
 AC_PROG_YACC
 AC_TYPE_INT16_T
 AC_TYPE_INT32_T

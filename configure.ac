@@ -124,32 +124,23 @@ CP="cp -au"
 AC_SUBST(CURR_DIR)
 CURR_DIR=`pwd`
 
-AC_DEFUN([CONFIG_CYGWIN],[
+LT_INIT([win32-dll])
+case $build in
+  *-cygwin*)
     echo "Cygwin detected"
     SHAREDEXT=".dll"
     SHARED_LDFLAGS=" -shared "
     SEP=';'
-    LT_INIT([win32-dll])
     WIN32=yes
     AC_DEFINE([WIN32],[1],[Building on a win32 system (detected Cygwin).])
-])
-
-AC_DEFUN([CONFIG_MINGW],[
+    ;;
+  *-mingw*)
     echo "MinGW detected"
     SHAREDEXT=".dll"
     SHARED_LDFLAGS=" -shared "
     SEP=';'
-    LT_INIT([win32-dll])
     WIN32=yes
     AC_DEFINE([WIN32],[1],[Building on a win32 system (detected MinGW).])
-])
-
-case $build in
-  *-cygwin*)
-    CONFIG_CYGWIN
-    ;;
-  *-mingw*)
-    CONFIG_MINGW 
     ;;
   *-apple*)
     echo "Mac OS X detected"   
@@ -172,7 +163,6 @@ case $build in
     CXXFLAGS=" -fPIC $CXXFLAGS"
     ;;  
 esac
-LT_INIT
 
 AC_PREFIX_DEFAULT(["/usr/local/jmodelica"])
 

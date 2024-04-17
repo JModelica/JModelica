@@ -700,7 +700,8 @@ class Assimulo_prepare(object):
             "extra_compile_args": extra_compile_flags[:],
             "extra_f77_compile_args": extra_compile_flags[:]
             + ["-ffixed-line-length-120"],  # Add flag for Fortran 77
-            "extra_f90_compile_args": extra_compile_flags[:],
+            "extra_f90_compile_args": extra_compile_flags[:]
+            + ["-ffixed-line-length-120"],
         }
 
         # Hairer

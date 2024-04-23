@@ -1,0 +1,72 @@
+name: Continuous Deployment
+
+on:
+  workflow_run:
+    workflows: ["Continuous Integration"]  # Ensure this matches the CI workflow name
+    branches: [master]
+    types:
+      - completed
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: test-results-and-artifacts
+          path: artifacts
+
+      # Environment Setup and Configuration
+      - name: Set up deployment environment
+        run: |
+          # Set up any environment-specific variables or prepare the environment
+          echo "Preparing environment for deployment"
+          # Example: setting environment variables, creating directories, etc.
+
+      # Deployment with Secrets
+      - name: Deploy to server (example with scp)
+        run: |
+          scp -r artifacts/install/* ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_ADDRESS }}:/path/to/deployment/
+        env:
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+
+      # Docker Deployment (Example)
+      - name: Pull and deploy Docker image (example)
+        run: |
+          docker pull my-image-name:latest
+          docker tag my-image-name:latest ${{ secrets.DOCKER_SERVER }}/my-image-name:latest
+          docker push ${{ secrets.DOCKER_SERVER }}/my-image-name:latest
+
+      # Conditional Deployment based on branch or tag
+      - name: Deploy to staging
+        if: github.ref == 'refs/heads/master'
+        run: echo "Deploying to staging server" 
+        # Add staging deployment commands
+
+      - name: Deploy to production
+        if: startsWith(github.ref, 'refs/tags/')
+        run: echo "Deploying to production server"
+        # Add production deployment commands
+
+      # Verification and Rollback
+      - name: Verify deployment
+        run: |
+          # Verification commands go here
+          echo "Verifying deployment" 
+
+      - name: Rollback if necessary
+        if: failure()
+        run: |
+          # Rollback commands go here
+          echo "Deployment failed, rolling back"
+
+      # Notifications
+      - name: Notify on deployment status
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

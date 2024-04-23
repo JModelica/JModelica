@@ -1,0 +1,105 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            bitness: 64
+          - os: macos-latest
+            bitness: 64
+          - os: windows-latest
+            bitness: 32
+            sdk_home: 'C:\\JModelica.org-SDK-1.13\\'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Windows Environment Setup
+      - name: Set up MSYS2 (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          path-type: inherit
+
+      - name: Set up environment (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          echo "Setting SDK_HOME to ${{ matrix.sdk_home }}"
+          "${{ matrix.sdk_home }}\setenv.bat"  # Assuming a batch file to set environment
+          # Add other Windows-specific environment setup here
+
+      # Linux/macOS Environment Setup
+      - name: Set up environment (Linux and macOS)
+        if: matrix.os != 'windows-latest'
+        run: |
+          echo "Setting SDK_HOME and other environment variables for ${{ matrix.os }}"
+          # Replace with actual commands to set environment variables for Linux/macOS
+
+      # Dependency Installation
+      - name: Install dependencies (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y <package-name>  # Replace with actual package names
+
+      - name: Install dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew update
+          brew install <package-name>  # Replace with actual package names
+
+      # Build Process (Platform-Specific)
+      - name: Build project (Linux and macOS)
+        if: matrix.os != 'windows-latest'
+        run: |
+          ./configure  # Or appropriate build configuration
+          make -j$(nproc)  # Or appropriate build command
+
+      - name: Build project (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          # Windows build commands here (e.g., using MSBuild or other tools)
+
+      # Test Execution
+      - name: Run tests
+        run: |
+          # Replace with actual test commands based on test runner
+          ./install/jm_tests -ie -x test_results 
+
+      # Artifact and Test Result Handling
+      - name: Archive Test Results and Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results-and-artifacts
+          path: |
+            test_results/
+            install/
+
+  build-docker:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: my-image-name:latest

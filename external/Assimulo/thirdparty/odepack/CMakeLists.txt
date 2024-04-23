@@ -26,3 +26,11 @@ set(source_files
 )
 
 add_library(odepack_solver SHARED ${source_files})
+
+find_package(FUT REQUIRED) # Locate FUT
+
+add_executable(odepack_test test_odepack.f90)
+target_link_libraries(odepack_test odepack_solver Fut) # Link FUT library
+add_test(NAME OdepackSolverTest COMMAND odepack_test)
+
+enable_testing()

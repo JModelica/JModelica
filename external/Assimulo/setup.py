@@ -759,11 +759,25 @@ class Assimulo_prepare(object):
             "assimulo" + os.sep + "thirdparty" + os.sep + "odepack" + os.sep + code
             for code in odepack_list
         ]
+        # config.add_extension(
+        #     "assimulo.lib.odepack",
+        #     sources=src,
+        #     include_dirs=[np.get_include()],
+        #     **extraargs
+        # )
+
+        extraargs_odepack = (
+            extraargs.copy()
+        )  # Create a copy to avoid modifying the original
+        extraargs_odepack["extra_f77_compile_args"] = extra_compile_flags[:] + [
+            "-ffixed-line-length-none",
+            "-fallow-argument-mismatch",
+        ]
         config.add_extension(
             "assimulo.lib.odepack",
             sources=src,
             include_dirs=[np.get_include()],
-            **extraargs
+            **extraargs_odepack
         )
 
         # ODASSL
@@ -841,7 +855,10 @@ class Assimulo_prepare(object):
                 "library_dirs": [self.BLASdir, self.LAPACKdir],
                 "libraries": ["lapack", self.BLASname],
             }
-            extraargs_glimda["extra_f77_compile_args"] = extra_compile_flags[:]
+            extraargs_glimda["extra_f77_compile_args"] = extra_compile_flags[:] + [
+                "-ffixed-line-length-none",
+                "-fallow-argument-mismatch",
+            ]
             config.add_extension(
                 "assimulo.lib.glimda",
                 sources=src,

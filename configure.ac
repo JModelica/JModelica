@@ -97,6 +97,14 @@ AM_CONDITIONAL([WITH_OPENMP],[test "x$OPENMP_CFLAGS" != x])
 # Checks for programs.
 AC_PROG_CXX
 AC_PROG_F77([gfortran])
+AC_PROG_AWK
+AC_PROG_CPP
+AC_PROG_INSTALL
+AC_PROG_LN_S
+AC_PROG_MAKE_SET
+AC_PROG_MKDIR_P
+# AC_PROG_RANLIB
+AC_PROG_YACC
 
 # Acquire information about the platform
 AC_CANONICAL_BUILD
@@ -116,12 +124,13 @@ CP="cp -au"
 AC_SUBST(CURR_DIR)
 CURR_DIR=`pwd`
 
+LT_INIT([win32-dll])
+
 AC_DEFUN([CONFIG_CYGWIN],[
     echo "Cygwin detected"
     SHAREDEXT=".dll"
     SHARED_LDFLAGS=" -shared "
     SEP=';'
-    # LT_INIT([win32-dll])
     WIN32=yes
     AC_DEFINE([WIN32],[1],[Building on a win32 system (detected Cygwin).])
 ])
@@ -165,7 +174,7 @@ case $build in
     CXXFLAGS=" -fPIC $CXXFLAGS"
     ;;  
 esac
-# LT_INIT
+
 
 AC_PREFIX_DEFAULT(["/usr/local/jmodelica"])
 
@@ -184,11 +193,35 @@ AS_IF([test "$WIN32" = yes],
       ])
 AM_CONDITIONAL([JM_WIN64],[test "$jm_win64" = yes])
 
-AC_DEFUN([IPOPT_ARG_CHECK],
-[
-# Checks for libraries.
+AC_FUNC_ERROR_AT_LINE
+AC_FUNC_ALLOCA
+AC_FUNC_MALLOC
+AC_FUNC_REALLOC
+AC_FUNC_MBRTOWC
+AC_FUNC_MKTIME
+AC_FUNC_STRTOD
 
 AC_CHECK_FUNCS([atexit bzero clock_gettime floor ftime getcwd gethrtime gettimeofday isascii localeconv memchr memmove memset mkdir pow putenv realpath rmdir setlocale sqrt strchr strdup strerror strpbrk strrchr strstr strtol utime])
+
+
+
+
+AC_DEFUN([IPOPT_ARG_CHECK],
+[
+
+  case "$host_os" in
+  darwin*)
+    coin="coin-or"
+    ;;
+  *)
+    coin="coin"
+    ;;
+  esac
+# Checks for libraries.
+
+
+AC_CHECK_FUNCS([atexit bzero clock_gettime floor ftime getcwd gethrtime gettimeofday isascii localeconv memchr memmove memset mkdir pow putenv realpath rmdir setlocale sqrt strchr strdup strerror strpbrk strrchr strstr strtol utime])
+
 
 AC_ARG_WITH([$1],
    [AS_HELP_STRING([--$2],
@@ -207,9 +240,19 @@ AS_IF([test "x$$3" = xno],
        AC_MSG_RESULT([* --$2 option specified - compiling with $4 support        *])
        AC_MSG_RESULT([***********************************************************************])
        AC_MSG_RESULT([ ])
-       AC_CHECK_FILE($$1/include/coin/IpStdCInterface.h,
-                     [],
-                     [AC_MSG_FAILURE([--$2 option was specified but does not seem to point at a valid IPOPT installation])])])
+      #  AC_CHECK_FILE($$1/include/coin/IpStdCInterface.h,
+      #                [],
+      #                [AC_MSG_FAILURE([--$2 option was specified but does not seem to point at a valid IPOPT installation])])
+      # AC_CHECK_HEADER ($$1/include/$coin/IpStdCInterface.h, 
+      #   [], 
+      #   [], 
+      #   [])
+       AC_MSG_CHECKING([for $$1/include/$coin/IpStdCInterface.h])
+       AS_IF([test -f "$$1/include/$coin/IpStdCInterface.h"],
+             [AC_MSG_RESULT([found])],
+             [AC_MSG_RESULT([not found])
+              AC_MSG_ERROR([--$2 option was specified but does not seem to point at a valid IPOPT installation])])
+       ])
 
 AM_CONDITIONAL([$8],[test "x$$3" != xno])
 
@@ -218,7 +261,7 @@ AC_SUBST($5)
 AC_SUBST($6)
 AC_SUBST($7)
 
-$5=$$1/include/coin
+$5=$$1/include/$coin
 $6=$$1/lib
 $7=$$1
 ])
@@ -256,9 +299,16 @@ AC_ARG_WITH([casadi],
 
 AS_IF([test "x$with_casadi" = xno],
       [AC_MSG_RESULT([CasADi installation not specified.])],
-      [AC_CHECK_FILE($casadi/casadi/casadi.py,
-                     [],
-                     [AC_MSG_FAILURE([CasADi installation specifed, but seems to be corrupt!])])])
+      [
+        # AC_CHECK_FILE($casadi/casadi/casadi.py,
+        #              [],
+        #              [AC_MSG_FAILURE([CasADi installation specifed, but seems to be corrupt!])])
+        AC_MSG_CHECKING([for $casadi/casadi/casadi.py])
+        AS_IF([test -f "$casadi/casadi/casadi.py"],
+          [AC_MSG_RESULT([found])],
+          [AC_MSG_RESULT([not found])
+          AC_MSG_ERROR([CasADi installation specifed, but seems to be corrupt!])])
+      ])
 
 # Set output variables to be exported to the Makefiles
 AC_SUBST(CASADI_HOME)
@@ -292,9 +342,16 @@ AS_IF([test "x$MINGW_HOME" != x],
 
 AS_IF([test "x$with_mingw" = xno],
       [AC_MSG_RESULT([MinGW installation not specified.])],
-      [AC_CHECK_FILE($mingw/bin/gcc.exe,
-                     [],
-                     [AC_MSG_FAILURE([MinGW installation specifed, but seems to be corrupt!])])])
+      [
+        # AC_CHECK_FILE($mingw/bin/gcc.exe,
+        #              [],
+        #              [AC_MSG_FAILURE([MinGW installation specifed, but seems to be corrupt!])])
+        AC_MSG_CHECKING([for $mingw/bin/gcc.exe])
+        AS_IF([test -f "$mingw/bin/gcc.exe"],
+          [AC_MSG_RESULT([found])],
+          [AC_MSG_RESULT([not found])
+          AC_MSG_ERROR([MinGW installation specifed, but seems to be corrupt!])])
+      ])
 
 AM_CONDITIONAL([WITH_MINGW],[test "x$with_mingw" != xno])
 
@@ -400,6 +457,7 @@ AC_HEADER_STDBOOL
 AC_C_CONST
 AC_C_INLINE
 AC_C_RESTRICT
+
 AC_FUNC_ALLOCA
 AC_FUNC_ERROR_AT_LINE
 AC_FUNC_MALLOC
@@ -411,12 +469,15 @@ AC_PROG_CPP
 # AC_PROG_RANLIB
 # LT_INIT
 AC_PROG_YACC
+
 AC_TYPE_INT16_T
 AC_TYPE_INT32_T
 AC_TYPE_INT64_T
 AC_TYPE_INT8_T
 AC_TYPE_OFF_T
+
 AC_TYPE_SIZE_T
+
 AC_TYPE_SSIZE_T
 AC_TYPE_UINT16_T
 AC_TYPE_UINT32_T
@@ -424,6 +485,7 @@ AC_TYPE_UINT64_T
 AC_TYPE_UINT8_T
 
 AC_CHECK_TYPES([ptrdiff_t]) #wanted by: ThirdParty/CasADi/CasADi/external_packages/tinyxml-2.6.2/tinyxmlparser.cpp:448
+
 
 #AC_CONFIG_SUBDIRS([ThirdParty/Sundials/sundials-2.5.0])
 

@@ -125,22 +125,33 @@ AC_SUBST(CURR_DIR)
 CURR_DIR=`pwd`
 
 LT_INIT([win32-dll])
-case $build in
-  *-cygwin*)
+
+AC_DEFUN([CONFIG_CYGWIN],[
     echo "Cygwin detected"
     SHAREDEXT=".dll"
     SHARED_LDFLAGS=" -shared "
     SEP=';'
     WIN32=yes
     AC_DEFINE([WIN32],[1],[Building on a win32 system (detected Cygwin).])
-    ;;
-  *-mingw*)
+])
+
+AC_DEFUN([CONFIG_MINGW],[
     echo "MinGW detected"
     SHAREDEXT=".dll"
     SHARED_LDFLAGS=" -shared "
     SEP=';'
+    # LT_INIT([win32-dll])
     WIN32=yes
     AC_DEFINE([WIN32],[1],[Building on a win32 system (detected MinGW).])
+])
+
+
+case $build in
+  *-cygwin*)
+    CONFIG_CYGWIN
+    ;;
+  *-mingw*)
+    CONFIG_MINGW 
     ;;
   *-apple*)
     echo "Mac OS X detected"   
@@ -163,6 +174,7 @@ case $build in
     CXXFLAGS=" -fPIC $CXXFLAGS"
     ;;  
 esac
+
 
 AC_PREFIX_DEFAULT(["/usr/local/jmodelica"])
 
@@ -206,6 +218,10 @@ AC_DEFUN([IPOPT_ARG_CHECK],
     ;;
   esac
 # Checks for libraries.
+
+
+AC_CHECK_FUNCS([atexit bzero clock_gettime floor ftime getcwd gethrtime gettimeofday isascii localeconv memchr memmove memset mkdir pow putenv realpath rmdir setlocale sqrt strchr strdup strerror strpbrk strrchr strstr strtol utime])
+
 
 AC_ARG_WITH([$1],
    [AS_HELP_STRING([--$2],
@@ -441,18 +457,35 @@ AC_HEADER_STDBOOL
 AC_C_CONST
 AC_C_INLINE
 AC_C_RESTRICT
-AC_CHECK_TYPES([ptrdiff_t])
+
+AC_FUNC_ALLOCA
+AC_FUNC_ERROR_AT_LINE
+AC_FUNC_MALLOC
+AC_FUNC_MBRTOWC
+AC_FUNC_MKTIME
+AC_FUNC_REALLOC
+AC_FUNC_STRTOD
+AC_PROG_CPP
+# AC_PROG_RANLIB
+# LT_INIT
+AC_PROG_YACC
 
 AC_TYPE_INT16_T
 AC_TYPE_INT32_T
 AC_TYPE_INT64_T
 AC_TYPE_INT8_T
 AC_TYPE_OFF_T
+
+AC_TYPE_SIZE_T
+
 AC_TYPE_SSIZE_T
 AC_TYPE_UINT16_T
 AC_TYPE_UINT32_T
 AC_TYPE_UINT64_T
 AC_TYPE_UINT8_T
+
+AC_CHECK_TYPES([ptrdiff_t]) #wanted by: ThirdParty/CasADi/CasADi/external_packages/tinyxml-2.6.2/tinyxmlparser.cpp:448
+
 
 #AC_CONFIG_SUBDIRS([ThirdParty/Sundials/sundials-2.5.0])
 

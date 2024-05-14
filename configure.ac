@@ -22,6 +22,37 @@ AM_INIT_AUTOMAKE
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 
+# # Set default verbosity level (0 = quiet, 1 = normal, 2 = verbose)
+# AC_ARG_ENABLE([verbosity],
+#               [AS_HELP_STRING([--enable-verbosity=LEVEL],
+#                               [Set verbosity level (0 = quiet, 1 = normal, 2 = verbose) @<:@default=1@:>@])],
+#               [verbosity=$enableval],
+#               [verbosity=1])
+
+# AM_CONDITIONAL([VERBOSITY_0], [test "$verbosity" -eq 0])
+# AM_CONDITIONAL([VERBOSITY_1], [test "$verbosity" -eq 1])
+# AM_CONDITIONAL([VERBOSITY_2], [test "$verbosity" -eq 2])
+
+# AC_ARG_ENABLE([ninja],
+#   [AS_HELP_STRING([--enable-ninja], [use Ninja build system instead of Make])],
+#   [use_ninja=$enableval],
+#   [use_ninja=no])
+
+# if test "x$use_ninja" = "xyes"; then
+#   AC_CHECK_PROG([NINJA], [ninja], [ninja])
+#   if test -z "$NINJA"; then
+#     AC_MSG_ERROR([Ninja build system requested but ninja not found])
+#   fi
+# fi
+
+# if test "x$use_ninja" = "xyes"; then
+#   MAKE=ninja
+# else
+#   MAKE=make
+# fi
+# AC_SUBST([MAKE])
+
+# AM_CONDITIONAL([USE_NINJA], [test "x$use_ninja" = "xyes"])
 
 # =========== Helper macros =================
 
@@ -217,7 +248,12 @@ AC_DEFUN([IPOPT_ARG_CHECK],
     coin="coin"
     ;;
   esac
-# Checks for libraries.
+
+# Check for required libraries
+AC_CHECK_LIB([superlu], [main], [], [AC_MSG_ERROR([superlu library not found])])
+AC_CHECK_LIB([sundials], [main], [], [AC_MSG_ERROR([sundials library not found])])
+AC_CHECK_LIB([blas], [main], [], [AC_MSG_ERROR([blas library not found])])
+AC_CHECK_LIB([lapack], [main], [], [AC_MSG_ERROR([lapack library not found])])
 
 
 AC_CHECK_FUNCS([atexit bzero clock_gettime floor ftime getcwd gethrtime gettimeofday isascii localeconv memchr memmove memset mkdir pow putenv realpath rmdir setlocale sqrt strchr strdup strerror strpbrk strrchr strstr strtol utime])
@@ -271,6 +307,25 @@ IPOPT_ARG_CHECK([ipopt64], [with-ipopt64], [with_ipopt64], [IPOPT64], [IPOPT64_I
 
 
 #------------- Configure python packages into build ----------------------------
+
+# Check for Python
+AC_CHECK_PROG(PYTHON, python, python)
+if test -z "$PYTHON"; then
+  AC_MSG_ERROR([Python not found. Please install Python and ensure it is available in your PATH.])
+fi
+
+# Check for environment variables
+if test -z "$PYTHONHOME"; then
+    AC_MSG_WARN([PYTHONHOME is not set])
+else
+    AC_MSG_NOTICE([PYTHONHOME is set to $PYTHONHOME])
+fi
+
+if test -z "$PATH"; then
+    AC_MSG_ERROR([PATH is not set])
+else
+    AC_MSG_NOTICE([PATH is set to $PATH])
+fi
 
 AC_ARG_ENABLE([python],
   AS_HELP_STRING([--enable-python], [ use --enable-python=no to remove python modules from build]),

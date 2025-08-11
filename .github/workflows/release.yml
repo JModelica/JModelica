@@ -1,0 +1,148 @@
+name: JModelica Automated Release
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Cache apt packages
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/cache@v3
+        with:
+          path: /var/cache/apt/archives
+          key: ${{ runner.os }}-apt-${{ hashFiles('**/lockfiles') }} # This is not ideal, but there is no lock file.
+          restore-keys: |
+            ${{ runner.os }}-apt-
+      - name: Install dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc ant cmake swig default-jdk python3-dev python3-pip python3-numpy cython3 coinor-libipopt-dev
+          pip3 install --user --upgrade pip
+          pip3 install --user numpy cython
+      - name: Build JModelica (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          mkdir build
+          cd build
+          ../configure --prefix=`pwd`/../install --with-ipopt=/usr
+          make
+          make install
+      - name: Package artifacts (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          tar -czvf jmodelica-ubuntu-latest.tar.gz install
+      - name: Upload artifact (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v3
+        with:
+          name: jmodelica-ubuntu-latest
+          path: jmodelica-ubuntu-latest.tar.gz
+
+      - name: Cache brew packages
+        if: matrix.os == 'macos-latest'
+        uses: actions/cache@v3
+        with:
+          path: /usr/local/Homebrew
+          key: ${{ runner.os }}-brew-${{ hashFiles('**/lockfiles') }}
+          restore-keys: |
+            ${{ runner.os }}-brew-
+      - name: Install dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install gcc ant cmake swig openjdk python numpy cython ipopt
+          pip3 install --user --upgrade pip
+          pip3 install --user numpy cython
+      - name: Build JModelica (macOS)
+        if: matrix.os == 'macos-latest'
+        env:
+          JAVA_HOME: /usr/local/opt/openjdk
+        run: |
+          mkdir build
+          cd build
+          ../configure --prefix=`pwd`/../install --with-ipopt=/usr/local/opt/ipopt
+          make
+          make install
+      - name: Package artifacts (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          tar -czvf jmodelica-macos-latest.tar.gz install
+      - name: Upload artifact (macOS)
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v3
+        with:
+          name: jmodelica-macos-latest
+          path: jmodelica-macos-latest.tar.gz
+
+      - name: Setup MSYS2
+        if: matrix.os == 'windows-latest'
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ant
+            mingw-w64-x86_64-swig
+            mingw-w64-x86_64-python
+            mingw-w64-x86_64-python-numpy
+            mingw-w64-x86_64-python-cython
+            mingw-w64-x86_64-ipopt
+      - name: Build JModelica (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: msys2 {0}
+        run: |
+          mkdir build
+          cd build
+          ../configure --prefix=`pwd`/../install --with-ipopt=/mingw64
+          make
+          make install
+      - name: Package artifacts (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: msys2 {0}
+        run: |
+          zip -r jmodelica-windows-latest.zip install
+      - name: Upload artifact (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v3
+        with:
+          name: jmodelica-windows-latest
+          path: jmodelica-windows-latest.zip
+      - name: Notify on failure (Build)
+        if: failure()
+        run: echo "Build failed on ${{ matrix.os }}"
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+      - name: Create Release and upload artifacts
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/jmodelica-ubuntu-latest/jmodelica-ubuntu-latest.tar.gz
+            artifacts/jmodelica-macos-latest/jmodelica-macos-latest.tar.gz
+            artifacts/jmodelica-windows-latest/jmodelica-windows-latest.zip
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Notify on failure (Release)
+        if: failure()
+        run: echo "Release job failed"

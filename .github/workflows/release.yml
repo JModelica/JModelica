@@ -3,9 +3,7 @@ name: JModelica Automated Release
 on:
   push:
     branches:
-      - master
-    tags:
-      - 'v*'
+      - 'fix/ci-workflow'
 
 jobs:
   build:
@@ -29,12 +27,13 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc ant cmake swig default-jdk python3-dev python3-pip python3-numpy cython3 coinor-libipopt-dev
+          sudo apt-get install -y gcc ant cmake swig default-jdk python3-dev python3-pip python3-numpy cython3 coinor-libipopt-dev autoconf
           pip3 install --user --upgrade pip
           pip3 install --user numpy cython
       - name: Build JModelica (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: |
+          autoconf
           mkdir build
           cd build
           ../configure --prefix=`pwd`/../install --with-ipopt=/usr
@@ -62,7 +61,7 @@ jobs:
       - name: Install dependencies (macOS)
         if: matrix.os == 'macos-latest'
         run: |
-          brew install gcc ant cmake swig openjdk python numpy cython ipopt
+          brew install gcc ant cmake swig openjdk python numpy cython ipopt autoconf
           pip3 install --user --upgrade pip
           pip3 install --user numpy cython
       - name: Build JModelica (macOS)
@@ -70,6 +69,7 @@ jobs:
         env:
           JAVA_HOME: /usr/local/opt/openjdk
         run: |
+          autoconf
           mkdir build
           cd build
           ../configure --prefix=`pwd`/../install --with-ipopt=/usr/local/opt/ipopt
@@ -100,10 +100,12 @@ jobs:
             mingw-w64-x86_64-python-numpy
             mingw-w64-x86_64-python-cython
             mingw-w64-x86_64-ipopt
+            autoconf
       - name: Build JModelica (Windows)
         if: matrix.os == 'windows-latest'
         shell: msys2 {0}
         run: |
+          autoconf
           mkdir build
           cd build
           ../configure --prefix=`pwd`/../install --with-ipopt=/mingw64

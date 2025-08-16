@@ -24,7 +24,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-lib2to3
-          find ./Python ./external/PyFMI -name "*.py" -exec 2to3 -w {} +
+          find ./Python ./external/PyFMI -name "*.py" -exec python3 -m lib2to3 -w {} +
 
       - name: Cache apt packages
         if: matrix.os == 'ubuntu-latest'
@@ -68,7 +68,7 @@ jobs:
       - name: Modernize Python Code
         if: matrix.os == 'macos-latest'
         run: |
-          find ./Python ./external/PyFMI -name "*.py" -exec 2to3 -w {} +
+          find ./Python ./external/PyFMI -name "*.py" -exec python3 -m lib2to3 -w {} +
 
       - name: Cache brew packages
         if: matrix.os == 'macos-latest'
@@ -110,7 +110,7 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: msys2 {0}
         run: |
-          find ./Python ./external/PyFMI -name "*.py" -exec 2to3 -w {} +
+          find ./Python ./external/PyFMI -name "*.py" -exec python3 -m lib2to3 -w {} +
 
       - name: Setup MSYS2
         if: matrix.os == 'windows-latest'

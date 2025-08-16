@@ -15,6 +15,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Set Script Permissions
+        if: matrix.os == 'ubuntu-latest'
+        run: chmod +x get_version.sh
+
+      - name: Modernize Python Code
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-lib2to3
+          find ./Python ./external/PyFMI -name "*.py" -exec 2to3 -w {} +
+
       - name: Cache apt packages
         if: matrix.os == 'ubuntu-latest'
         uses: actions/cache@v3
@@ -49,6 +60,15 @@ jobs:
         with:
           name: jmodelica-ubuntu-latest
           path: jmodelica-ubuntu-latest.tar.gz
+
+      - name: Set Script Permissions
+        if: matrix.os == 'macos-latest'
+        run: chmod +x get_version.sh
+
+      - name: Modernize Python Code
+        if: matrix.os == 'macos-latest'
+        run: |
+          find ./Python ./external/PyFMI -name "*.py" -exec 2to3 -w {} +
 
       - name: Cache brew packages
         if: matrix.os == 'macos-latest'
@@ -85,6 +105,12 @@ jobs:
         with:
           name: jmodelica-macos-latest
           path: jmodelica-macos-latest.tar.gz
+
+      - name: Modernize Python Code
+        if: matrix.os == 'windows-latest'
+        shell: msys2 {0}
+        run: |
+          find ./Python ./external/PyFMI -name "*.py" -exec 2to3 -w {} +
 
       - name: Setup MSYS2
         if: matrix.os == 'windows-latest'

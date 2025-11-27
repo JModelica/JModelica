@@ -1,84 +1,36 @@
-# JModelica - Modern Build System
+# JModelica.org - Modernized
 
-This project has been modernized to use:
-- **Python 3** (latest)
-- **Java 17** (LTS)
-- **Gradle** (Java build)
-- **CMake** (root build orchestration)
-- **vcpkg** (C++ dependency management)
+This is a modernized fork of the JModelica.org platform.
 
-## Quick Start
+## Key Changes
+*   **Python 3**: The codebase has been migrated from Python 2.7 to Python 3.
+*   **Java 17**: The compiler now requires Java 17 (LTS).
+*   **Build System**: The legacy Autotools/Ant system has been replaced with **CMake** (C++ runtime) and **Gradle** (Java compiler).
 
-### Prerequisites
-- Python 3.x
-- Java 17 or later
-- CMake 3.20+
-- vcpkg (optional, for C++ dependencies)
+## Prerequisites
+*   **Python 3.8+** (via Conda recommended)
+*   **Java JDK 17+**
+*   **CMake 3.15+**
+*   **Ninja Build System**
+*   **C++ Compiler** (MSVC on Windows, GCC/Clang on Linux)
+*   **Sundials 7.x** & **Ipopt 3.14+** (install via Conda: `conda install sundials ipopt`)
 
-### Building
+## Build Instructions
 
-#### Java Compiler Only
+### 1. Java Compiler
 ```bash
 cd Compiler
-.\gradlew.bat build
+./gradlew build
 ```
+This will generate the `Compiler.jar` in `Compiler/bin`.
 
-#### Full Build with CMake
+### 2. C++ Runtime (JMI)
 ```bash
-# Configure
-cmake -B build -S .
-
-# Build Java compiler
-cmake --build build --target compiler_build
-
-# Or build everything
-cmake --build build
+mkdir build
+cd build
+cmake .. -G "Ninja" -DCMAKE_PREFIX_PATH=$CONDA_PREFIX
+cmake --build . --target jmi
 ```
 
-### Installing C++ Dependencies (Optional)
-
-Using vcpkg:
-```bash
-# Set VCPKG_ROOT environment variable
-set VCPKG_ROOT=C:\path\to\vcpkg
-
-# Dependencies will be automatically installed via vcpkg.json
-cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake
-```
-
-Or install manually:
-```bash
-vcpkg install ipopt sundials
-```
-
-### Testing
-
-```bash
-cd Compiler
-.\gradlew.bat test
-```
-
-### Python Verification
-
-```bash
-python verify_python.py
-```
-
-## Build Outputs
-
-- **Java Compiler**: `Compiler/build/libs/Compiler.jar` (5.3 MB)
-- **Generated Code**: `Compiler/build/generated/java/`
-
-## Migration Status
-
-✅ Python 3 migration complete (200+ files)  
-✅ Java 17 upgrade complete  
-✅ Gradle build system functional  
-✅ CMake integration complete  
-✅ All tests passing
-
-See `walkthrough.md` in the artifacts directory for complete details.
-
-## Original README
-
-For the original JModelica documentation, see `README_ORIGINAL.md`.
+### 3. Python Packages
+(Instructions pending completion of Python bindings)

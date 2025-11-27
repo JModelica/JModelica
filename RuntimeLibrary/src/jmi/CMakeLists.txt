@@ -18,7 +18,7 @@
 # NOTE: CMake 2.8.6 is required since this is the version used in development.
 # The script is KNOWN NOT TO WORK WITH 2.8.3 and below (ExternalProject 
 # interface changes). CMake 2.8.4 and 2.8.5 are not tested.
-cmake_minimum_required (VERSION 2.8.6 FATAL_ERROR)
+cmake_minimum_required (VERSION 3.20 FATAL_ERROR)
 
 if(NOT TOP_SRC)
     set(TOP_SRC ${CMAKE_CURRENT_SOURCE_DIR}/../../../)
@@ -31,6 +31,8 @@ set(JMICommonSources
     # Types
     jmi_types.h
     jmi_types.c
+    jmi_sundials_compat.h
+    jmi_sundials_compat.c
     
     # Math
     jmi_linear_algebra.h
@@ -162,14 +164,16 @@ add_definitions(-DJMI_INCLUDE_MINPACK)
 
 OPTION(BUILD_BLOCK_SOLVER_LIB "Build the block solver library" ON)
 if (${BUILD_BLOCK_SOLVER_LIB})
-    add_library(jmi_block_solver STATIC ${JMIBlockSources})
+    add_library(jmi_block_solver SHARED ${JMIBlockSources})
     if(NOT MSVC)
         set_target_properties(jmi_block_solver PROPERTIES COMPILE_FLAGS "-Wall -g -std=c89 -pedantic -Werror -Wno-long-long -O2 -msse2 -mfpmath=sse")
     endif()
     
     #Install the libraries
     install(TARGETS jmi_block_solver
-        DESTINATION "${RTLIB_LIB_DIR}")
+        RUNTIME DESTINATION "${RTLIB_LIB_DIR}"
+        LIBRARY DESTINATION "${RTLIB_LIB_DIR}"
+        ARCHIVE DESTINATION "${RTLIB_LIB_DIR}")
     
     if(JMI_SUNDIALS AND JMI_LAPACK AND JMI_MINPACK)
         add_executable(jmi_block_solver_test jmi_block_solver_test.c)
@@ -180,7 +184,7 @@ endif()
 
 OPTION(BUILD_ODE_SOLVER_LIB "Build the ode solver library" ON)
 if (${BUILD_ODE_SOLVER_LIB})
-    add_library(jmi_ode_solver STATIC ${JMIODESolverSources})
+    add_library(jmi_ode_solver SHARED ${JMIODESolverSources})
     if(NOT MSVC)
         set_target_properties(jmi_ode_solver PROPERTIES COMPILE_FLAGS "-Wall -g -std=c89 -pedantic -Werror -Wno-long-long -O2 -msse2 -mfpmath=sse")
     endif()
@@ -194,7 +198,7 @@ endif()
 
 OPTION(BUILD_JMI_LIB "Build the jmi library" ON)
 if (${BUILD_JMI_LIB})
-    add_library(jmi STATIC ${JMISources})
+    add_library(jmi SHARED ${JMISources})
     if(NOT MSVC)
         set_target_properties(jmi PROPERTIES COMPILE_FLAGS "-Wall -g -std=c89 -pedantic -Werror -Wno-long-long -O2 -msse2 -mfpmath=sse")
     endif()
@@ -202,7 +206,9 @@ if (${BUILD_JMI_LIB})
 
     #Install the libraries
     install(TARGETS jmi
-        DESTINATION "${RTLIB_LIB_DIR}")
+        RUNTIME DESTINATION "${RTLIB_LIB_DIR}"
+        LIBRARY DESTINATION "${RTLIB_LIB_DIR}"
+        ARCHIVE DESTINATION "${RTLIB_LIB_DIR}")
 
     #Install header files
     install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/"
@@ -215,39 +221,41 @@ if (${BUILD_MSL_EXTERNAL_LIBS})
     #Build ModelicaExternalC library
     include_directories(${MSLCSOURCES})
     include_directories(${MSLCSOURCES}/zlib)
-    add_library(ModelicaExternalC STATIC ${MODELICAEXTERNALCSources})
+    add_library(ModelicaExternalC SHARED ${MODELICAEXTERNALCSources})
     if(NOT MSVC)
         set_target_properties(ModelicaExternalC PROPERTIES COMPILE_FLAGS "-Wall -g -std=c89 -pedantic")
     endif()
 
     #Build ModelicaStandardTables library
     add_definitions("-DDUMMY_FUNCTION_USERTAB -DHAVE_ZLIB")
-    add_library(ModelicaStandardTables STATIC ${MSLCSOURCES}/ModelicaStandardTables.c)
+    add_library(ModelicaStandardTables SHARED ${MSLCSOURCES}/ModelicaStandardTables.c)
     if(NOT MSVC)
         set_target_properties(ModelicaStandardTables PROPERTIES COMPILE_FLAGS "-Wall -g")
     endif()
 
     #Build ModelicaIO library
-    add_library(ModelicaIO STATIC ${MSLCSOURCES}/ModelicaIO.c)
+    add_library(ModelicaIO SHARED ${MSLCSOURCES}/ModelicaIO.c)
     if(NOT MSVC)
         set_target_properties(ModelicaIO PROPERTIES COMPILE_FLAGS "-Wall -g")
     endif()
 
     #Build ModelicaMatIO library
-    add_library(ModelicaMatIO STATIC ${MSLCSOURCES}/ModelicaMatIO.c)
+    add_library(ModelicaMatIO SHARED ${MSLCSOURCES}/ModelicaMatIO.c)
     if(NOT MSVC)
         set_target_properties(ModelicaMatIO PROPERTIES COMPILE_FLAGS "-Wall -g")
     endif()
 
     #Build Zlib library
-    add_library(zlib STATIC ${ZLIB_SOURCES})
+    add_library(zlib SHARED ${ZLIB_SOURCES})
     if(NOT MSVC)
         set_target_properties(ModelicaStandardTables PROPERTIES COMPILE_FLAGS "-Wall -g")
     endif()
 
     #Install the libraries
     install(TARGETS ModelicaExternalC ModelicaStandardTables ModelicaIO ModelicaMatIO zlib
-        DESTINATION "${RTLIB_LIB_DIR}")
+        RUNTIME DESTINATION "${RTLIB_LIB_DIR}"
+        LIBRARY DESTINATION "${RTLIB_LIB_DIR}"
+        ARCHIVE DESTINATION "${RTLIB_LIB_DIR}")
 
     install(DIRECTORY "${MSLCSOURCES}/"
         DESTINATION "${RTLIB_INCLUDE_DIR}"

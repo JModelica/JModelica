@@ -22,9 +22,10 @@
 #include <stdlib.h>
 
 #include <sundials/sundials_math.h>
-#include <sundials/sundials_direct.h>
+/* #include <sundials/sundials_direct.h> */
+#include "jmi_sundials_compat.h"
 #include <nvector/nvector_serial.h>
-#include <kinsol/kinsol_direct.h>
+/* #include <kinsol/kinsol_direct.h> */
 #include <kinsol/kinsol_impl.h>
 #include <sundials/sundials_dense.h>
 

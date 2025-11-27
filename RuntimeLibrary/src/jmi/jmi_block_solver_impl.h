@@ -26,7 +26,20 @@
 #define _JMI_BLOCK_SOLVER_IMPL_H
 #include "jmi_block_solver.h"
 #include <nvector/nvector_serial.h>
-#include <sundials/sundials_direct.h>
+#include "jmi_sundials_compat.h"
+
+#ifndef JMI_SUNDIALS_COMPAT_DLSMAT
+#define JMI_SUNDIALS_COMPAT_DLSMAT
+typedef struct _DlsMat {
+  int type;
+  long int M;
+  long int N;
+  long int ldim;
+  double *data;
+  long int ldata;
+  double **cols;
+} *DlsMat;
+#endif
 
 /**
     \brief Main data structure used in the block solver.

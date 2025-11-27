@@ -19,7 +19,8 @@
 
 #include <string.h>
 #include <cvode/cvode.h>             /* main integrator header file */
-#include <cvode/cvode_dense.h>       /* use CVDENSE linear solver */
+/* #include <cvode/cvode_dense.h> */      /* use CVDENSE linear solver */
+#include "jmi_sundials_compat.h"
 #include <nvector/nvector_serial.h>  /* serial N_Vector types, fct. and macros */
 #include <sundials/sundials_types.h> /* definition of realtype */
 #include <sundials/sundials_math.h>  /* contains the macros ABS, SQR, and EXP*/

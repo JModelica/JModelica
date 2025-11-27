@@ -1,0 +1,243 @@
+plugins {
+    id 'java'
+}
+
+repositories {
+    mavenCentral()
+}
+
+// Define configurations for build tools
+configurations {
+    jastadd
+    beaver
+    jflex
+}
+
+dependencies {
+    implementation files('ModelicaFrontEnd/ThirdParty/Beaver/lib/beaver-rt.jar')
+    implementation 'junit:junit:4.13.2'
+
+    jastadd files('../ThirdParty/JastAdd/jastadd-2.3.4.jar')
+    beaver files('../ThirdParty/Beaver/beaver-0.9.6.1/lib/beaver.jar')
+    jflex files('../ThirdParty/JFlex/jflex-1.4.3/lib/JFlex.jar')
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+def generatedSrcDir = layout.buildDirectory.dir("generated/java")
+
+sourceSets {
+    main {
+        java {
+            srcDirs = [
+                'ModelicaFrontEnd/src/java',
+                'ModelicaCompiler/src/java',
+                generatedSrcDir
+            ]
+        }
+    }
+}
+
+// JastAdd Task
+task generateJastAdd(type: JavaExec) {
+    group = 'Build'
+    description = 'Generates AST classes using JastAdd'
+
+    classpath = configurations.jastadd
+    mainClass = 'org.jastadd.JastAdd'
+
+    def outputDir = generatedSrcDir.get().asFile
+    def packagePath = 'org.jmodelica.modelica.compiler' // Derived from build-base.xml logic
+
+    def sourceFiles = fileTree(dir: 'ModelicaFlatTree/src/jastadd', include: ['**/*.ast', '**/*.jadd', '**/*.jrag']) +
+                      fileTree(dir: 'ModelicaFrontEnd/src/jastadd', include: ['**/*.ast', '**/*.jadd', '**/*.jrag']) +
+                      fileTree(dir: 'ModelicaMiddleEnd/src/jastadd', include: ['**/*.ast', '**/*.jadd', '**/*.jrag']) +
+                      fileTree(dir: 'GenericCodeGen/src/jastadd', include: ['**/*.ast', '**/*.jadd', '**/*.jrag']) +
+                      fileTree(dir: 'TestFramework/src/jastadd', include: ['**/*.ast', '**/*.jadd', '**/*.jrag']) +
+                      fileTree(dir: 'FmiXMLCodeGen/src/jastadd', include: ['**/*.ast', '**/*.jadd', '**/*.jrag']) +
+                      fileTree(dir: 'ModelicaFMUXBackEnd/src/jastadd', include: ['**/*.ast', '**/*.jadd', '**/*.jrag']) +
+                      fileTree(dir: 'ModelicaCBackEnd/src/jastadd', include: ['**/*.ast', '**/*.jadd', '**/*.jrag']) +
+                      fileTree(dir: 'ModelicaCompiler/src/jastadd', include: ['**/*.ast', '**/*.jadd', '**/*.jrag'])
+    
+    inputs.files sourceFiles
+    outputs.dir outputDir
+
+    doFirst {
+        outputDir.mkdirs()
+    }
+
+    args = [
+        "--package=${packagePath}",
+        "--o=${outputDir.absolutePath}",
+        "--beaver",
+        "--rewrite",
+        "--cacheCycle",
+        "--visitCheck=false",
+        "--lazyMaps",
+        "--emptyContainerSingletons",
+        "--indent=4space",
+        "--inhEqCheck=false",
+        "--optimize-imports"
+    ]
+
+    // Add source files to args
+    doFirst {
+        sourceFiles.each { file ->
+            args += file.absolutePath
+        }
+    }
+}
+
+// Parser Generation Task (Beaver)
+task generateParser {
+    group = 'Build'
+    description = 'Generates Parser classes using Beaver'
+    
+    def parserDir = layout.buildDirectory.dir("parsers").get().asFile
+    def outputDir = generatedSrcDir.get().asFile
+    def modelicaFrontEndDir = file('ModelicaFrontEnd/src/parser')
+    
+    inputs.files(fileTree(dir: modelicaFrontEndDir, include: ['*.parser', '*.beaver']))
+    outputs.dir outputDir
+
+    doLast {
+        parserDir.mkdirs()
+        outputDir.mkdirs()
+
+        // 1. Copy Modelica.parser
+        def parserFile = new File(parserDir, 'ModelicaParser.parser')
+        copy {
+            from new File(modelicaFrontEndDir, 'Modelica.parser')
+            into parserDir
+            rename 'Modelica.parser', 'ModelicaParser.parser'
+        }
+
+        // 2. Replace tokens
+        def parserContent = parserFile.text
+        parserContent = parserContent.replace('$PARSER_PACKAGE$', 'org.jmodelica.modelica.parser')
+        parserContent = parserContent.replace('$AST_PACKAGE$', 'org.jmodelica.modelica.compiler')
+        parserFile.text = parserContent
+
+        // 3. Translate to .raw.beaver
+        def rawBeaverFile = new File(parserDir, 'ModelicaParser.raw.beaver')
+        javaexec {
+            classpath = files('../ThirdParty/JastAdd/JastAddParser.jar', 'ModelicaFrontEnd/ThirdParty/Beaver/lib/beaver-rt.jar')
+            mainClass = 'Main'
+            args = [parserFile.absolutePath, rawBeaverFile.absolutePath]
+        }
+
+        // 4. Concat header + raw
+        def headerFile = new File(modelicaFrontEndDir, 'Modelica_header.beaver')
+        def finalBeaverFile = new File(parserDir, 'ModelicaParser.beaver')
+        finalBeaverFile.text = headerFile.text + "\n" + rawBeaverFile.text
+
+        // 5. Run Beaver
+        javaexec {
+            classpath = configurations.beaver
+            mainClass = 'beaver.comp.run.Make'
+            args = [
+                '-d', outputDir.absolutePath,
+                '-t', // terminal names
+                '-c', // no compress (compress=no in ant) -> Wait, ant says compress="no", so NO -c? 
+                      // Beaver CLI: -c means compress. So omit it.
+                      // Ant task: compress="no".
+                '-w', // use switch? Ant says useSwitch="yes". CLI: -w
+                finalBeaverFile.absolutePath
+            ]
+        }
+    }
+}
+
+// JFlex Task
+task generateJFlex {
+    group = 'Build'
+    description = 'Generates Scanner classes using JFlex'
+
+    def outputDir = generatedSrcDir.get().asFile
+    def tempDir = layout.buildDirectory.dir("flex-temp").get().asFile
+    
+    inputs.files fileTree(dir: 'ModelicaFrontEnd/src/parser', include: '**/*.flex')
+
+    outputs.dir outputDir
+
+    doLast {
+        outputDir.mkdirs()
+        tempDir.mkdirs()
+        
+        inputs.files.each { file ->
+            println "Generating scanner for ${file.name}"
+            
+            // Copy and replace tokens
+            def tempFile = new File(tempDir, file.name)
+            def content = file.text
+            content = content.replace('\$PARSER_PACKAGE\$', 'org.jmodelica.modelica.parser')
+            content = content.replace('\$AST_PACKAGE\$', 'org.jmodelica.modelica.compiler')
+            tempFile.text = content
+            
+            // Run JFlex on processed file
+            javaexec {
+                classpath = configurations.jflex
+                mainClass = 'JFlex.Main'
+                args = ['-d', outputDir.absolutePath, tempFile.absolutePath]
+            }
+        }
+    }
+}
+
+// Dummy Options Generation Task (Temporary fix)
+task generateDummyOptions {
+    def outputDir = generatedSrcDir.get().asFile
+    def packageDir = new File(outputDir, "org/jmodelica/modelica/compiler/generated")
+    def outputFile = new File(packageDir, "OptionRegistry.java")
+    
+    outputs.file outputFile
+
+    doLast {
+        packageDir.mkdirs()
+        outputFile.text = """
+package org.jmodelica.modelica.compiler.generated;
+
+import org.jmodelica.common.options.AbstractOptionRegistry;
+
+public class OptionRegistry extends AbstractOptionRegistry {
+    
+    // Simple option wrapper class
+    public class StringOption {
+        private String value = "";
+        public void setValue(String val) { value = val; }
+        public String getValue() { return value; }
+    }
+    
+    public final StringOption MODELICAPATH = new StringOption();
+    
+    public OptionRegistry() {
+        // Empty for now
+    }
+
+    @Override
+    public OptionRegistry copy() {
+        OptionRegistry res = new OptionRegistry();
+        res.copyAllOptions(this);
+        return res;
+    }
+    
+    public static OptionRegistry buildOptions() {
+        return new OptionRegistry();
+    }
+    
+    public static OptionRegistry buildTestOptions() {
+        return new OptionRegistry();
+    }
+}
+"""
+    }
+}
+
+compileJava.dependsOn generateJastAdd
+compileJava.dependsOn generateParser
+compileJava.dependsOn generateJFlex
+compileJava.dependsOn generateDummyOptions

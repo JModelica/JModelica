@@ -48,7 +48,7 @@ finally:
 
 try:
     _f = os.path.join(os.environ['JMODELICA_HOME'],'startup.py')
-    execfile(_f)
+    exec(open(_f).read())
 except IOError:
     logging.warning('Startup script ''%s'' not found. Environment may be corrupt'
                   % _f)

@@ -24,8 +24,13 @@ __all__ = ['common', 'initialization', 'optimization', 'examples', 'casadi_inter
 __version__=''
 
 import os
+import logging
+
+f = None
+try:
+    f = open(os.path.join(os.environ['JMODELICA_HOME'],'version.txt'), 'r')
     __version__=f.readline().strip()
-except IOError:
+except (IOError, KeyError):
     logging.warning('Version file not found. Environment may be corrupt.')
 finally:
     if f is not None:
@@ -41,10 +46,13 @@ except IOError:
 
 import numpy as N
 
-import pyjmi
+# import pyjmi # Circular import?
 
 int = N.int32
 N.int = N.int32
+
+# Expose load_fmu from pymodelica which handles loading
+from pymodelica import load_fmu
 
 try:
     ipopt_present = pyjmi.environ['IPOPT_HOME']

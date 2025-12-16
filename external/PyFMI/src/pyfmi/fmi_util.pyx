@@ -30,7 +30,7 @@ from cpython cimport array
 
 import functools
 import marshal
-import fmi
+import pyfmi.fmi as fmi
 import sys
 
 python3_flag = True if sys.hexversion > 0x03000000 else False
@@ -456,7 +456,7 @@ class Graph:
                 self._strongly_connected_components(node)
         return self.connected_components
 """
-class OrderedSet(collections.MutableSet):
+class OrderedSet(collections.abc.MutableSet):
 
     def __init__(self, iterable=None):
         self.end = end = [] 
@@ -568,7 +568,7 @@ class Graph:
                         if trees[model][out].has_key(node): #Node is in a previouos spanning tree (cannot join them)
                             pass
                         else:
-                            print "Joining: ", out, node
+                            print("Joining: ", out, node)
                             joined_nodes[out].append(node)
                             trees[model][out].update(self.dfs(node)) #Can be needed if they are not in the same tree
                             included = True
@@ -733,7 +733,7 @@ class Graph:
                         if valid_choices[node] > valid_choices[torn_node]: #If the weight is greater
                             torn_node = node
                             
-                    print "Variable to tear: ", torn_node
+                    print("Variable to tear: ", torn_node)
                     self.tear_node(torn_node)
         
         return torn_graph

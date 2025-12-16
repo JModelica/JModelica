@@ -295,7 +295,11 @@ try:
 except:
     pass
 
-from numpy.distutils.core import setup
+try:
+    from numpy.distutils.core import setup
+except ImportError:
+    from setuptools import setup
+
 setup(name=NAME,
       version=VERSION,
       license=LICENSE,

@@ -227,7 +227,7 @@ jmi_type_t jmi_get_type_from_value_ref(jmi_value_reference vref) {
         case BOOL_TYPE_MASK: return JMI_BOOLEAN;
         case STR_TYPE_MASK:  return JMI_STRING;
         default:
-            return -1;
+            return (jmi_type_t)-1;
     }
 }
 

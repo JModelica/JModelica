@@ -598,7 +598,7 @@ jmi_value_reference jmi_get_index_from_value_ref(jmi_value_reference vref);
  * @param vref A value reference.
  * @return Type.
  */
-jmi_value_reference jmi_get_type_from_value_ref(jmi_value_reference vref);
+jmi_type_t jmi_get_type_from_value_ref(jmi_value_reference vref);
 
 /**
  * \brief Checks if a value reference belongs to an internal negative alias

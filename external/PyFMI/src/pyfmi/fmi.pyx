@@ -149,17 +149,17 @@ FMI_DERIVATIVES = 1
 FMI_OUTPUTS = 2
 
 #CALLBACKS
-cdef void importlogger(FMIL.jm_callbacks* c, FMIL.jm_string module, FMIL.jm_log_level_enu_t log_level, FMIL.jm_string message):
+cdef void importlogger(FMIL.jm_callbacks* c, FMIL.jm_string module, FMIL.jm_log_level_enu_t log_level, FMIL.jm_string message) noexcept:
     if c.context != NULL:
         (<FMUModelBase>c.context)._logger(module,log_level,message)
  
 #CALLBACKS
-cdef void importlogger2(FMIL.jm_callbacks* c, FMIL.jm_string module, FMIL.jm_log_level_enu_t log_level, FMIL.jm_string message):
+cdef void importlogger2(FMIL.jm_callbacks* c, FMIL.jm_string module, FMIL.jm_log_level_enu_t log_level, FMIL.jm_string message) noexcept:
     if c.context != NULL:
         (<FMUModelBase2>c.context)._logger(module, log_level, message)
 
 #CALLBACKS
-cdef void importlogger_load_fmu(FMIL.jm_callbacks* c, FMIL.jm_string module, FMIL.jm_log_level_enu_t log_level, FMIL.jm_string message):
+cdef void importlogger_load_fmu(FMIL.jm_callbacks* c, FMIL.jm_string module, FMIL.jm_log_level_enu_t log_level, FMIL.jm_string message) noexcept:
     (<list>c.context).append("FMIL: module = %s, log level = %d: %s"%(module, log_level, message))
 
 cdef class ModelBase:

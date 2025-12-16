@@ -37,11 +37,12 @@ import scipy.sparse.linalg as splin
 import scipy.optimize as sopt
 import scipy.version
 
-from fmi cimport FMUModelCS2
+from pyfmi.fmi cimport FMUModelCS2
 from cpython cimport bool
 cimport fmil_import as FMIL
-from fmi_util import Graph
+from pyfmi.fmi_util import Graph
 from cython.parallel import prange, parallel
+from libc.math cimport pow
 
 IF WITH_OPENMP:
     cimport openmp
@@ -357,7 +358,7 @@ cdef class Master:
     cdef public dict statistics, models_id_mapping
     cdef public object opts
     cdef public object models_dict, L
-    cdef public object I
+    cdef public object I_mat
     cdef public object y_prev, yd_prev, input_traj
     cdef public object DL_prev
     cdef public int algebraic_loops, storing_fmu_state
@@ -446,7 +447,7 @@ cdef class Master:
         
         self.y_prev = None
         self.input_traj = None
-        self.I = sp.eye(self._len_inputs, self._len_outputs, format="csr") #y = Cx + Du , u = Ly -> DLy   DL[inputsXoutputs]
+        self.I_mat = sp.eye(self._len_inputs, self._len_outputs, format="csr") #y = Cx + Du , u = Ly -> DLy   DL[inputsXoutputs]
         
         self._error_data = {"time":[], "error":[], "step-size":[], "rejected":[]}
     
@@ -772,7 +773,7 @@ cdef class Master:
                             else:
                                 return C.dot(xd)+D.dot(ud)
                         else: #First step
-                            return splin.spsolve((self.I-D.dot(self.L)),C.dot(xd)).reshape((-1,1))
+                            return splin.spsolve((self.I_mat-D.dot(self.L)),C.dot(xd)).reshape((-1,1))
 
                 y_last = self.get_last_y()
                 if y_last is not None:
@@ -817,7 +818,7 @@ cdef class Master:
                         if ud is not None and udd is not None:
                             return C.dot(A.dot(xd))+C.dot(B.dot(ud+self.get_current_step_size()*udd))+D.dot(udd)
                         else: #First step
-                            return splin.spsolve((self.I-D.dot(self.L)),C.dot(A.dot(xd)+B.dot(self.L.dot(yd_cur)))).reshape((-1,1))
+                            return splin.spsolve((self.I_mat-D.dot(self.L)),C.dot(A.dot(xd)+B.dot(self.L.dot(yd_cur)))).reshape((-1,1))
                 
                 yd_last = self.get_last_yd()
                 if yd_last is not None:
@@ -869,7 +870,7 @@ cdef class Master:
                 
                 z = yd - D.dot(uhat)
             
-            yd = splin.spsolve((self.I-DL),z).reshape((-1,1))
+            yd = splin.spsolve((self.I_mat-DL),z).reshape((-1,1))
             """
         return ydd
 
@@ -884,7 +885,7 @@ cdef class Master:
                 
                 z = yd - D.dot(uhat)
             
-            yd = splin.spsolve((self.I-DL),z).reshape((-1,1))
+            yd = splin.spsolve((self.I_mat-DL),z).reshape((-1,1))
 
         return yd
     
@@ -901,7 +902,7 @@ cdef class Master:
                 else:
                     res = sopt.fsolve(init_f, y, args=(self))
                 if not res["success"]:
-                    print res
+                    print(res)
                     raise Exception("Failed to converge the output system.")
                 return res["x"].reshape(-1,1)
                 
@@ -920,7 +921,7 @@ cdef class Master:
                 z = y - DL.dot(y_prev)
                 #z = y - matvec(DL, y_prev.ravel())
             
-            y = splin.spsolve((self.I-DL),z).reshape((-1,1))
+            y = splin.spsolve((self.I_mat-DL),z).reshape((-1,1))
             #y = splin.lsqr((sp.eye(*DL.shape)-DL),z)[0].reshape((-1,1))
 
         elif self.algebraic_loops and self.support_directional_derivatives:
@@ -1019,7 +1020,7 @@ cdef class Master:
                     else:
                         res = sopt.fsolve(init_f_block, y[block["global_outputs_mask"]], args=(self,block))
                     if not res["success"]:
-                        print res
+                        print(res)
                         raise Exception("Failed to converge the initialization system.")
                     
                     y[block["global_outputs_mask"]] = res["x"]
@@ -1049,7 +1050,7 @@ cdef class Master:
                     else:
                         res = sopt.fsolve(init_f, self.get_connection_outputs(), args=(self))
                 if not res["success"]:
-                    print res
+                    print(res)
                     raise Exception("Failed to converge the initialization system.")
                 u = self.L.dot(res["x"].reshape(-1,1))
                 self.set_connection_inputs(u)
@@ -1265,7 +1266,7 @@ cdef class Master:
         if error == 0.0:
             return step_size*fac1
         else:
-            return step_size*min(fac1,max(fac2,alpha*(1.0/error)**one_over_p))
+            return step_size*min(fac1,max(fac2,alpha*pow(1.0/error, one_over_p)))
             
     cdef reset_statistics(self):
         for key in self.elapsed_time: 

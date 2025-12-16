@@ -30,9 +30,9 @@ cimport numpy as N
 N.import_array()
 
 cimport fmil_import as FMIL
-from fmi cimport FMUModelME1
-from fmi import FMUException
-from fmi import FMI_OK, FMI_DEFAULT_LOG_LEVEL, FMI_ME
+from pyfmi.fmi cimport FMUModelME1
+from pyfmi.fmi import FMUException
+from pyfmi.fmi import FMI_OK, FMI_DEFAULT_LOG_LEVEL, FMI_ME
 
 
 cdef class FMUModelME1Extended(FMUModelME1):

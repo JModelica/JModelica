@@ -1,0 +1,81 @@
+name: Bug report
+description: Something does not work
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Issues here can be handed to an automated agent that will attempt a fix
+        and open a pull request. The more precisely you fill this in, the better
+        that works — and the more likely a human reviewer can act on it too.
+
+        Before filing: JModelica's build is currently broken against modern
+        toolchains, and that is known. See `AGENTS.md` section 3 before opening
+        an issue about a build failure.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: >-
+        Exact commands, and the smallest Modelica model that shows the problem.
+        An issue that cannot be reproduced cannot be fixed.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Actual output
+      description: The full error, traceback or compiler message. Do not truncate it.
+      render: shell
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Compiler (Modelica to C)
+        - Runtime library (C)
+        - Python interface (pymodelica / pyjmi)
+        - FMU export / FMI compliance
+        - Build system
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: JModelica version or commit
+      placeholder: '2.14, or a commit SHA, or the branch you built'
+    validations:
+      required: true
+
+  - type: input
+    id: platform
+    attributes:
+      label: Operating system and architecture
+      placeholder: 'Ubuntu 24.04 x86_64 / macOS 15 arm64 / Windows 11 x86_64'
+    validations:
+      required: true
+
+  - type: textarea
+    id: toolchain
+    attributes:
+      label: Toolchain versions
+      description: >-
+        Output of `cc --version`, `java -version`, `python3 --version`, and the
+        Sundials version if the problem is in the runtime library.
+      render: shell

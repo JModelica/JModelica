@@ -1,0 +1,28 @@
+# actionlint configuration.
+#
+# actionlint validates runner labels against a list baked into the binary, so
+# runner images released after that version are reported as unknown. These two
+# are real GitHub-hosted images, not self-hosted runners:
+#
+#   macos-15-intel  x86_64 macOS, the successor to macos-13 as Intel images are
+#                   retired. https://github.com/actions/runner-images
+#   windows-11-arm  arm64 Windows, generally available since 2025.
+#
+# Both are used only in release.yml, behind the ENABLE_EXTRA_RUNNERS repository
+# variable, so a repository without access to them is unaffected. Remove these
+# entries once the pinned actionlint version recognises them.
+self-hosted-runner:
+  labels:
+    - macos-15-intel
+    - windows-11-arm
+
+paths:
+  .github/workflows/jules-branches.yml:
+    ignore:
+      # SC2016 warns that '$' does not expand inside single quotes. In the
+      # branch survey that is the whole point: '$b', '$a' and the rest are jq
+      # variables bound by --arg, and '^HEAD$' is a regex anchor. An inline
+      # `# shellcheck disable` cannot cover them, because actionlint prepends
+      # its own shebang to each `run:` block, which turns a file-level
+      # directive into one that applies to the next command only.
+      - 'shellcheck reported issue in this script: SC2016'

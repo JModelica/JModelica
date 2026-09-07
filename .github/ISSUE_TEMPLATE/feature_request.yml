@@ -1,0 +1,60 @@
+name: Feature request
+description: Something is missing
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Requests here can be handed to an automated agent that will attempt an
+        implementation. A request stated as a concrete, checkable outcome gets a
+        usable pull request; a vague one gets a guess.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve
+      description: >-
+        Describe the situation you are actually in, not the solution you have in
+        mind. What are you trying to do that you cannot do today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: What should happen instead? An example command or API call helps.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: How would you know it works
+      description: >-
+        What would you run to check it? This becomes the regression test, so
+        being concrete here is the difference between a mergeable change and a
+        plausible-looking one.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Compiler (Modelica to C)
+        - Runtime library (C)
+        - Python interface (pymodelica / pyjmi)
+        - FMU export / FMI compliance
+        - Build system, packaging or CI
+        - Documentation
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other tools or workarounds you tried, and why they did not fit.

@@ -1,0 +1,86 @@
+# Deterministic line endings.
+#
+# Without this, whether a file arrives in a commit as LF or CRLF depends on each
+# contributor's core.autocrlf setting. That is how pull request #21 came to
+# rewrite all 5,864 lines of InstanceTree.jrag while changing nothing: the diff
+# was CRLF-versus-LF, not code.
+#
+# Deliberately NOT set here: a global `* text=auto eol=lf`.
+#
+# Parts of this tree are already stored with CRLF — InstanceTree.jrag among
+# them — so a blanket rule would mark thousands of untouched files as modified
+# on the next checkout and bury real changes under renormalisation noise.
+# Normalising the whole repository is worth doing, but it needs to be its own
+# commit, made deliberately:
+#
+#     # after adding `* text=auto eol=lf` above
+#     git add --renormalize .
+#     git commit -m "Normalise line endings to LF"
+#
+# and merged when no long-lived branch is waiting, since it conflicts with
+# everything. Until then, the rules below cover the cases where the line ending
+# is not cosmetic but load-bearing.
+
+# --- Files that must keep CRLF in the working tree --------------------------
+# cmd.exe misparses a batch file with bare LF line endings.
+*.bat           text eol=crlf
+*.cmd           text eol=crlf
+*.ps1           text eol=crlf
+
+# --- Files that must keep LF even on Windows --------------------------------
+# A shell script or a Makefile with CRLF fails at the shebang or the recipe.
+*.sh            text eol=lf
+*.bash          text eol=lf
+configure.ac    text eol=lf
+Makefile*       text eol=lf
+*.mk            text eol=lf
+gradlew         text eol=lf
+Dockerfile*     text eol=lf
+
+# --- Binary: never touch, never diff ----------------------------------------
+*.png           binary
+*.jpg           binary
+*.jpeg          binary
+*.gif           binary
+*.ico           binary
+*.pdf           binary
+*.zip           binary
+*.gz            binary
+*.tgz           binary
+*.bz2           binary
+*.xz            binary
+*.jar           binary
+*.class         binary
+*.so            binary
+*.so.*          binary
+*.dylib         binary
+*.dll           binary
+*.exe           binary
+*.o             binary
+*.a             binary
+*.lib           binary
+*.pyc           binary
+*.pyd           binary
+*.mat           binary
+*.fmu           binary
+*.fmux          binary
+
+# --- Language hints ---------------------------------------------------------
+# GitHub's language detection reports this repository as partly "Motoko" because
+# .mo is Motoko's extension; here it is Modelica, which is most of the tree.
+*.mo            linguist-language=Modelica
+*.mop           linguist-language=Modelica
+
+# Vendored and generated trees should not count towards language statistics and
+# should be collapsed in pull request diffs by default.
+ThirdParty/**       linguist-vendored
+external/**         linguist-vendored
+*.jrag              linguist-language=Java
+*.jadd              linguist-language=Java
+*.ast               linguist-language=Java
+
+# --- Export ------------------------------------------------------------------
+# Keep development-only files out of `git archive` tarballs.
+/.github        export-ignore
+/.gitattributes export-ignore
+/.gitignore     export-ignore

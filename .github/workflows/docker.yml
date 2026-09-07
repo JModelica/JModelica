@@ -1,0 +1,159 @@
+name: Container images
+
+# Multi-architecture container images, published to GitHub Container Registry.
+#
+# This is the most portable artifact the project can produce: one image
+# reference that resolves to the right binary on x86_64 and arm64 alike, on any
+# host with a container runtime. It is also how arm64 gets built and tested at
+# all — GitHub's arm64 runners are not used here, so nothing depends on a runner
+# label that might not be available to this repository.
+#
+# Pull requests build both architectures but publish nothing.
+
+on:
+  push:
+    branches: [master, 'feature/**']
+    tags: ['v*']
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - '.github/workflows/docker.yml'
+      - 'CMakeLists.txt'
+      - 'RuntimeLibrary/**'
+      - 'Compiler/**'
+      - 'Python/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  attestations: write
+  id-token: write
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    name: ${{ matrix.platform }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - linux/amd64
+          - linux/arm64
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up QEMU
+        # Cross-architecture emulation. Needed for the arm64 build on an x86_64
+        # runner; slow, but it is real arm64 code being compiled and it proves
+        # the source has no architecture assumptions in it.
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ${{ env.REGISTRY }}
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          # Digests are assembled into a manifest list by the `manifest` job;
+          # pushing a tag per architecture would leave the tag pointing at
+          # whichever build finished last.
+          outputs: >-
+            type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=${{ github.event_name != 'pull_request' }}
+          cache-from: type=gha,scope=${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
+          provenance: false
+
+      - name: Export the digest
+        if: github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${{ steps.build.outputs.digest }}#"
+        shell: bash
+
+      - name: Upload the digest
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ strategy.job-index }}
+          path: /tmp/digests/*
+          retention-days: 1
+          if-no-files-found: error
+
+  manifest:
+    name: Publish manifest list
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the digests
+        uses: actions/download-artifact@v5
+        with:
+          path: /tmp/digests
+          pattern: digest-*
+          merge-multiple: true
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ${{ env.REGISTRY }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Create the manifest list
+        working-directory: /tmp/digests
+        run: |
+          set -euo pipefail
+          # One tag, every architecture. `docker pull` then resolves to the
+          # right one for the host without the user choosing.
+          # shellcheck disable=SC2046
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "${DOCKER_METADATA_OUTPUT_JSON}") \
+            $(printf "${REGISTRY}/${IMAGE_NAME}@sha256:%s " *)
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+
+      - name: Inspect the published image
+        run: |
+          set -euo pipefail
+          version="$(jq -r '.labels["org.opencontainers.image.version"] // empty' <<< "${DOCKER_METADATA_OUTPUT_JSON}")"
+          # Verify what was actually published rather than trusting the push.
+          docker buildx imagetools inspect \
+            "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${version:-latest}"

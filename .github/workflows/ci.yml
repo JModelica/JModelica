@@ -1,0 +1,303 @@
+name: CI
+
+# Honest CI for a project that does not currently build.
+#
+# `meta` is the gate. It is fast, it passes today, and it is the check that
+# branch protection should require: it enforces the rules in AGENTS.md that a
+# reviewer would otherwise have to enforce by hand.
+#
+# `compiler`, `runtime` and `python` attempt the real build on every supported
+# platform. They currently fail — Sundials 7.x removed DlsMat, JastAdd trips on
+# Java 17+, and parts of Python/src are still Python 2. Those failures are the
+# point: they are the modernization backlog, made visible and measurable. They
+# are deliberately NOT marked continue-on-error, because a build job that
+# reports success while the build is broken is worse than no CI at all.
+
+on:
+  push:
+    branches: [master, 'feature/**', 'fix/**', 'ci/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: '21'
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Fast, deterministic checks. This job must stay green.
+  # ---------------------------------------------------------------------------
+  meta:
+    name: Repository hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The artifact guard diffs against the merge base, which needs history.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Guard against build artifacts and unportable symlinks
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [ -n "${BASE_SHA:-}" ]; then
+            echo "Checking files added or modified against ${BASE_SHA}."
+            git diff --name-only --diff-filter=AM "${BASE_SHA}...HEAD" \
+              | python tools/check_no_artifacts.py --stdin
+          else
+            echo "Not a pull request; auditing the whole tree."
+            python tools/check_no_artifacts.py --all
+          fi
+
+      - name: Test the guard itself
+        run: |
+          python -m pip install --quiet pytest
+          python -m pytest tools/test_check_no_artifacts.py -q
+
+      - name: Lint the workflows
+        run: |
+          set -euo pipefail
+          # Pinned: actionlint is a linter, and a surprise upgrade turning a new
+          # rule on would fail unrelated pull requests.
+          version=1.7.7
+          curl -fsSL -o actionlint.tar.gz \
+            "https://github.com/rhysd/actionlint/releases/download/v${version}/actionlint_${version}_linux_amd64.tar.gz"
+          tar -xzf actionlint.tar.gz actionlint
+          ./actionlint -color
+
+      - name: Lint shell scripts
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          # Advisory: most of these scripts predate the project's move to git and
+          # fixing them is not what a build pull request is for.
+          find . -name '*.sh' -not -path './ThirdParty/*' -not -path './external/*' \
+            -print0 | xargs -0 -r shellcheck --severity=error || \
+            echo "::warning::shellcheck reported errors; see the log."
+
+      - name: Check Python syntax
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet ruff
+          # E9 = syntax errors, F63/F7/F82 = genuine bugs (undefined names and
+          # the like). Style is not policed; this repository has 15 years of it.
+          ruff check --select=E9,F63,F7,F82 --exclude=ThirdParty,external . || \
+            echo "::warning::ruff found problems in legacy Python; see the log."
+          # tools/ is new code and is held to the full default rule set.
+          ruff check tools/
+
+  # ---------------------------------------------------------------------------
+  # The Java compiler. Closest to green of the three build jobs.
+  # ---------------------------------------------------------------------------
+  compiler:
+    name: Compiler (Java) — ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build
+        shell: bash
+        working-directory: Compiler
+        run: |
+          set -euo pipefail
+          if [ ! -f build.gradle ]; then
+            echo "::notice::No Gradle build on this branch. The Gradle migration"
+            echo "::notice::lives on feature/modernization-checkpoint; master"
+            echo "::notice::still uses Ant. Nothing to do here."
+            exit 0
+          fi
+          chmod +x gradlew 2>/dev/null || true
+          ./gradlew --no-daemon --stacktrace build
+
+      - name: Upload the compiler jars
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compiler-${{ matrix.os }}
+          path: Compiler/build/libs/*.jar
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # The C runtime library. Blocked on the Sundials 7.x API removals.
+  # ---------------------------------------------------------------------------
+  runtime:
+    name: Runtime (C) — ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            build-essential gfortran cmake ninja-build swig \
+            libsundials-dev libopenblas-dev liblapack-dev zlib1g-dev \
+            coinor-libipopt-dev
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update --quiet
+          # gcc is here for gfortran, which several ThirdParty solvers need.
+          brew install --quiet cmake ninja swig sundials openblas lapack gcc || true
+
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f vcpkg.json ]; then
+            echo "Manifest found; vcpkg will install from vcpkg.json during configure."
+          else
+            echo "::notice::No vcpkg.json on this branch, so Sundials and BLAS are"
+            echo "::notice::not available. Expect configure to fail."
+          fi
+
+      - name: Configure
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f CMakeLists.txt ]; then
+            echo "::notice::No top-level CMakeLists.txt on this branch. The CMake"
+            echo "::notice::migration lives on feature/modernization-checkpoint;"
+            echo "::notice::master still uses autotools (see issue #20)."
+            exit 0
+          fi
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -d build ]; then exit 0; fi
+          cmake --build build --config Release --parallel
+
+      - name: Test
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -d build ]; then exit 0; fi
+          ctest --test-dir build --output-on-failure --no-tests=ignore
+
+      - name: Upload the runtime libraries
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-${{ matrix.os }}
+          path: |
+            build/**/*.so
+            build/**/*.dylib
+            build/**/*.dll
+            build/**/*.a
+            build/**/*.lib
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # The Python interface.
+  # ---------------------------------------------------------------------------
+  python:
+    name: Python — ${{ matrix.os }} / ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ['3.12']
+        include:
+          # Check the ends of the supported range on Linux only; doing the full
+          # cross product would triple the job count to little effect.
+          - os: ubuntu-latest
+            python: '3.10'
+          - os: ubuntu-latest
+            python: '3.13'
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Import check
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip setuptools wheel
+          python -m pip install --quiet numpy scipy cython lxml
+          # Compiling to bytecode catches the Python 2 syntax that still remains
+          # without needing the native extensions to be built first.
+          python -m compileall -q Python/src/pymodelica Python/src/pyjmi || {
+            echo "::error::Python/src still contains Python 2 syntax. See AGENTS.md section 3."
+            exit 1
+          }
+
+  # ---------------------------------------------------------------------------
+  # A single place to read the state of the build.
+  # ---------------------------------------------------------------------------
+  summary:
+    name: Summary
+    if: always()
+    needs: [meta, compiler, runtime, python]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report
+        env:
+          META: ${{ needs.meta.result }}
+          COMPILER: ${{ needs.compiler.result }}
+          RUNTIME: ${{ needs.runtime.result }}
+          PYTHON: ${{ needs.python.result }}
+        run: |
+          {
+            echo "## Build status"
+            echo
+            echo "| Component | Result |"
+            echo "|---|---|"
+            echo "| Repository hygiene | ${META} |"
+            echo "| Compiler (Java) | ${COMPILER} |"
+            echo "| Runtime (C) | ${RUNTIME} |"
+            echo "| Python | ${PYTHON} |"
+            echo
+            if [ "${META}" != "success" ]; then
+              echo "**Repository hygiene failed.** This is the gating check —"
+              echo "see AGENTS.md for what it enforces and why."
+            else
+              echo "Repository hygiene passed. Build failures below it are the"
+              echo "known modernization backlog, not something this change"
+              echo "introduced; see \`doc/modernization/\` and AGENTS.md section 3."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Only hygiene gates the run. Making the whole workflow red on a build
+          # that is known-broken would train everyone to ignore the red.
+          [ "${META}" = "success" ]

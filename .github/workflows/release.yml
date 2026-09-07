@@ -1,0 +1,240 @@
+name: Release
+
+# Builds portable, self-contained JModelica bundles and publishes them.
+#
+# One archive per platform. Each unpacks anywhere and runs without installing a
+# JDK, a Modelica library, or a solver package: tools/package_portable.py builds
+# a minimal Java runtime with jlink and puts the compiler, the native runtime
+# libraries and the Python interface beside it. The only thing the host must
+# still supply is a C compiler, because turning a Modelica model into an FMU
+# means compiling generated C.
+#
+# jlink emits a runtime for the architecture of the JDK that runs it, so every
+# platform is built natively. Nothing is cross-compiled and nothing is emulated,
+# which is also what makes these builds a genuine portability test.
+#
+# Status: the bundles cannot be produced until the build succeeds — see
+# AGENTS.md section 3. The jlink stage works today; the compiler and runtime
+# stages are what the modernization work is for. Container images, which are
+# produced by docker.yml, are the working multi-architecture artifact in the
+# meantime.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version string for the archives (e.g. 2.15.0-rc1)'
+        required: true
+        type: string
+      publish:
+        description: 'Attach the archives to a GitHub release'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  bundle:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The always-available runner images.
+          - { os: ubuntu-latest,  label: linux-x86_64,   extra: false }
+          - { os: macos-latest,   label: macos-aarch64,  extra: false }
+          - { os: windows-latest, label: windows-x86_64, extra: false }
+          # Additional architectures. These runner labels are not available to
+          # every repository, and an unavailable label queues forever rather
+          # than failing, so they are opt-in: set the repository variable
+          # ENABLE_EXTRA_RUNNERS to 'true' once you have confirmed they run.
+          - { os: ubuntu-24.04-arm, label: linux-aarch64,   extra: true }
+          - { os: macos-15-intel,   label: macos-x86_64,    extra: true }
+          - { os: windows-11-arm,   label: windows-aarch64, extra: true }
+
+    steps:
+      - name: Skip unless enabled
+        id: gate
+        shell: bash
+        run: |
+          if [ "${{ matrix.extra }}" = "true" ] && \
+             [ "${{ vars.ENABLE_EXTRA_RUNNERS }}" != "true" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::${{ matrix.label }} is opt-in; set ENABLE_EXTRA_RUNNERS to build it."
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v5
+        if: steps.gate.outputs.run == 'true'
+
+      - uses: actions/setup-java@v5
+        if: steps.gate.outputs.run == 'true'
+        with:
+          # A full JDK, not a JRE: jlink ships with the JDK only.
+          distribution: temurin
+          java-version: '21'
+
+      - uses: actions/setup-python@v6
+        if: steps.gate.outputs.run == 'true'
+        with:
+          python-version: '3.12'
+
+      - name: Install build dependencies (Linux)
+        if: steps.gate.outputs.run == 'true' && runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            build-essential gfortran cmake ninja-build swig \
+            libsundials-dev libopenblas-dev liblapack-dev zlib1g-dev \
+            coinor-libipopt-dev
+
+      - name: Install build dependencies (macOS)
+        if: steps.gate.outputs.run == 'true' && runner.os == 'macOS'
+        run: |
+          brew update --quiet
+          brew install --quiet cmake ninja swig sundials openblas lapack gcc
+
+      - name: Install build dependencies (Windows)
+        if: steps.gate.outputs.run == 'true' && runner.os == 'Windows'
+        shell: bash
+        run: |
+          # vcpkg ships on the Windows runner image; the manifest drives it.
+          if [ -f vcpkg.json ]; then
+            echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build the runtime library
+        if: steps.gate.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release --parallel
+
+      - name: Build the compiler
+        if: steps.gate.outputs.run == 'true'
+        shell: bash
+        working-directory: Compiler
+        run: |
+          set -euo pipefail
+          chmod +x gradlew 2>/dev/null || true
+          ./gradlew --no-daemon build
+
+      - name: Assemble the portable bundle
+        id: package
+        if: steps.gate.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ inputs.version || github.ref_name }}"
+          python tools/package_portable.py \
+            --version "${version#v}" \
+            --build-dir build \
+            --compiler-dir Compiler/build/libs \
+            --output dist
+
+      - name: Verify the bundle runs
+        if: steps.gate.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Unpack into a directory unrelated to the build tree. A bundle that
+          # only works where it was built is not portable, and this is the one
+          # check that actually distinguishes the two.
+          workdir="$(mktemp -d)"
+          archive="$(find dist -maxdepth 1 -name '*.tar.gz' -o -maxdepth 1 -name '*.zip' | head -n1)"
+          case "$archive" in
+            *.zip)    unzip -q "$archive" -d "$workdir" ;;
+            *.tar.gz) tar -xzf "$archive" -C "$workdir" ;;
+          esac
+          root="$(find "$workdir" -maxdepth 1 -mindepth 1 -type d | head -n1)"
+          "$root/runtime/bin/java" -version
+          echo "Bundle relocated to $root and its runtime executes."
+
+      - name: Upload the bundle
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: jmodelica-${{ matrix.label }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.sha256
+          if-no-files-found: error
+
+  publish:
+    name: Publish
+    needs: bundle
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      # For build provenance, so a downloader can verify an archive really came
+      # from this workflow and this commit.
+      attestations: write
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          path: dist
+          pattern: jmodelica-*
+          merge-multiple: true
+
+      - name: Collect the checksums
+        run: |
+          set -euo pipefail
+          cd dist
+          cat ./*.sha256 > SHA256SUMS
+          rm -f ./*.sha256
+          echo "Publishing:"
+          cat SHA256SUMS
+
+      - name: Attest the archives
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: 'dist/*.tar.gz,dist/*.zip'
+
+      - name: Create the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/SHA256SUMS
+          generate_release_notes: true
+          draft: true
+          body: |
+            ## Portable bundles
+
+            Each archive is self-contained: it carries its own Java runtime, the
+            compiler, the native runtime libraries and the Python interface.
+            Unpack it anywhere and run `bin/jmodelica`. No installation, no
+            system JDK, no system Sundials.
+
+            The host must provide a C compiler — compiling a Modelica model to
+            an FMU compiles generated C source.
+
+            ## Container image
+
+            Architecture-independent; `docker` selects the right one for the host:
+
+            ```
+            docker pull ghcr.io/jmodelica/jmodelica:${{ github.ref_name }}
+            ```
+
+            ## Verifying a download
+
+            ```
+            sha256sum -c SHA256SUMS
+            gh attestation verify jmodelica-*.tar.gz --repo ${{ github.repository }}
+            ```

@@ -1,0 +1,15 @@
+# Lint settings for tools/ only.
+#
+# The rest of the repository carries fifteen years of Python written to other
+# conventions, and CI checks it for genuine bugs (E9, F63, F7, F82) rather than
+# for style. Code in this directory is new, so it is held to the full default
+# rule set.
+
+line-length = 88
+target-version = "py310"
+
+[lint.isort]
+# check_no_artifacts is a sibling module imported by the test beside it, not a
+# third-party package. Without this, isort sorts it into the third-party block
+# and then disagrees with itself about where the import should go.
+known-first-party = ["check_no_artifacts"]

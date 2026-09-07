@@ -1,0 +1,140 @@
+name: Jules — fix a CI failure
+
+# Hands a failed CI run to Jules.
+#
+# DISABLED BY DEFAULT, deliberately. This repository's build is currently
+# expected to fail (AGENTS.md section 3), so an unconditional trigger would
+# start a Jules session on every single push and exhaust the daily task quota —
+# 15 on the free tier — within an hour, while starving the `jules` label that a
+# human is actually waiting on.
+#
+# Turn it on only once CI is green enough that a failure means something:
+#     gh variable set JULES_CI_FIX_ENABLED --body true
+#
+# Until then, use the `jules` label or `/jules` on an issue to target specific
+# build failures, which is both cheaper and better directed.
+
+on:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
+    branches: [master, 'feature/**']
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'CI run ID to investigate'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  # One session per branch. A branch that fails three times in five minutes
+  # should produce one attempt at a fix, not three.
+  group: jules-ci-fix-${{ github.event.workflow_run.head_branch || inputs.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  fix:
+    if: >-
+      vars.JULES_CI_FIX_ENABLED == 'true' &&
+      (github.event_name == 'workflow_dispatch' ||
+       github.event.workflow_run.conclusion == 'failure')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the API key is configured
+        env:
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+        run: |
+          if [ -z "${JULES_API_KEY}" ]; then
+            echo "::error::Secret JULES_API_KEY is not set. See doc/automation.md." >&2
+            exit 1
+          fi
+
+      - name: Collect the failing jobs
+        id: failures
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+        run: |
+          set -euo pipefail
+          # Names and step-level conclusions only. Full logs are megabytes and
+          # would dominate the prompt; Jules can reproduce the build itself,
+          # which is more reliable than reading a log it cannot re-run.
+          gh api "repos/${GH_REPO}/actions/runs/${RUN_ID}/jobs" --paginate \
+            --jq '.jobs[] | select(.conclusion == "failure") |
+                  "- \(.name): failed at step \"" +
+                  ([.steps[] | select(.conclusion == "failure") | .name] | join(", ")) +
+                  "\""' \
+            > failures.txt || true
+
+          if [ ! -s failures.txt ]; then
+            echo "No failing jobs found in run ${RUN_ID}."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          else
+            cat failures.txt
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Assemble the prompt
+        id: prompt
+        if: steps.failures.outputs.found == 'true'
+        env:
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          set -euo pipefail
+          {
+            echo "The CI workflow for ${REPO} failed on branch ${BRANCH}."
+            echo
+            echo "Commit: ${SHA}"
+            echo "Run: ${RUN_URL}"
+            echo
+            echo "Failing jobs:"
+            cat failures.txt
+            echo
+            echo "Read AGENTS.md before you change anything. Section 3 lists the"
+            echo "known build blockers; section 7 explains which CI jobs are"
+            echo "expected to fail today and which must never fail."
+            echo
+            cat <<'GUIDANCE'
+          Work as follows.
+
+          1. Reproduce the failure locally first. Run the same commands the
+             failing job runs and show the actual output.
+          2. Decide whether this is a *new* breakage or one of the known blockers
+             in AGENTS.md section 3. If it is a known blocker and you cannot
+             finish it, do not open a speculative pull request — report how far
+             you got and what specifically stands in the way.
+          3. If it is a new breakage, find the root cause and fix it minimally.
+          4. Re-run the build and the tests, and report the real result.
+
+          Do not disable a test, add continue-on-error, loosen a compiler
+          warning, or delete an assertion to make CI pass. A green build that
+          checks nothing is the one outcome worse than a red one.
+
+          Do not commit build artifacts and do not commit symlinks to absolute
+          paths; the `meta` job rejects both mechanically.
+          GUIDANCE
+          } > prompt.txt
+
+          delimiter="EOF_$(openssl rand -hex 12)"
+          {
+            echo "text<<${delimiter}"
+            cat prompt.txt
+            echo "${delimiter}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Hand the failure to Jules
+        if: steps.failures.outputs.found == 'true'
+        uses: google-labs-code/jules-action@bff7875eaa123cac6742b7cfc51005b95ba4d566 # v1.0.0
+        with:
+          prompt: ${{ steps.prompt.outputs.text }}
+          # Fix it on the branch that broke, not on the default branch.
+          starting_branch: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+          jules_api_key: ${{ secrets.JULES_API_KEY }}

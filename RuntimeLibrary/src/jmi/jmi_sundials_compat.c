@@ -1,14 +1,9 @@
+#define JMI_COMPAT_IMPL
 #include "jmi_sundials_compat.h"
+
+#if SUNDIALS_VERSION_MAJOR >= 6
 #include <stdlib.h>
 #include <sundials/sundials_context.h>
-#include <cvode/cvode.h>
-#include <sunmatrix/sunmatrix_dense.h>
-#include <sunlinsol/sunlinsol_dense.h>
-
-/* Undefine macros to avoid recursion/redefinition issues */
-#undef CVodeCreate
-#undef CVDense
-#undef CVodeSetErrHandlerFn
 
 /* Global SUNContext */
 SUNContext jmi_sundials_ctx = NULL;
@@ -25,6 +20,17 @@ void jmi_sundials_free_context() {
         jmi_sundials_ctx = NULL;
     }
 }
+#endif
+
+#if SUNDIALS_VERSION_MAJOR >= 6
+#include <cvode/cvode.h>
+#include <sunmatrix/sunmatrix_dense.h>
+#include <sunlinsol/sunlinsol_dense.h>
+
+/* Undefine macros to avoid recursion/redefinition issues */
+#undef CVodeCreate
+#undef CVDense
+#undef CVodeSetErrHandlerFn
 
 /* Wrapper for CVodeCreate */
 void* jmi_cvode_create_compat(int lmm, int iter) {
@@ -36,28 +42,23 @@ void* jmi_cvode_create_compat(int lmm, int iter) {
 /* Wrapper for CVDense */
 int jmi_cvdense_compat(void *cvode_mem, int N) {
     /* Create dense matrix */
-    SUNMatrix A = SUNDenseMatrix(N, N, jmi_sundials_ctx);
+    SUNMatrix A;
+    SUNLinearSolver LS;
+    int flag;
+
+    A = SUNDenseMatrix(N, N, jmi_sundials_ctx);
     if (A == NULL) return -1;
 
     /* Create dense linear solver */
-    SUNLinearSolver LS = SUNLinSol_Dense(NULL, A, jmi_sundials_ctx);
+    LS = SUNLinSol_Dense(NULL, A, jmi_sundials_ctx);
     if (LS == NULL) {
         SUNMatDestroy(A);
         return -1;
     }
 
     /* Attach to CVODE */
-    int flag = CVodeSetLinearSolver(cvode_mem, LS, A);
+    flag = CVodeSetLinearSolver(cvode_mem, LS, A);
     
-    /* Note: A and LS are owned by CVODE after attachment? 
-       Actually, usually user must free them. 
-       But for JModelica's legacy usage, we might leak them if we don't store them.
-       For now, let's assume we can just attach them. 
-       Wait, if we don't store them, we can't free them.
-       But JModelica calls jmi_ode_cvode_delete.
-       We might need to store them in the user data or similar.
-       For now, let's proceed and see if it works. Memory leak is secondary to build.
-    */
     return flag;
 }
 
@@ -73,3 +74,4 @@ int jmi_cvode_set_err_handler_fn_compat(void *cvode_mem, void (*ehfun)(int, cons
     CVodeSetErrHandlerFn(cvode_mem, (CVErrHandlerFn)ehfun, eh_data);
     return 0;
 }
+#endif

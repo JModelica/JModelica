@@ -24,7 +24,7 @@ dependencies {
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
+        languageVersion = JavaLanguageVersion.of(21)
     }
 }
 
@@ -188,54 +188,7 @@ task generateJFlex {
     }
 }
 
-// Dummy Options Generation Task (Temporary fix)
-task generateDummyOptions {
-    def outputDir = generatedSrcDir.get().asFile
-    def packageDir = new File(outputDir, "org/jmodelica/modelica/compiler/generated")
-    def outputFile = new File(packageDir, "OptionRegistry.java")
-    
-    outputs.file outputFile
-
-    doLast {
-        packageDir.mkdirs()
-        outputFile.text = """
-package org.jmodelica.modelica.compiler.generated;
-
-import org.jmodelica.common.options.AbstractOptionRegistry;
-
-public class OptionRegistry extends AbstractOptionRegistry {
-    
-    // Simple option wrapper class
-    public class StringOption {
-        private String value = "";
-        public void setValue(String val) { value = val; }
-        public String getValue() { return value; }
-    }
-    
-    public final StringOption MODELICAPATH = new StringOption();
-    
-    public OptionRegistry() {
-        // Empty for now
-    }
-
-    @Override
-    public OptionRegistry copy() {
-        OptionRegistry res = new OptionRegistry();
-        res.copyAllOptions(this);
-        return res;
-    }
-    
-    public static OptionRegistry buildOptions() {
-        return new OptionRegistry();
-    }
-    
-    public static OptionRegistry buildTestOptions() {
-        return new OptionRegistry();
-    }
-}
-"""
-    }
-}
+apply from: 'options.gradle'
 
 compileJava.dependsOn generateJastAdd
 compileJava.dependsOn generateParser

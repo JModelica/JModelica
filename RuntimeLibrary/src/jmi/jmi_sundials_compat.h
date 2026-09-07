@@ -1,8 +1,21 @@
 #ifndef JMI_SUNDIALS_COMPAT_H
 #define JMI_SUNDIALS_COMPAT_H
 
+#include <sundials/sundials_config.h>
 #include <sundials/sundials_types.h>
 
+#ifdef __has_include
+#if __has_include(<sundials/sundials_version.h>)
+#include <sundials/sundials_version.h>
+#endif
+#else
+/* Fallback if __has_include is not available (e.g. old GCC), assume header exists if version >= 2.7.0 */
+/* For safety, we can try including it. If it fails on very old Sundials, this might be an issue.
+   But we are targeting modern stack. */
+#include <sundials/sundials_version.h>
+#endif
+
+#if SUNDIALS_VERSION_MAJOR >= 7
 /* Define realtype if missing (Sundials 7.x might use sunrealtype) */
 typedef double realtype;
 
@@ -47,6 +60,10 @@ typedef struct _DlsMat {
 #define SUNDIALS_BAND  2
 
 #endif /* JMI_SUNDIALS_COMPAT_DLSMAT */
+#else
+#include <sundials/sundials_direct.h>
+/* Ensure DlsMat is defined properly if not done by sundials_direct.h (unlikely for < 7) */
+#endif
 
 
 
@@ -85,6 +102,7 @@ typedef struct _DlsMat {
 extern "C" {
 #endif
 
+#if SUNDIALS_VERSION_MAJOR >= 6
 /* Initialize/Free global SUNContext */
 void jmi_sundials_init_context();
 void jmi_sundials_free_context();
@@ -95,8 +113,12 @@ extern SUNContext jmi_sundials_ctx;
 
 /* N_Vector wrapper */
 #include <nvector/nvector_serial.h>
-#define N_VNew_Serial(N) N_VNew_Serial(N, jmi_sundials_ctx)
+/* #define N_VNew_Serial(N) N_VNew_Serial(N, jmi_sundials_ctx) */
+/* Use explicit context passing in source code instead of macro injection */
+#endif
 
+#if SUNDIALS_VERSION_MAJOR >= 6
+#ifndef JMI_COMPAT_IMPL
 /* Define N_Vector accessors (Sundials 7.x compatibility) */
 /* Force definition to ensure we use the macro version */
 #ifdef N_VGetArrayPointer
@@ -120,6 +142,13 @@ int jmi_cvdense_compat(void *cvode_mem, int N);
 /* CVodeSetErrHandlerFn wrapper */
 int jmi_cvode_set_err_handler_fn_compat(void *cvode_mem, void (*ehfun)(int, const char*, const char*, char*, void*), void *eh_data);
 #define CVodeSetErrHandlerFn jmi_cvode_set_err_handler_fn_compat
+#endif /* JMI_COMPAT_IMPL */
+
+#else
+/* For Sundials < 6 */
+#define jmi_sundials_init_context()
+#define jmi_sundials_free_context()
+#endif
 
 #ifdef __cplusplus
 }

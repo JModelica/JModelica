@@ -8,14 +8,28 @@ This example demonstrates:
 - Result plotting
 """
 
+import sys
+import os
+
+# Hack to fix pyfmi import issue where it expects 'fmi' module but it is 'pyfmi.fmi'
+try:
+    import pyfmi.fmi
+    sys.modules['fmi'] = pyfmi.fmi
+except ImportError:
+    pass
+
 from pymodelica import compile_fmu
 from pyjmi import load_fmu
 import matplotlib.pyplot as plt
 import numpy as np
 
+# Resolve path to rc_circuit.mo
+current_dir = os.path.dirname(os.path.abspath(__file__))
+mo_file = os.path.join(current_dir, "rc_circuit.mo")
+
 # Compile the Modelica model to FMU
 print("Compiling RC circuit model...")
-fmu_path = compile_fmu("RCCircuit", "rc_circuit.mo")
+fmu_path = compile_fmu("RCCircuit", mo_file)
 
 # Load the compiled FMU
 print("Loading FMU...")
@@ -49,7 +63,8 @@ ax2.set_ylabel('Current (mA)')
 ax2.set_title('RC Circuit - Current')
 ax2.grid(True)
 
+output_file = os.path.join(current_dir, 'rc_circuit_results.png')
 plt.tight_layout()
-plt.savefig('rc_circuit_results.png')
-print("Results saved to rc_circuit_results.png")
-plt.show()
+plt.savefig(output_file)
+print(f"Results saved to {output_file}")
+# plt.show() # Disable show for headless environment

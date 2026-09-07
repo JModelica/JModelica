@@ -62,4 +62,4 @@ int = N.int32
 N.int = N.int32
 
 #Import the compile functions allowing for users to type: from pymodelica import compiler_*
-from compiler import compile_fmu, compile_fmux
+from .compiler import compile_fmu, compile_fmux, load_fmu

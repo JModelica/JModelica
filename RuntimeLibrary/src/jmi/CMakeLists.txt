@@ -162,11 +162,33 @@ if(WIN32)
 endif()
 add_definitions(-DJMI_INCLUDE_MINPACK)
 
+# Warning and code-generation flags shared by the three libraries below.
+#
+# -msse2 -mfpmath=sse is not an optimisation request. It exists to stop 32-bit
+# x86 evaluating doubles in the x87 unit's 80-bit registers, which makes the
+# solvers' floating-point results depend on when the compiler happens to spill a
+# register. On x86-64 SSE2 is already the ABI default, and on every other
+# architecture the flags do not exist: clang on arm64 macOS rejects them with
+# "unsupported option '-msse2'", and gcc on arm64 Linux with "unrecognized
+# command-line option". Both failures killed the Runtime (C) job and the
+# linux/arm64 container build. Gate them on the processor rather than dropping
+# them, because 32-bit x86 still needs them.
+if(NOT MSVC)
+    set(JMI_C_FLAGS "-Wall -g -std=c89 -pedantic -Werror -Wno-long-long -O2")
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(i.86|x86|x86_64|amd64|AMD64)$")
+        set(JMI_C_FLAGS "${JMI_C_FLAGS} -msse2 -mfpmath=sse")
+    else()
+        message(STATUS
+            "Not an x86 target (${CMAKE_SYSTEM_PROCESSOR}); "
+            "omitting -msse2 -mfpmath=sse")
+    endif()
+endif()
+
 OPTION(BUILD_BLOCK_SOLVER_LIB "Build the block solver library" ON)
 if (${BUILD_BLOCK_SOLVER_LIB})
     add_library(jmi_block_solver SHARED ${JMIBlockSources})
     if(NOT MSVC)
-        set_target_properties(jmi_block_solver PROPERTIES COMPILE_FLAGS "-Wall -g -std=c89 -pedantic -Werror -Wno-long-long -O2 -msse2 -mfpmath=sse")
+        set_target_properties(jmi_block_solver PROPERTIES COMPILE_FLAGS "${JMI_C_FLAGS}")
     endif()
     
     #Install the libraries
@@ -186,7 +208,7 @@ OPTION(BUILD_ODE_SOLVER_LIB "Build the ode solver library" ON)
 if (${BUILD_ODE_SOLVER_LIB})
     add_library(jmi_ode_solver SHARED ${JMIODESolverSources})
     if(NOT MSVC)
-        set_target_properties(jmi_ode_solver PROPERTIES COMPILE_FLAGS "-Wall -g -std=c89 -pedantic -Werror -Wno-long-long -O2 -msse2 -mfpmath=sse")
+        set_target_properties(jmi_ode_solver PROPERTIES COMPILE_FLAGS "${JMI_C_FLAGS}")
     endif()
     
     if(JMI_SUNDIALS)
@@ -200,7 +222,7 @@ OPTION(BUILD_JMI_LIB "Build the jmi library" ON)
 if (${BUILD_JMI_LIB})
     add_library(jmi SHARED ${JMISources})
     if(NOT MSVC)
-        set_target_properties(jmi PROPERTIES COMPILE_FLAGS "-Wall -g -std=c89 -pedantic -Werror -Wno-long-long -O2 -msse2 -mfpmath=sse")
+        set_target_properties(jmi PROPERTIES COMPILE_FLAGS "${JMI_C_FLAGS}")
     endif()
     include_directories(${TOP_SRC}/RuntimeLibrary/src/jmi)
 

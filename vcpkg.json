@@ -1,9 +1,16 @@
 {
   "name": "jmodelica",
   "version": "1.0.0",
-  "description": "JModelica C++ dependencies",
+  "description": "JModelica C++ dependencies for the Windows build",
   "dependencies": [
-    "ipopt",
     "sundials"
-  ]
+  ],
+  "features": {
+    "optimization": {
+      "description": "Optimica optimisation support via Ipopt. Opt in with -DVCPKG_MANIFEST_FEATURES=optimization; the port is not present in every vcpkg registry, including the one bundled with the GitHub Windows runner image.",
+      "dependencies": [
+        "ipopt"
+      ]
+    }
+  }
 }

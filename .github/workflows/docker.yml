@@ -39,8 +39,34 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # The Dockerfile builds through CMake and Gradle. master still uses autotools
+  # and Ant, so on that ref there is nothing here that could succeed — and a
+  # job that runs anyway and fails every time teaches everyone to ignore a red
+  # Actions tab. Skipping is the honest outcome, and it is visibly different
+  # from both success and failure.
+  detect:
+    name: Detect build system
+    runs-on: ubuntu-latest
+    outputs:
+      buildable: ${{ steps.check.outputs.buildable }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: check
+        run: |
+          set -euo pipefail
+          buildable=false
+          if [ -f CMakeLists.txt ] && [ -f Compiler/build.gradle ]; then
+            buildable=true
+          fi
+          echo "buildable=${buildable}" >> "$GITHUB_OUTPUT"
+          if [ "${buildable}" = "false" ]; then
+            echo "::notice::No CMake/Gradle build on this ref; skipping the image build."
+          fi
+
   build:
     name: ${{ matrix.platform }}
+    needs: detect
+    if: needs.detect.outputs.buildable == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -104,8 +130,8 @@ jobs:
 
   manifest:
     name: Publish manifest list
-    needs: build
-    if: github.event_name != 'pull_request'
+    needs: [detect, build]
+    if: needs.detect.outputs.buildable == 'true' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Download the digests

@@ -12,4 +12,4 @@ target-version = "py310"
 # check_no_artifacts is a sibling module imported by the test beside it, not a
 # third-party package. Without this, isort sorts it into the third-party block
 # and then disagrees with itself about where the import should go.
-known-first-party = ["check_no_artifacts"]
+known-first-party = ["check_no_artifacts", "check_python3_syntax"]

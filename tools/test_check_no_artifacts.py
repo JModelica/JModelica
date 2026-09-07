@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Regression tests for the artifact guard.
 
 Run with ``python -m pytest tools/test_check_no_artifacts.py``.

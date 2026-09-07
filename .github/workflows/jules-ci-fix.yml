@@ -18,6 +18,16 @@ name: Jules — keep Actions green
 #
 # Set JULES_CI_FIX_ENABLED to 'false' to pause this entirely.
 
+# The run title carries the commit under investigation. This is not cosmetic:
+# guard 1 below reads it back. A workflow_run-triggered run is always attributed
+# to the default branch — `headSha` in the run list is master's tip, never the
+# commit that broke — so the run list cannot be used as a per-commit ledger
+# unless the commit is written somewhere the API will return. `displayTitle` is
+# that somewhere.
+run-name: >-
+  Jules — keep Actions green
+  (${{ github.event.workflow_run.head_sha || inputs.run_id }})
+
 on:
   workflow_run:
     workflows: ['CI', 'Container images', 'Release']
@@ -89,8 +99,16 @@ jobs:
           # needed. A commit that broke CI and Docker at once must not produce
           # two sessions solving the same thing.
           #
+          # Read the commit out of `displayTitle`, which `run-name:` above fills
+          # in. Matching on `headSha` was wrong and was: for a workflow_run
+          # trigger GitHub attributes the run to the *default branch*, so every
+          # row's headSha is master's tip and the comparison against the failing
+          # commit never matched. The guard silently passed every time. It cost
+          # three Jules sessions on 2026-09-07 — 12:25, 12:31 and 12:39 — for one
+          # branch and one set of failures.
+          #
           # Any conclusion except "skipped" counts as a handover. Matching only
-          # on "success" is wrong and was: a run that started a session and then
+          # on "success" is wrong too: a run that started a session and then
           # failed in a later bookkeeping step is recorded as a failure, the
           # guard does not see it, and the next trigger spends a second task on
           # the identical problem. A run is "skipped" only when this guard
@@ -99,8 +117,8 @@ jobs:
             seen=$(gh run list \
                      --workflow jules-ci-fix.yml \
                      --limit 60 \
-                     --json headSha,databaseId,conclusion \
-                     --jq "[.[] | select(.headSha == \"${SHA}\" and
+                     --json displayTitle,databaseId,conclusion \
+                     --jq "[.[] | select((.displayTitle | contains(\"${SHA}\")) and
                                          .databaseId != ${GITHUB_RUN_ID} and
                                          .conclusion != null and
                                          .conclusion != \"skipped\" and
@@ -133,14 +151,19 @@ jobs:
           fi
 
           # --- Guard 3: is Jules already working on this branch? --------------
+          # Scoped to the branch that broke. `baseRefName` was fetched but never
+          # tested, so an open Jules pull request anywhere in the repository
+          # blocked a handover for every other branch — the opposite failure to
+          # guard 1's, and just as silent.
           if [ "${proceed}" = "true" ] && [ -n "${BRANCH:-}" ]; then
             open=$(gh pr list --state open --limit 100 \
                      --json author,baseRefName \
-                     --jq "[.[] | select(.author.login | test(\"jules\"; \"i\"))] | length" \
+                     --jq "[.[] | select(.baseRefName == \"${BRANCH}\" and
+                                         (.author.login | test(\"jules\"; \"i\")))] | length" \
                    2>/dev/null || echo 0)
             if [ "${open}" -gt 0 ]; then
               proceed=false
-              reason="Jules already has ${open} open pull request(s); let them land first"
+              reason="Jules already has ${open} open pull request(s) against ${BRANCH}; let them land first"
             fi
           fi
 
@@ -260,10 +283,29 @@ jobs:
           in which case add a regression test proving the new behaviour is
           correct.
 
+          ## This session is unattended
+
+          Nothing started this run but a failing build, and no one is watching
+          the session waiting to answer you. A question asked here does not get
+          a reply — it ends the session with the work half done and the branch
+          no better than it was. So do not ask which approach to take, and do
+          not ask for permission or confirmation.
+
+          Decide instead. Pick the approach the evidence supports, say in one
+          line why you picked it over the alternative, and carry it through. If
+          a choice genuinely needs a maintainer — it changes the licence, it
+          deletes someone's branch, it needs a credential you do not have — do
+          the rest of the work first, then write the question into the pull
+          request description under a heading "Needs a decision", where a human
+          will actually see it.
+
           ## Pull request
 
           Open one pull request with the fix. Explain the root cause, the fix,
           and how you verified it. State plainly anything you could not verify.
+          Push it even when the work is incomplete: a branch with two of five
+          jobs fixed and an honest account of the other three is worth more
+          than an unpushed session.
           GUIDANCE
           } > prompt.txt
 

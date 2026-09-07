@@ -131,10 +131,15 @@ working on the same problem in parallel. Three guards prevent that:
 1. **Deduplication by commit.** A commit whose failure has already been handed
    over is never handed over again, however many workflows it broke. This
    workflow's own run history is the ledger, so no external state is needed.
+   The commit is read out of each run's `displayTitle`, which the workflow's
+   `run-name:` fills in. It cannot be read out of `headSha`: a run triggered by
+   `workflow_run` is attributed to the *default branch*, so `headSha` is always
+   master's tip and never the commit that broke.
 2. **A daily budget.** At most `JULES_CI_FIX_DAILY_MAX` handovers per rolling
    24 hours, default 3.
-3. **Open-work check.** If Jules already has pull requests open, it is already
-   working; no second session starts until they land.
+3. **Open-work check.** If Jules already has a pull request open *against the
+   branch that broke*, it is already working; no second session starts until
+   that lands. Open work on other branches does not block a handover.
 
 ```sh
 gh variable set JULES_CI_FIX_DAILY_MAX --body 5
@@ -147,6 +152,13 @@ assertion, drop a failing platform from the matrix, or relax the artifact
 guard. Each of those turns a real signal into a false one, which is worse than
 the red build it started from. Where the honest answer is that a failure cannot
 be fixed in one session, it is told to push what it has and say what is left.
+
+The prompt also tells Jules that the session is unattended. That is not a
+courtesy — a session that ends on "which approach would you prefer?" leaves the
+branch exactly as red as it found it, and nobody is subscribed to answer. It is
+told to decide, justify the decision in one line, and put anything that
+genuinely needs a maintainer into the pull request description under a
+"Needs a decision" heading, where a human will see it.
 
 This is also why the CI jobs are gated on `detect` rather than exiting early:
 a build job that finds no build system, exits 0 and reports green would teach

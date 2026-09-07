@@ -205,18 +205,39 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ -f vcpkg.json ]; then
-            echo "Manifest found; vcpkg will install from vcpkg.json during configure."
-          else
+          if [ ! -f vcpkg.json ]; then
             echo "::notice::No vcpkg.json on this branch, so Sundials and BLAS are"
             echo "::notice::not available. Expect configure to fail."
+            exit 0
           fi
+          # A manifest on its own installs nothing. vcpkg reads vcpkg.json only
+          # when CMake is configured with its toolchain file, and this step used
+          # to print "vcpkg will install from vcpkg.json during configure" while
+          # the Configure step below ran a plain `cmake -S . -B build`. It never
+          # did install, and the job died at `find_library ... sundials_cvode`
+          # with a log that said the opposite of what had happened.
+          root="${VCPKG_INSTALLATION_ROOT:-}"
+          if [ -z "${root}" ] || [ ! -f "${root}/scripts/buildsystems/vcpkg.cmake" ]; then
+            echo "::error::vcpkg.json is present but VCPKG_INSTALLATION_ROOT does not" >&2
+            echo "::error::point at a usable vcpkg, so nothing would install it." >&2
+            exit 1
+          fi
+          echo "Manifest found; configuring with the vcpkg toolchain at ${root}."
+          {
+            echo "VCPKG_TOOLCHAIN=${root}/scripts/buildsystems/vcpkg.cmake"
+            echo "VCPKG_TARGET_TRIPLET=x64-windows"
+          } >> "$GITHUB_ENV"
 
       - name: Configure
         shell: bash
         run: |
           set -euo pipefail
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          args=(-S . -B build -DCMAKE_BUILD_TYPE=Release)
+          if [ -n "${VCPKG_TOOLCHAIN:-}" ]; then
+            args+=("-DCMAKE_TOOLCHAIN_FILE=${VCPKG_TOOLCHAIN}")
+            args+=("-DVCPKG_TARGET_TRIPLET=${VCPKG_TARGET_TRIPLET}")
+          fi
+          cmake "${args[@]}"
 
       - name: Build
         shell: bash

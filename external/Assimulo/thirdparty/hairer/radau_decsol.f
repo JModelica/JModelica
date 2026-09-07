@@ -636,7 +636,8 @@ C -------- CALL TO CORE INTEGRATOR ------------
      &      WORK(IEZ3),WORK(IEY0),WORK(IESCAL),WORK(IEF1),WORK(IEF2),
      &      WORK(IEF3),WORK(IEJAC),WORK(IEE1),WORK(IEE2R),WORK(IEE2I),
      &      WORK(IEMAS),IWORK(IEIP1),IWORK(IEIP2),IWORK(IEIPH),
-     &      WORK(IECON),NFCN,NJAC,NSTEP,NACCPT,NREJCT,NDEC,NSOL,RPAR,IPAR)
+     &      WORK(IECON),NFCN,NJAC,NSTEP,NACCPT,
+     &      NREJCT,NDEC,NSOL,RPAR,IPAR)
          IWORK(14)=NFCN
          IWORK(15)=NJAC
          IWORK(16)=NSTEP
@@ -679,7 +680,8 @@ C ----------------------------------------------------------
 C         DECLARATIONS
 C ----------------------------------------------------------
          IMPLICIT DOUBLE PRECISION (A-H,O-Z)
-         DIMENSION Y(N),Z1(N),Z2(N),Z3(N),Y0(N),SCAL(N),F1(N),F2(N),F3(N)
+         DIMENSION Y(N),Z1(N),Z2(N),Z3(N),Y0(N),SCAL(N),F1(N),F2(N)
+         DIMENSION F3(N)
          DIMENSION FJAC(LDJAC,N),FMAS(LDMAS,NM1),CONT(4*N),WERR(N)
          DIMENSION E1(LDE1,NM1),E2R(LDE1,NM1),E2I(LDE1,NM1)
          DIMENSION ATOL(*),RTOL(*),RPAR(*),IPAR(*)
@@ -1087,7 +1089,8 @@ C       --- PREDICTIVE CONTROLLER OF GUSTAFSSON
             ELSE
                QT=HNEW/H
                HHFAC=H
-               IF (THETA.LE.THET.AND.QT.GE.QUOT1.AND.QT.LE.QUOT2) GOTO 30
+               IF (THETA.LE.THET.AND.QT.GE.QUOT1.AND.QT.LE.QUOT2) 
+     1            GOTO 30
                H=HNEW
             END IF
             HHFAC=H
@@ -1228,7 +1231,8 @@ C-----------------------------------------------------------------------
             IF (T .EQ. 0.D0) GO TO 80
             T = 1.D0/T
             DO 30 I = KP1,N
-   30       A(I,K) = -A(I,K)*T
+               A(I,K) = -A(I,K)*T
+   30       CONTINUE
             DO 50 J = KP1,N
                T = A(M,J)
                A(M,J) = A(K,J)

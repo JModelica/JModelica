@@ -300,37 +300,55 @@ jobs:
         run: |
           explain() {
             case "$1" in
-              skipped) echo "skipped — this branch has no such build system" ;;
+              skipped) echo "not run — no such build system on this ref" ;;
               success) echo "success" ;;
               failure) echo "**failure**" ;;
               *)       echo "$1" ;;
             esac
           }
 
+          # A green tick on this workflow must never be readable as "JModelica
+          # builds". On a ref with no CMake and no Gradle, no build ran at all,
+          # and a summary that did not say so plainly would be a false report
+          # dressed as a passing run. Emit a warning annotation as well as the
+          # table, so the claim is visible on the run page itself and not only
+          # to whoever expands the summary.
+          built=0
+          for result in "${COMPILER}" "${RUNTIME}"; do
+            [ "${result}" = "success" ] && built=$((built + 1))
+          done
+
           {
-            echo "## Build status"
+            echo "## What this run actually checked"
             echo
             echo "| Component | Result |"
             echo "|---|---|"
             echo "| Repository hygiene | $(explain "${META}") |"
             echo "| Compiler (Java) | $(explain "${COMPILER}") |"
             echo "| Runtime (C) | $(explain "${RUNTIME}") |"
-            echo "| Python | $(explain "${PYTHON}") |"
+            echo "| Python 3 migration ratchet | $(explain "${PYTHON}") |"
             echo
-            echo "A *skipped* build job means the build system is not present on"
-            echo "this branch — master still uses autotools and Ant, while CMake"
-            echo "and Gradle live on \`feature/modernization-checkpoint\`. It does"
-            echo "not mean the build passed."
+            if [ "${built}" -eq 0 ]; then
+              echo "### ⚠ No build was performed"
+              echo
+              echo "**A passing result here does not mean JModelica builds.** It"
+              echo "means the checks that *can* run on this ref passed. Neither"
+              echo "the compiler nor the runtime library was compiled, because"
+              echo "this ref carries no CMake or Gradle build — master is still"
+              echo "autotools and Ant. Build work happens on"
+              echo "\`feature/modernization-checkpoint\`; see AGENTS.md section 3"
+              echo "for the outstanding blockers."
+            fi
             echo
             if [ "${META}" != "success" ]; then
               echo "**Repository hygiene failed.** This is the gating check —"
               echo "see AGENTS.md for what it enforces and why."
-            else
-              echo "Repository hygiene passed. Build failures below it are the"
-              echo "known modernization backlog; see \`doc/modernization/\` and"
-              echo "AGENTS.md section 3."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${built}" -eq 0 ]; then
+            echo "::warning::No build ran on this ref (no CMake or Gradle present). A green result here does NOT mean JModelica builds."
+          fi
 
           # Only hygiene gates this job. The run as a whole is still red when a
           # build job fails — which is what jules-ci-fix.yml reacts to — but

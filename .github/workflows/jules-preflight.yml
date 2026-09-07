@@ -1,0 +1,98 @@
+name: Jules — preflight
+
+# Confirms the Jules wiring actually works, before a real task depends on it.
+#
+# Three things have to line up, and each fails differently and unhelpfully when
+# it is wrong:
+#
+#   1. JULES_API_KEY is readable from this repository. An organisation secret
+#      set to "private repositories" visibility is invisible to a public repo,
+#      and the failure looks like an authentication error rather than a missing
+#      secret.
+#   2. The Jules GitHub App can see this repository. The API only lists sources
+#      the app has been granted.
+#   3. The source name matches what google-labs-code/jules-action constructs.
+#      Google's API quickstart documents `sources/github/OWNER/REPO`, which the
+#      action hardcodes, while the API reference documents
+#      `sources/github-OWNER-REPO`. If your account returns the hyphenated form,
+#      the action cannot address this repository and the workflows need a direct
+#      curl against POST /v1alpha/sessions instead — which is all the action
+#      does anyway.
+#
+# Run it from the Actions tab. It creates no session and spends no quota.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the secret is visible here
+        env:
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+        run: |
+          if [ -z "${JULES_API_KEY}" ]; then
+            echo "::error::JULES_API_KEY is not readable from this repository." >&2
+            echo "If it is set as an organisation secret, check its visibility:" >&2
+            echo "a secret scoped to private repositories is invisible to a" >&2
+            echo "public one. See doc/automation.md." >&2
+            exit 1
+          fi
+          echo "JULES_API_KEY is present (${#JULES_API_KEY} characters)."
+
+      - name: List the sources Jules can see
+        env:
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # -f so an HTTP error is a failure; the key goes through a header from
+          # an environment variable, never onto the command line.
+          if ! curl -fsS -H "x-goog-api-key: ${JULES_API_KEY}" \
+                 https://jules.googleapis.com/v1alpha/sources > sources.json; then
+            echo "::error::Could not list sources. The key may be invalid or revoked." >&2
+            exit 1
+          fi
+
+          count=$(jq '.sources | length // 0' sources.json)
+          echo "Jules can see ${count} source(s):"
+          jq -r '.sources[]?.name | "  " + .' sources.json
+
+          # What the action will construct, from action.yaml:
+          #   "source": "sources/github/\($repo_full_name)"
+          expected="sources/github/${REPO}"
+          echo
+          echo "google-labs-code/jules-action will address: ${expected}"
+
+          if jq -e --arg e "${expected}" '.sources[]? | select(.name == $e)' \
+               sources.json > /dev/null; then
+            echo "::notice::Match. The action can address this repository."
+            verdict="The action's source name matches. Wiring is good."
+          else
+            actual=$(jq -r --arg r "${REPO}" \
+                       '[.sources[]?.name | select(test("github"))] | .[0] // "none"' \
+                       sources.json)
+            echo "::error::No source named ${expected}." >&2
+            echo "::error::Closest match: ${actual}" >&2
+            echo "::error::If that is the hyphenated form, replace the action" >&2
+            echo "::error::with a direct POST to /v1alpha/sessions." >&2
+            verdict="**Mismatch.** The action builds \`${expected}\`, but the API returns \`${actual}\`. See doc/automation.md."
+          fi
+
+          {
+            echo "## Jules preflight"
+            echo
+            echo "Sources visible: ${count}"
+            echo
+            echo "${verdict}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Fail the run on a mismatch: a preflight that reports a problem and
+          # still goes green is not a preflight.
+          jq -e --arg e "${expected}" '.sources[]? | select(.name == $e)' \
+            sources.json > /dev/null

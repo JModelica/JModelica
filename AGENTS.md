@@ -172,3 +172,26 @@ JModelica must be hardware-agnostic and cross-platform. Every change is held to 
 
 The artifact guard in the `meta` job will fail a PR that adds any of the files
 listed in §5. That check exists because of PR #21.
+
+### A green CI run does not mean JModelica builds
+
+Read the run summary, not the tick. On `master` there is no CMake and no
+Gradle, so the compiler and runtime jobs do not run at all and the workflow can
+pass having compiled nothing. Every such run carries a warning annotation
+saying so, and the summary states how much was actually built.
+
+Two checks are deliberately tolerant of the existing backlog, and it matters
+that you understand the difference between tolerant and absent:
+
+- **The Python 3 job** (`tools/check_python3_syntax.py`) compiles all of
+  `Python/src/pymodelica` and `pyjmi` on every run, but excuses the files
+  listed in `tools/python3_baseline.txt`. It fails on a *new* Python 2 file, and
+  it also fails when a listed file starts compiling and its line is not removed
+  — so the list can only shrink, and the debt cannot quietly grow back.
+- **Container images** are not built on a ref with no CMake, because the build
+  would fail at `cmake -S .` before compiling anything. That failure carried no
+  information; it is not evidence that the image builds.
+
+If you are fixing CI, do not extend either mechanism to cover a *new* failure.
+Adding a file to the Python baseline to make your pull request pass is
+prohibited: the baseline records pre-existing debt, not yours.

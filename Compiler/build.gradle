@@ -53,22 +53,30 @@ task generateJastAdd(type: JavaExec) {
     def outputDir = generatedSrcDir.get().asFile
     def packagePath = 'org.jmodelica.modelica.compiler' // Derived from build-base.xml logic
 
-    def sourceFiles = fileTree(dir: 'ModelicaFlatTree/src/jastadd', include: ['**/*.ast', '**/*.jadd', '**/*.jrag']) +
-                      fileTree(dir: 'ModelicaFrontEnd/src/jastadd', include: ['**/*.ast', '**/*.jadd', '**/*.jrag']) +
-                      fileTree(dir: 'ModelicaMiddleEnd/src/jastadd', include: ['**/*.ast', '**/*.jadd', '**/*.jrag']) +
-                      fileTree(dir: 'GenericCodeGen/src/jastadd', include: ['**/*.ast', '**/*.jadd', '**/*.jrag']) +
-                      fileTree(dir: 'TestFramework/src/jastadd', include: ['**/*.ast', '**/*.jadd', '**/*.jrag']) +
-                      fileTree(dir: 'FmiXMLCodeGen/src/jastadd', include: ['**/*.ast', '**/*.jadd', '**/*.jrag']) +
-                      fileTree(dir: 'ModelicaFMUXBackEnd/src/jastadd', include: ['**/*.ast', '**/*.jadd', '**/*.jrag']) +
-                      fileTree(dir: 'ModelicaCBackEnd/src/jastadd', include: ['**/*.ast', '**/*.jadd', '**/*.jrag']) +
-                      fileTree(dir: 'ModelicaCompiler/src/jastadd', include: ['**/*.ast', '**/*.jadd', '**/*.jrag'])
-    
+    // The nine modules of the Modelica compiler, in the order `mc_set.modules`
+    // lists them in ModelicaCompiler/build-set.xml. The order is not cosmetic —
+    // see the note on determinism below.
+    def jastaddModules = [
+        'ModelicaFlatTree',
+        'ModelicaFrontEnd',
+        'ModelicaMiddleEnd',
+        'GenericCodeGen',
+        'TestFramework',
+        'FmiXMLCodeGen',
+        'ModelicaFMUXBackEnd',
+        'ModelicaCBackEnd',
+        'ModelicaCompiler',
+    ]
+
+    def jastaddTrees = jastaddModules.collect { module ->
+        fileTree(dir: "${module}/src/jastadd",
+                 include: ['**/*.ast', '**/*.jadd', '**/*.jrag'])
+    }
+
+    def sourceFiles = jastaddTrees.inject(files()) { acc, tree -> acc + tree }
+
     inputs.files sourceFiles
     outputs.dir outputDir
-
-    doFirst {
-        outputDir.mkdirs()
-    }
 
     args = [
         "--package=${packagePath}",
@@ -84,10 +92,30 @@ task generateJastAdd(type: JavaExec) {
         "--optimize-imports"
     ]
 
-    // Add source files to args
     doFirst {
-        sourceFiles.each { file ->
-            args += file.absolutePath
+        outputDir.mkdirs()
+
+        // JastAdd 2.3.4 resolves `SomeClass implements SomeInterface;` against the
+        // classes it has already read, so a file that adds an interface to a class
+        // must come after the file that declares that class. The argument order is
+        // therefore part of the build's correctness, not a detail.
+        //
+        // Iterating the file trees directly does not give a defined order: Gradle
+        // walks a directory in the order the filesystem hands entries back, which
+        // is alphabetical on NTFS and arbitrary on ext4. The Ant build never hit
+        // this because Ant's <fileset> sorts. On the runners the walk put
+        // ExternalConstantEvaluation.jrag ahead of ConstantEvaluation.jrag and the
+        // build died with
+        //
+        //   ExternalConstantEvaluation.jrag:54: can not add interface to unknown
+        //   class CValue
+        //
+        // on every platform and in both container architectures. Sorting each
+        // module's files by path restores Ant's behaviour and makes the result
+        // reproducible.
+        jastaddTrees.each { tree ->
+            tree.files.toSorted { a, b -> a.absolutePath <=> b.absolutePath }
+                      .each { file -> args += file.absolutePath }
         }
     }
 }

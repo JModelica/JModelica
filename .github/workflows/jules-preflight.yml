@@ -1,0 +1,131 @@
+name: Jules — preflight
+
+# Confirms the Jules wiring actually works, before a real task depends on it.
+#
+# Three things have to line up, and each fails differently and unhelpfully when
+# it is wrong:
+#
+#   1. JULES_API_KEY is readable from this repository. An organisation secret
+#      set to "private repositories" visibility is invisible to a public repo,
+#      and the failure looks like an authentication error rather than a missing
+#      secret.
+#   2. The Jules GitHub App can see this repository. The API only lists sources
+#      the app has been granted.
+#   3. The source name matches what google-labs-code/jules-action constructs.
+#      Google's API quickstart documents `sources/github/OWNER/REPO`, which the
+#      action hardcodes, while the API reference documents
+#      `sources/github-OWNER-REPO`. If your account returns the hyphenated form,
+#      the action cannot address this repository and the workflows need a direct
+#      curl against POST /v1alpha/sessions instead — which is all the action
+#      does anyway.
+#
+# Run it from the Actions tab. It creates no session and spends no quota.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the secret is visible here
+        env:
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+        run: |
+          if [ -z "${JULES_API_KEY}" ]; then
+            echo "::error::JULES_API_KEY is not readable from this repository." >&2
+            echo "If it is set as an organisation secret, check its visibility:" >&2
+            echo "a secret scoped to private repositories is invisible to a" >&2
+            echo "public one. See doc/automation.md." >&2
+            exit 1
+          fi
+          echo "JULES_API_KEY is present (${#JULES_API_KEY} characters)."
+
+      - name: List the sources Jules can see
+        env:
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # Paginated deliberately. GET /sources returns 30 per page by
+          # default, and an account with more connected repositories than that
+          # will not show the one you are looking for on page one. Reading a
+          # single page and concluding "not connected" is a false negative
+          # dressed as a finding - the instrument stopped early, the repository
+          # was not absent.
+          : > names.txt
+          token=""
+          pages=0
+          while : ; do
+            url="https://jules.googleapis.com/v1alpha/sources?pageSize=100"
+            if [ -n "${token}" ]; then
+              url="${url}&pageToken=${token}"
+            fi
+
+            # -f so an HTTP error is a failure; the key goes through a header
+            # from an environment variable, never onto the command line.
+            if ! curl -fsS -H "x-goog-api-key: ${JULES_API_KEY}" "${url}" > page.json; then
+              echo "::error::Could not list sources. The key may be invalid or revoked." >&2
+              exit 1
+            fi
+
+            jq -r '.sources[]?.name' page.json >> names.txt
+            pages=$((pages + 1))
+            token=$(jq -r '.nextPageToken // empty' page.json)
+            [ -n "${token}" ] || break
+
+            if [ "${pages}" -ge 20 ]; then
+              echo "::warning::Stopped after 20 pages; the listing may be incomplete."
+              break
+            fi
+          done
+
+          count=$(wc -l < names.txt)
+          echo "Jules can see ${count} source(s) across ${pages} page(s)."
+
+          # What the action constructs, from its action.yaml:
+          #   "source": "sources/github/\($repo_full_name)"
+          expected="sources/github/${REPO}"
+          echo "google-labs-code/jules-action will address: ${expected}"
+          echo
+
+          if grep -Fxq "${expected}" names.txt; then
+            echo "::notice::Match. The action can address this repository."
+            verdict="\`${expected}\` is connected and addressable. Wiring is good."
+            status=0
+          else
+            # A genuine near-match, not simply the first entry: look for this
+            # repository under any naming form, so the report distinguishes
+            # "not connected at all" from "connected under a different shape".
+            repo_name="${REPO#*/}"
+            related=$(grep -i -- "${repo_name}" names.txt || true)
+            if [ -n "${related}" ]; then
+              echo "::error::No source named ${expected}, but these look related:" >&2
+              echo "${related}" >&2
+              verdict="**Name mismatch.** The action builds \`${expected}\`, but the API lists:"$'\n\n```\n'"${related}"$'\n```\n\n'"Replace the action with a direct POST to /v1alpha/sessions. See doc/automation.md."
+            else
+              echo "::error::${REPO} is not connected to Jules." >&2
+              echo "::error::Installing the GitHub App is necessary but not sufficient:" >&2
+              echo "::error::a repository also has to be added as a codebase in the Jules" >&2
+              echo "::error::web app, and the API can only read sources, never create them." >&2
+              verdict="**Not connected.** \`${REPO}\` is not among the ${count} sources Jules can see. Add it at <https://jules.google.com> — sidebar, *codebases*, connect the repository. Having the GitHub App installed is necessary but not sufficient; the API cannot create a source."
+            fi
+            status=1
+          fi
+
+          {
+            echo "## Jules preflight"
+            echo
+            echo "- API key: readable, and accepted by the API"
+            echo "- Sources visible: ${count}"
+            echo
+            echo "${verdict}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # A preflight that reports a problem and still goes green is not a
+          # preflight.
+          exit "${status}"

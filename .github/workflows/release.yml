@@ -21,7 +21,12 @@ name: Release
 
 on:
   push:
-    tags: ['v*']
+    # Both conventions. The only tag this repository has ever carried is `2.14`,
+    # inherited from upstream, and a `v*`-only filter would have skipped a `2.15`
+    # tagged the same way — silently, since a tag that matches nothing produces
+    # no run and therefore no failure to notice. `[0-9]*` is a glob, not a
+    # regex: it matches a tag whose first character is a digit.
+    tags: ['v*', '[0-9]*']
   workflow_dispatch:
     inputs:
       version:
@@ -108,17 +113,35 @@ jobs:
         if: steps.gate.outputs.run == 'true' && runner.os == 'Windows'
         shell: bash
         run: |
-          # vcpkg ships on the Windows runner image; the manifest drives it.
-          if [ -f vcpkg.json ]; then
-            echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> "$GITHUB_ENV"
+          set -euo pipefail
+          # vcpkg ships on the Windows runner image, but the manifest does not
+          # "drive it" on its own: vcpkg reads vcpkg.json only when CMake is
+          # configured with its toolchain file. Exporting VCPKG_ROOT alone,
+          # which is what this step used to do, installs nothing.
+          [ -f vcpkg.json ] || exit 0
+          root="${VCPKG_INSTALLATION_ROOT:-}"
+          if [ -z "${root}" ] || [ ! -f "${root}/scripts/buildsystems/vcpkg.cmake" ]; then
+            echo "::error::vcpkg.json is present but VCPKG_INSTALLATION_ROOT does not" >&2
+            echo "::error::point at a usable vcpkg, so nothing would install it." >&2
+            exit 1
           fi
+          {
+            echo "VCPKG_ROOT=${root}"
+            echo "VCPKG_TOOLCHAIN=${root}/scripts/buildsystems/vcpkg.cmake"
+            echo "VCPKG_TARGET_TRIPLET=x64-windows"
+          } >> "$GITHUB_ENV"
 
       - name: Build the runtime library
         if: steps.gate.outputs.run == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          args=(-S . -B build -DCMAKE_BUILD_TYPE=Release)
+          if [ -n "${VCPKG_TOOLCHAIN:-}" ]; then
+            args+=("-DCMAKE_TOOLCHAIN_FILE=${VCPKG_TOOLCHAIN}")
+            args+=("-DVCPKG_TARGET_TRIPLET=${VCPKG_TARGET_TRIPLET}")
+          fi
+          cmake "${args[@]}"
           cmake --build build --config Release --parallel
 
       - name: Build the compiler

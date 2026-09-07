@@ -1,0 +1,9 @@
+{
+  "name": "jmodelica",
+  "version": "1.0.0",
+  "description": "JModelica C++ dependencies",
+  "dependencies": [
+    "ipopt",
+    "sundials"
+  ]
+}

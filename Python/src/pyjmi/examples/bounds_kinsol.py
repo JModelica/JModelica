@@ -45,9 +45,9 @@ def run_demo(with_plots=True):
     
     try:
         m.initialize()
-        print 'Initialized OK'
+        print('Initialized OK')
     except:
-        print 'Error in initialize'
+        print('Error in initialize')
     
     # Parse the entire XML log
     log = parse_jmi_log(log_file_name)
@@ -55,15 +55,15 @@ def run_demo(with_plots=True):
     # Gather information pertaining to equation solves
     solves = gather_solves(log)
     
-    print 'Number of iterations in solver without bounds:',\
-            len(solves[0].block_solves[0].iterations), '+', len(solves[0].block_solves[1].iterations)
+    print('Number of iterations in solver without bounds:',\
+            len(solves[0].block_solves[0].iterations), '+', len(solves[0].block_solves[1].iterations))
     
-    print 'Solution: x_1=', m.get('x_1'),' x_2=', m.get('x_2') 
+    print('Solution: x_1=', m.get('x_1'),' x_2=', m.get('x_2')) 
     
     nbr_iterations = len(solves[0].block_solves[0].iterations)
     iteration_points = numpy.zeros(shape=(nbr_iterations,2))
     
-    for i in xrange(nbr_iterations):
+    for i in range(nbr_iterations):
         iteration_points[i] = solves[0].block_solves[0].iterations[i].ivs
     
     if with_plots:
@@ -86,9 +86,9 @@ def run_demo(with_plots=True):
     
     try:
         m.initialize()
-        print 'Initialized OK'
+        print('Initialized OK')
     except:
-        print 'Error in initialize'
+        print('Error in initialize')
     
     # Parse the entire XML log
     log = parse_jmi_log(log_file_name)
@@ -96,15 +96,15 @@ def run_demo(with_plots=True):
     # Gather information pertaining to equation solves
     solves = gather_solves(log)
     
-    print 'Number of iterations in solver with bounds:',\
-            len(solves[0].block_solves[0].iterations), '+', len(solves[0].block_solves[1].iterations)
+    print('Number of iterations in solver with bounds:',\
+            len(solves[0].block_solves[0].iterations), '+', len(solves[0].block_solves[1].iterations))
     
-    print 'Solution: x_1=', m.get('x_1'),' x_2=', m.get('x_2') 
+    print('Solution: x_1=', m.get('x_1'),' x_2=', m.get('x_2')) 
     
     nbr_iterations = len(solves[0].block_solves[0].iterations)
     iteration_points = numpy.zeros(shape=(nbr_iterations,2))
     
-    for i in xrange(nbr_iterations):
+    for i in range(nbr_iterations):
         iteration_points[i] = solves[0].block_solves[0].iterations[i].ivs
     
     if with_plots:
@@ -126,7 +126,7 @@ def run_demo(with_plots=True):
         y = arange(-7,9,0.1)
         X,Y = meshgrid(x, y)
         Z = (X**2 + Y**2 - 25)**2 + ((X - 5)**2 + (Y - 2)**2 - 4)**2
-        contour_levels = [4**n for n in xrange(1,6)] 
+        contour_levels = [4**n for n in range(1,6)] 
         contour(X,Y,Z, contour_levels, colors='b')
         show() 
     

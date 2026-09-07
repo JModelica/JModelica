@@ -28,10 +28,10 @@ aspect Environment {
      * TODO: Is it a good idea to inherit? Should env be a component?
      */
     public class Environment extends ArrayList<InstModification> {
-        
+
         public Environment() {
         }
-        
+
         public Environment(Iterable<InstModification>... sets) {
             for (Iterable<InstModification> set : sets) {
                 for (InstModification mod : set) {
@@ -42,7 +42,7 @@ aspect Environment {
 
         /**
          * Merge an outer modification into the environment: add it at the beginning.
-         * 
+         *
          * @return <code>this</code>, for convenience
          */
         public Environment mergeOuter(InstModification outerMod) {
@@ -52,7 +52,7 @@ aspect Environment {
 
         /**
          * Merge an inner modification into the environment: add it last.
-         * 
+         *
          * @return <code>this</code>, for convenience
          */
         public Environment mergeInner(InstModification innerMod) {
@@ -62,8 +62,8 @@ aspect Environment {
 
         /**
          * Merge outer sets of modifications: add them at the beginning.
-         * 
-         * @return if there are no modifications to merge, <code>this</code>; 
+         *
+         * @return if there are no modifications to merge, <code>this</code>;
          *         otherwise a clone with the modifications merged
          */
         public Environment mergeOuterClone(Iterable<InstModification>... sets) {
@@ -81,8 +81,8 @@ aspect Environment {
 
         /**
          * Merge inner sets of modifications: add them last.
-         * 
-         * @return if there are no modifications to merge, <code>this</code>; 
+         *
+         * @return if there are no modifications to merge, <code>this</code>;
          *         otherwise a clone with the modifications merged
          */
         public Environment mergeInnerClone(Iterable<InstModification>... sets) {
@@ -111,26 +111,26 @@ aspect Environment {
             return null;
         }
 
-        /** 
+        /**
          * Creates a new environment that is a copy of this one, filtered for a named class or component.
-         * 
-         * When filtering the environment, the result consists only of modifications with a matching prefix. 
-         * In effect, this results in a "peeling" operation, where the first name in a qualified name is removed, 
-         * and the rest of the modification is added to the new Environment. 
-         * 
+         *
+         * When filtering the environment, the result consists only of modifications with a matching prefix.
+         * In effect, this results in a "peeling" operation, where the first name in a qualified name is removed,
+         * and the rest of the modification is added to the new Environment.
+         *
          * Redeclares are not taken into account.
          */
         public Environment filter(String name) {
             return filter(name, null, null);
         }
 
-        /** 
+        /**
          * Creates a new environment that is a copy of this one, filtered for a named class or component.
-         * 
-         * When filtering the environment, the result consists only of modifications with a matching prefix. 
-         * In effect, this results in a "peeling" operation, where the first name in a qualified name is removed, 
-         * and the rest of the modification is added to the new Environment. 
-         * 
+         *
+         * When filtering the environment, the result consists only of modifications with a matching prefix.
+         * In effect, this results in a "peeling" operation, where the first name in a qualified name is removed,
+         * and the rest of the modification is added to the new Environment.
+         *
          * Any given redeclares are taken into account.
          */
         public Environment filter(String name, InstComponentRedeclare icr, InstRedeclareClassNode ircn) {
@@ -140,18 +140,18 @@ aspect Environment {
             for (InstModification im : this) {
                 // If a first component redeclare modification is found, add modifiers
                 if (!componentRedeclareFound && im == icr) {
-                    if (icr.getInstComponentDecl().hasInstModification()) 
+                    if (icr.getInstComponentDecl().hasInstModification())
                         env.mergeInner(icr.getInstComponentDecl().getInstModification());
                     componentRedeclareFound = true;
                 }
                 // If a first class redeclare modification is found, add modifiers
                 if (!classRedeclareFound && im == ircn) {
                     InstClassRedeclare iclr = (InstClassRedeclare) im;
-                    if (iclr.hasInstClassModification()) 
+                    if (iclr.hasInstClassModification())
                         env.mergeInner(iclr.getInstClassDecl().getInstClassModification());
                     classRedeclareFound = true;
                 }
-                
+
                 InstModification match = im.matchInstModification(name);
                 if (match != null) {
                     env.mergeInner(match);
@@ -206,7 +206,7 @@ aspect Environment {
                 }
                 str.append(": ");
                 str.append(im.myInstNode().name());
-                
+
                 if (i != size() - 1) {
                     str.append(",\n");
                 }
@@ -233,15 +233,15 @@ aspect InstModifications{
             l.add(im);
         if (hasInstValueModification())
             l.add(getInstValueModification());
-        return l;	
-    
+        return l;
+
     }
 
     public ArrayList<InstModification> InstClassModification.expand() {
         ArrayList<InstModification> l = new ArrayList<InstModification>();
         for (InstModification im : getInstArguments())
-        	l.add(im);
-        return l;	
+		l.add(im);
+        return l;
     }
 
     public abstract InstModification SrcModification.newInstModification();
@@ -320,12 +320,8 @@ aspect InstModifications{
     syn SrcComponentModification InstComponentModification.getSrcComponentModification() = (SrcComponentModification) getSrcModification();
     syn SrcClassRedeclare InstClassRedeclare.getSrcClassRedeclare()                      = (SrcClassRedeclare)        getSrcModification();
 
-    syn SrcComponentDecl InstComponentRedeclare.getComponentRedeclareDecl() = 
+    syn SrcComponentDecl InstComponentRedeclare.getComponentRedeclareDecl() =
         getSrcModification().componentRedeclareDecl();
-
-    public interface SrcModificationOrRedeclareElement {
-        public SrcComponentDecl componentRedeclareDecl();
-    }
 
     syn SrcComponentDecl SrcModification.componentRedeclareDecl() {
         throw new UnsupportedOperationException();
@@ -338,51 +334,51 @@ aspect MergedEnvironment {
     public abstract class ModificationNode {
         protected String name;
         protected Map<String, ModificationNode> subNodes = new LinkedHashMap<>();
-        
+
         protected ModificationNode(String name) {
             this.name = name;
         }
-        
+
         public void setModification(InstValueModification modification) {
         }
-        
+
         public boolean isEmpty() {
             return name.isEmpty() && subNodes.isEmpty();
         }
-        
+
         public ModificationNode subNode(String name) {
             if (!subNodes.containsKey(name)) {
                 subNodes.put(name, new ValueModificationNode(name));
             }
             return subNodes.get(name);
         }
-        
+
         public ModificationNode redeclareSubNode(String name, InstElementRedeclare redeclare) {
             subNodes.put(name, new RedeclareModificationNode(name, redeclare));
             return subNodes.get(name);
         }
-        
+
         public static ModificationNode newRootNode() {
             return new ValueModificationNode("");
         }
     }
-    
+
     public class ValueModificationNode extends ModificationNode {
         private InstValueModification modification;
 
         public ValueModificationNode(String name) {
             super(name);
         }
-        
+
         @Override
         public void setModification(InstValueModification modification) {
             this.modification = modification;
         }
     }
-    
+
     public class RedeclareModificationNode extends ModificationNode {
         private InstElementRedeclare redeclare;
-        
+
         public RedeclareModificationNode(String name, InstElementRedeclare redeclare) {
             super(name);
             this.redeclare = redeclare;
@@ -432,13 +428,13 @@ aspect Environments {
     }
     /**
      * All local modifications except those from any target class.
-     * 
+     *
      * Used for extends within components.
      */
     syn Collection<InstModification> InstNode.localInstModificationsNoClass() = Collections.<InstModification>emptyList();
     /**
      * Local modifications only from any target class.
-     * 
+     *
      * Used for extends within components.
      */
     syn Collection<InstModification> InstNode.localInstModificationsClass()   = Collections.<InstModification>emptyList();
@@ -479,9 +475,9 @@ aspect Environments {
     eq InstClassDecl.localInstModificationsClass() = targetClassInstModifications();
 
     syn java.util.List<InstModification> InstClassDecl.targetClassInstModifications() = Collections.<InstModification>emptyList();
-    eq InstShortClassDecl.targetClassInstModifications()       = 
+    eq InstShortClassDecl.targetClassInstModifications()       =
         getInstExtends(0).isRecursive() ? Collections.<InstModification>emptyList() : myTargetInstClassDecl().classInstModifications();
-    eq InstSimpleShortClassDecl.targetClassInstModifications() = 
+    eq InstSimpleShortClassDecl.targetClassInstModifications() =
         isRecursive() ? Collections.<InstModification>emptyList() : myTargetInstClassDecl().classInstModifications();
 
     syn java.util.List<InstModification> InstComponentDecl.instModificationsForConstraining() {
@@ -521,7 +517,7 @@ aspect Environments {
 
     syn java.util.List<InstModification> InstComponentRedeclare.instModificationsFromConstrainingType() {
         InstLookupResult<InstComponentDecl> repl = lookupInstComponentInInstElement(name());
-        if (repl.successful()) 
+        if (repl.successful())
             return repl.target().instModificationsFromConstrainingType();
         else
             return Collections.<InstModification>emptyList();
@@ -529,7 +525,7 @@ aspect Environments {
 
     syn java.util.List<InstModification> InstClassRedeclare.instModificationsFromConstrainingType() {
         InstLookupResult<InstClassDecl> repl = lookupInstClassInInstElement(name());
-        if (repl.successful()) 
+        if (repl.successful())
             return repl.target().instModificationsFromConstrainingType();
         else
             return Collections.<InstModification>emptyList();
@@ -564,11 +560,11 @@ aspect Environments {
      * Check if there is a constraining clause with modifications.
      */
     syn boolean SrcElement.hasConstrainingModification()       = false;
-    eq SrcBaseClassDecl.hasConstrainingModification()          = 
+    eq SrcBaseClassDecl.hasConstrainingModification()          =
         hasSrcConstrainingClause() && getSrcConstrainingClause().hasSrcClassModification();
-    eq SrcComponentClause.hasConstrainingModification()        = 
+    eq SrcComponentClause.hasConstrainingModification()        =
         hasSrcConstrainingClause() && getSrcConstrainingClause().hasSrcClassModification();
-    syn boolean SrcComponentDecl.hasConstrainingModification() = 
+    syn boolean SrcComponentDecl.hasConstrainingModification() =
         myComponentClause().hasConstrainingModification();
 
     syn boolean SrcClassDecl.hasSrcClassModification() = false;
@@ -581,7 +577,7 @@ aspect Environments {
        in the environment (with the name of the InstNode itself, if any,
        removed) merged with potential local modifications.
     */
-    syn lazy Environment InstNode.getMergedEnvironment() = 
+    syn lazy Environment InstNode.getMergedEnvironment() =
         filteredEnvironment().mergeInnerClone(getElementInstModifications(), localInstModifications());
     eq InstForIndexPrimitive.getMergedEnvironment() = new Environment();
     eq InstExtendsShortClass.getMergedEnvironment() {
@@ -592,13 +588,13 @@ aspect Environments {
             return super.getMergedEnvironment();
         }
     }
-    
-    syn lazy Environment InstRecordConstructor.getMergedEnvironment() = 
+
+    syn lazy Environment InstRecordConstructor.getMergedEnvironment() =
         myInstClassDecl().getMergedEnvironment().mergeOuterClone(getInstModifications());
 
     /**
-     *  Gives the environment filtered on this InstNode. The result includes only include modifications on/for this 
-     *  InstNode. 
+     *  Gives the environment filtered on this InstNode. The result includes only include modifications on/for this
+     *  InstNode.
      */
     syn Environment InstNode.filteredEnvironment() = nameScope() ? myEnvironment(name()) : myEnvironment();
 
@@ -625,11 +621,11 @@ aspect Environments {
     eq Root.getChild().myEnvironmentClass()                = null;
     eq InstNode.getChild().myEnvironmentNoClass()          = getMergedEnvironment().clone();
     eq InstNode.getChild().myEnvironmentClass()            = new Environment();
-    eq InstExtends.getChild().myEnvironmentNoClass()       = 
+    eq InstExtends.getChild().myEnvironmentNoClass()       =
         myEnvironmentNoClass().mergeInnerClone(getElementInstModifications(), localInstModificationsNoClass());
-    eq InstExtends.getChild().myEnvironmentClass()         = 
+    eq InstExtends.getChild().myEnvironmentClass()         =
         myEnvironmentClass().mergeInnerClone(localInstModificationsClass());
-    eq InstComponentDecl.getChild().myEnvironmentNoClass() = 
+    eq InstComponentDecl.getChild().myEnvironmentNoClass() =
         filteredEnvironment().mergeInnerClone(getElementInstModifications(), localInstModificationsNoClass());
     eq InstComponentDecl.getChild().myEnvironmentClass()   = new Environment(localInstModificationsClass());
 
@@ -638,7 +634,7 @@ aspect Environments {
      * myEnvironment represents the environment of the InstNode itself. It is defined
      * as an inherited attribute and is computed from the outer environment located at
      * ancestor InstNodes.
-     */ 
+     */
     inh Environment InstNode.myEnvironment();
     inh Environment InstNode.myEnvironment(String name);
     eq Root.getChild().myEnvironment()            = null;
@@ -651,14 +647,14 @@ aspect Environments {
     eq InstNode.getChild().myEnvironment()                          = getMergedEnvironment().clone();
     eq InstRecordConstructor.getInstComponentDecl().myEnvironment() = getMergedEnvironment().clone();
     eq InstRecordConstructor.getInstExtends().myEnvironment()       = getMergedEnvironment().clone();
-    eq InstExpandableConnectorDecl.getInstComponentDecl(int i).myEnvironment()          = 
+    eq InstExpandableConnectorDecl.getInstComponentDecl(int i).myEnvironment()          =
         useTemplate(i) ? template(i).myEnvironment() : getMergedEnvironment().clone();
-    eq InstArrayExpandableConnector.getInstComponentDecl(int i).myEnvironment()         = 
+    eq InstArrayExpandableConnector.getInstComponentDecl(int i).myEnvironment()         =
         useTemplate(i) ? template(i).myEnvironment() : getMergedEnvironment().clone();
-    eq InstReplacingExpandableConnectorDecl.getInstComponentDecl(int i).myEnvironment() = 
+    eq InstReplacingExpandableConnectorDecl.getInstComponentDecl(int i).myEnvironment() =
         useTemplate(i) ? template(i).myEnvironment() : getMergedEnvironment().clone();
 
-    /** 
+    /**
      * When a string argument representing a component name is given as argument to myEnvironment,
      * the environment is filtered on that name.
      */
@@ -668,16 +664,16 @@ aspect Environments {
     eq InstComponentDecl.getInstConstrainingComponent().myEnvironment(String name) = getMergedEnvironment().clone();
     eq InstBaseClassDecl.getInstConstrainingClass().myEnvironment(String name)     = getMergedEnvironment().clone();
     // TODO: This seems like the wriong name - shouldn't we filter on template's name?
-    eq InstExpandableConnectorDecl.getInstComponentDecl(int i).myEnvironment(String name)          = 
+    eq InstExpandableConnectorDecl.getInstComponentDecl(int i).myEnvironment(String name)          =
         useTemplate(i) ? template(i).myEnvironment(name) : myEnvironment_def(name);
-    eq InstArrayExpandableConnector.getInstComponentDecl(int i).myEnvironment(String name)         = 
+    eq InstArrayExpandableConnector.getInstComponentDecl(int i).myEnvironment(String name)         =
         useTemplate(i) ? template(i).myEnvironment(name) : myEnvironment_def(name);
-    eq InstReplacingExpandableConnectorDecl.getInstComponentDecl(int i).myEnvironment(String name) = 
+    eq InstReplacingExpandableConnectorDecl.getInstComponentDecl(int i).myEnvironment(String name) =
         useTemplate(i) ? template(i).myEnvironment(name) : myEnvironment_def(name);
 
-    syn lazy Environment InstNode.myEnvironment_def(String name) = 
+    syn lazy Environment InstNode.myEnvironment_def(String name) =
         getMergedEnvironment().filter(name, retrieveReplacingComponent(name), retrieveReplacingClass(name));
-    syn lazy Environment InstRecordConstructor.myEnvironment_def(String name) = 
+    syn lazy Environment InstRecordConstructor.myEnvironment_def(String name) =
         declarationInstComponent(name).filteredEnvironment().mergeOuterClone(getMergedEnvironment().filter(name));
 
     eq InstReplacingShortClassDecl.getOriginalInstClass().myEnvironment()            = filteredEnvironment();
@@ -743,7 +739,7 @@ aspect Environments {
             return hasInstModification() ? getInstModification() : null;
         return null;
     }
-    
+
     // Only add modifiers in constraining clauses
     eq InstComponentRedeclare.matchInstModification(String name) {
         if (name().equals(name) && hasConstrainingModification())
@@ -757,8 +753,8 @@ aspect Environments {
             return getInstClassDecl().getInstConstrainingClass().getInstClassModification();
         return null;
     }
-    
-    
+
+
     /**
      * Find the InstModification containing this expression, if any.
      */
@@ -766,8 +762,8 @@ aspect Environments {
     eq InstModification.getChild().surroundingInstModification() = this;
     eq InstNode.getChild().surroundingInstModification()         = null;
     eq Root.getChild().surroundingInstModification()             = null;
-    
-    
+
+
     syn InstComponentRedeclare InstModification.matchInstComponentRedeclare(String name) = null;
     eq InstComponentRedeclare.matchInstComponentRedeclare(String name) {
         if (getName().name().equals(name))
@@ -787,7 +783,7 @@ aspect Environments {
     syn InstComponentRedeclare InstNode.retrieveReplacingComponent(String name) {
         for (InstModification im : getMergedEnvironment()) {
             InstComponentRedeclare icr = im.matchInstComponentRedeclare(name);
-            if (icr != null) 
+            if (icr != null)
                 return icr;
         }
         return null;
@@ -796,7 +792,7 @@ aspect Environments {
     syn InstComponentRedeclare InstNode.retrieveConstrainingComponent(String name) {
         for (InstModification im : getMergedEnvironment()) {
             InstComponentRedeclare icr = im.matchInstComponentRedeclare(name);
-            if (icr != null && icr.getComponentRedeclareDecl().hasSrcConstrainingClause()) 
+            if (icr != null && icr.getComponentRedeclareDecl().hasSrcConstrainingClause())
                 return icr;
         }
         return null;
@@ -806,7 +802,7 @@ aspect Environments {
     syn InstRedeclareClassNode InstNode.retrieveReplacingClass(String name) {
         for (InstModification im : getMergedEnvironment()) {
             InstClassRedeclare icr = im.matchInstClassRedeclare(name);
-            if (icr != null) 
+            if (icr != null)
                 return icr;
         }
         return null;
@@ -815,32 +811,32 @@ aspect Environments {
     syn InstRedeclareClassNode InstNode.retrieveConstrainingClass(String name) {
         for (InstModification im : getMergedEnvironment()) {
             InstRedeclareClassNode icr = im.matchInstClassRedeclare(name);
-            if (icr != null && icr.redeclaringClassDecl().hasSrcConstrainingClause()) 
+            if (icr != null && icr.redeclaringClassDecl().hasSrcConstrainingClause())
                 return icr;
         }
         return null;
     }
 
     eq InstExtends.retrieveReplacingClass(String name) {
-    	InstRedeclareClassNode res = super.retrieveReplacingClass(name);
-    	return (res == null) ? lookupReplacingClass(name) : res;
+	InstRedeclareClassNode res = super.retrieveReplacingClass(name);
+	return (res == null) ? lookupReplacingClass(name) : res;
     }
-    
+
     inh InstRedeclareClassNode InstExtends.lookupReplacingClass(String name);
     eq InstNode.getInstExtends().lookupReplacingClass(String name) {
-    	for (InstClassDecl icd : getRedeclaredInstClassDecls())
-    		if (icd.name().equals(name))
-    			return icd;
-    	return retrieveReplacingClass(name);
+	for (InstClassDecl icd : getRedeclaredInstClassDecls())
+		if (icd.name().equals(name))
+			return icd;
+	return retrieveReplacingClass(name);
     }
     eq InstExtends.getChild().lookupReplacingClass(String name) {
-    	InstRedeclareClassNode res = lookupReplacingClass(name);
-    	if (res != null)
-    		return res;
-    	for (InstClassDecl icd : getRedeclaredInstClassDecls())
-    		if (icd.name().equals(name))
-    			return icd;
-    	return super.retrieveReplacingClass(name);
+	InstRedeclareClassNode res = lookupReplacingClass(name);
+	if (res != null)
+		return res;
+	for (InstClassDecl icd : getRedeclaredInstClassDecls())
+		if (icd.name().equals(name))
+			return icd;
+	return super.retrieveReplacingClass(name);
     }
     eq InstRoot.getChild().lookupReplacingClass(String name) = null;
     eq Root.getChild().lookupReplacingClass(String name)     = null;
@@ -850,14 +846,14 @@ aspect Environments {
     inh InstNode FAbstractEquation.myInstNode();
     eq Root.getChild().myInstNode()                       = null;
     eq InstNode.getChild().myInstNode()                   = this;
-    eq InstComponentDecl.getChild().myInstNode()          = 
+    eq InstComponentDecl.getChild().myInstNode()          =
         isExpandableConnectorMember() ? myExpandableConnectorTemplate() : this;
     eq InstNode.getElementInstModification().myInstNode() = myInstNode();
-    eq InstExpandableConnectorDecl.getInstComponentDecl(int i).myInstNode()          = 
+    eq InstExpandableConnectorDecl.getInstComponentDecl(int i).myInstNode()          =
         template(i).myInstNode();
-    eq InstReplacingExpandableConnectorDecl.getInstComponentDecl(int i).myInstNode() = 
+    eq InstReplacingExpandableConnectorDecl.getInstComponentDecl(int i).myInstNode() =
         template(i).myInstNode();
-    eq InstArrayExpandableConnector.getInstComponentDecl(int i).myInstNode()         = 
+    eq InstArrayExpandableConnector.getInstComponentDecl(int i).myInstNode()         =
         template(i).myInstNode();
 
     inh InstNode InstModification.myParentInstNode();
@@ -872,7 +868,7 @@ aspect Environments {
 	 * InstPrimitive:s may have children of type InstExtends, if the InstPrimitive is instantiated
 	 * either from a short class declaration that references a primitive type or from a 'type' class
 	 * declaration that inherits a primitive type. In both cases, the result is one or a chain of InstExtends/
-	 * InstExtendsShortClass children. The final node in such a chain holds the total merged environment of 
+	 * InstExtendsShortClass children. The final node in such a chain holds the total merged environment of
 	 * the InstPrimitive. InstRecords can of course have InstExtends.
 	 */
 	syn lazy Environment InstNode.totalMergedEnvironment() {
@@ -941,12 +937,12 @@ aspect InstanceTreeConstruction {
     syn nta Opt InstNode.getDynamicFExpOpt()                       = new DynamicOpt();
     syn nta Opt InstExternal.getDynamicFExpOpt()                   = new DynamicOpt();
     syn nta Opt FExp.getDynamicFExpOpt()                           = new DynamicOpt();
-	syn nta Opt FAbstractEquation.getDynamicFAbstractEquationOpt() = new DynamicOpt();	
+	syn nta Opt FAbstractEquation.getDynamicFAbstractEquationOpt() = new DynamicOpt();
 	syn nta Opt FVariable.getDynamicFVariableOpt()                 = new DynamicOpt();
-	
+
 	/**
 	 * Dynamically places an FExp in the tree under this InstNode.
-	 * 
+	 *
 	 * @return  the final version of the dynamically placed node.
 	 */
 	public FExp InstNode.dynamicFExp(FExp exp) {
@@ -960,21 +956,21 @@ aspect InstanceTreeConstruction {
 
     /**
      * Dynamically places an FExp in the tree under this InstExternal.
-     * 
+     *
      * @return  the final version of the dynamically placed node.
      */
     public FExp InstExternal.dynamicFExp(FExp exp) {
         getDynamicFExpOpt().setChild(exp, 0);
         return (FExp) getDynamicFExpOpt().getChild(0);
     }
-	
-	
+
+
 	/**
 	 * Dynamically places an FExp in the tree under this FExp.
-	 * 
-	 * If <code>exp</code> is already in tree of if <code>exp == this</code>, 
+	 *
+	 * If <code>exp</code> is already in tree of if <code>exp == this</code>,
 	 * then <code>exp</code> is returned.
-	 * 
+	 *
 	 * @return  the final version of the dynamically placed node.
 	 */
 	public FExp FExp.dynamicFExp(FExp exp) {
@@ -988,7 +984,7 @@ aspect InstanceTreeConstruction {
 		getDynamicFExpOpt().setChild(exp, 0);
 		return (FExp) getDynamicFExpOpt().getChild(0);
 	}
-    
+
     public FVariable FVariable.dynamicFVariable(FVariable fv) {
         if (fv == this)
             return fv;
@@ -1000,10 +996,10 @@ aspect InstanceTreeConstruction {
         getDynamicFVariableOpt().setChild(fv, 0);
         return (FVariable) getDynamicFVariableOpt().getChild(0);
     }
-    
+
     /**
      * Dynamically places an FAbstractEquation in the tree under this FAbstractEquation.
-     * 
+     *
      * @return  the final version of the dynamically placed node.
      */
     public FAbstractEquation FAbstractEquation.dynamicFAbstractEquation(FAbstractEquation eqn) {
@@ -1029,7 +1025,7 @@ aspect InstanceTreeConstruction {
             }
         }
         return l;
-        
+
     }
 
     eq InstComponentDecl.getInstComponentDeclList() {
@@ -1049,13 +1045,13 @@ aspect InstanceTreeConstruction {
     }
 
     public InstComponentDecl InstComponentDecl.createInstArrayComponentDecl(int i) {
-        return new InstArrayComponentDecl(name(), new InstClassAccess("ArrayDecl"), new Opt(), 
+        return new InstArrayComponentDecl(name(), new InstClassAccess("ArrayDecl"), new Opt(),
                 getSrcComponentDecl(), new Opt(), new Opt(), new Opt(), i);
     }
 
     syn lazy List InstNode.getInstClassDeclList() {
         List l = new List();
-        
+
         for (SrcClassDecl cd : classes()) {
             if (!cd.hasRedeclare()) {
                 InstClassDecl icd = createInstClassDecl(cd);
@@ -1063,13 +1059,13 @@ aspect InstanceTreeConstruction {
                     l.add(icd);
             }
         }
-        
+
         return l;
     }
 
     syn lazy List InstNode.getRedeclaredInstClassDeclList() {
         List l = new List();
-        
+
         for (SrcClassDecl cd : classes()) {
             if (cd.hasRedeclare()) {
                 InstNode icd = cd.newInstClassDecl();
@@ -1077,7 +1073,7 @@ aspect InstanceTreeConstruction {
                     l.add(icd);
             }
         }
-        
+
         return l;
     }
 
@@ -1090,7 +1086,7 @@ aspect InstanceTreeConstruction {
         List l = new List();
         if (shouldHaveInstExtendsList()) {
             InstNode lookup = instLookupNodeForShortClassExtends();
-            for (SrcExtendsClause e : superClasses()) { 
+            for (SrcExtendsClause e : superClasses()) {
                 l.add(createInstExtends(e, lookup));
             }
         }
@@ -1102,7 +1098,7 @@ aspect InstanceTreeConstruction {
     eq InstArrayComponentDecl.shouldHaveInstExtendsList() = childDimensionLength() == Size.UNKNOWN;
 
     /**
-     * Find the instance tree node an extends below this node, from a short class declaration, 
+     * Find the instance tree node an extends below this node, from a short class declaration,
      * should look up right hand side names in its modification from.
      */
     syn InstNode InstNode.instLookupNodeForShortClassExtends()          = myInstClass().instLookupNodeForShortClassExtends();
@@ -1119,7 +1115,7 @@ aspect InstanceTreeConstruction {
     syn lazy List<InstComponentDecl> InstRecordConstructor.getInstComponentDeclList() {
         InstClassDecl rec = getRecord().myInstClassDecl().actualInstClass();
         List<InstComponentDecl> l = new List<InstComponentDecl>();
-        for (SrcComponentDecl cd : rec.components()) 
+        for (SrcComponentDecl cd : rec.components())
             l.add(rec.createInstComponentDecl(cd));
         return l;
     }
@@ -1128,7 +1124,7 @@ aspect InstanceTreeConstruction {
         InstClassDecl rec = getRecord().myInstClassDecl().actualInstClass();
         List l = new List();
         InstNode lookup = myInstClassDecl().instLookupNodeForShortClassExtends();
-        for (SrcExtendsClause e : rec.superClasses()) 
+        for (SrcExtendsClause e : rec.superClasses())
             l.add(rec.createInstExtends(e, lookup));
         return l;
     }
@@ -1151,7 +1147,7 @@ aspect InstanceTreeConstruction {
         res.add(newInstModification());
     }
 
-    syn InstModification InstFunctionArgument.newInstModification() = 
+    syn InstModification InstFunctionArgument.newInstModification() =
             new InstComponentModification(getSrcModification(), false, false,
                     boundInput.createInstAccess(),
                     new Opt<InstModification>(getSrcModification().newInstModification()));
@@ -1167,43 +1163,43 @@ aspect InstanceTreeConstruction {
 
     syn lazy List<InstModification> InstNode.getElementInstModificationList() {
         List<InstModification> l = new List<InstModification>();
-        for (SrcModificationOrRedeclareElement m : elementModifications()) 
+        for (SrcModificationOrRedeclareElement m : elementModifications())
             l.add(m.newInstModification());
         return l;
     }
 
 
     public InstComponentDecl InstNode.createInstComponentDecl(SrcComponentDecl cd) {
-        // Check if the component is redeclared. 
+        // Check if the component is redeclared.
         // -> Yes: Create an InstReplacingComponent component
-        // -> No: Create an InstComponent 
+        // -> No: Create an InstComponent
         InstComponentRedeclare irc = retrieveReplacingComponent(cd.name());
         InstComponentRedeclare cicr = retrieveConstrainingComponent(cd.name());
         if (irc!=null) {
             SrcComponentDecl replacingComp = irc.getComponentRedeclareDecl();
             return new InstCreateReplacingComponentDecl(replacingComp, irc, cd, irc, cicr);
             // TODO: handle expandable connectors in this case
-        } else { 
+        } else {
             return new InstCreateComponentDecl(cd, null);
         }
      }
 
      rewrite InstCreateReplacingComponentDecl {
          to InstComponentDecl getClassName().myInstClassDecl().newInstReplacingComponent(
-                 getSrcComponentDecl(), getOriginalDecl(), 
+                 getSrcComponentDecl(), getOriginalDecl(),
                  getInstComponentRedeclare(), getInstConstrainingRedeclare());
      }
-     
+
      rewrite InstCreateComponentDecl {
          to InstComponentDecl getClassName().myInstClassDecl().newInstComponentDecl(getSrcComponentDecl());
      }
-     
+
      rewrite InstCreateForIndexPrimitive {
          to InstPrimitive (InstPrimitive) getClassName().myInstClassDecl().newInstComponentDecl(getSrcComponentDecl());
      }
 
      public InstClassDecl InstNode.createInstClassDecl(SrcClassDecl bcd) {
-         // Check if the class is redeclared. 
+         // Check if the class is redeclared.
          // -> Yes: Create an InstReplacingClass component
          // -> No: Create an InstClassDecl
          InstRedeclareClassNode icr = retrieveReplacingClass(bcd.name());
@@ -1355,13 +1351,13 @@ aspect InstanceTreeConstruction {
     }
 
     public InstComponentDecl InstBaseClassDecl.emptyInstComponentDecl(String name, SrcComponentDecl cd, InstAccess className) {
-        if (isRecord()) 
+        if (isRecord())
             return new InstRecord(name, className, new Opt(), cd, new Opt(), new Opt(), new Opt());
-        else if (extendsEnum()) 
+        else if (extendsEnum())
             return new InstEnum(name, className, new Opt(), cd, new Opt(), new Opt(), new Opt());
         else if (isExternalObject())
             return new InstExternalObject(name, className, new Opt(), cd, new Opt(), new Opt(), new Opt());
-        else if (extendsPrimitive()) 
+        else if (extendsPrimitive())
             return new InstPrimitive(name, className, new Opt(), cd, new Opt(), new Opt(), new Opt());
         else if (isExpandableConnector())
             return new InstExpandableConnectorDecl(name, className, new Opt(), cd, new Opt(), new Opt(), new Opt());
@@ -1380,9 +1376,9 @@ aspect InstanceTreeConstruction {
     }
 
     public InstComponentDecl InstBuiltInClassDecl.newInstComponentDeclGeneric(String name, SrcComponentDecl cd, SrcAccess className) {
-        if (cd.isEnumLiteral()) 
-            return new InstEnumLiteral(name, className.newInstAccess(), new Opt(), cd, new Opt(), new Opt(), new Opt());   
-        else 
+        if (cd.isEnumLiteral())
+            return new InstEnumLiteral(name, className.newInstAccess(), new Opt(), cd, new Opt(), new Opt(), new Opt());
+        else
             return new InstBuiltIn(name, className.newInstAccess(), new Opt(), cd, new Opt(), new Opt(), new Opt());
     }
 
@@ -1393,7 +1389,7 @@ aspect InstanceTreeConstruction {
     }
 
     public abstract InstComponentDecl InstClassDecl.newInstReplacingComponent(
-            SrcComponentDecl replacingDecl, SrcComponentDecl originalDecl, 
+            SrcComponentDecl replacingDecl, SrcComponentDecl originalDecl,
             InstComponentRedeclare icr, InstComponentRedeclare cicr);
 
     // TODO: Should probably represent different var & type subscripts in instance tree as well
@@ -1416,7 +1412,7 @@ aspect InstanceTreeConstruction {
     }
 
     public InstComponentDecl InstBaseClassDecl.newInstReplacingComponent(
-            SrcComponentDecl replacingDecl, SrcComponentDecl originalDecl, 
+            SrcComponentDecl replacingDecl, SrcComponentDecl originalDecl,
             InstComponentRedeclare icr, InstComponentRedeclare cicr) {
         Opt fas_opt = new Opt();
         if (replacingDecl.hasSrcArraySubscripts()) {
@@ -1428,24 +1424,24 @@ aspect InstanceTreeConstruction {
         }
         String name = replacingDecl.name();
         InstAccess className = replacingDecl.newInstClassAccess();
-        
+
         InstComponentDecl icd;
         if (isPrimitive()) {
-            icd = new InstReplacingPrimitive(name, className, fas_opt, 
+            icd = new InstReplacingPrimitive(name, className, fas_opt,
                     replacingDecl, new Opt(), new Opt(), cond_attr_opt, originalDecl, icr);
         } else if (isRecord()) {
-            icd = new InstReplacingRecord(name, className, fas_opt, 
+            icd = new InstReplacingRecord(name, className, fas_opt,
                     replacingDecl, new Opt(), new Opt(), cond_attr_opt, originalDecl, icr);
         } else {
             if (isExpandableConnector()) {
-                icd = new InstReplacingExpandableConnectorDecl(name, className, fas_opt, 
+                icd = new InstReplacingExpandableConnectorDecl(name, className, fas_opt,
                         replacingDecl, new Opt(), new Opt(), cond_attr_opt, originalDecl, icr);
             } else {
-                icd = new InstReplacingComposite(name, className, fas_opt, 
+                icd = new InstReplacingComposite(name, className, fas_opt,
                         replacingDecl, new Opt(), new Opt(), cond_attr_opt, originalDecl, icr);
             }
         }
-        
+
         SrcComponentDecl constrainingDecl = (cicr == null) ? originalDecl : cicr.getComponentRedeclareDecl();
         icd.setInstConstrainingComponentOpt(constrainingDecl.newInstConstrainingComponentOpt(cicr));
         icd.setLocation(originalDecl);
@@ -1453,20 +1449,20 @@ aspect InstanceTreeConstruction {
     }
 
     public InstComponentDecl InstLibNode.newInstReplacingComponent(
-            SrcComponentDecl replacingDecl, SrcComponentDecl originalDecl, 
+            SrcComponentDecl replacingDecl, SrcComponentDecl originalDecl,
             InstComponentRedeclare icr, InstComponentRedeclare cicr) {
         return resolveLib().newInstReplacingComponent(replacingDecl, originalDecl, icr, cicr);
     }
 
     // This cannot be done.
     public InstComponentDecl InstBuiltInClassDecl.newInstReplacingComponent(
-            SrcComponentDecl replacingDecl, SrcComponentDecl originalDecl, 
+            SrcComponentDecl replacingDecl, SrcComponentDecl originalDecl,
             InstComponentRedeclare icr, InstComponentRedeclare cicr) {
         throw new UnsupportedOperationException();
     }
 
     public InstComponentDecl BadInstClassDecl.newInstReplacingComponent(
-            SrcComponentDecl replacingDecl, SrcComponentDecl originalDecl, 
+            SrcComponentDecl replacingDecl, SrcComponentDecl originalDecl,
             InstComponentRedeclare icr, InstComponentRedeclare cicr) {
         throw new UnsupportedOperationException();
     }
@@ -1474,9 +1470,9 @@ aspect InstanceTreeConstruction {
     public InstClassDecl SrcClassDecl.newInstClassDecl() {
         return new UnknownInstClassDecl();
     }
-    
+
     public Opt<InstExternal> SrcFullClassDecl.newInstExternalOpt() {
-    	return hasSrcExternalClause() ? new Opt(getSrcExternalClause().instantiate()) : new Opt();
+	return hasSrcExternalClause() ? new Opt(getSrcExternalClause().instantiate()) : new Opt();
     }
 
     public InstFullClassDecl SrcFullClassDecl.newInstClassDecl() {
@@ -1499,15 +1495,15 @@ aspect InstanceTreeConstruction {
         if (getSrcExtendsClauseShortClass().hasSrcArraySubscripts()) {
             fas_opt.setChild(getSrcExtendsClauseShortClass().getSrcArraySubscripts().instantiate(),0);
         }
-        InstShortClassDecl scd =  new InstShortClassDecl(this, new Opt(), 
+        InstShortClassDecl scd =  new InstShortClassDecl(this, new Opt(),
                 newInstRestriction(),fas_opt);
-        scd.setInstConstrainingClassOpt(newInstConstrainingClassOpt(null));     
+        scd.setInstConstrainingClassOpt(newInstConstrainingClassOpt(null));
         scd.setLocation(this);
         return scd;
     }
 
     public InstPrimitiveClassDecl SrcPrimitiveClassDecl.newInstClassDecl() {
-    	return new InstPrimitiveClassDecl(this, new Opt(), newInstRestriction(), newInstExternalOpt());
+	return new InstPrimitiveClassDecl(this, new Opt(), newInstRestriction(), newInstExternalOpt());
     }
 
     public InstBuiltInClassDecl SrcBuiltInClassDecl.newInstClassDecl() {
@@ -1519,9 +1515,9 @@ aspect InstanceTreeConstruction {
     }
 
     public InstEnumClassDecl SrcEnumClassDecl.newInstClassDecl() {
-    	InstEnumClassDecl ecd = new InstEnumClassDecl(this, new Opt(), newInstRestriction(), newInstExternalOpt());
-    	ecd.setLocation(this);
-    	return ecd;
+	InstEnumClassDecl ecd = new InstEnumClassDecl(this, new Opt(), newInstRestriction(), newInstExternalOpt());
+	ecd.setLocation(this);
+	return ecd;
     }
 
     public BadInstClassDecl SrcBadClassDecl.newInstClassDecl() {
@@ -1545,7 +1541,7 @@ aspect InstanceTreeConstruction {
         SrcClassDecl constrainingDecl = (cicr == null) ? replacedClass : cicr.redeclaringClassDecl();
         InstReplacingFullClassDecl fcd = new InstReplacingFullClassDecl(this, new Opt(), ir, exto, replacedClass, icr);
         fcd.setInstConstrainingClassOpt(constrainingDecl.newInstConstrainingClassOpt(cicr));
-        //TODO: Should be constr clause of original or redeclared? 
+        //TODO: Should be constr clause of original or redeclared?
         // - Should be from redeclared if it has one.
         fcd.setLocation(this);
         return fcd;
@@ -1569,7 +1565,7 @@ aspect InstanceTreeConstruction {
     public InstRestriction SrcBaseClassDecl.newInstRestriction() {
         return getSrcRestriction().newInstRestriction();
     }
-    
+
     public abstract InstRestriction SrcRestriction.newInstRestriction();
     public InstModel               SrcModel.newInstRestriction()               { return new InstModel(); }
     public InstBlock               SrcBlock.newInstRestriction()               { return new InstBlock(); }
@@ -1585,7 +1581,7 @@ aspect InstanceTreeConstruction {
     public InstOperatorRecord      SrcOperatorRecord.newInstRestriction()      { return new InstOperatorRecord(); }
 
     /**
-     * A connector class inheriting a record class is both connector and record, 
+     * A connector class inheriting a record class is both connector and record,
      * this method finds any inherited restriction that should be kept.
      */
     syn InstRestriction InstRestriction.inheritedRestriction()       = null;
@@ -1593,15 +1589,15 @@ aspect InstanceTreeConstruction {
     eq InstOperatorRecord.inheritedRestriction()                     = this;
     inh lazy InstRestriction InstConnector.inheritedRestriction();
     eq InstBaseClassDecl.getInstRestriction().inheritedRestriction() = inheritedRestriction(false);
-    
+
     /**
-     * A connector class inheriting a record class is both connector and record, 
+     * A connector class inheriting a record class is both connector and record,
      * this method finds any inherited restriction that should be kept.
      */
     syn InstRestriction InstClassDecl.inheritedRestriction(boolean checkMine) = null;
-    eq InstSimpleShortClassDecl.inheritedRestriction(boolean checkMine)       = 
+    eq InstSimpleShortClassDecl.inheritedRestriction(boolean checkMine)       =
         actualInstClass().inheritedRestriction(true);
-    eq InstLibNode.inheritedRestriction(boolean checkMine)                    = 
+    eq InstLibNode.inheritedRestriction(boolean checkMine)                    =
         actualInstClass().inheritedRestriction(true);
     eq InstBaseClassDecl.inheritedRestriction(boolean checkMine) {
         if (checkMine)
@@ -1692,7 +1688,7 @@ aspect InstanceTreeConstruction {
     }
 
     syn lazy InstClassDecl InstClassRedeclare.getInstClassDecl() {
-    	return getSrcClassRedeclare().getSrcBaseClassDecl().newInstClassDecl();
+	return getSrcClassRedeclare().getSrcBaseClassDecl().newInstClassDecl();
     }
 
     syn lazy InstComponentDecl InstComponentRedeclare.getInstComponentDecl() =
@@ -1726,7 +1722,7 @@ aspect InstanceTreeConstruction {
      * Returns the FExp associated with this argument, if any, without triggering rewrites.
      */
     public FExp InstFunctionArgument.getFExpNoTransform() { return null; }
-    
+
     public FExp InstFunctionArgument.getOriginalFExp() { return null; }
     public FExp InstGivenArgument.getOriginalFExp()    { return getFExpNoTransform(); }
 
@@ -1744,14 +1740,14 @@ aspect InstanceTreeConstruction {
     private boolean InstShortClassDecl.simpleRewriteDone = false;
 
     rewrite InstShortClassDecl {
-    	when (!simpleRewriteDone) to InstAbstractShortClassDecl {
-    		simpleRewriteDone = true;
-    		if (shouldBeExpanded())
-    			return this;
-    		InstSimpleShortClassDecl res = createInstSimpleShortClassDecl();
-    		res.setLocation(this);
-    		return res;
-    	}
+	when (!simpleRewriteDone) to InstAbstractShortClassDecl {
+		simpleRewriteDone = true;
+		if (shouldBeExpanded())
+			return this;
+		InstSimpleShortClassDecl res = createInstSimpleShortClassDecl();
+		res.setLocation(this);
+		return res;
+	}
     }
 
     public InstSimpleShortClassDecl InstShortClassDecl.createInstSimpleShortClassDecl() {
@@ -1759,27 +1755,27 @@ aspect InstanceTreeConstruction {
     }
 
     public InstReplacingSimpleShortClassDecl InstReplacingShortClassDecl.createInstSimpleShortClassDecl() {
-        return new InstReplacingSimpleShortClassDecl(getSrcClassDecl(), getInstConstrainingClassOpt(), 
+        return new InstReplacingSimpleShortClassDecl(getSrcClassDecl(), getInstConstrainingClassOpt(),
                getInstRestriction(), getOriginalClassDecl(), getInstClassRedeclare());
     }
 
-    syn boolean InstShortClassDecl.shouldBeExpanded() = 
-        hasFArraySubscripts() || 
-        hasInstClassModification() || 
-        getSrcClassDecl().hasSrcTypePrefix() || 
+    syn boolean InstShortClassDecl.shouldBeExpanded() =
+        hasFArraySubscripts() ||
+        hasInstClassModification() ||
+        getSrcClassDecl().hasSrcTypePrefix() ||
         !filteredEnvironment().isEmpty();
     eq InstReplacingShortClassDecl.shouldBeExpanded() =
-        super.shouldBeExpanded() || 
-        (hasInstConstrainingClass() && getInstConstrainingClass().hasInstClassModification()) || 
+        super.shouldBeExpanded() ||
+        (hasInstConstrainingClass() && getInstConstrainingClass().hasInstClassModification()) ||
         (isFunction() && !instModificationsFromConstrainingType().isEmpty());
 
     syn boolean SrcClassDecl.hasSrcTypePrefix() = false;
     eq SrcShortClassDecl.hasSrcTypePrefix()     = getSrcExtendsClauseShortClass().hasSrcTypePrefix();
 
-    syn boolean SrcExtendsClauseShortClass.hasSrcTypePrefix() = 
+    syn boolean SrcExtendsClauseShortClass.hasSrcTypePrefix() =
         hasSrcTypePrefixFlow() || hasSrcTypePrefixVariability() || hasSrcTypePrefixInputOutput();
 
-    syn lazy InstAccess InstSimpleShortClassDecl.getTarget() = 
+    syn lazy InstAccess InstSimpleShortClassDecl.getTarget() =
         getSrcBaseClassDecl().superClasses().iterator().next().getSuper().newInstAccess();
 
     /**
@@ -1839,7 +1835,7 @@ aspect InstanceTreeConstruction {
 }
 
 aspect ExpandableConnectorMembers {
-    
+
     private List<InstComponentDecl> InstExpandableConnectorDecl.expandedMembers          = null;
     private List<InstComponentDecl> InstReplacingExpandableConnectorDecl.expandedMembers = null;
     private List<InstComponentDecl> InstArrayExpandableConnector.expandedMembers         = null;
@@ -1848,44 +1844,44 @@ aspect ExpandableConnectorMembers {
     private InstComponentDecl[] InstReplacingExpandableConnectorDecl.templates = null;
     private InstComponentDecl[] InstArrayExpandableConnector.templates         = null;
 
-    syn boolean InstExpandableConnectorDecl.useTemplate(int i)          = 
+    syn boolean InstExpandableConnectorDecl.useTemplate(int i)          =
         templates != null && getInstComponentDecl(i) != templates[i];
-    syn boolean InstReplacingExpandableConnectorDecl.useTemplate(int i) = 
+    syn boolean InstReplacingExpandableConnectorDecl.useTemplate(int i) =
         templates != null && getInstComponentDecl(i) != templates[i];
-    syn boolean InstArrayExpandableConnector.useTemplate(int i)         = 
+    syn boolean InstArrayExpandableConnector.useTemplate(int i)         =
         templates != null && getInstComponentDecl(i) != templates[i];
 
-    syn InstComponentDecl InstExpandableConnectorDecl.template(int i)          = 
+    syn InstComponentDecl InstExpandableConnectorDecl.template(int i)          =
         templates[i].arrayTopInstComponentDecl();
-    syn InstComponentDecl InstReplacingExpandableConnectorDecl.template(int i) = 
+    syn InstComponentDecl InstReplacingExpandableConnectorDecl.template(int i) =
         templates[i].arrayTopInstComponentDecl();
-    syn InstComponentDecl InstArrayExpandableConnector.template(int i)         = 
+    syn InstComponentDecl InstArrayExpandableConnector.template(int i)         =
         templates[i].arrayTopInstComponentDecl();
 
-    eq InstExpandableConnectorDecl.getInstComponentDeclList()          = 
+    eq InstExpandableConnectorDecl.getInstComponentDeclList()          =
         (expandedMembers != null) ? expandedMembers : super.getInstComponentDeclList();
-    eq InstReplacingExpandableConnectorDecl.getInstComponentDeclList() = 
+    eq InstReplacingExpandableConnectorDecl.getInstComponentDeclList() =
         (expandedMembers != null) ? expandedMembers : super.getInstComponentDeclList();
-    eq InstArrayExpandableConnector.getInstComponentDeclList()         = 
+    eq InstArrayExpandableConnector.getInstComponentDeclList()         =
         (expandedMembers != null) ? expandedMembers : super.getInstComponentDeclList();
-    
-    eq InstExpandableConnectorDecl.getInstExtendsList()          = 
+
+    eq InstExpandableConnectorDecl.getInstExtendsList()          =
         (expandedMembers != null) ? new List<InstExtends>() : super.getInstExtendsList();
-    eq InstReplacingExpandableConnectorDecl.getInstExtendsList() = 
+    eq InstReplacingExpandableConnectorDecl.getInstExtendsList() =
         (expandedMembers != null) ? new List<InstExtends>() : super.getInstExtendsList();
-    eq InstArrayExpandableConnector.getInstExtendsList()         = 
+    eq InstArrayExpandableConnector.getInstExtendsList()         =
         (expandedMembers != null) ? new List<InstExtends>() : super.getInstExtendsList();
-    
+
     public InstComponentDecl InstExpandableConnectorDecl.createInstArrayComponentDecl(int i) {
-        return new InstArrayExpandableConnector(name(), new InstClassAccess("ArrayDecl"), new Opt(), 
+        return new InstArrayExpandableConnector(name(), new InstClassAccess("ArrayDecl"), new Opt(),
                 getSrcComponentDecl(), new Opt(), new Opt(), new Opt(), i);
     }
     public InstComponentDecl InstReplacingExpandableConnectorDecl.createInstArrayComponentDecl(int i) {
-        return new InstArrayExpandableConnector(name(), new InstClassAccess("ArrayDecl"), new Opt(), 
+        return new InstArrayExpandableConnector(name(), new InstClassAccess("ArrayDecl"), new Opt(),
                 getSrcComponentDecl(), new Opt(), new Opt(), new Opt(), i);
     }
     public InstComponentDecl InstArrayExpandableConnector.createInstArrayComponentDecl(int i) {
-        return new InstArrayExpandableConnector(name(), new InstClassAccess("ArrayDecl"), new Opt(), 
+        return new InstArrayExpandableConnector(name(), new InstClassAccess("ArrayDecl"), new Opt(),
                 getSrcComponentDecl(), new Opt(), new Opt(), new Opt(), i);
     }
 
@@ -1947,14 +1943,14 @@ aspect InstaceConstrainingClauses {
         SrcClassDecl classToExpand = getClassName().myInstClassDecl().getSrcClassDecl();
         return classToExpand.newInstClassDecl();
     }
-    
+
     syn lazy FExp InstValueModification.getFExp() = getSrcValueModification().instantiateExp();
     eq InstArrayModification.getFExp()            = getCell();
-    
+
     syn FExp SrcValueModification.instantiateExp() = getSrcExp().instantiate();
     eq SrcDummyModification.instantiateExp()       = myFExp().treeCopy();
 
-    public List InstNode.buildFAbstractEquationList() { 
+    public List InstNode.buildFAbstractEquationList() {
     List l = new List();
 	    for (SrcAbstractEquation e : equations()) {
 	        l.add(e.instantiate());
@@ -1972,13 +1968,13 @@ aspect InstaceConstrainingClauses {
         return instComponentDecl().buildFAbstractEquationList();
     }
 
-    syn lazy List InstNode.getFAbstractEquationList() = 
+    syn lazy List InstNode.getFAbstractEquationList() =
         buildFAbstractEquationList();
-    eq InstComponentDecl.getFAbstractEquationList() = 
+    eq InstComponentDecl.getFAbstractEquationList() =
         isArrayParent() ? new List() : buildFAbstractEquationList();
 
     // TODO: Change behaviour of isArrayDecl to this instead?
-    syn boolean InstComponentDecl.isArrayParent() = 
+    syn boolean InstComponentDecl.isArrayParent() =
         getNumInstComponentDecl() > 0 && getInstComponentDecl(0).isArrayChild();
 
     syn boolean InstComponentDecl.isArrayChild() = false;
@@ -1989,17 +1985,17 @@ aspect InstImportClauses {
 
 
     syn List InstNode.getInstImportList() {
-    	List l = new List();
-    	for (SrcImportClause ic : imports()) {
-    		InstImport iic = ic.newInstImport();
-    		iic.setLocation(ic);
-    		l.add(iic);
-    	}
-    	return l;
+	List l = new List();
+	for (SrcImportClause ic : imports()) {
+		InstImport iic = ic.newInstImport();
+		iic.setLocation(ic);
+		l.add(iic);
+	}
+	return l;
     }
 
 
-	public abstract InstImport SrcImportClause.newInstImport(); 
+	public abstract InstImport SrcImportClause.newInstImport();
 	public InstImport SrcImportClauseQualified.newInstImport() {
 		return new InstImportQualified(getPackageName().newInstAccess(),this);
 	}
@@ -2009,9 +2005,9 @@ aspect InstImportClauses {
 	public InstImport SrcImportClauseRename.newInstImport() {
 		return new InstImportRename(getPackageName().newInstAccess(),this);
 	}
-	
 
-} 
+
+}
 
 aspect InstanceAST_API {
 	syn boolean InstNode.nameScope() = false;
@@ -2023,14 +2019,14 @@ aspect InstanceAST_API {
     eq InstComponentDecl.name()          = getName();
     eq InstClassDecl.name()              = getSrcClassDecl().name();
     eq InstExtends.name()                = getClassName().name();
-    
+
     syn String InstGeneratedInner.name() = getCopiedOuter().name();
-    
+
    /**
    * Retrieve fully indexed names for array elements
    *
    */
-    
+
     syn String InstNode.getElementName() = name();
     eq InstArrayComponentDecl.getElementName() {
         if (ndims() != 0 )  {
@@ -2038,7 +2034,7 @@ aspect InstanceAST_API {
         }
         return getFAccess().scalarName(false, true);
     }
-    
+
     syn SrcBaseClassDecl InstBaseClassDecl.getSrcBaseClassDecl() = (SrcBaseClassDecl)getSrcClassDecl();
     syn SrcShortClassDecl InstAbstractShortClassDecl.getSrcShortClassDecl() = (SrcShortClassDecl)getSrcClassDecl();
     syn SrcFullClassDecl InstFullClassDecl.getSrcFullClassDecl() = (SrcFullClassDecl)getSrcClassDecl();
@@ -2048,21 +2044,21 @@ aspect InstanceAST_API {
     syn lazy String InstClassDecl.qualifiedName();
     eq InstComponentDecl.qualifiedName()     = getFAccess().name();
     eq InstExtends.qualifiedName()           = myInstClass().qualifiedName();
-    eq InstInlineExtends.qualifiedName()     = 
+    eq InstInlineExtends.qualifiedName()     =
         surroundingInstClass().myInheritedOrigin().qualifiedName();
     eq InstBaseClassDecl.qualifiedName()     = getInstRestriction().qualifiedClassName();
     eq InstLibNode.qualifiedName()           = resolveLib().qualifiedName();
     eq BadInstClassDecl.qualifiedName()      = buildQualifiedName();
     eq InstBuiltInClassDecl.qualifiedName()  = name();
     eq InstProgramRoot.qualifiedName()       = "";
-    
+
     eq InstArrayComponentDecl.qualifiedName(){
         if (ndims() != 0 ){
-            return super.qualifiedName() + 
+            return super.qualifiedName() +
                 myIndex().partIndex(0, myDimension() + 1).toString();
         }
         return super.qualifiedName();
-    } 
+    }
 
     syn String InstRestriction.qualifiedClassName() = myInstClassDecl().buildQualifiedName();
     eq InstOperator.qualifiedClassName()            = myInstClassDecl().buildQualifiedOperatorName();
@@ -2082,11 +2078,11 @@ aspect InstanceAST_API {
 
     /**
      * Get the qualified class name of the oldest ancestor in the inheritance structure.
-     * 
+     *
      * For classes inheriting multiple classes, only the first one is considered.
      * This is useful mostly for classes that only allows inheriting from one other class.
      */
-    syn String InstNode.baseClassName()                  = 
+    syn String InstNode.baseClassName()                  =
         (getNumInstExtends() > 0) ? getInstExtends(0).baseClassName() : qualifiedName();
     eq InstComponentDecl.baseClassName()                 = myInstClass().baseClassName();
     eq InstSimpleShortClassDecl.baseClassName()          = actualInstClass().baseClassName();
@@ -2096,13 +2092,13 @@ aspect InstanceAST_API {
 	syn Iterable<SrcAbstractEquation> InstNode.equations() = Collections.<SrcAbstractEquation>emptyList();
 	eq InstComponentDecl.equations()                    = myInstClass().equations();
 	eq InstExtends.equations()                          = myInstClass().equations();
-	eq InstFullClassDecl.equations()                    = getSrcBaseClassDecl().equations();	
-	
+	eq InstFullClassDecl.equations()                    = getSrcBaseClassDecl().equations();
+
 	syn Iterable<SrcAlgorithm> InstNode.algorithms() = Collections.<SrcAlgorithm>emptyList();
 	eq InstComponentDecl.algorithms()             = myInstClass().algorithms();
 	eq InstExtends.algorithms()                   = myInstClass().algorithms();
-	eq InstFullClassDecl.algorithms()             = getSrcBaseClassDecl().algorithms();	
-	
+	eq InstFullClassDecl.algorithms()             = getSrcBaseClassDecl().algorithms();
+
     syn Iterable<FAlgorithm> InstNode.fAlgorithms() = Collections.<FAlgorithm>emptyList();
     eq InstComponentDecl.fAlgorithms()              = myInstClass().fAlgorithms();
     eq InstExtends.fAlgorithms()                    = myInstClass().fAlgorithms();
@@ -2120,7 +2116,7 @@ aspect InstanceAST_API {
     syn Iterable<SrcComponentDecl> InstNode.components() = Collections.<SrcComponentDecl>emptyList();
     eq InstComponentDecl.components()                 = myInstClass().components();
     eq InstArrayComponentDecl.components()            = instComponentDecl().components();
-    eq InstExtends.components()                       = 
+    eq InstExtends.components()                       =
         extendsPrimitive() ? Collections.<SrcComponentDecl>emptyList() : myInstClass().components();
     eq InstBaseClassDecl.components()                 = getSrcBaseClassDecl().components();
     eq InstLibNode.components()                       = resolveLib().components();
@@ -2146,7 +2142,7 @@ aspect InstanceAST_API {
     eq InstExtends.imports()                      = myInstClass().imports();
     eq InstLibNode.imports()                      = resolveLib().imports();
 
-    syn Iterable<SrcModificationOrRedeclareElement> InstNode.elementModifications() = 
+    syn Iterable<SrcModificationOrRedeclareElement> InstNode.elementModifications() =
         Collections.<SrcModificationOrRedeclareElement>emptyList();
     eq InstComponentDecl.elementModifications() = myInstClass().elementModifications();
     eq InstExtends.elementModifications()       = myInstClass().elementModifications();
@@ -2159,7 +2155,7 @@ aspect InstanceAST_API {
     eq FlatRoot.getChild().myInstEnumClassDecl()                      = null;
 
     inh int InstEnumLiteral.myIndex();
-    eq InstEnumClassDecl.getInstComponentDecl(int i).myIndex() = 
+    eq InstEnumClassDecl.getInstComponentDecl(int i).myIndex() =
         enumLiterals().indexOf(getInstComponentDecl(i)) + 1;
     eq InstNode.getChild().myIndex()                           = 0;
     eq FlatRoot.getChild().myIndex()                           = 0;
@@ -2204,7 +2200,7 @@ aspect InstanceAST_API {
 
     /**
      * get the InstNode for the redeclare that this constraining clause comes from.
-     * 
+     *
      * Only valid if hasInstRedeclare() returns true.
      */
     syn InstNode InstConstraining.getRedeclareInstNode();
@@ -2253,7 +2249,7 @@ aspect InstanceAST_API {
     syn boolean InstNode.isClassDecl() = false;
     eq InstClassDecl.isClassDecl()     = true;
     eq InstExtends.isClassDecl()       = isInClassDecl();
-    
+
     /**
      * Check if this node is an extends.
      */
@@ -2267,14 +2263,14 @@ aspect InstanceAST_API {
     eq InstClassDecl.getChild().isInClassDecl() = true;
     eq InstBaseNode.getChild().isInClassDecl()  = false;
     eq Root.getChild().isInClassDecl()          = false;
-    
+
     /**
      * Check if this node is a component declaration or an extends in one.
      */
     syn boolean InstNode.isComponentDecl() = false;
     eq InstComponentDecl.isComponentDecl() = true;
     eq InstExtends.isComponentDecl()       = isInComponentDecl();
-    
+
     /**
      * Check if this extends is part of a component declaration.
      */
@@ -2293,16 +2289,16 @@ aspect InstanceAST_API {
     eq InstEnumClassDecl.extendsEnum()        = true;
     eq InstExtends.extendsEnum()              = !isRecursive() && myInstClass().extendsEnum();
 
-	syn InstClassDecl InstClassDecl.getBaseInstClass() = 
+	syn InstClassDecl InstClassDecl.getBaseInstClass() =
 		(getNumInstExtends() > 0) ? getInstExtends(0).getBaseInstClass() : this;
-	syn InstClassDecl InstExtends.getBaseInstClass()   = 
+	syn InstClassDecl InstExtends.getBaseInstClass()   =
 		myInstClass().getBaseInstClass();
-	
+
 	inh boolean InstNode.enclosedBy(InstNode node);
 	eq InstNode.getChild().enclosedBy(InstNode node) = (node == this) || enclosedBy(node);
 	eq InstRoot.getChild().enclosedBy(InstNode node) = (node == this);
     eq Root.getChild().enclosedBy(InstNode node)     = false;
-    
+
     syn InstNode InstNode.commonAncestor(InstNode node) {
         HashSet<InstNode> theirs = new HashSet<InstNode>(node.instAncestors());
         for (InstNode mine : instAncestors())
@@ -2310,7 +2306,7 @@ aspect InstanceAST_API {
                 return mine;
         return null;
     }
-    
+
     syn java.util.List<InstNode> InstNode.instAncestors() {
         ArrayList<InstNode> list = new ArrayList<InstNode>();
         InstNode cur = this;
@@ -2324,7 +2320,7 @@ aspect InstanceAST_API {
     inh InstNode InstNode.instNodeParent();
     eq InstNode.getChild().instNodeParent() = this;
     eq Root.getChild().instNodeParent()     = null;
-    
+
     syn InstNode InstNode.matchingAncestor(InstNode node) {
         if (node.isClassDecl()) {
             int dims = node.nTypeDims();
@@ -2341,31 +2337,31 @@ aspect InstanceAST_API {
             return commonAncestor(node);
         }
     }
-    
+
     syn int InstNode.nTypeDims()      = 0;
-    eq InstShortClassDecl.nTypeDims() = (hasFArraySubscripts() ? getFArraySubscripts().ndims() : 0) 
+    eq InstShortClassDecl.nTypeDims() = (hasFArraySubscripts() ? getFArraySubscripts().ndims() : 0)
             + getInstExtends(0).nTypeDims();
     eq InstExtends.nTypeDims()        = myInstClass().nTypeDims();
-    
+
     syn boolean InstNode.isThisClass(InstNode node)                 = this == node;
     eq InstComponentDecl.isThisClass(InstNode node)                 = myInstClass().isThisClass(node);
     eq InstReplacingShortClassDecl.isThisClass(InstNode node)       = getInstClassRedeclare().isThisClass(node);
     eq InstReplacingSimpleShortClassDecl.isThisClass(InstNode node) = actualInstClass().isThisClass(node);
-    
+
     public interface InstRedeclareClassNode {
         public boolean isThisClass(InstNode node);
     }
-    
+
     syn boolean InstClassRedeclare.isThisClass(InstNode node)       = getInstClassDecl().isThisClass(node);
-    
+
 	/**
 	 * Find the component that this access should be evaluated in.
 	 */
 	inh InstComponentDecl InstAccess.containingInstComponent();
 	inh InstComponentDecl InstNode.containingInstComponent();
-	eq InstComponentDecl.getLocalFArraySubscripts().containingInstComponent() = 
+	eq InstComponentDecl.getLocalFArraySubscripts().containingInstComponent() =
 		containingInstComponent();
-	eq InstComponentDecl.getFArraySubscripts().containingInstComponent()      = 
+	eq InstComponentDecl.getFArraySubscripts().containingInstComponent()      =
 		containingInstComponent();
 	eq InstComponentDecl.getChild().containingInstComponent() = this;
 	eq InstClassDecl.getChild().containingInstComponent()     = null;
@@ -2376,7 +2372,7 @@ aspect InstanceAST_API {
     /**
      * Iterate over all components in this node and all InstExtends (recursively).
      * Filters out any duplicate components.
-     * 
+     *
      * @return  an Iterable over the components
      */
     public Iterable<InstComponentDecl> InstNode.allInstComponentDecls() {
@@ -2385,7 +2381,7 @@ aspect InstanceAST_API {
 
     /**
      * Iterate over all components in this node and all InstExtends (recursively).
-     * 
+     *
      * @return  an Iterable over the components
      */
     public Iterable<InstComponentDecl> InstRecordConstructor.allInstComponentDecls() {
@@ -2402,7 +2398,7 @@ aspect InstanceAST_API {
     /**
      * Iterate over all components in this node and all InstExtends (recursively).
      * Includes any duplicate components.
-     * 
+     *
      * @return  an Iterable over the components
      */
     public Iterable<InstComponentDecl> InstNode.allInstComponentDeclsWithDuplicates() {
@@ -2414,7 +2410,7 @@ aspect InstanceAST_API {
 
     /**
      * Iterate over all classes in this node and all InstExtends (recursively).
-     * 
+     *
      * @return  an Iterable over the classes
      */
     public Iterable<InstClassDecl> InstNode.allInstClassDecls() {
@@ -2553,7 +2549,7 @@ aspect InstanceAST_API {
     eq InstNode.getChild().containingInstNode() = this;
     eq InstRoot.getChild().containingInstNode() = null;
     eq Root.getChild().containingInstNode()     = null;
-    
+
     inh InstNode FExternalStmt.containingInstClassDecl();
     eq Root.getChild().containingInstClassDecl()          = null;
     eq InstClassDecl.getChild().containingInstClassDecl() = this;
@@ -2588,7 +2584,7 @@ aspect SourceAST_API {
                 return !elem.isError();
             }
         };
-    
+
         public static <N extends ASTNode> Iterable<N> filterErrorNodes(final Iterable<N> parent) {
             return new Iterable<N>() {
                 public Iterator<N> iterator() {
@@ -2636,7 +2632,7 @@ aspect InstArrays {
 
     /**
      * Find the length of the dimension corresponding to the next level of InstArrayComponentDecls in an array.
-     * 
+     *
      * For a primitive, the length of the first dimension is returned.
      */
     syn int InstComponentDecl.childDimensionLength() = size().get(0);
@@ -2644,7 +2640,7 @@ aspect InstArrays {
 
 	/**
 	 * Find the length of the dimension corresponding to the InstArrayComponentDecl(s)
-	 *        <code>i</code> levels under this one. 
+	 *        <code>i</code> levels under this one.
 	 */
 	inh int InstArrayComponentDecl.dimensionLength(int i);
 	eq InstArrayComponentDecl.getInstComponentDecl().dimensionLength(int i) = dimensionLength(i + 1);
@@ -2654,7 +2650,7 @@ aspect InstArrays {
 
     /**
      * Get an Index to my cell.
-     * 
+     *
      * Only valid for bottom level in array.
      */
     syn Index InstArrayComponentDecl.myIndex() {
@@ -2665,7 +2661,7 @@ aspect InstArrays {
 
     /**
      * Calculate Index of parent.
-     * 
+     *
      * For internal use only - returns an incomplete Index. See {@link #myIndex()}.
      */
     inh Index InstArrayComponentDecl.parentIndex();
@@ -2673,12 +2669,12 @@ aspect InstArrays {
     eq InstRecordConstructor.getChild().parentIndex()  = null;
     eq InstComponentDecl.getChild().parentIndex()      = new Index(new int[ndims()]);
     eq InstArrayComponentDecl.getChild().parentIndex() = myIndex();
-    
+
     /**
      * Get an Index to my cell for the concatenation of all surrounding array indices.
      */
     syn Index InstArrayComponentDecl.myTotalIndex() = parentTotalIndex().expand(myIndex());
-    
+
     /**
      * For internal use only - returns an incomplete Index. See {@link #myTotalIndex()}.
      */
@@ -2701,15 +2697,15 @@ aspect InstArrays {
     syn InstComponentDecl InstComponentDecl.arrayTopInstComponentDecl() = this;
     eq InstArrayComponentDecl.arrayTopInstComponentDecl()               = instComponentDecl();
 
-	syn boolean InstComponentDecl.isArrayDecl() = hasFArraySubscripts() && 
+	syn boolean InstComponentDecl.isArrayDecl() = hasFArraySubscripts() &&
 		getFArraySubscripts().ndims()>0;
-	
+
     syn java.util.List<? extends Subscript> InstNode.myFSubscripts() = Collections.emptyList();
     eq InstSimpleShortClassDecl.myFSubscripts()             = actualInstClass().myFSubscripts();
     eq InstLibNode.myFSubscripts()                          = actualInstClass().myFSubscripts();
-    eq InstFullClassDecl.myFSubscripts()                    = 
+    eq InstFullClassDecl.myFSubscripts()                    =
         (getNumInstExtends() == 1) ? getInstExtends(0).myFSubscripts() : super.myFSubscripts();
-    eq InstExtends.myFSubscripts()                          = 
+    eq InstExtends.myFSubscripts()                          =
         isRecursive() ? Collections.<FSubscript>emptyList() : myInstClass().myFSubscripts();
     syn lazy java.util.List<Subscript> InstShortClassDecl.myFSubscripts() {
 		java.util.List<Subscript> l = new ArrayList<>();
@@ -2729,7 +2725,7 @@ aspect InstArrays {
 		l.addAll(myInstClass().myFSubscripts());
 		return l;
 	}
-	
+
 	public void InstComponentDecl.addLocalFArraySubscriptsTo(java.util.List<Subscript> l) {
         if (hasLocalFArraySubscripts()) {
             for (Subscript s : getLocalFArraySubscripts().subscripts()) {
@@ -2739,7 +2735,7 @@ aspect InstArrays {
             addFSubscriptsFromOriginalDeclTo(l);
         }
 	}
-	
+
     public void InstComponentDecl.addFSubscriptsFromOriginalDeclTo(java.util.List<Subscript> l) {}
     public void InstReplacingComposite.addFSubscriptsFromOriginalDeclTo(java.util.List<Subscript> l) {
         getOriginalInstComponent().addLocalFArraySubscriptsTo(l);
@@ -2761,14 +2757,14 @@ aspect InstArrays {
 	    if (myFSubscripts().isEmpty())
 	        return null;
         List<FSubscript> list = new List<FSubscript>();
-        for (Subscript s : myFSubscripts()) { 
+        for (Subscript s : myFSubscripts()) {
             list.add(s.deferredCopy());
         }
         return new FArrayExpSubscripts(list);
 	}
-	
+
 	syn boolean InstComponentDecl.hasFArraySubscripts() = getFArraySubscripts()!=null;
-	
+
 }
 
 aspect DeferredSubscripts {
@@ -2791,14 +2787,14 @@ aspect DeferredSubscripts {
 }
 
 aspect InstanceAnnotations {
-    
+
     syn lazy Opt<InstClassModification> InstClassDecl.getClassAnnotationOpt() = new Opt<InstClassModification>();
     syn lazy Opt<InstClassModification> InstComponentDecl.getClassAnnotationOpt() = new Opt<InstClassModification>();
     syn lazy Opt<InstClassModification> InstExtends.getClassAnnotationOpt() = new Opt<InstClassModification>();
     syn lazy Opt<InstClassModification> InstExtends.getClassAnnotationExtendsOpt() = new Opt<InstClassModification>();
-    
+
     syn lazy Opt<InstClassModification> InstComponentDecl.getAnnotationOpt() = new Opt<InstClassModification>();
-    
+
     syn lazy Opt<InstClassModification> InstElementModification.getAnnotationOpt() = new Opt<InstClassModification>();
 }
 
@@ -2806,23 +2802,23 @@ aspect InstanceToString {
 
 
     public String InstClassDecl.toString() {
-    	return getSrcClassDecl().toString();
+	return getSrcClassDecl().toString();
     }
-    
+
     public String InstExternal.toString() {
-    	return getSrcExternalClause().toString();
+	return getSrcExternalClause().toString();
     }
-    
+
     public String InstComponentDecl.toString() {
-    	return getSrcComponentDecl().myComponentClause().toString();
+	return getSrcComponentDecl().myComponentClause().toString();
     }
 
     public String InstEnumLiteral.toString() {
-    	return prettyPrint("");
+	return prettyPrint("");
     }
-    
+
     public String InstExtends.toString() {
-    	return getSrcExtendsClause().toString();
+	return getSrcExtendsClause().toString();
     }
 
     public String InstModification.toString() {
@@ -2835,12 +2831,12 @@ aspect InstanceToString {
 aspect InheritedFrom {
 
     /**
-     * If this class was inherited into this scope, return the corresponding class 
-     * from the inherited class. 
-     * 
-     * The inhetitance can be either direct or through a surronding class that was 
+     * If this class was inherited into this scope, return the corresponding class
+     * from the inherited class.
+     *
+     * The inhetitance can be either direct or through a surronding class that was
      * inherited in. This method only follows a single extends.
-     * 
+     *
      * If no surrounding extends exists or any lookup fails, <code>this</code> is returned.
      */
     syn InstClassDecl InstClassDecl.myInheritedOrigin() {
@@ -2849,11 +2845,11 @@ aspect InheritedFrom {
     }
 
     inh InstClassDecl InstClassDecl.inheritedOriginHelper(String name);
-    eq InstExtends  .getInstClassDecl().inheritedOriginHelper(String name) = 
+    eq InstExtends  .getInstClassDecl().inheritedOriginHelper(String name) =
         myInstClass().memberInstClass(name).target(INST_UNKNOWN_CLASS, this);
-    eq InstClassDecl.getInstClassDecl().inheritedOriginHelper(String name) = 
+    eq InstClassDecl.getInstClassDecl().inheritedOriginHelper(String name) =
         inheritedOriginHelper(name()).memberInstClass(name).target(INST_UNKNOWN_CLASS, this);
-    eq InstNode     .getChild()        .inheritedOriginHelper(String name) = 
+    eq InstNode     .getChild()        .inheritedOriginHelper(String name) =
         unknownInstClassDecl();
 }
 
@@ -2888,7 +2884,7 @@ aspect InstancePrettyPrint {
 		str = indent+str.substring(str.lastIndexOf('.')+1);
 		str+= ": " + getClassName().name();
 		return str;
-		
+
 	}
 
 	public String InstExtends.prettyPrint(String indent) {
@@ -2896,7 +2892,7 @@ aspect InstancePrettyPrint {
 		str = indent+str.substring(str.lastIndexOf('.')+1);
 		str+= ": " + getClassName().name();
 		return str;
-		
+
 	}
 
 	public String InstComponentDecl.prettyPrint(String indent) {
@@ -2915,7 +2911,7 @@ aspect InstancePrettyPrint {
 		return str;
 
 	}
-	
+
 	public String InstImport.prettyPrint(String indent) {
 		String str = getClass().getName();
 		str = indent+str.substring(str.lastIndexOf('.')+1);
@@ -2930,6 +2926,6 @@ aspect InstancePrettyPrint {
 		return str;
 	}
 
-	
+
 }
 */

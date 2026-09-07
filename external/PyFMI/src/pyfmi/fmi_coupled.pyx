@@ -16,7 +16,7 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import pyfmi.fmi as fmi
-from fmi cimport FMUModelME2
+from pyfmi.fmi cimport FMUModelME2
 cimport fmil_import as FMIL
 
 from pyfmi.fmi_util import cpr_seed, enable_caching, Graph
@@ -728,7 +728,7 @@ cdef class CoupledFMUModelBase(CoupledModelBase):
         return valueref & 0x00000000FFFFFFFF
     
     cdef _get_model_index_from_vr(self, valueref):
-        return long(valueref) >> 32
+        return int(valueref) >> 32
     
     cdef _get_global_name(self, model_ind, name):
         return self.index[model_ind] + "." + name
@@ -2210,7 +2210,7 @@ cdef class CoupledFMUModelME2(CoupledFMUModelBase):
         
         err = (sum/N)**0.5 if N > 0 else 0.0 #If there are no connections between the models
         
-        if err < 1:
+        if abs(err) < 1.0:
             return False #No new discrete states needed
         else:
             return True #Discrete states needed

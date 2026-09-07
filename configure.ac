@@ -401,7 +401,7 @@ AS_IF([test "${$1}"],
       [
           $2="`cd ${$1}; pwd`"
           AC_MSG_RESULT([Using Python $7 installation ${$2}])
-          $5="-DPYTHON_LIBRARY=${$2}/libs/libpython27.a"
+          $5="-DPYTHON_LIBRARY=${$2}/libs/libpython3.a"
           $6="-DPYTHON_INCLUDE_DIR=${$2}/include"
       ], [
           AS_IF([test "${$3}" && test "${$4}"], 

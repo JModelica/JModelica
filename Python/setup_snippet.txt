@@ -1,0 +1,36 @@
+    path = string.split(package, '.')
+
+    if not package_dir:
+        if path:
+            return apply(os.path.join, path)
+        else:
+            return ''
+    else:
+        tail = []
+        while path:
+            try:
+                pdir = package_dir[string.join(path, '.')]
+            except KeyError:
+                tail.insert(0, path[-1])
+                del path[-1]
+            else:
+                tail.insert(0, pdir)
+                return apply(os.path.join, tail)
+        else:
+            # Oops, got all the way through 'path' without finding a
+            # match in package_dir.  If package_dir defines a directory
+            # for the root (nameless) package, then fallback on it;
+            # otherwise, we might as well have not consulted
+            # package_dir at all, as we just use the directory implied
+            # by 'tail' (which should be the same as the original value
+            # of 'path' at this point).
+            pdir = package_dir.get('')
+            if pdir is not None:
+                tail.insert(0, pdir)
+
+            if tail:
+                return apply(os.path.join, tail)
+            else:
+                return ''
+
+# get_package_dir ()

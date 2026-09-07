@@ -36,7 +36,7 @@ if not jpype.isJVMStarted():
         '-Djava.class.path=%s' % os.pathsep.join([_jvm_class_path]),
         *_jvm_args)
     org = jpype.JPackage('org')
-    print "JVM started."
+    print("JVM started.")
 
 
 # Compilers

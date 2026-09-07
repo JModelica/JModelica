@@ -11,7 +11,7 @@ into pull requests — and what a maintainer has to do by hand to switch that on
 |---|---|---|
 | `ci.yml` | push, pull request | Repository hygiene, then real builds of the compiler, runtime and Python layers on Linux, macOS and Windows |
 | `docker.yml` | push, tag, pull request | Multi-architecture container images (`linux/amd64`, `linux/arm64`) to GHCR |
-| `release.yml` | tag `v*`, manual | Self-contained portable bundles per platform, attached to a GitHub release |
+| `release.yml` | tag `v*` or a tag starting with a digit, manual | Self-contained portable bundles per platform, attached to a GitHub release |
 | `jules-issue.yml` | `jules` label, `/jules` comment, manual | Hands one issue to Jules, which opens a pull request |
 | `jules-sweep.yml` | daily 04:00 UTC | Hands the oldest untouched issues to Jules, a few at a time |
 | `jules-branches.yml` | weekly Monday 05:00 UTC | Surveys every branch, opens draft pull requests, hands them to Jules to finish |
@@ -299,6 +299,14 @@ gh variable set ENABLE_EXTRA_RUNNERS --body true
 
 Set it once you have confirmed those runner images are available to this
 repository.
+
+`release.yml` has never run. That is the trigger working as specified, not a
+fault: it fires on a tag, and the repository carries exactly one tag — `2.14`,
+inherited from upstream and pushed long before this workflow existed. Nothing
+has been tagged since, and nothing has been dispatched by hand. It will stay
+that way until the compiler and runtime stages can succeed, because a release
+run that dies at the build produces no bundle and tells you nothing you did not
+already know from CI. Tag, or dispatch it, once `AGENTS.md` section 3 is clear.
 
 ## 6. Branch protection
 

@@ -81,7 +81,7 @@ jobs:
         # Cross-architecture emulation. Needed for the arm64 build on an x86_64
         # runner; slow, but it is real arm64 code being compiled and it proves
         # the source has no architecture assumptions in it.
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
         with:
           platforms: arm64
 

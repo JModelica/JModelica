@@ -32,6 +32,35 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
+  # Which build systems exist on this ref?
+  #
+  # master still uses autotools and Ant; the CMake and Gradle migration lives on
+  # feature/modernization-checkpoint. Without this, the build jobs would run,
+  # find nothing to do, exit 0, and report a green tick for having built
+  # nothing — which is precisely the false signal this CI is written to avoid.
+  # Gating on it instead makes those jobs show up as *skipped*, which is both
+  # honest and visually distinct from success.
+  # ---------------------------------------------------------------------------
+  detect:
+    name: Detect build systems
+    runs-on: ubuntu-latest
+    outputs:
+      cmake: ${{ steps.check.outputs.cmake }}
+      gradle: ${{ steps.check.outputs.gradle }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: check
+        run: |
+          set -euo pipefail
+          cmake=false; gradle=false
+          [ -f CMakeLists.txt ] && cmake=true
+          [ -f Compiler/build.gradle ] && gradle=true
+          echo "cmake=${cmake}" >> "$GITHUB_OUTPUT"
+          echo "gradle=${gradle}" >> "$GITHUB_OUTPUT"
+          echo "CMake build: ${cmake}"
+          echo "Gradle build: ${gradle}"
+
+  # ---------------------------------------------------------------------------
   # Fast, deterministic checks. This job must stay green.
   # ---------------------------------------------------------------------------
   meta:
@@ -103,6 +132,8 @@ jobs:
   # ---------------------------------------------------------------------------
   compiler:
     name: Compiler (Java) — ${{ matrix.os }}
+    needs: detect
+    if: needs.detect.outputs.gradle == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -123,12 +154,6 @@ jobs:
         working-directory: Compiler
         run: |
           set -euo pipefail
-          if [ ! -f build.gradle ]; then
-            echo "::notice::No Gradle build on this branch. The Gradle migration"
-            echo "::notice::lives on feature/modernization-checkpoint; master"
-            echo "::notice::still uses Ant. Nothing to do here."
-            exit 0
-          fi
           chmod +x gradlew 2>/dev/null || true
           ./gradlew --no-daemon --stacktrace build
 
@@ -145,6 +170,8 @@ jobs:
   # ---------------------------------------------------------------------------
   runtime:
     name: Runtime (C) — ${{ matrix.os }}
+    needs: detect
+    if: needs.detect.outputs.cmake == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -189,26 +216,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ ! -f CMakeLists.txt ]; then
-            echo "::notice::No top-level CMakeLists.txt on this branch. The CMake"
-            echo "::notice::migration lives on feature/modernization-checkpoint;"
-            echo "::notice::master still uses autotools (see issue #20)."
-            exit 0
-          fi
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
         shell: bash
         run: |
           set -euo pipefail
-          if [ ! -d build ]; then exit 0; fi
           cmake --build build --config Release --parallel
 
       - name: Test
         shell: bash
         run: |
           set -euo pipefail
-          if [ ! -d build ]; then exit 0; fi
           ctest --test-dir build --output-on-failure --no-tests=ignore
 
       - name: Upload the runtime libraries
@@ -268,7 +287,7 @@ jobs:
   summary:
     name: Summary
     if: always()
-    needs: [meta, compiler, runtime, python]
+    needs: [detect, meta, compiler, runtime, python]
     runs-on: ubuntu-latest
     steps:
       - name: Report
@@ -278,26 +297,42 @@ jobs:
           RUNTIME: ${{ needs.runtime.result }}
           PYTHON: ${{ needs.python.result }}
         run: |
+          explain() {
+            case "$1" in
+              skipped) echo "skipped — this branch has no such build system" ;;
+              success) echo "success" ;;
+              failure) echo "**failure**" ;;
+              *)       echo "$1" ;;
+            esac
+          }
+
           {
             echo "## Build status"
             echo
             echo "| Component | Result |"
             echo "|---|---|"
-            echo "| Repository hygiene | ${META} |"
-            echo "| Compiler (Java) | ${COMPILER} |"
-            echo "| Runtime (C) | ${RUNTIME} |"
-            echo "| Python | ${PYTHON} |"
+            echo "| Repository hygiene | $(explain "${META}") |"
+            echo "| Compiler (Java) | $(explain "${COMPILER}") |"
+            echo "| Runtime (C) | $(explain "${RUNTIME}") |"
+            echo "| Python | $(explain "${PYTHON}") |"
+            echo
+            echo "A *skipped* build job means the build system is not present on"
+            echo "this branch — master still uses autotools and Ant, while CMake"
+            echo "and Gradle live on \`feature/modernization-checkpoint\`. It does"
+            echo "not mean the build passed."
             echo
             if [ "${META}" != "success" ]; then
               echo "**Repository hygiene failed.** This is the gating check —"
               echo "see AGENTS.md for what it enforces and why."
             else
               echo "Repository hygiene passed. Build failures below it are the"
-              echo "known modernization backlog, not something this change"
-              echo "introduced; see \`doc/modernization/\` and AGENTS.md section 3."
+              echo "known modernization backlog; see \`doc/modernization/\` and"
+              echo "AGENTS.md section 3."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-          # Only hygiene gates the run. Making the whole workflow red on a build
-          # that is known-broken would train everyone to ignore the red.
+          # Only hygiene gates this job. The run as a whole is still red when a
+          # build job fails — which is what jules-ci-fix.yml reacts to — but
+          # keeping the gate narrow means a pull request that fixes the build is
+          # not blocked by the build being broken.
           [ "${META}" = "success" ]

@@ -15,7 +15,7 @@ into pull requests — and what a maintainer has to do by hand to switch that on
 | `jules-issue.yml` | `jules` label, `/jules` comment, manual | Hands one issue to Jules, which opens a pull request |
 | `jules-sweep.yml` | daily 04:00 UTC | Hands the oldest untouched issues to Jules, a few at a time |
 | `jules-branches.yml` | weekly Monday 05:00 UTC | Surveys every branch, opens draft pull requests, hands them to Jules to finish |
-| `jules-ci-fix.yml` | CI failure | Hands a failed CI run to Jules. **Off by default** |
+| `jules-ci-fix.yml` | any workflow failing | Hands the failure to Jules, which owns keeping the Actions tab green |
 
 ## 2. Turning Jules on
 
@@ -117,13 +117,41 @@ gh variable set JULES_SWEEP_BATCH --body 3       # issues per daily run
 gh variable set JULES_SWEEP_ENABLED --body false # pause the sweep entirely
 ```
 
-`jules-ci-fix.yml` is off by default for the same reason. This repository's
-build is currently expected to fail, so a CI-failure trigger would start a
-session on every push and drain the day's quota within the hour:
+### Keeping the Actions tab green
+
+Jules owns the health of <https://github.com/JModelica/JModelica/actions>. When
+any of `CI`, `Container images` or `Release` goes red, `jules-ci-fix.yml` hands
+the failure over to be diagnosed and fixed.
+
+The hard part is not triggering — it is triggering *once*. The build is
+currently expected to fail, so a naive "on failure" trigger would start a
+session on every push and drain the day's quota within the hour, most of them
+working on the same problem in parallel. Three guards prevent that:
+
+1. **Deduplication by commit.** A commit whose failure has already been handed
+   over is never handed over again, however many workflows it broke. This
+   workflow's own run history is the ledger, so no external state is needed.
+2. **A daily budget.** At most `JULES_CI_FIX_DAILY_MAX` handovers per rolling
+   24 hours, default 3.
+3. **Open-work check.** If Jules already has pull requests open, it is already
+   working; no second session starts until they land.
 
 ```sh
-gh variable set JULES_CI_FIX_ENABLED --body true   # only once CI is meaningful
+gh variable set JULES_CI_FIX_DAILY_MAX --body 5
+gh variable set JULES_CI_FIX_ENABLED --body false   # pause it entirely
 ```
+
+The prompt is explicit about what a fix may not be. Jules is told not to
+disable a test, add `continue-on-error`, lower a warning level, delete an
+assertion, drop a failing platform from the matrix, or relax the artifact
+guard. Each of those turns a real signal into a false one, which is worse than
+the red build it started from. Where the honest answer is that a failure cannot
+be fixed in one session, it is told to push what it has and say what is left.
+
+This is also why the CI jobs are gated on `detect` rather than exiting early:
+a build job that finds no build system, exits 0 and reports green would teach
+exactly the wrong lesson. Those jobs show as *skipped* instead, which is
+visually distinct from success and cannot be mistaken for a passing build.
 
 ### Maturing the old branches
 

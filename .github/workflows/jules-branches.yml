@@ -82,6 +82,10 @@ jobs:
           ONLY: ${{ inputs.branches }}
           BATCH: ${{ inputs.batch || '3' }}
         run: |
+          # shellcheck disable=SC2016
+          # Single-quoted '$' throughout this script is deliberate: '$b', '$a'
+          # and the rest are jq variables bound by --arg, and '^HEAD$' is a
+          # regex anchor. None of them are shell expansions.
           set -euo pipefail
           git fetch --all --quiet
 

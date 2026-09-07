@@ -1,48 +1,58 @@
-name: Jules — fix a CI failure
+name: Jules — keep Actions green
 
-# Hands a failed CI run to Jules.
+# Jules owns the health of the Actions tab. When a workflow goes red, this hands
+# the failure to Jules to diagnose and fix.
 #
-# DISABLED BY DEFAULT, deliberately. This repository's build is currently
-# expected to fail (AGENTS.md section 3), so an unconditional trigger would
-# start a Jules session on every single push and exhaust the daily task quota —
-# 15 on the free tier — within an hour, while starving the `jules` label that a
-# human is actually waiting on.
+# The hard part is not triggering — it is triggering *once*. This repository's
+# build is currently expected to fail, so a naive `on: workflow_run failure`
+# would start a session on every push and drain the free tier's 15 daily tasks
+# within the hour, most of them working on the same problem in parallel. Three
+# guards prevent that:
 #
-# Turn it on only once CI is green enough that a failure means something:
-#     gh variable set JULES_CI_FIX_ENABLED --body true
+#   1. Deduplication by commit. A commit whose failure has already been handed
+#      over is never handed over again, however many workflows fail on it.
+#   2. A daily budget. At most JULES_CI_FIX_DAILY_MAX handovers per rolling day
+#      (default 3), counted from this workflow's own run history.
+#   3. Open-work check. If Jules already has a pull request open against the
+#      branch, it is already working; no second session is started.
 #
-# Until then, use the `jules` label or `/jules` on an issue to target specific
-# build failures, which is both cheaper and better directed.
+# Set JULES_CI_FIX_ENABLED to 'false' to pause this entirely.
 
 on:
   workflow_run:
-    workflows: ['CI']
+    workflows: ['CI', 'Container images', 'Release']
     types: [completed]
     branches: [master, 'feature/**']
   workflow_dispatch:
     inputs:
       run_id:
-        description: 'CI run ID to investigate'
+        description: 'Workflow run ID to investigate'
         required: true
         type: string
+      force:
+        description: 'Ignore the deduplication and budget guards'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
   actions: read
+  pull-requests: read
 
 concurrency:
-  # One session per branch. A branch that fails three times in five minutes
-  # should produce one attempt at a fix, not three.
   group: jules-ci-fix-${{ github.event.workflow_run.head_branch || inputs.run_id }}
   cancel-in-progress: false
 
 jobs:
-  fix:
+  triage:
     if: >-
-      vars.JULES_CI_FIX_ENABLED == 'true' &&
+      vars.JULES_CI_FIX_ENABLED != 'false' &&
       (github.event_name == 'workflow_dispatch' ||
        github.event.workflow_run.conclusion == 'failure')
     runs-on: ubuntu-latest
+    outputs:
+      proceed: ${{ steps.guards.outputs.proceed }}
     steps:
       - name: Check the API key is configured
         env:
@@ -53,6 +63,93 @@ jobs:
             exit 1
           fi
 
+      - name: Apply the guards
+        id: guards
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          FORCE: ${{ inputs.force }}
+          DAILY_MAX: ${{ vars.JULES_CI_FIX_DAILY_MAX || '3' }}
+        run: |
+          set -euo pipefail
+
+          if [ "${FORCE}" = "true" ]; then
+            echo "Guards bypassed by request."
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          proceed=true
+          reason=""
+
+          # --- Guard 1: has this commit already been handed over? -------------
+          # Runs of this very workflow are the ledger, so no external state is
+          # needed. A commit that broke CI and Docker at once must not produce
+          # two sessions solving the same thing.
+          if [ -n "${SHA:-}" ]; then
+            seen=$(gh run list \
+                     --workflow jules-ci-fix.yml \
+                     --limit 60 \
+                     --json headSha,databaseId,conclusion \
+                     --jq "[.[] | select(.headSha == \"${SHA}\" and
+                                         .databaseId != ${GITHUB_RUN_ID} and
+                                         .conclusion == \"success\")] | length" \
+                   2>/dev/null || echo 0)
+            if [ "${seen}" -gt 0 ]; then
+              proceed=false
+              reason="commit ${SHA:0:8} has already been handed to Jules"
+            fi
+          fi
+
+          # --- Guard 2: the daily budget --------------------------------------
+          if [ "${proceed}" = "true" ]; then
+            since=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+            today=$(gh run list \
+                      --workflow jules-ci-fix.yml \
+                      --limit 100 \
+                      --json createdAt,conclusion,databaseId \
+                      --jq "[.[] | select(.createdAt > \"${since}\" and
+                                          .databaseId != ${GITHUB_RUN_ID} and
+                                          .conclusion == \"success\")] | length" \
+                    2>/dev/null || echo 0)
+            echo "Handovers in the last 24h: ${today} (max ${DAILY_MAX})"
+            if [ "${today}" -ge "${DAILY_MAX}" ]; then
+              proceed=false
+              reason="daily budget of ${DAILY_MAX} handovers is spent"
+            fi
+          fi
+
+          # --- Guard 3: is Jules already working on this branch? --------------
+          if [ "${proceed}" = "true" ] && [ -n "${BRANCH:-}" ]; then
+            open=$(gh pr list --state open --limit 100 \
+                     --json author,baseRefName \
+                     --jq "[.[] | select(.author.login | test(\"jules\"; \"i\"))] | length" \
+                   2>/dev/null || echo 0)
+            if [ "${open}" -gt 0 ]; then
+              proceed=false
+              reason="Jules already has ${open} open pull request(s); let them land first"
+            fi
+          fi
+
+          if [ "${proceed}" = "true" ]; then
+            echo "Proceeding."
+          else
+            echo "::notice::Not handing this failure over: ${reason}."
+            {
+              echo "### Skipped"
+              echo
+              echo "Not handed to Jules: ${reason}."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "proceed=${proceed}" >> "$GITHUB_OUTPUT"
+
+  fix:
+    needs: triage
+    if: needs.triage.outputs.proceed == 'true'
+    runs-on: ubuntu-latest
+    steps:
       - name: Collect the failing jobs
         id: failures
         env:
@@ -61,9 +158,9 @@ jobs:
           RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
         run: |
           set -euo pipefail
-          # Names and step-level conclusions only. Full logs are megabytes and
-          # would dominate the prompt; Jules can reproduce the build itself,
-          # which is more reliable than reading a log it cannot re-run.
+          # Job and step names only. Full logs run to megabytes and would swamp
+          # the prompt; Jules can reproduce the build itself, which is better
+          # evidence than a log it cannot re-run.
           gh api "repos/${GH_REPO}/actions/runs/${RUN_ID}/jobs" --paginate \
             --jq '.jobs[] | select(.conclusion == "failure") |
                   "- \(.name): failed at step \"" +
@@ -84,13 +181,14 @@ jobs:
         if: steps.failures.outputs.found == 'true'
         env:
           REPO: ${{ github.repository }}
+          WORKFLOW: ${{ github.event.workflow_run.name || 'CI' }}
           BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
           SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
           RUN_URL: ${{ github.event.workflow_run.html_url }}
         run: |
           set -euo pipefail
           {
-            echo "The CI workflow for ${REPO} failed on branch ${BRANCH}."
+            echo "The \"${WORKFLOW}\" workflow for ${REPO} failed on branch ${BRANCH}."
             echo
             echo "Commit: ${SHA}"
             echo "Run: ${RUN_URL}"
@@ -99,27 +197,52 @@ jobs:
             cat failures.txt
             echo
             echo "Read AGENTS.md before you change anything. Section 3 lists the"
-            echo "known build blockers; section 7 explains which CI jobs are"
-            echo "expected to fail today and which must never fail."
+            echo "known build blockers; section 7 explains what each CI job does."
             echo
             cat <<'GUIDANCE'
-          Work as follows.
+          You are responsible for the health of this repository's Actions tab.
+          The goal is a green build that means something — not a green tick.
 
-          1. Reproduce the failure locally first. Run the same commands the
-             failing job runs and show the actual output.
-          2. Decide whether this is a *new* breakage or one of the known blockers
-             in AGENTS.md section 3. If it is a known blocker and you cannot
-             finish it, do not open a speculative pull request — report how far
-             you got and what specifically stands in the way.
-          3. If it is a new breakage, find the root cause and fix it minimally.
+          ## How to work
+
+          1. Reproduce the failure. Run the same commands the failing job runs
+             and show the actual output. Do not theorise from the job name.
+          2. Establish whether this is a *new* breakage or one of the known
+             blockers in AGENTS.md section 3.
+          3. Fix the root cause. If the fix is large, fix one layer completely
+             rather than half-fixing three.
           4. Re-run the build and the tests, and report the real result.
 
-          Do not disable a test, add continue-on-error, loosen a compiler
-          warning, or delete an assertion to make CI pass. A green build that
-          checks nothing is the one outcome worse than a red one.
+          ## What is not allowed
 
-          Do not commit build artifacts and do not commit symlinks to absolute
-          paths; the `meta` job rejects both mechanically.
+          Do not make CI green by weakening it. Specifically, do not:
+
+          - disable, skip or delete a failing test
+          - add `continue-on-error` to a job or step
+          - lower a compiler warning level, or remove `-Werror`
+          - loosen or delete an assertion
+          - narrow the platform matrix to drop a platform that fails
+          - relax the `meta` job's artifact guard so a rejected file passes
+
+          Any of those turns a real signal into a false one, which is worse than
+          the red build you started with. If the honest answer is that this
+          cannot be fixed in one session, say so, push what you have, and state
+          exactly what is left. A clear handover is a good outcome.
+
+          ## If the failure is in the hygiene job
+
+          `meta` is the gate and it is expected to pass. If it is red, something
+          in the change genuinely violates AGENTS.md section 5 — a build
+          artifact, an absolute symlink, a lint error in `tools/`. Fix the
+          offending file. Do not edit `tools/check_no_artifacts.py` to stop it
+          reporting, unless you have established that the rule itself is wrong,
+          in which case add a regression test proving the new behaviour is
+          correct.
+
+          ## Pull request
+
+          Open one pull request with the fix. Explain the root cause, the fix,
+          and how you verified it. State plainly anything you could not verify.
           GUIDANCE
           } > prompt.txt
 
@@ -138,3 +261,19 @@ jobs:
           # Fix it on the branch that broke, not on the default branch.
           starting_branch: ${{ github.event.workflow_run.head_branch || github.ref_name }}
           jules_api_key: ${{ secrets.JULES_API_KEY }}
+
+      - name: Record the handover
+        if: steps.failures.outputs.found == 'true'
+        env:
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          {
+            echo "### Handed to Jules"
+            echo
+            echo "Branch: \`${BRANCH}\`"
+            echo
+            echo "Failing run: ${RUN_URL}"
+            echo
+            cat failures.txt
+          } >> "$GITHUB_STEP_SUMMARY"

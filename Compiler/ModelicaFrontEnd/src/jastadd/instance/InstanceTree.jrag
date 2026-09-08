@@ -323,9 +323,16 @@ aspect InstModifications{
     syn SrcComponentDecl InstComponentRedeclare.getComponentRedeclareDecl() = 
         getSrcModification().componentRedeclareDecl();
 
-    public interface SrcModificationOrRedeclareElement {
-        public SrcComponentDecl componentRedeclareDecl();
-    }
+    // SrcModificationOrRedeclareElement is declared once, in
+    // source/SourceTraversal.jrag, where componentRedeclareDecl() sits alongside
+    // newInstModification() and hasRedeclare() and where the two `implements`
+    // clauses that weave it into SrcModification and SrcComponentDecl live. A
+    // second, partial declaration of the same interface used to sit here.
+    // JastAdd merges both into one generated interface, so the method was
+    // emitted twice and javac rejected
+    // SrcModificationOrRedeclareElement.java with "method
+    // componentRedeclareDecl() is already defined". The equations below stay —
+    // it is only the redundant interface header that was the problem.
 
     syn SrcComponentDecl SrcModification.componentRedeclareDecl() {
         throw new UnsupportedOperationException();

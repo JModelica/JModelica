@@ -48,7 +48,7 @@ finally:
 
 try:
     _f = os.path.join(os.environ['JMODELICA_HOME'],'startup.py')
-    execfile(_f)
+    exec(open(_f).read())
 except IOError:
     logging.warning('Startup script ''%s'' not found. Environment may be corrupt'
                   % _f)
@@ -62,4 +62,4 @@ int = N.int32
 N.int = N.int32
 
 #Import the compile functions allowing for users to type: from pymodelica import compiler_*
-from compiler import compile_fmu, compile_fmux
+from .compiler import compile_fmu, compile_fmux, load_fmu

@@ -41,7 +41,7 @@ for i in range(n):
 
 # Execute the file containing the definition of the function to be evaluated
 func_file_name = sys.argv[-2]
-execfile(func_file_name)
+exec(open(func_file_name).read())
 
 # Get the actual function
 if func_file_name.endswith(".py"):

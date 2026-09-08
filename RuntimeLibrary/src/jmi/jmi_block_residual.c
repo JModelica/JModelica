@@ -418,9 +418,10 @@ int jmi_block_update_pre(jmi_block_residual_t* block) {
         
         if (strcmp(current_str, previous_str) != 0) {
             changed_pre_values = TRUE;
-            JMI_ASG_STR_Z(z_str[block->str_pre_index[i]], z_str[block->str_index[i]]);
+            /* Log before assignment because assignment might free previous_str */
             jmi_log_node(jmi->log, logInfo, "Info", " <string: #s%d#> <from: %s> <to: %s> ", block->str_vref[i],
                             (jmi_string_t)previous_str, (jmi_string_t)current_str);
+            JMI_ASG_STR_Z(z_str[block->str_pre_index[i]], z_str[block->str_index[i]]);
         }
     }
     

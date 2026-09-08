@@ -22,9 +22,10 @@
 #include <stdlib.h>
 
 #include <sundials/sundials_math.h>
-#include <sundials/sundials_direct.h>
+/* #include <sundials/sundials_direct.h> */
+#include "jmi_sundials_compat.h"
 #include <nvector/nvector_serial.h>
-#include <kinsol/kinsol_direct.h>
+/* #include <kinsol/kinsol_direct.h> */
 #include <kinsol/kinsol_impl.h>
 #include <sundials/sundials_dense.h>
 
@@ -800,7 +801,7 @@ void kin_err(int err_code, const char *module, const char *function, char *msg, 
                     }
                 }
             } else {
-                DenseCopy(block->J, block->J_scale);
+                SUNDlsMat_DenseCopy(block->J, block->J_scale);
             }
             
             jmi_kinsol_log_jacobian_cond_nbr(block);
@@ -1627,7 +1628,7 @@ static int jmi_LU_factorization(jmi_block_solver_t * block, DlsMat matrix) {
         dgetrf_(  &N, &N, matrix->data, &N, solver->lapack_ipiv, &info);
     } else if (lin_alg_package == 1) {
         /* Perform factorization to detect if there is a singular Jacobian */
-        info = DenseGETRF(matrix, solver->sundials_permutationwork);
+        info = SUNDlsMat_DenseGETRF(matrix, solver->sundials_permutationwork);
     }
     return info;
 }
@@ -1639,7 +1640,7 @@ static int jmi_LU_solve(jmi_block_solver_t * block, DlsMat matrix, realtype* xd)
     int lin_alg_package = block->options->experimental_mode & jmi_block_solver_experimental_LU_through_sundials ? 1:0;
     
     if(lin_alg_package == 1) {
-        DenseGETRS(matrix, solver->sundials_permutationwork, xd);
+        SUNDlsMat_DenseGETRS(matrix, solver->sundials_permutationwork, xd);
     } else if (lin_alg_package == 0){
         /* Back-solve and get solution in x */
         char trans = 'N'; /* No transposition */
@@ -1687,7 +1688,7 @@ static void jmi_regularize_and_do_condition_estimate_on_scaled_jacobian(jmi_bloc
                 }
             }
         } else {
-            DenseCopy(block->J, block->J_scale);
+            SUNDlsMat_DenseCopy(block->J, block->J_scale);
         }
 
         jmi_kinsol_log_jacobian_cond_nbr(block);
@@ -1707,7 +1708,7 @@ static realtype jmi_calculate_jacobian_condition_number(jmi_block_solver_t * blo
     J_norm = dlange_(&norm, &N, &N, block->J->data, &N, solver->lapack_work);
     
     /* Copy Jacobian to factorization matrix */
-    DenseCopy(block->J, solver->J_LU);
+    SUNDlsMat_DenseCopy(block->J, solver->J_LU);
     /* Perform LU factorization to be used with dgecon */
     info = jmi_LU_factorization(block, solver->J_LU); 
     if (info != 0 ) {
@@ -1739,7 +1740,7 @@ static int jmi_kin_lsetup(struct KINMemRec * kin_mem) {
     if(solver->updated_jacobian_flag) {
         return 0;
     }
-    SetToZero(block->J);
+    SUNDlsMat_SetToZero(block->J);
 
     /* Evaluate Jacobian */
     ret = kin_dF(N, solver->kin_y, kin_mem->kin_fval, block->J, block, kin_mem->kin_vtemp1, kin_mem->kin_vtemp2);
@@ -1934,7 +1935,7 @@ static int jmi_kin_factorize_jacobian(jmi_block_solver_t *block ) {
     int N = block->n;
     clock_t t = jmi_block_solver_start_clock(block);
       
-    DenseCopy(block->J, solver->J_LU); /* make a copy of the Jacobian that will be used for LU factorization */
+    SUNDlsMat_DenseCopy(block->J, solver->J_LU); /* make a copy of the Jacobian that will be used for LU factorization */
 
     /* Equillibrate if corresponding option is set */
     if((N>1) && block->options->use_jacobian_equilibration_flag) {
@@ -1961,7 +1962,7 @@ static int jmi_kin_factorize_jacobian(jmi_block_solver_t *block ) {
     info = jmi_LU_factorization(block, solver->J_LU);
     if(info != 0) {
         if(jmi_kinsol_zero_column_jacobian_handling(block)) {
-            DenseCopy(block->J, solver->J_LU); /* make a copy of the Jacobian that will be used for LU factorization */
+            SUNDlsMat_DenseCopy(block->J, solver->J_LU); /* make a copy of the Jacobian that will be used for LU factorization */
             info = jmi_LU_factorization(block, solver->J_LU);
         }
     }
@@ -1999,8 +2000,8 @@ static int jmi_kin_factorize_jacobian(jmi_block_solver_t *block ) {
             } else if (solver->handling_of_singular_jacobian_flag == JMI_MINIMUM_NORM) {
                 jmi_log_node(block->log, logWarning, "MinimumNorm", "Singular Jacobian detected when factorizing in linear solver. "
                              "Will try to find the minimum norm solution in <block: %s>", block->label);
-                SetToZero(solver->J_sing);
-                DenseCopy(block->J, solver->J_sing);
+                SUNDlsMat_SetToZero(solver->J_sing);
+                SUNDlsMat_DenseCopy(block->J, solver->J_sing);
             } else {
                 /* Error */
                 jmi_log_node(block->log, logWarning, "IllegalOption", "Illegal singular jacobian handling <option: %d> in <block: %s>", 
@@ -2329,9 +2330,10 @@ static int jmi_kin_lsolve(struct KINMemRec * kin_mem, N_Vector x, N_Vector b, re
 int jmi_kinsol_solver_new(jmi_kinsol_solver_t** solver_ptr, jmi_block_solver_t* block) {
     jmi_kinsol_solver_t* solver;
     int flag, n = block->n;
+    struct KINMemRec * kin_mem;
     
-    
-    struct KINMemRec * kin_mem = KINCreate();
+    jmi_sundials_init_context();
+    kin_mem = KINCreate(jmi_sundials_ctx);
     if(!kin_mem) return -1;
     solver = (jmi_kinsol_solver_t*)calloc(1,sizeof(jmi_kinsol_solver_t));
     if(!solver ) return -1;
@@ -2345,10 +2347,10 @@ int jmi_kinsol_solver_new(jmi_kinsol_solver_t** solver_ptr, jmi_block_solver_t* 
 
     /*Sets the scaling vectors to ones.*/
     /*To be changed. */
-    solver->kin_y = N_VMake_Serial(n, block->x);
-    solver->kin_y_scale = N_VNew_Serial(n);
-    solver->gradient  = N_VNew_Serial(n);    
-    solver->last_residual = N_VNew_Serial(n);
+    solver->kin_y = N_VMake_Serial(n, block->x, jmi_sundials_ctx);
+    solver->kin_y_scale = N_VNew_Serial(n, jmi_sundials_ctx);
+    solver->gradient  = N_VNew_Serial(n, jmi_sundials_ctx);
+    solver->last_residual = N_VNew_Serial(n, jmi_sundials_ctx);
     solver->kin_jac_update_time = -1.0;
     /*NOTE: it'd be nice to use "jmi->newton_tolerance" here
       However, newton_tolerance is not set yet at this point.
@@ -2359,10 +2361,10 @@ int jmi_kinsol_solver_new(jmi_kinsol_solver_t** solver_ptr, jmi_block_solver_t* 
     solver->is_first_newton_solve_flag = TRUE;
     solver->current_nni = 0;
     
-    solver->JTJ = NewDenseMat(n ,n);
-    solver->J_LU = NewDenseMat(n ,n);
-    solver->J_sing = NewDenseMat(n, n);
-    solver->J_Dependency = NewDenseMat(n,n);
+    solver->JTJ = SUNDlsMat_NewDenseMat(n ,n);
+    solver->J_LU = SUNDlsMat_NewDenseMat(n ,n);
+    solver->J_sing = SUNDlsMat_NewDenseMat(n, n);
+    solver->J_Dependency = SUNDlsMat_NewDenseMat(n,n);
     solver->J_is_singular_flag = 0;
 
     solver->equed = 'N';
@@ -2374,9 +2376,9 @@ int jmi_kinsol_solver_new(jmi_kinsol_solver_t** solver_ptr, jmi_block_solver_t* 
     solver->jac_compression_group_index = (int*)calloc(n+1,sizeof(int));
     solver->range_most_limiting = 0;
 
-    solver->work_vector = N_VNew_Serial(n);
-    solver->work_vector2 = N_VNew_Serial(n);
-    solver->work_vector3 = N_VNewEmpty_Serial(n);
+    solver->work_vector = N_VNew_Serial(n, jmi_sundials_ctx);
+    solver->work_vector2 = N_VNew_Serial(n, jmi_sundials_ctx);
+    solver->work_vector3 = N_VNewEmpty_Serial(n, jmi_sundials_ctx);
     solver->lapack_work = (realtype*)calloc(4*(n+1),sizeof(realtype));
     solver->lapack_iwork = (int *)calloc(n+2, sizeof(int));
     solver->lapack_ipiv = (int *)calloc(n+2, sizeof(int));
@@ -2402,7 +2404,7 @@ int jmi_kinsol_solver_new(jmi_kinsol_solver_t** solver_ptr, jmi_block_solver_t* 
     /*Attach linear solver*/
     kin_mem->kin_lsetup = jmi_kin_lsetup;
     kin_mem->kin_lsolve = jmi_kin_lsolve;
-    kin_mem->kin_setupNonNull = TRUE;
+    /* kin_mem->kin_setupNonNull = TRUE; */ /* Removed in Sundials 6.x */
     kin_mem->kin_inexact_ls = FALSE;
     /*End linear solver*/
     
@@ -2431,10 +2433,10 @@ int jmi_kinsol_solver_new(jmi_kinsol_solver_t** solver_ptr, jmi_block_solver_t* 
     
     /* Struct for storing the Kinsol state */
     solver->saved_state = (jmi_kinsol_solver_reset_t*)calloc(1,sizeof(jmi_kinsol_solver_reset_t));
-    solver->saved_state->J = NewDenseMat(n,n);
-    solver->saved_state->J_modified = NewDenseMat(n,n);
-    solver->saved_state->kin_f_scale = N_VNew_Serial(n);
-    solver->saved_state->kin_y_scale = N_VNew_Serial(n);
+    solver->saved_state->J = SUNDlsMat_NewDenseMat(n,n);
+    solver->saved_state->J_modified = SUNDlsMat_NewDenseMat(n,n);
+    solver->saved_state->kin_f_scale = N_VNew_Serial(n, jmi_sundials_ctx);
+    solver->saved_state->kin_y_scale = N_VNew_Serial(n, jmi_sundials_ctx);
     solver->saved_state->lapack_ipiv = (int *)calloc(n+2, sizeof(int));
     solver->saved_state->J_is_singular_flag = 0;
     solver->saved_state->force_new_J_flag = 0;
@@ -2470,10 +2472,10 @@ void jmi_kinsol_solver_delete(jmi_block_solver_t* block) {
     N_VDestroy_Serial(solver->kin_y_scale);
     N_VDestroy_Serial(solver->gradient);
     N_VDestroy_Serial(solver->last_residual);
-    DestroyMat(solver->JTJ);
-    DestroyMat(solver->J_LU);
-    DestroyMat(solver->J_sing);
-    DestroyMat(solver->J_Dependency);
+    SUNDlsMat_DestroyMat(solver->JTJ);
+    SUNDlsMat_DestroyMat(solver->J_LU);
+    SUNDlsMat_DestroyMat(solver->J_sing);
+    SUNDlsMat_DestroyMat(solver->J_Dependency);
     free(solver->cScale);
     free(solver->rScale);
     free(solver->range_limits);
@@ -2503,8 +2505,8 @@ void jmi_kinsol_solver_delete(jmi_block_solver_t* block) {
     }
     
     /* Struct for storing the Kinsol state */
-    DestroyMat(solver->saved_state->J);
-    DestroyMat(solver->saved_state->J_modified);
+    SUNDlsMat_DestroyMat(solver->saved_state->J);
+    SUNDlsMat_DestroyMat(solver->saved_state->J_modified);
     N_VDestroy_Serial(solver->saved_state->kin_f_scale);
     N_VDestroy_Serial(solver->saved_state->kin_y_scale);
     free(solver->saved_state->lapack_ipiv);
@@ -2677,7 +2679,7 @@ static int jmi_kinsol_invoke_kinsol(jmi_block_solver_t *block, int strategy) {
                     }
                 }
             } else {
-                DenseCopy(block->J, block->J_scale);
+                SUNDlsMat_DenseCopy(block->J, block->J_scale);
             }
 
             jmi_kinsol_log_jacobian_cond_nbr(block);
@@ -2864,14 +2866,14 @@ int jmi_kinsol_restore_state(jmi_block_solver_t* block) {
     
     if (solver->saved_state->J_is_singular_flag) {
         if (solver->saved_state->handling_of_singular_jacobian_flag == JMI_REGULARIZATION) {
-            DenseCopy(solver->saved_state->J_modified, solver->JTJ);
+            SUNDlsMat_DenseCopy(solver->saved_state->J_modified, solver->JTJ);
         } else if (solver->saved_state->handling_of_singular_jacobian_flag == JMI_MINIMUM_NORM) {
-            DenseCopy(solver->saved_state->J_modified, solver->J_sing);
+            SUNDlsMat_DenseCopy(solver->saved_state->J_modified, solver->J_sing);
         }
     } else {
-            DenseCopy(solver->saved_state->J_modified, solver->J_LU);
+            SUNDlsMat_DenseCopy(solver->saved_state->J_modified, solver->J_LU);
     }
-    DenseCopy(solver->saved_state->J, block->J);
+    SUNDlsMat_DenseCopy(solver->saved_state->J, block->J);
     
     block->scale_update_time = solver->saved_state->kin_scale_update_time;
     block->force_rescaling        = solver->saved_state->force_rescaling;
@@ -2926,14 +2928,14 @@ int jmi_kinsol_completed_integrator_step(jmi_block_solver_t* block) {
         
         if (solver->J_is_singular_flag) {
             if (solver->handling_of_singular_jacobian_flag == JMI_REGULARIZATION) {
-                DenseCopy(solver->JTJ, solver->saved_state->J_modified);
+                SUNDlsMat_DenseCopy(solver->JTJ, solver->saved_state->J_modified);
             } else if (solver->handling_of_singular_jacobian_flag == JMI_MINIMUM_NORM) {
-                DenseCopy(solver->J_sing, solver->saved_state->J_modified);
+                SUNDlsMat_DenseCopy(solver->J_sing, solver->saved_state->J_modified);
             }
         } else {
-            DenseCopy(solver->J_LU, solver->saved_state->J_modified);
+            SUNDlsMat_DenseCopy(solver->J_LU, solver->saved_state->J_modified);
         }
-        DenseCopy(block->J, solver->saved_state->J);
+        SUNDlsMat_DenseCopy(block->J, solver->saved_state->J);
         
         solver->saved_state->kin_scale_update_time = block->scale_update_time;
         solver->saved_state->force_rescaling       = block->force_rescaling;

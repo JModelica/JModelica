@@ -1027,8 +1027,8 @@ static int jmi_kinsol_init_bounds(jmi_block_solver_t * block) {
     }
     
     for(i=0; i < block->n; ++i) {
-        if(block->max[i] != BIG_REAL) num_bounds++;
-        if(block->min[i] != -BIG_REAL) num_bounds++;
+        if(block->max[i] != JMI_BIG_REAL) num_bounds++;
+        if(block->min[i] != -JMI_BIG_REAL) num_bounds++;
     }
     
     solver->num_bounds = num_bounds;
@@ -1045,7 +1045,7 @@ static int jmi_kinsol_init_bounds(jmi_block_solver_t * block) {
         int hasMin = 0, hasMax = 0;
         double range = block->max[i] - block->min[i];
 
-        if(block->max[i] != BIG_REAL) {
+        if(block->max[i] != JMI_BIG_REAL) {
             /* upper bound on a variable */
             solver->bound_vindex[num_bounds] = i; /* variable index */
             solver->bound_kind[num_bounds] = 1;
@@ -1053,7 +1053,7 @@ static int jmi_kinsol_init_bounds(jmi_block_solver_t * block) {
             num_bounds++;
             hasMax = 1;
         }
-        if(block->min[i] != -BIG_REAL) {
+        if(block->min[i] != -JMI_BIG_REAL) {
             /* lower bound on a variable */
             solver->bound_vindex[num_bounds] = i; /* variable index */
             solver->bound_kind[num_bounds] = -1;
@@ -1067,7 +1067,7 @@ static int jmi_kinsol_init_bounds(jmi_block_solver_t * block) {
             solver->range_limits[i] = range * block->options->step_limit_factor;
         }
         else {
-            solver->range_limits[i] = BIG_REAL;
+            solver->range_limits[i] = JMI_BIG_REAL;
         }
         if(block->max[i] == block->min[i])
             jmi_log_node(block->log, logWarning, "MinAndMaxEqual", "Min and max equal for <Iter: #r%d#>.", block->value_references[i]);
@@ -1435,7 +1435,7 @@ static void jmi_kinsol_limit_step(struct KINMemRec * kin_mem, N_Vector x, N_Vect
                     /* zero step - no range violation possible*/
                     solver->range_limited[i] = 0;
                     if (block->callbacks->log_options.log_level >= 5) {
-                        jmi_log_real_(log, BIG_REAL);
+                        jmi_log_real_(log, JMI_BIG_REAL);
                     }
                     continue;
                 }
@@ -2702,8 +2702,8 @@ int jmi_kinsol_solver_solve(jmi_block_solver_t * block){
        if (block->options->use_Brent_in_1d_flag) {
            return jmi_brent_solver_solve(block);
        }
-       solver->f_pos_min_1d = BIG_REAL;
-       solver->f_neg_max_1d = -BIG_REAL;
+       solver->f_pos_min_1d = JMI_BIG_REAL;
+       solver->f_neg_max_1d = -JMI_BIG_REAL;
     }
     
     if(block->init) {

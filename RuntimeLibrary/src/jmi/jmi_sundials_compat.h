@@ -15,6 +15,10 @@
 #include <sundials/sundials_version.h>
 #endif
 
+#ifndef JMI_BIG_REAL
+#define JMI_BIG_REAL 1e150
+#endif
+
 #if SUNDIALS_VERSION_MAJOR >= 7
 /* Define realtype if missing (Sundials 7.x might use sunrealtype) */
 typedef double realtype;
@@ -22,7 +26,7 @@ typedef double realtype;
 /* Define DlsMat for compatibility with newer Sundials versions (which removed it) */
 #ifndef JMI_SUNDIALS_COMPAT_DLSMAT
 #define JMI_SUNDIALS_COMPAT_DLSMAT
-#pragma message "Defining DlsMat manually"
+/* #pragma message "Defining DlsMat manually" */
 
 /*
  * ==================================================================
@@ -104,8 +108,8 @@ extern "C" {
 
 #if SUNDIALS_VERSION_MAJOR >= 6
 /* Initialize/Free global SUNContext */
-void jmi_sundials_init_context();
-void jmi_sundials_free_context();
+void jmi_sundials_init_context(void);
+void jmi_sundials_free_context(void);
 
 /* Global SUNContext (needed for macros) */
 #include <sundials/sundials_context.h>

@@ -66,7 +66,7 @@ int brentf(jmi_real_t y, jmi_real_t* f, void* problem_data) {
     }
     /* Check that outputs are valid */    
     {
-        double heuristic_nominal = BIG_REAL/JMI_LIMIT_VALUE;
+        double heuristic_nominal = JMI_BIG_REAL/JMI_LIMIT_VALUE;
         ret = jmi_check_and_log_illegal_residual_output(block, f, &y, &heuristic_nominal,1);
     }
     return ret;
@@ -628,8 +628,8 @@ int jmi_brent_solver_solve(jmi_block_solver_t * block){
         double lower = x, f_lower = f;
         double upper = x, f_upper = f;
         /* Introduce to avoid IllegalIterationVariableInput warnings */
-        double bracketMin = JMI_MAX(block->options->enforce_bounds_flag ? block->min[0] : -BIG_REAL, -block->nominal[0]*JMI_LIMIT_VALUE);
-        double bracketMax = JMI_MIN(block->options->enforce_bounds_flag ? block->max[0] : BIG_REAL, block->nominal[0]*JMI_LIMIT_VALUE);
+        double bracketMin = JMI_MAX(block->options->enforce_bounds_flag ? block->min[0] : -JMI_BIG_REAL, -block->nominal[0]*JMI_LIMIT_VALUE);
+        double bracketMax = JMI_MIN(block->options->enforce_bounds_flag ? block->max[0] : JMI_BIG_REAL, block->nominal[0]*JMI_LIMIT_VALUE);
 
         double initialStepStatic = block->nominal[0]*BRENT_INITIAL_STEP_FACTOR;
         double initialStepStaticSmall = initialStepStatic*BRENT_INITIAL_STEP_FACTOR;

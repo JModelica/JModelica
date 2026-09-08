@@ -189,6 +189,6 @@ void jmi_log_int_(   jmi_log_t *log, int x);
 /** \brief Log a value reference of type `t` (one of `ribs`), without ending the line. */
 void jmi_log_vref_(  jmi_log_t *log, char t, int vref);
 
-char* jmi_log_get_build_date();
+char* jmi_log_get_build_date(void);
 
 #endif

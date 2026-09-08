@@ -336,12 +336,12 @@ int jmi_block_solver_solve(jmi_block_solver_t * block_solver, double cur_time, i
         /* Initialize the work vectors */
         for(i=0; i < block_solver->n; ++i) {
             if(options->iteration_variable_scaling_mode == jmi_iter_var_scaling_heuristics) {
-                block_solver->nominal[i] = BIG_REAL;
+                block_solver->nominal[i] = JMI_BIG_REAL;
             }
             else {
                 block_solver->nominal[i] = 1.0;
             }
-            block_solver->max[i] = BIG_REAL;
+            block_solver->max[i] = JMI_BIG_REAL;
             block_solver->min[i] = -block_solver->max[i];
         }
         if(options->iteration_variable_scaling_mode != jmi_iter_var_scaling_none) {
@@ -369,11 +369,11 @@ int jmi_block_solver_solve(jmi_block_solver_t * block_solver, double cur_time, i
             realtype mini = block_solver->min[i];
             realtype nomi = block_solver->nominal[i];
             realtype initi = block_solver->initial[i];
-            booleantype hasSpecificMax = (maxi != BIG_REAL);
-            booleantype hasSpecificMin = (mini != -BIG_REAL);
+            booleantype hasSpecificMax = (maxi != JMI_BIG_REAL);
+            booleantype hasSpecificMin = (mini != -JMI_BIG_REAL);
             booleantype nominalOk = TRUE;
             
-            if(nomi == BIG_REAL) {
+            if(nomi == JMI_BIG_REAL) {
                 nominalOk = FALSE; /* no nominal set and heuristics is activated */
             } else if((nomi > maxi) || (nomi < mini)) { /* nominal outside min-max */
                                 

@@ -136,7 +136,11 @@ working on the same problem in parallel. Three guards prevent that:
    `workflow_run` is attributed to the *default branch*, so `headSha` is always
    master's tip and never the commit that broke.
 2. **A daily budget.** At most `JULES_CI_FIX_DAILY_MAX` handovers per rolling
-   24 hours, default 3.
+   24 hours, default 3. It counts distinct *commits*, not runs: a run in which
+   guard 1 declines still concludes `success`, because the triage job did its
+   work and only `fix` was skipped, so counting runs would charge the budget for
+   sessions that were never started. Two failing workflows on one commit cost
+   one, which is what guard 1 enforces anyway.
 3. **Open-work check.** If Jules already has a pull request open *against the
    branch that broke*, it is already working; no second session starts until
    that lands. Open work on other branches does not block a handover.

@@ -131,19 +131,37 @@ jobs:
           fi
 
           # --- Guard 2: the daily budget --------------------------------------
+          # Counts distinct *commits*, not runs.
+          #
+          # A run in which guard 1 declines still concludes "success" — the
+          # triage job did its work and only `fix` was skipped — so counting
+          # runs charges the budget for handovers that never happened. On
+          # 2026-09-07 commit 9895559 produced one real session from the CI
+          # failure and one decline from the Container images failure, and the
+          # decline was billed as if it were a second session. Two failing
+          # workflows on one commit must cost one, which is the same thing
+          # guard 1 already enforces.
+          #
+          # Runs predating `run-name:` carry no commit in their title; they fall
+          # back to their own id so each still counts once.
           if [ "${proceed}" = "true" ]; then
             since=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
             today=$(gh run list \
                       --workflow jules-ci-fix.yml \
                       --limit 100 \
-                      --json createdAt,conclusion,databaseId \
-                      --jq "[.[] | select(.createdAt > \"${since}\" and
-                                          .databaseId != ${GITHUB_RUN_ID} and
-                                          .conclusion != null and
-                                          .conclusion != \"skipped\" and
-                                          .conclusion != \"cancelled\")] | length" \
+                      --json createdAt,conclusion,databaseId,displayTitle \
+                    | jq --arg since "${since}" \
+                         --argjson me "${GITHUB_RUN_ID}" '
+                        [ .[]
+                          | select(.createdAt > $since
+                                   and .databaseId != $me
+                                   and .conclusion != null
+                                   and (.conclusion | IN("skipped", "cancelled") | not))
+                          | (.displayTitle | [scan("[0-9a-f]{40}")] | first)
+                            // ("run-" + (.databaseId | tostring))
+                        ] | unique | length' \
                     2>/dev/null || echo 0)
-            echo "Handovers in the last 24h: ${today} (max ${DAILY_MAX})"
+            echo "Commits handed over in the last 24h: ${today} (max ${DAILY_MAX})"
             if [ "${today}" -ge "${DAILY_MAX}" ]; then
               proceed=false
               reason="daily budget of ${DAILY_MAX} handovers is spent"

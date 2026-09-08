@@ -24,6 +24,7 @@
 #ifndef _JMI_LINEAR_SOLVER_H
 #define _JMI_LINEAR_SOLVER_H
 
+#include "jmi_sundials_compat.h"
 #include "jmi_block_solver.h"
 #include "jmi.h"
 

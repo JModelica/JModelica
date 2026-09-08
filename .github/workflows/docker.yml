@@ -36,7 +36,6 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   # The Dockerfile builds through CMake and Gradle. master still uses autotools
@@ -49,6 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       buildable: ${{ steps.check.outputs.buildable }}
+      image: ${{ steps.image.outputs.name }}
     steps:
       - uses: actions/checkout@v5
       - id: check
@@ -62,6 +62,20 @@ jobs:
           if [ "${buildable}" = "false" ]; then
             echo "::notice::No CMake/Gradle build on this ref; skipping the image build."
           fi
+
+      # OCI reference names must be lowercase, and this repository is
+      # `JModelica/JModelica`. Using ${{ github.repository }} verbatim built the
+      # image all the way through — compiler, runtime, Python layer, manifest —
+      # and then failed on the push with "invalid reference format: repository
+      # name (JModelica/JModelica) must be lowercase", throwing away the whole
+      # build. Lowercased here rather than hardcoded, so a fork under any name
+      # still publishes to its own namespace.
+      - id: image
+        run: |
+          set -euo pipefail
+          name="${GITHUB_REPOSITORY,,}"
+          echo "name=${name}" >> "$GITHUB_OUTPUT"
+          echo "Image name: ${name}"
 
   build:
     name: ${{ matrix.platform }}
@@ -106,7 +120,7 @@ jobs:
           # pushing a tag per architecture would leave the tag pointing at
           # whichever build finished last.
           outputs: >-
-            type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=${{ github.event_name != 'pull_request' }}
+            type=image,name=${{ env.REGISTRY }}/${{ needs.detect.outputs.image }},push-by-digest=true,name-canonical=true,push=${{ github.event_name != 'pull_request' }}
           cache-from: type=gha,scope=${{ matrix.platform }}
           cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
           provenance: false
@@ -155,7 +169,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ needs.detect.outputs.image }}
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
@@ -174,7 +188,7 @@ jobs:
             $(printf "${REGISTRY}/${IMAGE_NAME}@sha256:%s " *)
         env:
           REGISTRY: ${{ env.REGISTRY }}
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          IMAGE_NAME: ${{ needs.detect.outputs.image }}
 
       - name: Inspect the published image
         run: |
@@ -182,4 +196,4 @@ jobs:
           version="$(jq -r '.labels["org.opencontainers.image.version"] // empty' <<< "${DOCKER_METADATA_OUTPUT_JSON}")"
           # Verify what was actually published rather than trusting the push.
           docker buildx imagetools inspect \
-            "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${version:-latest}"
+            "${{ env.REGISTRY }}/${{ needs.detect.outputs.image }}:${version:-latest}"

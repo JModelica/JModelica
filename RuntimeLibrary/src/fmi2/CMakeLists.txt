@@ -41,7 +41,7 @@ set(FMISources
     fmi2_cs.c
 )
 #Build fmi2 library
-include_directories(${STANDARD_HEADER_SRC})
+include_directories(SYSTEM ${STANDARD_HEADER_SRC})
 add_library(fmi2 STATIC ${FMISources})
 if(NOT MSVC)
     set_target_properties(fmi2 PROPERTIES COMPILE_FLAGS "-Wall -g -std=c89 -pedantic -Werror -O2")

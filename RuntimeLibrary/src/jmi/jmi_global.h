@@ -39,12 +39,12 @@ void jmi_set_current(jmi_t* jmi);
 /**
  * \brief Get the current jmi struct.
  */
-jmi_t* jmi_get_current();
+jmi_t* jmi_get_current(void);
 
 /**
  * \brief Check if the current jmi struct is set.
  */
-int jmi_current_is_set();
+int jmi_current_is_set(void);
 
 /**
  * \brief Prepare try buffer for calling jmi_try()
@@ -65,7 +65,7 @@ void jmi_finalize_try(jmi_t* jmi, int depth);
 /**
  * \brief Throw exception.
  */
-void jmi_throw();
+void jmi_throw(void);
 
 
 /**

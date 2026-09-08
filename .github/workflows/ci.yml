@@ -90,6 +90,17 @@ jobs:
             python tools/check_no_artifacts.py --all
           fi
 
+      - name: Guard against the build quietly ceasing to run
+        run: |
+          set -euo pipefail
+          # `detect` skips the compiler and runtime jobs when the files they
+          # need are absent, which is right — a build job that finds nothing and
+          # exits 0 is a worse lie than a red build. But it means deleting
+          # CMakeLists.txt turns those jobs into skips and the whole run green,
+          # having compiled nothing. Every reward hack has that shape: stop the
+          # measurement rather than fix the thing. This makes it a hard error.
+          python tools/check_build_coverage.py
+
       - name: Test the tools themselves
         run: |
           python -m pip install --quiet pytest

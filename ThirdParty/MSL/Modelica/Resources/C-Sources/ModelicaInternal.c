@@ -185,6 +185,9 @@ MODELICA_EXPORT void ModelicaInternal_setenv(const char* name, const char* value
 
 #include <stdio.h>
 #include <stdlib.h>
+#if defined(__unix__) || defined(__APPLE__)
+#include <unistd.h>
+#endif
 #include <errno.h>
 
 #if defined(__WATCOMC__)

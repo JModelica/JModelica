@@ -516,7 +516,7 @@ int jmi_destruct_external_objs(jmi_t* jmi);
 /**
  * \brief Get the name of the model that produced this FMU.
  */
-const char *jmi_get_model_identifier();
+const char *jmi_get_model_identifier(void);
 
 /**
  * \brief Call a jmi_generic_func_t, and handle exceptions and setting the current jmi_t pointer.

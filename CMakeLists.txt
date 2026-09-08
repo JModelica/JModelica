@@ -61,7 +61,7 @@ set(SUNDIALS_LIBRARIES
 message(STATUS "Sundials Include: ${SUNDIALS_INCLUDE_DIR}")
 message(STATUS "Sundials Libraries: ${SUNDIALS_LIBRARIES}")
 
-include_directories(${SUNDIALS_INCLUDE_DIR})
+include_directories(SYSTEM ${SUNDIALS_INCLUDE_DIR})
 
 # Find Ipopt (optional for now)
 find_library(IPOPT_LIB NAMES ipopt)
@@ -70,7 +70,7 @@ find_path(IPOPT_INCLUDE_DIR coin-or/IpStdCInterface.h)
 if(IPOPT_LIB AND IPOPT_INCLUDE_DIR)
     message(STATUS "Ipopt Include: ${IPOPT_INCLUDE_DIR}")
     message(STATUS "Ipopt Library: ${IPOPT_LIB}")
-    include_directories(${IPOPT_INCLUDE_DIR})
+    include_directories(SYSTEM ${IPOPT_INCLUDE_DIR})
 else()
     message(STATUS "Ipopt: Not found (optional)")
 endif()

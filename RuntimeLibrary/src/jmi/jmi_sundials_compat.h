@@ -104,8 +104,8 @@ extern "C" {
 
 #if SUNDIALS_VERSION_MAJOR >= 6
 /* Initialize/Free global SUNContext */
-void jmi_sundials_init_context();
-void jmi_sundials_free_context();
+void jmi_sundials_init_context(void);
+void jmi_sundials_free_context(void);
 
 /* Global SUNContext (needed for macros) */
 #include <sundials/sundials_context.h>

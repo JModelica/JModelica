@@ -108,7 +108,7 @@ struct jmi_ode_problem_t {
  *
  * @return A ode_callback_funcs_t struct with default callbacks.
   */
-jmi_ode_callbacks_t jmi_ode_problem_default_callbacks();
+jmi_ode_callbacks_t jmi_ode_problem_default_callbacks(void);
 
 /**
  * \brief Creates a new jmi_ode_problem_t instance.

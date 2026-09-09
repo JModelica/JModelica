@@ -12,6 +12,48 @@
 #    along with this program.  If not, see
 #     <http://www.ibm.com/developerworks/library/os-cpl.html/>.
 
+# if USE_NINJA
+# all-local: build.ninja
+#     $(NINJA)
+
+# build.ninja: configure.ac Makefile.am
+#     $(SHELL) ./config.status --file=$@
+
+# clean-local:
+#     $(NINJA) -t clean
+
+# distclean-local:
+#     rm -f build.ninja
+# else
+# Existing Makefile rules...
+
+all-local: build-python-packages build-compiler
+	$(abs_top_srcdir)/get_version.sh $(abs_top_srcdir) https://svn.jmodelica.org > $(abs_builddir)/version.txt
+	if [ "$(BUILD_EXTRA)" ]; then exec "$(BUILD_EXTRA)" "$(abs_top_srcdir)" "$(DESTDIR)$(prefix)"; fi
+
+clean-local: clean-frontends clean-python-packages clean-casadi-interface
+	rm -rf $(CLEANFILES)
+# endif
+
+
+# # Set default verbosity level (0 = quiet, 1 = normal, 2 = verbose)
+# VERBOSITY ?= 1
+
+# if VERBOSITY_0
+# Q := @
+# PRINT := @echo
+# else
+# Q :=
+# PRINT := @echo
+# if ($(VERBOSITY),2)
+# 	PRINT := @echo "  $@: $^"
+# endif
+# endif
+
+CLEANFILES = $(assimulo_build_dir) $(assimulo_install_dir) \
+			 $(pymodelica_install_dir) $(pyfmi_build_dir) \
+			 $(pyfmi_install_dir) $(pyjmi_install_dir)
+
 
 AUTOMAKE_OPTIONS = foreign
 ACLOCAL_AMFLAGS = -I m4
@@ -41,6 +83,16 @@ pyfmi_build_dir64=$(abs_builddir)/PyFMI_build64
 pyjmi_build_dir64=$(abs_builddir)/PyJMI_build64
 
 bindistdir=JModelica.org-$(VERSION)-bin
+
+install-casadi: casadi
+if COMPILE_WITH_IPOPT
+	if [ ! -d "$(IPOPT_HOME)" ]; then \
+		echo "Error: IPOPT_HOME directory not found: $(IPOPT_HOME)"; \
+		exit 1; \
+	fi
+	cd $(abs_builddir)/ThirdParty/CasADi && \
+	make -f Makefile install "SWIGCHECK_BUILD_DIR=$(SWIGCHECK_BUILD_DIR)" "CASADI_BUILD_DIR=$(CASADI_BUILD_DIR)" "IPOPT_HOME=$(IPOPT_HOME)"
+endif
 
 casadi:
 if COMPILE_WITH_IPOPT
@@ -126,10 +178,10 @@ if COMPILE_WITH_IPOPT
 	case $(build) in \
 	*-cygwin*|*-mingw*) \
 	cmake $(MC_SRC_SWIG) -G "MSYS Makefiles" -DCMAKE_CXX_COMPILER_ARG1="-m32" -DCMAKE_CXX_FLAGS="-m32" \
-	    -DIFCASADI_OUTDIR="$(MC_CASADI_BUILD)" -DCASADI_HOME="$(CASADI_HOME)" -DCASADI_BUILD_DIR="$(CASADI_BUILD_DIR)";; \
+		-DIFCASADI_OUTDIR="$(MC_CASADI_BUILD)" -DCASADI_HOME="$(CASADI_HOME)" -DCASADI_BUILD_DIR="$(CASADI_BUILD_DIR)";; \
 	*) \
 	cmake $(MC_SRC_SWIG) \
-	    -DIFCASADI_OUTDIR="$(MC_CASADI_BUILD)" -DCASADI_HOME="$(CASADI_HOME)" -DCASADI_BUILD_DIR="$(CASADI_BUILD_DIR)";; \
+		-DIFCASADI_OUTDIR="$(MC_CASADI_BUILD)" -DCASADI_HOME="$(CASADI_HOME)" -DCASADI_BUILD_DIR="$(CASADI_BUILD_DIR)";; \
 	esac 
 	cd $(MC_BUILD)/ifcasadi;  make
 endif
@@ -139,7 +191,7 @@ if COMPILE_WITH_IPOPT64
 	mkdir -p $(MC_BUILD64)/ifcasadi; \
 	cd $(MC_BUILD64)/ifcasadi; \
 	cmake $(MC_SRC_SWIG) -G "MSYS Makefiles" -DCMAKE_CXX_COMPILER_ARG1="-m64" -DCMAKE_CXX_FLAGS="-m64" \
-	    -DIFCASADI_OUTDIR="$(MC_CASADI_BUILD)" -DCASADI_HOME="$(CASADI_HOME)" -DCASADI_BUILD_DIR="$(CASADI_BUILD_DIR64)"; \
+		-DIFCASADI_OUTDIR="$(MC_CASADI_BUILD)" -DCASADI_HOME="$(CASADI_HOME)" -DCASADI_BUILD_DIR="$(CASADI_BUILD_DIR64)"; \
 	cd $(MC_BUILD64)/ifcasadi;  make
 	export PYTHONHOME=$(ORIG_PYTHON_HOME); \
 	export PATH="$(ORIG_PATH)";
@@ -196,14 +248,14 @@ if COMPILE_WITH_IPOPT
 	case $(build) in \
 	*-cygwin*|*-mingw*) \
 	cmake $(MC_INTERFACE) -G "MSYS Makefiles" -DCMAKE_CXX_COMPILER_ARG1="-m32" -DCMAKE_CXX_FLAGS="-m32" \
-	    -DMC_BUILD="$(MC_BUILD)" -DIPOPT_HOME="$(IPOPT_HOME)" -DCASADI_BUILD_DIR="$(CASADI_BUILD_DIR)" \
-	    -DIFCASADI_JAR_BASE="$(JAVA_CASADI_BUILD_DIR)" -DCASADI_HOME="$(CASADI_HOME)" \
-	    "$(CMAKE_PYTHON_LIB)" "$(CMAKE_PYTHON_INCLUDE)" ;; \
+		-DMC_BUILD="$(MC_BUILD)" -DIPOPT_HOME="$(IPOPT_HOME)" -DCASADI_BUILD_DIR="$(CASADI_BUILD_DIR)" \
+		-DIFCASADI_JAR_BASE="$(JAVA_CASADI_BUILD_DIR)" -DCASADI_HOME="$(CASADI_HOME)" \
+		"$(CMAKE_PYTHON_LIB)" "$(CMAKE_PYTHON_INCLUDE)" ;; \
 	*) \
 	cmake $(MC_INTERFACE) \
-	    -DMC_BUILD="$(MC_BUILD)" -DIPOPT_HOME="$(IPOPT_HOME)" -DCASADI_BUILD_DIR="$(CASADI_BUILD_DIR)" \
-	    -DIFCASADI_JAR_BASE="$(JAVA_CASADI_BUILD_DIR)" -DCASADI_HOME="$(CASADI_HOME)" \
-	    "$(CMAKE_PYTHON_LIB)" "$(CMAKE_PYTHON_INCLUDE)" ;; \
+		-DMC_BUILD="$(MC_BUILD)" -DIPOPT_HOME="$(IPOPT_HOME)" -DCASADI_BUILD_DIR="$(CASADI_BUILD_DIR)" \
+		-DIFCASADI_JAR_BASE="$(JAVA_CASADI_BUILD_DIR)" -DCASADI_HOME="$(CASADI_HOME)" \
+		"$(CMAKE_PYTHON_LIB)" "$(CMAKE_PYTHON_INCLUDE)" ;; \
 	esac 
 	cd $(MC_BUILD)/modelicacasadi_wrapper;  make modelicacasadi_wrapper
 endif
@@ -213,9 +265,9 @@ if COMPILE_WITH_IPOPT64
 	mkdir -p $(MC_BUILD64)/modelicacasadi_wrapper; \
 	cd $(MC_BUILD64)/modelicacasadi_wrapper; \
 	cmake $(MC_INTERFACE) -G "MSYS Makefiles" -DCMAKE_CXX_COMPILER_ARG1="-m64" -DCMAKE_CXX_FLAGS="-m64" \
-	    -DMC_BUILD="$(MC_BUILD64)" -DIPOPT_HOME="$(IPOPT64_HOME)" -DCASADI_BUILD_DIR="$(CASADI_BUILD_DIR64)" \
-	    -DIFCASADI_JAR_BASE="$(JAVA_CASADI_BUILD_DIR)" -DCASADI_HOME="$(CASADI_HOME)" \
-	    "$(CMAKE_PYTHON64_LIB)" "$(CMAKE_PYTHON64_INCLUDE)"; \
+		-DMC_BUILD="$(MC_BUILD64)" -DIPOPT_HOME="$(IPOPT64_HOME)" -DCASADI_BUILD_DIR="$(CASADI_BUILD_DIR64)" \
+		-DIFCASADI_JAR_BASE="$(JAVA_CASADI_BUILD_DIR)" -DCASADI_HOME="$(CASADI_HOME)" \
+		"$(CMAKE_PYTHON64_LIB)" "$(CMAKE_PYTHON64_INCLUDE)"; \
 	cd $(MC_BUILD64)/modelicacasadi_wrapper;  make modelicacasadi_wrapper
 	export PYTHONHOME=$(ORIG_PYTHON_HOME);
 	export PATH="$(ORIG_PATH)";
@@ -261,7 +313,7 @@ if COMPILE_WITH_IPOPT64
 	echo "from modelica_casadi_transfer_wrapper import *" >> $(DESTDIR)$(prefix)/Python_64/modelicacasadi_transfer/__init__.py
 	cp $(MC_INTERFACE)/python/modelica_casadi_transfer_wrapper.py $(DESTDIR)$(prefix)/Python_64/modelicacasadi_transfer
 endif
-        
+		
 if NUMPY_NO_MSVCR
 NUMPY_NO_MSVCR_ARG=--no-msvcr="true"
 else
@@ -269,59 +321,54 @@ NUMPY_NO_MSVCR_ARG=
 endif
 
 
+# define build_python_package
+# 	$(Q)mkdir -p $(1); \
+# 	$(Q)cd $(abs_top_srcdir)/external; \
+# 		find $(2) -type f |grep -v /.svn | grep -v .pyc | grep -v ~ |tar c -T - -f - | tar x -C $(1); \
+# 	$(Q)cd $(1)/$(2); \
+# 	$(3); \
+# 	python setup.py install $(4) --prefix=$(5)
+# 	if [ $$? -ne 0 ]; then \
+# 		echo "Error: Failed to build Assimulo package."; \
+# 		exit 1; \
+# 	fi
+# 	$(PRINT) "Python packages built successfully."
+# endef
+
+define build_python_package
+	@$(info Building package in directory: $(1))
+	@$(info Source directory: $(2))
+	@$(info Extra commands: $(3))
+	@$(info Install options: $(4))
+	@$(info Install prefix: $(5))
+	mkdir -p $(1); \
+	cd $(abs_top_srcdir)/external; \
+	find $(2) -type f | grep -v /.svn | grep -v .pyc | grep -v ~ | tar c -T - -f - | tar x -C $(1); \
+	cd $(1)/$(2); \
+	$(3); \
+	python setup.py install $(4) --prefix=$(5); \
+	if [ $$? -ne 0 ]; then \
+		echo "Error: Failed to build $(2) package."; \
+		exit 1; \
+	fi
+endef
+
 build-python-packages:
 if PYTHON_ENABLED
+# $(PRINT) "Building Python packages..."
 if WITH_OPENMP
-	mkdir -p $(assimulo_build_dir); \
-	cd $(abs_top_srcdir)/external; \
-	find Assimulo -type f |grep -v /.svn | grep -v .pyc | grep -v ~ |tar c -T - -f - | tar x -C $(assimulo_build_dir); \
-	cd $(assimulo_build_dir)/Assimulo; \
-	case $(build) in \
-	*-cygwin*) \
-	python setup.py install --with_openmp=True --superlu-home=$(abs_builddir)/superlu_build/ --sundials-home=$(SUNDIALS_HOME) --sundials-with-superlu=True --blas-home=$(abs_builddir)/blas_install/ --lapack-home=$(abs_builddir)/lapack_install/ --force-32bit="true" --extra-c-flags="-mincoming-stack-boundary=2" --prefix=$(assimulo_install_dir) ;; \
-	*-mingw*) \
-	python setup.py install --with_openmp=True --superlu-home=$(abs_builddir)/superlu_build/ --sundials-home=$(SUNDIALS_HOME) --sundials-with-superlu=True --blas-home=$(abs_builddir)/blas_install/ --lapack-home=$(abs_builddir)/lapack_install/ --force-32bit="true" $(NUMPY_NO_MSVCR_ARG) --extra-c-flags="-mincoming-stack-boundary=2" --prefix=$(assimulo_install_dir) ;; \
-	*) \
-	python setup.py install --with_openmp=True --superlu-home=$(abs_builddir)/superlu_build/ --sundials-home=$(SUNDIALS_HOME) --sundials-with-superlu=True --blas-home=$(abs_builddir)/blas_install/ --lapack-home=$(abs_builddir)/lapack_install/ --prefix=$(assimulo_install_dir) ;; \
-	esac
+	$(call build_python_package, $(assimulo_build_dir), Assimulo, export CFLAGS="$(CFLAGS) $(OPENMP_CFLAGS)" && export LDFLAGS="$(LDFLAGS) $(OPENMP_CFLAGS)", --with_openmp=True --superlu-home=$(abs_builddir)/superlu_build/ --sundials-home=$(SUNDIALS_HOME) --sundials-with-superlu=True --blas-home=$(abs_builddir)/blas_install/ --lapack-home=$(abs_builddir)/lapack_install/, $(assimulo_install_dir))
 if JM_WIN64
 if WITH_PYTHON64
-	mkdir -p $(assimulo_build_dir64); \
-	cd $(abs_top_srcdir)/external; \
-	find Assimulo -type f |grep -v /.svn | grep -v .pyc | grep -v ~ |tar c -T - -f - | tar x -C $(assimulo_build_dir64); \
-	cd $(assimulo_build_dir)/Assimulo; \
-	export PATH=$(PYTHON64_HOME):$(PYTHON64_HOME)/Scripts:$(PYTHON64_HOME)/Lib:"${PATH}"; \
-	export PYTHONHOME=$(PYTHON64_HOME); \
-	python setup.py install --with_openmp=True --superlu-home=$(abs_builddir)/superlu_build64/ --sundials-home=$(SUNDIALS_HOME)64 --sundials-with-superlu=True --blas-home=$(abs_builddir)/blas_install64/ --lapack-home=$(abs_builddir)/lapack_install64/ --force-32bit="false" $(NUMPY_NO_MSVCR_ARG) --prefix=$(assimulo_install_dir64); \
-	export PATH="$(ORIG_PATH)"; \
-	export PYTHONHOME=$(ORIG_PYTHON_HOME)
+	$(call build_python_package, $(assimulo_build_dir64), Assimulo, export PATH=$(PYTHON64_HOME):$(PYTHON64_HOME)/Scripts:$(PYTHON64_HOME)/Lib:"${PATH}" && export PYTHONHOME=$(PYTHON64_HOME), --with_openmp=True --superlu-home=$(abs_builddir)/superlu_build64/ --sundials-home=$(SUNDIALS_HOME)64 --sundials-with-superlu=True --blas-home=$(abs_builddir)/blas_install64/ --lapack-home=$(abs_builddir)/lapack_install64/ --force-32bit="false" $(NUMPY_NO_MSVCR_ARG), $(assimulo_install_dir64))
 endif
 endif
 endif
 if !WITH_OPENMP
-	mkdir -p $(assimulo_build_dir); \
-	cd $(abs_top_srcdir)/external; \
-	find Assimulo -type f |grep -v /.svn | grep -v .pyc | grep -v ~ |tar c -T - -f - | tar x -C $(assimulo_build_dir); \
-	cd $(assimulo_build_dir)/Assimulo; \
-	case $(build) in \
-	*-cygwin*) \
-	python setup.py install --sundials-home=$(SUNDIALS_HOME) --blas-home=$(abs_builddir)/blas_install/ --lapack-home=$(abs_builddir)/lapack_install/ --force-32bit="true" --extra-c-flags="-mincoming-stack-boundary=2" --prefix=$(assimulo_install_dir) ;; \
-	*-mingw*) \
-	python setup.py install --sundials-home=$(SUNDIALS_HOME) --blas-home=$(abs_builddir)/blas_install/ --lapack-home=$(abs_builddir)/lapack_install/ --force-32bit="true" $(NUMPY_NO_MSVCR_ARG) --extra-c-flags="-mincoming-stack-boundary=2" --prefix=$(assimulo_install_dir) ;; \
-	*) \
-	python setup.py install --sundials-home=$(SUNDIALS_HOME) --blas-home=$(abs_builddir)/blas_install/ --lapack-home=$(abs_builddir)/lapack_install/ --prefix=$(assimulo_install_dir) ;; \
-	esac
+	$(call build_python_package, $(assimulo_build_dir), Assimulo, , --sundials-home=$(SUNDIALS_HOME) --blas-home=$(abs_builddir)/blas_install/ --lapack-home=$(abs_builddir)/lapack_install/, $(assimulo_install_dir))
 if JM_WIN64
 if WITH_PYTHON64
-	mkdir -p $(assimulo_build_dir64); \
-	cd $(abs_top_srcdir)/external; \
-	find Assimulo -type f |grep -v /.svn | grep -v .pyc | grep -v ~ |tar c -T - -f - | tar x -C $(assimulo_build_dir64); \
-	cd $(assimulo_build_dir64)/Assimulo; \
-	export PATH=$(PYTHON64_HOME):$(PYTHON64_HOME)/Scripts:$(PYTHON64_HOME)/Lib:"${PATH}"; \
-	export PYTHONHOME=$(PYTHON64_HOME); \
-	python setup.py install --sundials-home=$(SUNDIALS_HOME)64 --blas-home=$(abs_builddir)/blas_install64/ --lapack-home=$(abs_builddir)/lapack_install64/ --force-32bit="false" $(NUMPY_NO_MSVCR_ARG) --prefix=$(assimulo_install_dir64) ; \
-	export PATH="$(ORIG_PATH)"; \
-	export PYTHONHOME=$(ORIG_PYTHON_HOME)
+	$(call build_python_package, $(assimulo_build_dir64), Assimulo, export PATH=$(PYTHON64_HOME):$(PYTHON64_HOME)/Scripts:$(PYTHON64_HOME)/Lib:"${PATH}" && export PYTHONHOME=$(PYTHON64_HOME), --sundials-home=$(SUNDIALS_HOME)64 --blas-home=$(abs_builddir)/blas_install64/ --lapack-home=$(abs_builddir)/lapack_install64/ --force-32bit="false" $(NUMPY_NO_MSVCR_ARG), $(assimulo_install_dir64))
 endif
 endif
 endif
@@ -339,31 +386,10 @@ if WITH_PYTHON64
 	rm -rf build
 endif
 endif
-	mkdir -p $(pyfmi_build_dir); \
-	cd $(abs_top_srcdir)/external; \
-	find PyFMI -type f |grep -v /.svn | grep -v .pyc | grep -v ~ |tar c -T - -f - | tar x -C $(pyfmi_build_dir); \
-	cd $(pyfmi_build_dir)/PyFMI; \
-	case $(build) in \
-	*-cygwin*) \
-	python setup.py install --fmil-home=$(abs_builddir)/FMIL_install/ --force-32bit="true" --extra-c-flags="-mincoming-stack-boundary=2" --prefix=$(pyfmi_install_dir) ;; \
-	*-mingw*) \
-	python setup.py install --fmil-home=$(abs_builddir)/FMIL_install/ --force-32bit="true" $(NUMPY_NO_MSVCR_ARG) --extra-c-flags="-mincoming-stack-boundary=2" --prefix=$(pyfmi_install_dir) ;; \
-	*) \
-	python setup.py install --fmil-home=$(abs_builddir)/FMIL_install/ --prefix=$(pyfmi_install_dir) ;; \
-	esac
-	rm -rf build
+	$(call build_python_package, $(pyfmi_build_dir), PyFMI, , --fmil-home=$(abs_builddir)/FMIL_install/, $(pyfmi_install_dir))
 if JM_WIN64
 if WITH_PYTHON64
-	mkdir -p $(pyfmi_build_dir64); \
-	cd $(abs_top_srcdir)/external; \
-	find PyFMI -type f |grep -v /.svn | grep -v .pyc | grep -v ~ |tar c -T - -f - | tar x -C $(pyfmi_build_dir64); \
-	cd $(pyfmi_build_dir64)/PyFMI; \
-	export PATH=$(PYTHON64_HOME):$(PYTHON64_HOME)/Scripts:$(PYTHON64_HOME)/Lib:"${PATH}"; \
-	export PYTHONHOME=$(PYTHON64_HOME); \
-	python setup.py install --fmil-home=$(abs_builddir)/FMIL_install64/ $(NUMPY_NO_MSVCR_ARG) --prefix=$(pyfmi_install_dir64); \
-	export PATH="$(ORIG_PATH)"; \
-	export PYTHONHOME=$(ORIG_PYTHON_HOME); \
-	rm -rf build
+	$(call build_python_package, $(pyfmi_build_dir64), PyFMI, export PATH=$(PYTHON64_HOME):$(PYTHON64_HOME)/Scripts:$(PYTHON64_HOME)/Lib:"${PATH}" && export PYTHONHOME=$(PYTHON64_HOME), --fmil-home=$(abs_builddir)/FMIL_install64/ $(NUMPY_NO_MSVCR_ARG), $(pyfmi_install_dir64))
 endif
 endif
 	cd $(abs_top_srcdir)/Python/src; \
@@ -381,6 +407,7 @@ if WITH_PYTHON64
 endif
 endif
 endif
+
 
 install-python-tests:
 if PYTHON_ENABLED
@@ -501,9 +528,6 @@ JAVA_CASADI_BUILD_DIR=$(abs_builddir)
 JAVA_MC_CASADI_ANT_FILE=$(COMPILER_DIR)/ModelicaCompilerCasADi/build.xml
 JAVA_OC_CASADI_ANT_FILE=$(COMPILER_DIR)/OptimicaCompilerCasADi/build.xml
 
-all-local: build-python-packages build-compiler
-	$(abs_top_srcdir)/get_version.sh $(abs_top_srcdir) https://svn.jmodelica.org > $(abs_builddir)/version.txt
-	if [ "$(BUILD_EXTRA)" ]; then exec "$(BUILD_EXTRA)" "$(abs_top_srcdir)" "$(DESTDIR)$(prefix)"; fi
 
 install-exec-local: install-python-packages install-compiler install-modules
 	[ $(abs_top_srcdir) == $(DESTDIR)$(prefix) ] && echo "Installing in dist directory, don't copy LICENSE file" || cp $(abs_top_srcdir)/LICENSE $(DESTDIR)$(prefix)/ 
@@ -646,42 +670,34 @@ bindist: bindistdir
 test: install
 	$(prefix)/jm_tests -i
 
-clean-local: clean-frontends clean-python-packages clean-casadi-interface
 
-clean-casadi-interface: 
-	rm -rf $(MC_BUILD)
-	rm -rf $(MC_BUILD64)
-#	rm -rf $(DESTDIR)$(prefix)/Python/casadi
-#	rm -rf $(DESTDIR)$(prefix)/Python/modelicacasadi_transfer
+
+
+clean-casadi-interface:
+	rm -rf $(MC_BUILD) $(MC_BUILD64)
 if HAVE_ANT
-	cd $(JAVA_CASADI_BUILD_DIR)/ModelicaCompilerCasADi; \
-	$(ANT_OPTS) $(ANT) clean ; rm -rf $(MC_CASADI_BUILD)/src/cpp-generated $(MC_CASADI_BUILD)/src/generated/modelica/java/ifcasadi 
-	cd $(JAVA_CASADI_BUILD_DIR)/OptimicaCompilerCasADi; \
-	$(ANT_OPTS) $(ANT) clean ; rm -rf $(OC_CASADI_BUILD)/src/cpp-generated $(OC_CASADI_BUILD)/src/generated/optimica/java/ifcasadi 
+	cd $(JAVA_CASADI_BUILD_DIR)/ModelicaCompilerCasADi && \
+	$(ANT_OPTS) $(ANT) clean && rm -rf $(MC_CASADI_BUILD)/src/cpp-generated $(MC_CASADI_BUILD)/src/generated/modelica/java/ifcasadi 
+	cd $(JAVA_CASADI_BUILD_DIR)/OptimicaCompilerCasADi && \
+	$(ANT_OPTS) $(ANT) clean && rm -rf $(OC_CASADI_BUILD)/src/cpp-generated $(OC_CASADI_BUILD)/src/generated/optimica/java/ifcasadi 
 endif
 	
 clean-python-packages:
 if PYTHON_ENABLED
 	if [ -d $(assimulo_build_dir)/Assimulo ]; then \
-		cd $(assimulo_build_dir)/Assimulo; \
-		python setup.py clean --all --sundials-home=$(SUNDIALS_HOME); \
+		cd $(assimulo_build_dir)/Assimulo && \
+		python setup.py clean --all --sundials-home=$(SUNDIALS_HOME) && \
 		cd $(abs_builddir); \
 	fi;
-	rm -rf $(assimulo_build_dir) || echo  Could not remove $(assimulo_build_dir)
-	rm -rf $(assimulo_install_dir) || echo  Could not remove $(assimulo_install_dir)
-	-cd $(abs_top_srcdir)/Python/src; \
+	-cd $(abs_top_srcdir)/Python/src && \
 	python setup_pymodelica.py clean --all 
-	-rm -rf $(pymodelica_install_dir) || echo  Could not remove $(pymodelica_install_dir)
 	if [ -d $(pyfmi_build_dir)/PyFMI ]; then \
-		-cd $(pyfmi_build_dir)/PyFMI; \
-		python setup.py  clean --all; \
+		-cd $(pyfmi_build_dir)/PyFMI && \
+		python setup.py clean --all && \
 		cd $(abs_builddir); \
 	fi;
-	-rm -rf $(pyfmi_build_dir) || echo  Could not remove $(pyfmi_build_dir)
-	-rm -rf $(pyfmi_install_dir) || echo  Could not remove $(pyfmi_install_dir)
-	-cd $(abs_top_srcdir)/Python/src; \
+	-cd $(abs_top_srcdir)/Python/src && \
 	python setup_pyjmi.py clean --all 
-	-rm -rf $(pyjmi_install_dir)|| echo  Could not remove $(pyjmi_install_dir)
 endif
 
 clean-frontends:
@@ -695,4 +711,4 @@ docs:
 	make -C $(abs_top_srcdir)/doc/PyJMI html
 
 
-.PHONY: modelicacasadi_wrapper ifcasadi install_modelicacasadi_transfer install_modelicacasadi_wrapper
+.PHONY: modelicacasadi_wrapper ifcasadi install_modelicacasadi_transfer install_modelicacasadi_wrapper test docs

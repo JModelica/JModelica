@@ -61,8 +61,8 @@ int jmi_kinsol_restore_state(jmi_block_solver_t* block);
 const char *jmi_kinsol_flag_to_name(int flag);
 
 struct jmi_kinsol_solver_reset_t {
-    DlsMat J;
-    DlsMat J_modified;
+    SUNDlsMat J;
+    SUNDlsMat J_modified;
     int * lapack_ipiv;
     N_Vector kin_y_scale;
     N_Vector kin_f_scale;
@@ -89,15 +89,15 @@ struct jmi_kinsol_solver_t {
     realtype kin_stol;             /**< \brief Tolerance for Step-size */
     realtype kin_reg_tol;          /**< \brief Regularization tolerance */
     
-    DlsMat JTJ;                     /**< \brief The Transpose(J).J used if J is singular */
+    SUNDlsMat JTJ;                     /**< \brief The Transpose(J).J used if J is singular */
     int J_is_singular_flag;         /**< \brief A flag indicating that J is singular. Regularized JTJ is setup */
     int use_steepest_descent_flag;  /**< \brief A flag indicating that steepest descent and not Newton direction should be used */
     int force_new_J_flag;           /**< \brief A flag indicating that J needs to be recalculated */
     int updated_jacobian_flag;      /**< \brief A flag indicating if an updated Jacobian is used to solve the system */
     int handling_of_singular_jacobian_flag; /**< \brief A flag for determining how singular systems should be treated */
-    DlsMat J_LU;                    /**< \brief Jacobian matrix/it's LU decomposition */
-    DlsMat J_sing;                  /**< \brief Jacobian matrix/it's right singular vectors */
-    DlsMat J_Dependency;            /**< \brief Dependency matrix with value 1 at (i,j) if iv j depends on residual i, 0 otherwise */ 
+    SUNDlsMat J_LU;                    /**< \brief Jacobian matrix/it's LU decomposition */
+    SUNDlsMat J_sing;                  /**< \brief Jacobian matrix/it's right singular vectors */
+    SUNDlsMat J_Dependency;            /**< \brief Dependency matrix with value 1 at (i,j) if iv j depends on residual i, 0 otherwise */
 
     int is_first_newton_solve_flag; /**< \brief Flag indicating if the current solve is the first Newton solve */
 

@@ -44,8 +44,8 @@ struct jmi_block_solver_t {
     int n_sr;                         /**< \brief The number of solved variables */
     jmi_real_t* x;                 /**< \brief Work vector for the real iteration variables */
     jmi_real_t* last_accepted_x;   /**< \brief Work vector for the real iteration variables holding the last accepted vales by the integrator */
-    DlsMat J;                       /**< \brief The Jacobian matrix  */
-    DlsMat J_scale;                 /**< \brief Jacobian matrix scaled with xnorm for used for fnorm calculation */
+    SUNDlsMat J;                       /**< \brief The Jacobian matrix  */
+    SUNDlsMat J_scale;                 /**< \brief Jacobian matrix scaled with xnorm for used for fnorm calculation */
     int using_max_min_scaling_flag; /**< \brief A flag indicating if either the maximum scaling is used of the minimum */
 
     jmi_real_t* dx;                /**< \brief Work vector for the seed vector */

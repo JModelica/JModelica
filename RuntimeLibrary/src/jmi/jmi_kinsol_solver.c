@@ -236,7 +236,7 @@ int jmi_kinsol_zero_column_jacobian_handling(jmi_block_solver_t * block) {
 
 
 /* Kinsol Jacobian function wrapper */
-int kin_dF(int N, N_Vector u, N_Vector fu, DlsMat J, jmi_block_solver_t * block, N_Vector tmp1, N_Vector tmp2);
+int kin_dF(int N, N_Vector u, N_Vector fu, SUNDlsMat J, jmi_block_solver_t * block, N_Vector tmp1, N_Vector tmp2);
 
 /*Kinsol function wrapper
     @param yy - Input - function argument
@@ -357,7 +357,7 @@ int jmi_kin_setup_column_partition(jmi_block_solver_t * block) {
 }
 
 /* Wrapper function to Jacobian evaluation as needed by standard KINSOL solvers */
-int kin_dF(int N, N_Vector u, N_Vector fu, DlsMat J, jmi_block_solver_t * block, N_Vector tmp1, N_Vector tmp2){
+int kin_dF(int N, N_Vector u, N_Vector fu, SUNDlsMat J, jmi_block_solver_t * block, N_Vector tmp1, N_Vector tmp2){
     clock_t t = jmi_block_solver_start_clock(block);
     jmi_kinsol_solver_t* solver = (jmi_kinsol_solver_t*)block->solver;            
     int i, j, ret = 0;
@@ -1619,7 +1619,7 @@ static void jmi_kinsol_reg_matrix(jmi_block_solver_t * block) {
 }
 
 /* Perform LU factorization with different linear algebra packages */
-static int jmi_LU_factorization(jmi_block_solver_t * block, DlsMat matrix) {
+static int jmi_LU_factorization(jmi_block_solver_t * block, SUNDlsMat matrix) {
     jmi_kinsol_solver_t* solver = block->solver;
     int info = 0, N = block->n;
     int lin_alg_package = block->options->experimental_mode & jmi_block_solver_experimental_LU_through_sundials ? 1:0;
@@ -1634,7 +1634,7 @@ static int jmi_LU_factorization(jmi_block_solver_t * block, DlsMat matrix) {
 }
 
 /* Solve with an LU factorized matrix with different linear algebra packages */
-static int jmi_LU_solve(jmi_block_solver_t * block, DlsMat matrix, realtype* xd) {
+static int jmi_LU_solve(jmi_block_solver_t * block, SUNDlsMat matrix, realtype* xd) {
     jmi_kinsol_solver_t* solver = block->solver;
     int ret = 0, N = block->n;
     int lin_alg_package = block->options->experimental_mode & jmi_block_solver_experimental_LU_through_sundials ? 1:0;

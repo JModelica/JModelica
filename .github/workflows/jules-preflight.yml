@@ -11,13 +11,11 @@ name: Jules — preflight
 #      secret.
 #   2. The Jules GitHub App can see this repository. The API only lists sources
 #      the app has been granted.
-#   3. The source name matches what google-labs-code/jules-action constructs.
+#   3. The source name matches what .github/actions/jules-session constructs.
 #      Google's API quickstart documents `sources/github/OWNER/REPO`, which the
-#      action hardcodes, while the API reference documents
+#      action uses, while the API reference documents
 #      `sources/github-OWNER-REPO`. If your account returns the hyphenated form,
-#      the action cannot address this repository and the workflows need a direct
-#      curl against POST /v1alpha/sessions instead — which is all the action
-#      does anyway.
+#      change the source in that action.
 #
 # Run it from the Actions tab. It creates no session and spends no quota.
 
@@ -87,10 +85,9 @@ jobs:
           count=$(wc -l < names.txt)
           echo "Jules can see ${count} source(s) across ${pages} page(s)."
 
-          # What the action constructs, from its action.yaml:
-          #   "source": "sources/github/\($repo_full_name)"
+          # What .github/actions/jules-session constructs.
           expected="sources/github/${REPO}"
-          echo "google-labs-code/jules-action will address: ${expected}"
+          echo "The workflows will address: ${expected}"
           echo
 
           if grep -Fxq "${expected}" names.txt; then
@@ -106,7 +103,7 @@ jobs:
             if [ -n "${related}" ]; then
               echo "::error::No source named ${expected}, but these look related:" >&2
               echo "${related}" >&2
-              verdict="**Name mismatch.** The action builds \`${expected}\`, but the API lists:"$'\n\n```\n'"${related}"$'\n```\n\n'"Replace the action with a direct POST to /v1alpha/sessions. See doc/automation.md."
+              verdict="**Name mismatch.** The action builds \`${expected}\`, but the API lists:"$'\n\n```\n'"${related}"$'\n```\n\n'"Change the source in .github/actions/jules-session. See doc/automation.md."
             else
               echo "::error::${REPO} is not connected to Jules." >&2
               echo "::error::Installing the GitHub App is necessary but not sufficient:" >&2

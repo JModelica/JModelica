@@ -12,8 +12,17 @@ name: Jules — scheduled issue sweep
 # `jules` label. Set the repository variable JULES_SWEEP_BATCH to change the
 # per-run cap, or JULES_SWEEP_ENABLED to 'false' to pause the sweep entirely.
 #
-# Opting an issue out: add the `jules:skip` label. Anything already carrying
-# `jules:queued` is skipped too, so re-running is safe.
+# Opting an issue out: add the `jules:skip` label.
+#
+# Handovers expire. `jules:queued` used to be permanent, so an issue whose
+# session stalled or ended without a pull request was never looked at again —
+# by 2026-09-23 every open issue carried the label and each daily run selected
+# nothing. Now a queued issue with no open pull request referring to it is
+# handed over again once its last handover is JULES_REQUEUE_DAYS old (default
+# 7). After JULES_MAX_ATTEMPTS handovers (default 3) it is labelled
+# `jules:stuck` for a maintainer instead of spending more quota. The attempt
+# count is read from the handover comments on the issue, so no state is kept
+# anywhere else.
 
 on:
   schedule:
@@ -54,6 +63,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           BATCH: ${{ inputs.batch || vars.JULES_SWEEP_BATCH || '3' }}
+          REQUEUE_DAYS: ${{ vars.JULES_REQUEUE_DAYS || '7' }}
+          MAX_ATTEMPTS: ${{ vars.JULES_MAX_ATTEMPTS || '3' }}
         run: |
           set -euo pipefail
 
@@ -62,38 +73,110 @@ jobs:
           gh issue list \
             --state open \
             --limit 100 \
-            --json number,title,labels,createdAt \
+            --json number,title,labels \
             > open_issues.json
+          gh pr list \
+            --state open \
+            --limit 100 \
+            --json number,title,body \
+            > open_prs.json
+
+          cutoff=$(date -u -d "${REQUEUE_DAYS} days ago" +%Y-%m-%dT%H:%M:%SZ)
+          : > candidates.jsonl
+          : > stuck.jsonl
 
           # Oldest first, so nothing sits in the backlog forever.
-          jq -c --argjson batch "${BATCH}" '
+          jq -c '
             [ .[]
-              | select(
-                  ([.labels[].name] | any(. == "jules:queued" or
-                                          . == "jules:skip"   or
-                                          . == "wontfix"      or
-                                          . == "duplicate"    or
-                                          . == "question")) | not
-                )
-              | {number, title}
-            ]
-            | sort_by(.number)
-            | .[0:$batch]
-          ' open_issues.json > tasks.json
+              | {number, title, labels: [.labels[].name]}
+              | select(.labels | any(. == "jules:skip"  or
+                                     . == "jules:stuck" or
+                                     . == "wontfix"     or
+                                     . == "duplicate"   or
+                                     . == "question") | not)
+            ] | sort_by(.number) | .[]
+          ' open_issues.json |
+          while IFS= read -r issue; do
+            number=$(jq -r .number <<< "${issue}")
+
+            if ! jq -e '.labels | index("jules:queued")' <<< "${issue}" > /dev/null; then
+              jq -c '{number, title, attempt: 1}' <<< "${issue}" >> candidates.jsonl
+              continue
+            fi
+
+            # An open pull request that names the issue means the work was
+            # delivered and waits on review, not on Jules.
+            if jq -e --arg n "${number}" '
+                 any(.[]; ((.title + " " + (.body // "")) | test("#" + $n + "(?![0-9])")))
+               ' open_prs.json > /dev/null; then
+              continue
+            fi
+
+            # Every handover leaves a comment from this bot; they are the
+            # attempt ledger.
+            gh api "repos/${GH_REPO}/issues/${number}/comments" --paginate \
+              --jq '.[] | select(.user.login == "github-actions[bot]" and
+                                 ((.body | startswith("Handed to [Jules]")) or
+                                  (.body | startswith("Picked up automatically by the")))) |
+                          .created_at' < /dev/null > handovers.txt
+            attempts=$(wc -l < handovers.txt)
+            last=$(sort handovers.txt | tail -n 1)
+
+            if [ "${attempts}" -ge "${MAX_ATTEMPTS}" ]; then
+              jq -c --argjson a "${attempts}" '{number, title, attempts: $a}' <<< "${issue}" >> stuck.jsonl
+            elif [ -z "${last}" ] || [[ "${last}" < "${cutoff}" ]]; then
+              jq -c --argjson a "$((attempts + 1))" '{number, title, attempt: $a}' <<< "${issue}" >> candidates.jsonl
+            fi
+          done
+
+          jq -sc --argjson batch "${BATCH}" '.[0:$batch]' candidates.jsonl > tasks.json
 
           count=$(jq 'length' tasks.json)
           echo "Selected ${count} issue(s):"
-          jq -r '.[] | "  #\(.number)  \(.title)"' tasks.json
+          jq -r '.[] | "  #\(.number)  attempt \(.attempt)  \(.title)"' tasks.json
+
+          {
+            echo "### Jules sweep"
+            echo
+            echo "Selected ${count} issue(s) (batch ${BATCH}, requeue after ${REQUEUE_DAYS} days, at most ${MAX_ATTEMPTS} attempts)."
+            jq -r '.[] | "- #\(.number) (attempt \(.attempt)): \(.title)"' tasks.json
+          } >> "$GITHUB_STEP_SUMMARY"
 
           {
             echo "tasks=$(jq -c . tasks.json)"
             echo "count=${count}"
+            echo "stuck=$(jq -sc . stuck.jsonl)"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Escalate issues Jules has not managed
+        if: steps.pick.outputs.stuck != '[]' && !inputs.dry_run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          STUCK: ${{ steps.pick.outputs.stuck }}
+        run: |
+          set -euo pipefail
+          gh label create "jules:stuck" --force --color B60205 \
+            --description "Jules has not produced a pull request; needs a maintainer" \
+            || echo "::warning::Could not create the jules:stuck label."
+          jq -c '.[]' <<< "${STUCK}" | while IFS= read -r issue; do
+            number=$(jq -r .number <<< "${issue}")
+            attempts=$(jq -r .attempts <<< "${issue}")
+            echo "::warning::Issue #${number}: ${attempts} handovers without a pull request."
+            gh issue edit "${number}" --add-label "jules:stuck" || \
+              echo "::warning::Could not label #${number}."
+            gh issue comment "${number}" --body \
+              "Jules has been handed this issue ${attempts} times without a pull request resulting, so the sweep has stopped retrying it. Each session is linked from the comments above. A maintainer needs to decide: clarify the issue, close it, or remove \`jules:stuck\` to allow further attempts." || \
+              echo "::warning::Could not comment on #${number}."
+            echo "- #${number}: escalated after ${attempts} attempts" >> "$GITHUB_STEP_SUMMARY"
+          done
 
   dispatch:
     needs: select
     if: needs.select.outputs.count != '0' && !inputs.dry_run
     runs-on: ubuntu-latest
+    env:
+      STARTING_BRANCH: ${{ vars.JULES_STARTING_BRANCH || github.event.repository.default_branch || 'master' }}
     strategy:
       fail-fast: false
       # Stay under the free tier's 3-concurrent-session ceiling, leaving room
@@ -103,6 +186,11 @@ jobs:
         task: ${{ fromJSON(needs.select.outputs.tasks) }}
 
     steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+
       - name: Check the API key is configured
         env:
           JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
@@ -128,6 +216,7 @@ jobs:
         env:
           ISSUE_NUMBER: ${{ matrix.task.number }}
           ISSUE_TITLE: ${{ matrix.task.title }}
+          ATTEMPT: ${{ matrix.task.attempt }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -154,6 +243,12 @@ jobs:
             echo
             echo "ISSUE_REPORT"
             echo
+            if [ "${ATTEMPT:-1}" -gt 1 ]; then
+              echo "This is attempt ${ATTEMPT}. Earlier sessions on this issue ended"
+              echo "without a pull request. Finish this time: if you stop to ask a"
+              echo "question, nobody will answer it."
+              echo
+            fi
             cat <<'GUIDANCE'
           ## This task was started automatically
 
@@ -166,6 +261,12 @@ jobs:
             what you found instead.
           - If it is too vague to act on, say precisely what information is
             missing rather than guessing at an interpretation.
+
+          Nobody is watching this session, and a question asked here does not
+          get an answer. Do not ask which approach to take or for permission:
+          pick the one the evidence supports, say in one line why, and carry it
+          through. A choice that genuinely needs a maintainer goes into the pull
+          request description under a heading "Needs a decision".
 
           ## How to work
 
@@ -213,22 +314,27 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Hand the task to Jules
-        uses: google-labs-code/jules-action@bff7875eaa123cac6742b7cfc51005b95ba4d566 # v1.0.0
+        id: jules
+        uses: ./.github/actions/jules-session
         with:
           prompt: ${{ steps.prompt.outputs.text }}
-          starting_branch: ${{ vars.JULES_STARTING_BRANCH || 'feature/modernization-checkpoint' }}
-          jules_api_key: ${{ secrets.JULES_API_KEY }}
+          # The `auto:` prefix is what jules-shepherd.yml recognises as ours.
+          title: 'auto: Issue #${{ matrix.task.number }}: ${{ matrix.task.title }}'
+          starting_branch: ${{ env.STARTING_BRANCH }}
+          api_key: ${{ secrets.JULES_API_KEY }}
 
       - name: Mark the issue as queued
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ matrix.task.number }}
+          SESSION_URL: ${{ steps.jules.outputs.url }}
+          ATTEMPT: ${{ matrix.task.attempt }}
         run: |
           set -euo pipefail
           # Without this label the next sweep would pick the same issue again.
           gh issue edit "${ISSUE_NUMBER}" --add-label "jules:queued" || \
             echo "::warning::Could not add the jules:queued label."
           gh issue comment "${ISSUE_NUMBER}" --body \
-            "Picked up automatically by the [scheduled Jules sweep](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}), starting from \`${{ vars.JULES_STARTING_BRANCH || 'feature/modernization-checkpoint' }}\`. If a change is warranted a pull request will appear here. Add \`jules:skip\` to exclude this issue from future sweeps." || \
+            "Picked up automatically by the [scheduled Jules sweep](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) (attempt ${ATTEMPT}, [session](${SESSION_URL})), starting from \`${STARTING_BRANCH}\`. If a change is warranted a pull request will appear here. Add \`jules:skip\` to exclude this issue from future sweeps." || \
             echo "::warning::Could not comment on the issue."

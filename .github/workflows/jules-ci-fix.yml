@@ -3,36 +3,47 @@ name: Jules — keep Actions green
 # Jules owns the health of the Actions tab. When a workflow goes red, this hands
 # the failure to Jules to diagnose and fix.
 #
-# The hard part is not triggering — it is triggering *once*. This repository's
-# build is currently expected to fail, so a naive `on: workflow_run failure`
-# would start a session on every push and drain the free tier's 15 daily tasks
-# within the hour, most of them working on the same problem in parallel. Three
-# guards prevent that:
+# The hard part is not triggering — it is triggering *once*, and then again
+# when the first attempt came to nothing. Three guards:
 #
-#   1. Deduplication by commit. A commit whose failure has already been handed
-#      over is never handed over again, however many workflows fail on it.
-#   2. A daily budget. At most JULES_CI_FIX_DAILY_MAX handovers per rolling day
-#      (default 3), counted from this workflow's own run history.
-#   3. Open-work check. If Jules already has a pull request open against the
-#      branch, it is already working; no second session is started.
+#   1. Deduplication by commit. A commit handed over in the last
+#      JULES_CI_FIX_RETRY_HOURS (default 72) is not handed over again, however
+#      many workflows fail on it. After that, if it is still red, it is.
+#   2. A daily budget. At most JULES_CI_FIX_DAILY_MAX handovers (distinct
+#      commits) per rolling day, default 3.
+#   3. Open-work check. If a Jules pull request against the branch was active
+#      within the retry window, Jules is already working; no second session.
+#
+# The ledger for 1 and 2 is this workflow's own run history, but only runs in
+# which the handover step really succeeded. Counting every run that was not
+# "skipped" deadlocked master: a run that *declined* still concludes "success",
+# so on 2026-09-08 the budget filled with declines, and the decline for
+# 22c5b14 then counted as that commit's handover. master stayed red for two
+# weeks and no session was ever started for it.
+#
+# The daily schedule is what makes the retry reachable. workflow_run only fires
+# when CI runs, and CI only runs on a push, so a red branch nobody pushes to was
+# never looked at again. The scheduled run checks the latest CI and Container
+# images results on the default branch.
 #
 # Set JULES_CI_FIX_ENABLED to 'false' to pause this entirely.
 
-# The run title carries the commit under investigation. This is not cosmetic:
-# guard 1 below reads it back. A workflow_run-triggered run is always attributed
-# to the default branch — `headSha` in the run list is master's tip, never the
-# commit that broke — so the run list cannot be used as a per-commit ledger
-# unless the commit is written somewhere the API will return. `displayTitle` is
-# that somewhere.
+# The run title carries the commit under investigation, for people reading the
+# Actions tab. The ledger no longer reads it: the handover job's name carries
+# the commit instead, which also works for scheduled runs, whose commit is not
+# known until the triage job has looked it up.
 run-name: >-
   Jules — keep Actions green
-  (${{ github.event.workflow_run.head_sha || inputs.run_id }})
+  (${{ github.event.workflow_run.head_sha || inputs.run_id || 'scheduled check' }})
 
 on:
   workflow_run:
     workflows: ['CI', 'Container images', 'Release']
     types: [completed]
     branches: [master, 'feature/**']
+  schedule:
+    # 05:00 UTC daily, an hour after the issue sweep.
+    - cron: '0 5 * * *'
   workflow_dispatch:
     inputs:
       run_id:
@@ -50,19 +61,27 @@ permissions:
   actions: read
   pull-requests: read
 
+# One group for the whole workflow. The guards read the ledger and then write
+# to it by handing over; two runs interleaving there could both see "not yet
+# handed over". Runs take seconds, so serialising them costs nothing.
 concurrency:
-  group: jules-ci-fix-${{ github.event.workflow_run.head_branch || inputs.run_id }}
+  group: jules-ci-fix
   cancel-in-progress: false
 
 jobs:
   triage:
     if: >-
       vars.JULES_CI_FIX_ENABLED != 'false' &&
-      (github.event_name == 'workflow_dispatch' ||
+      (github.event_name != 'workflow_run' ||
        github.event.workflow_run.conclusion == 'failure')
     runs-on: ubuntu-latest
     outputs:
       proceed: ${{ steps.guards.outputs.proceed }}
+      run_id: ${{ steps.run.outputs.run_id }}
+      sha: ${{ steps.run.outputs.sha }}
+      branch: ${{ steps.run.outputs.branch }}
+      workflow: ${{ steps.run.outputs.workflow }}
+      run_url: ${{ steps.run.outputs.run_url }}
     steps:
       - name: Check the API key is configured
         env:
@@ -73,15 +92,82 @@ jobs:
             exit 1
           fi
 
-      - name: Apply the guards
-        id: guards
+      - name: Resolve the failing run
+        id: run
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          SHA: ${{ github.event.workflow_run.head_sha }}
-          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          EVENT: ${{ github.event_name }}
+          EV_RUN_ID: ${{ github.event.workflow_run.id }}
+          EV_SHA: ${{ github.event.workflow_run.head_sha }}
+          EV_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          EV_WORKFLOW: ${{ github.event.workflow_run.name }}
+          EV_URL: ${{ github.event.workflow_run.html_url }}
+          INPUT_RUN_ID: ${{ inputs.run_id }}
+        run: |
+          set -euo pipefail
+          case "${EVENT}" in
+            workflow_run)
+              run_id="${EV_RUN_ID}" sha="${EV_SHA}" branch="${EV_BRANCH}"
+              workflow="${EV_WORKFLOW}" url="${EV_URL}"
+              ;;
+            workflow_dispatch)
+              gh api "repos/${GH_REPO}/actions/runs/${INPUT_RUN_ID}" > run.json
+              run_id="${INPUT_RUN_ID}"
+              sha=$(jq -r .head_sha run.json)
+              branch=$(jq -r .head_branch run.json)
+              workflow=$(jq -r .name run.json)
+              url=$(jq -r .html_url run.json)
+              ;;
+            schedule)
+              # The latest *completed* run of each watched workflow on the
+              # default branch; the first red one is the one to hand over.
+              default=$(gh api "repos/${GH_REPO}" --jq .default_branch)
+              run_id=""
+              for wf in ci.yml docker.yml; do
+                gh run list --workflow "${wf}" --branch "${default}" \
+                  --status completed --limit 1 \
+                  --json databaseId,conclusion,headSha,headBranch,workflowName,url \
+                  --jq '.[0] // empty' > latest.json
+                [ -s latest.json ] || continue
+                echo "${wf} on ${default}: $(jq -r .conclusion latest.json) at $(jq -r .headSha latest.json)"
+                if [ "$(jq -r .conclusion latest.json)" = "failure" ]; then
+                  run_id=$(jq -r .databaseId latest.json)
+                  sha=$(jq -r .headSha latest.json)
+                  branch=$(jq -r .headBranch latest.json)
+                  workflow=$(jq -r .workflowName latest.json)
+                  url=$(jq -r .url latest.json)
+                  break
+                fi
+              done
+              if [ -z "${run_id}" ]; then
+                echo "::notice::Nothing is red on ${default}."
+                echo "found=false" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              ;;
+          esac
+          echo "Investigating ${workflow} run ${run_id} on ${branch} at ${sha}."
+          {
+            echo "found=true"
+            echo "run_id=${run_id}"
+            echo "sha=${sha}"
+            echo "branch=${branch}"
+            echo "workflow=${workflow}"
+            echo "run_url=${url}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Apply the guards
+        id: guards
+        if: steps.run.outputs.found == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ steps.run.outputs.sha }}
+          BRANCH: ${{ steps.run.outputs.branch }}
           FORCE: ${{ inputs.force }}
           DAILY_MAX: ${{ vars.JULES_CI_FIX_DAILY_MAX || '3' }}
+          RETRY_HOURS: ${{ vars.JULES_CI_FIX_RETRY_HOURS || '72' }}
         run: |
           set -euo pipefail
 
@@ -94,73 +180,48 @@ jobs:
           proceed=true
           reason=""
 
-          # --- Guard 1: has this commit already been handed over? -------------
-          # Runs of this very workflow are the ledger, so no external state is
-          # needed. A commit that broke CI and Docker at once must not produce
-          # two sessions solving the same thing.
-          #
-          # Read the commit out of `displayTitle`, which `run-name:` above fills
-          # in. Matching on `headSha` was wrong and was: for a workflow_run
-          # trigger GitHub attributes the run to the *default branch*, so every
-          # row's headSha is master's tip and the comparison against the failing
-          # commit never matched. The guard silently passed every time. It cost
-          # three Jules sessions on 2026-09-07 — 12:25, 12:31 and 12:39 — for one
-          # branch and one set of failures.
-          #
-          # Any conclusion except "skipped" counts as a handover. Matching only
-          # on "success" is wrong too: a run that started a session and then
-          # failed in a later bookkeeping step is recorded as a failure, the
-          # guard does not see it, and the next trigger spends a second task on
-          # the identical problem. A run is "skipped" only when this guard
-          # already stopped it, which is the one case where no session started.
-          if [ -n "${SHA:-}" ]; then
-            seen=$(gh run list \
-                     --workflow jules-ci-fix.yml \
-                     --limit 60 \
-                     --json displayTitle,databaseId,conclusion \
-                     --jq "[.[] | select((.displayTitle | contains(\"${SHA}\")) and
-                                         .databaseId != ${GITHUB_RUN_ID} and
-                                         .conclusion != null and
-                                         .conclusion != \"skipped\" and
-                                         .conclusion != \"cancelled\")] | length" \
-                   2>/dev/null || echo 0)
-            if [ "${seen}" -gt 0 ]; then
-              proceed=false
-              reason="commit ${SHA:0:8} has already been handed to Jules"
-            fi
+          # --- The ledger -----------------------------------------------------
+          # One line per real handover: "<commit> <time>". A run counts only if
+          # its "Hand over <commit>" job ran the handover step to success,
+          # whatever the run's overall conclusion says: a declined run concludes
+          # "success" with no such step, and a run that handed over and then
+          # failed in a later step concludes "failure" with one.
+          window=$(( RETRY_HOURS > 24 ? RETRY_HOURS : 24 ))
+          since=$(date -u -d "${window} hours ago" +%Y-%m-%dT%H:%M:%SZ)
+          gh run list --workflow jules-ci-fix.yml --limit 100 \
+            --json databaseId,createdAt,conclusion \
+            --jq ".[] | select(.createdAt > \"${since}\" and
+                               .databaseId != ${GITHUB_RUN_ID} and
+                               .conclusion != null and
+                               .conclusion != \"skipped\") |
+                        \"\(.databaseId) \(.createdAt)\"" |
+          while read -r id created; do
+            gh api "repos/${GH_REPO}/actions/runs/${id}/jobs" \
+              --jq '.jobs[] | select(.name | startswith("Hand over ")) |
+                    select(any(.steps[]?; .name == "Hand the failure to Jules" and
+                                          .conclusion == "success")) |
+                    .name | ltrimstr("Hand over ")' < /dev/null |
+            while read -r handed; do
+              echo "${handed} ${created}"
+            done
+          done > ledger.txt
+          echo "Handovers in the last ${window}h:"
+          sed 's/^/  /' ledger.txt
+
+          # --- Guard 1: has this commit been handed over recently? -----------
+          retry_since=$(date -u -d "${RETRY_HOURS} hours ago" +%Y-%m-%dT%H:%M:%SZ)
+          if awk -v sha="${SHA}" -v t="${retry_since}" \
+               '$1 == sha && $2 > t { found = 1 } END { exit !found }' ledger.txt; then
+            proceed=false
+            reason="commit ${SHA:0:8} was handed to Jules within the last ${RETRY_HOURS}h"
           fi
 
           # --- Guard 2: the daily budget --------------------------------------
-          # Counts distinct *commits*, not runs.
-          #
-          # A run in which guard 1 declines still concludes "success" — the
-          # triage job did its work and only `fix` was skipped — so counting
-          # runs charges the budget for handovers that never happened. On
-          # 2026-09-07 commit 9895559 produced one real session from the CI
-          # failure and one decline from the Container images failure, and the
-          # decline was billed as if it were a second session. Two failing
-          # workflows on one commit must cost one, which is the same thing
-          # guard 1 already enforces.
-          #
-          # Runs predating `run-name:` carry no commit in their title; they fall
-          # back to their own id so each still counts once.
+          # Counts distinct commits, so two failing workflows on one commit
+          # cost one.
           if [ "${proceed}" = "true" ]; then
-            since=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
-            today=$(gh run list \
-                      --workflow jules-ci-fix.yml \
-                      --limit 100 \
-                      --json createdAt,conclusion,databaseId,displayTitle \
-                    | jq --arg since "${since}" \
-                         --argjson me "${GITHUB_RUN_ID}" '
-                        [ .[]
-                          | select(.createdAt > $since
-                                   and .databaseId != $me
-                                   and .conclusion != null
-                                   and (.conclusion | IN("skipped", "cancelled") | not))
-                          | (.displayTitle | [scan("[0-9a-f]{40}")] | first)
-                            // ("run-" + (.databaseId | tostring))
-                        ] | unique | length' \
-                    2>/dev/null || echo 0)
+            day_since=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+            today=$(awk -v t="${day_since}" '$2 > t { print $1 }' ledger.txt | sort -u | wc -l)
             echo "Commits handed over in the last 24h: ${today} (max ${DAILY_MAX})"
             if [ "${today}" -ge "${DAILY_MAX}" ]; then
               proceed=false
@@ -169,19 +230,21 @@ jobs:
           fi
 
           # --- Guard 3: is Jules already working on this branch? --------------
-          # Scoped to the branch that broke. `baseRefName` was fetched but never
-          # tested, so an open Jules pull request anywhere in the repository
-          # blocked a handover for every other branch — the opposite failure to
-          # guard 1's, and just as silent.
-          if [ "${proceed}" = "true" ] && [ -n "${BRANCH:-}" ]; then
-            open=$(gh pr list --state open --limit 100 \
-                     --json author,baseRefName \
-                     --jq "[.[] | select(.baseRefName == \"${BRANCH}\" and
-                                         (.author.login | test(\"jules\"; \"i\")))] | length" \
-                   2>/dev/null || echo 0)
+          # Jules opens its pull requests under the account of the person who
+          # owns the API key, not as google-labs-jules[bot]; matching on the
+          # author alone never fired. Its descriptions always link the task.
+          # Only pull requests active within the retry window count, so one
+          # abandoned pull request cannot block the branch for good.
+          if [ "${proceed}" = "true" ]; then
+            open=$(gh pr list --state open --base "${BRANCH}" --limit 100 \
+                     --json author,body,updatedAt \
+                     --jq "[.[] | select(.updatedAt > \"${retry_since}\") |
+                                  select((.author.login | test(\"jules\"; \"i\")) or
+                                         ((.body // \"\") | test(\"jules\\\\.google\\\\.com/(task|session)/\")))]
+                           | length")
             if [ "${open}" -gt 0 ]; then
               proceed=false
-              reason="Jules already has ${open} open pull request(s) against ${BRANCH}; let them land first"
+              reason="Jules has ${open} active pull request(s) against ${BRANCH}; let them land first"
             fi
           fi
 
@@ -198,16 +261,23 @@ jobs:
           echo "proceed=${proceed}" >> "$GITHUB_OUTPUT"
 
   fix:
+    # The commit in the job name is the ledger entry the guards read back.
+    name: Hand over ${{ needs.triage.outputs.sha }}
     needs: triage
     if: needs.triage.outputs.proceed == 'true'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+
       - name: Collect the failing jobs
         id: failures
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+          RUN_ID: ${{ needs.triage.outputs.run_id }}
         run: |
           set -euo pipefail
           # Job and step names only. Full logs run to megabytes and would swamp
@@ -227,10 +297,8 @@ jobs:
             cat failures.txt
             {
               echo "found=true"
-              # Carried as an output, not left in a file. The Jules action runs
-              # actions/checkout internally, and checkout cleans the workspace
-              # (git clean -ffdx), so anything written here is gone by the time
-              # a later step looks for it.
+              # Carried as an output as well as in failures.txt, so the
+              # summary step does not depend on the workspace.
               delimiter="EOF_$(openssl rand -hex 12)"
               echo "list<<${delimiter}"
               cat failures.txt
@@ -243,10 +311,10 @@ jobs:
         if: steps.failures.outputs.found == 'true'
         env:
           REPO: ${{ github.repository }}
-          WORKFLOW: ${{ github.event.workflow_run.name || 'CI' }}
-          BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
-          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
-          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          WORKFLOW: ${{ needs.triage.outputs.workflow }}
+          BRANCH: ${{ needs.triage.outputs.branch }}
+          SHA: ${{ needs.triage.outputs.sha }}
+          RUN_URL: ${{ needs.triage.outputs.run_url }}
         run: |
           set -euo pipefail
           {
@@ -335,23 +403,29 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Hand the failure to Jules
+        id: jules
         if: steps.failures.outputs.found == 'true'
-        uses: google-labs-code/jules-action@bff7875eaa123cac6742b7cfc51005b95ba4d566 # v1.0.0
+        uses: ./.github/actions/jules-session
         with:
           prompt: ${{ steps.prompt.outputs.text }}
+          # The `auto:` prefix is what jules-shepherd.yml recognises as ours.
+          title: 'auto: ${{ needs.triage.outputs.workflow }} failed on ${{ needs.triage.outputs.branch }} at ${{ needs.triage.outputs.sha }}'
           # Fix it on the branch that broke, not on the default branch.
-          starting_branch: ${{ github.event.workflow_run.head_branch || github.ref_name }}
-          jules_api_key: ${{ secrets.JULES_API_KEY }}
+          starting_branch: ${{ needs.triage.outputs.branch }}
+          api_key: ${{ secrets.JULES_API_KEY }}
 
       - name: Record the handover
         if: steps.failures.outputs.found == 'true'
         env:
-          BRANCH: ${{ github.event.workflow_run.head_branch }}
-          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          BRANCH: ${{ needs.triage.outputs.branch }}
+          RUN_URL: ${{ needs.triage.outputs.run_url }}
           FAILURES: ${{ steps.failures.outputs.list }}
+          SESSION_URL: ${{ steps.jules.outputs.url }}
         run: |
           {
             echo "### Handed to Jules"
+            echo
+            echo "Session: ${SESSION_URL}"
             echo
             echo "Branch: \`${BRANCH}\`"
             echo

@@ -1,0 +1,95 @@
+name: Start a Jules session
+description: >-
+  Creates a Jules session through the REST API, fails the step when the API
+  refuses, and returns the session's name and URL.
+
+# Replaces google-labs-code/jules-action, for three reasons found in this
+# repository's run history:
+#
+#   1. It calls curl without --fail. A rejected request - bad key, source not
+#      connected, quota exhausted - printed an error body and the step went
+#      green, and the workflow went on to label the issue as handed over.
+#   2. It discards the response, so the session it created cannot be followed
+#      up. jules-shepherd.yml needs the session name to approve plans, answer
+#      questions and relay CI failures.
+#   3. It runs actions/checkout internally, which wipes the workspace of the
+#      calling job (git clean -ffdx) in the middle of that job.
+#
+# The payload is the one the action sent, so session behaviour is unchanged.
+
+inputs:
+  prompt:
+    description: 'Task description for Jules'
+    required: true
+  starting_branch:
+    description: 'Branch Jules starts from'
+    required: true
+  title:
+    description: 'Session title shown in the Jules UI'
+    required: false
+    default: ''
+  api_key:
+    description: 'Jules API key'
+    required: true
+
+outputs:
+  name:
+    description: 'Session resource name, e.g. sessions/1234'
+    value: ${{ steps.create.outputs.name }}
+  url:
+    description: 'Session URL in the Jules web app'
+    value: ${{ steps.create.outputs.url }}
+
+runs:
+  using: composite
+  steps:
+    - id: create
+      shell: bash
+      env:
+        PROMPT: ${{ inputs.prompt }}
+        BRANCH: ${{ inputs.starting_branch }}
+        TITLE: ${{ inputs.title }}
+        JULES_API_KEY: ${{ inputs.api_key }}
+        REPO: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+        work="$(mktemp -d "${RUNNER_TEMP}/jules.XXXXXX")"
+
+        jq -n --arg prompt "${PROMPT}" --arg branch "${BRANCH}" \
+              --arg title "${TITLE}" --arg repo "${REPO}" '{
+            prompt: $prompt,
+            sourceContext: {
+              source: "sources/github/\($repo)",
+              githubRepoContext: { startingBranch: $branch }
+            },
+            requirePlanApproval: false,
+            automationMode: "AUTO_CREATE_PR"
+          } + (if $title == "" then {} else {title: $title} end)' \
+          > "${work}/payload.json"
+
+        # The key travels in a header from the environment, never on the
+        # command line.
+        status=$(curl -sS -o "${work}/response.json" -w '%{http_code}' \
+                   -X POST 'https://jules.googleapis.com/v1alpha/sessions' \
+                   -H 'Content-Type: application/json' \
+                   -H "X-Goog-Api-Key: ${JULES_API_KEY}" \
+                   -d @"${work}/payload.json") || status=000
+
+        if [ "${status}" -lt 200 ] || [ "${status}" -ge 300 ]; then
+          echo "::error::Jules refused the session (HTTP ${status}). Nothing was handed over." >&2
+          jq -r '.error.message // .' "${work}/response.json" >&2 2>/dev/null || true
+          exit 1
+        fi
+
+        name=$(jq -r '.name // empty' "${work}/response.json")
+        url=$(jq -r '.url // empty' "${work}/response.json")
+        if [ -z "${name}" ]; then
+          echo "::error::Jules answered HTTP ${status} but returned no session name." >&2
+          exit 1
+        fi
+
+        echo "Started ${name}: ${url}"
+        {
+          echo "name=${name}"
+          echo "url=${url}"
+        } >> "$GITHUB_OUTPUT"

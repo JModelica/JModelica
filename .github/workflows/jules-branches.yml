@@ -345,6 +345,12 @@ jobs:
           - Report honestly. "This does not build and here is the error" is a
             useful result. A pull request that claims to work and does not is
             worse than no pull request.
+
+          Nobody is watching this session, and a question asked here does not
+          get an answer. Decide instead: pick what the evidence supports, say
+          in one line why, and finish. A choice that genuinely needs a
+          maintainer goes into the pull request description under a heading
+          "Needs a decision".
           GUIDANCE
           } > prompt.txt
 
@@ -357,9 +363,11 @@ jobs:
 
       - name: Start the Jules session
         if: inputs.hand_to_jules == null || inputs.hand_to_jules
-        uses: google-labs-code/jules-action@bff7875eaa123cac6742b7cfc51005b95ba4d566 # v1.0.0
+        uses: ./.github/actions/jules-session
         with:
           prompt: ${{ steps.prompt.outputs.text }}
+          # The `auto:` prefix is what jules-shepherd.yml recognises as ours.
+          title: 'auto: Assess branch ${{ matrix.task.branch }}'
           # Start from the branch under assessment, not from the default branch.
           starting_branch: ${{ matrix.task.branch }}
-          jules_api_key: ${{ secrets.JULES_API_KEY }}
+          api_key: ${{ secrets.JULES_API_KEY }}

@@ -170,7 +170,7 @@ jobs:
 
       - name: Upload the compiler jars
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: compiler-${{ matrix.os }}
           path: Compiler/build/libs/*.jar
@@ -264,7 +264,7 @@ jobs:
 
       - name: Upload the runtime libraries
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: runtime-${{ matrix.os }}
           path: |

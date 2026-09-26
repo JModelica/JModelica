@@ -29,6 +29,8 @@ name: Jules — shepherd sessions
 #   started from a branch   archived, and its issue released for the next
 #   merged or deleted       sweep: a pull request against that base lands
 #   since                   nowhere.
+#   completed with no PR    asked once to open the pull request (or explain
+#                           why there is nothing to change).
 #   ended with no PR        the outcome is reported on the issue, and the
 #                           session archived. A failed session frees the issue
 #                           for the next sweep; a completed one - Jules found
@@ -287,6 +289,13 @@ jobs:
                   action="relayed CI failures on ${head:0:8}"
                 fi
               fi
+
+            # Completing without a pull request is not always completing with
+            # nothing: on 2026-09-26 the #24 session converted 13 files and
+            # stopped. Ask once to publish before treating it as a dead end.
+            elif [ "${state}" = "COMPLETED" ] && [ "$(sent "[shepherd:publish]")" -eq 0 ]; then
+              message "${name}" "[shepherd:publish] You finished without opening a pull request, so none of your work is visible to anyone. If you changed anything, open the pull request now, as your instructions describe, and state in it what is done and what is left. If you concluded that no change is warranted, say so in one short paragraph with the evidence; that is the answer a maintainer will read." || true
+              action="finished without a pull request; asked to publish"
 
             elif [ "${state}" = "FAILED" ] || [ "${state}" = "COMPLETED" ]; then
               reason=$(jq -rs '[.[] | .sessionFailed.reason // empty] | last // ""' acts.jsonl)

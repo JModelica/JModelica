@@ -269,6 +269,19 @@ jobs:
                   | sort -u > base_failing.txt || : > base_failing.txt
                 own=$(comm -23 <(sort -u failing.txt) base_failing.txt)
                 inherited=$(comm -12 <(sort -u failing.txt) base_failing.txt)
+                # A session jules-ci-fix started exists to fix what fails on
+                # the base branch. Calling those failures "not this pull
+                # request's" would tell it to leave its own task alone, as it
+                # would have done to #63 on 2026-09-26.
+                if jq -e --arg repo "${GH_REPO}" \
+                     '(.prompt // "") | test("^The \"[^\"]+\" workflow for \($repo) failed on branch")' \
+                     <<< "${s}" > /dev/null; then
+                  own=$(sort -u failing.txt)
+                  inherited=""
+                  own_label="These checks still fail on it. Making them pass is what this pull request is for:"
+                else
+                  own_label="These checks fail on it and pass on ${base}, so this change caused them:"
+                fi
                 conflict=$(jq -r 'select(.mergeable == "CONFLICTING") | "yes"' pr.json)
 
                 if [ "${pending}" -gt 0 ]; then
@@ -283,7 +296,7 @@ jobs:
                 else
                   text="[shepherd:pr ${head}] Your pull request ${pr_url} needs more work at commit ${head}."$'\n\n'
                   if [ -n "${own}" ]; then
-                    text+="These checks fail on it and pass on ${base}, so this change caused them:"$'\n'"$(prefix '- ' "${own}")"$'\n\n'
+                    text+="${own_label}"$'\n'"$(prefix '- ' "${own}")"$'\n\n'
                     text+="Reproduce each locally, fix the root cause, and push to the same branch."$'\n\n'
                   fi
                   if [ -n "${conflict}" ]; then

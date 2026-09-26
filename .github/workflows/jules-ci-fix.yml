@@ -343,7 +343,7 @@ jobs:
               echo '```'
               { sed -E 's/^[0-9]{4}-[0-9-]+T[0-9:.]+Z //' job.log \
                   | grep -aE '(error|Error|ERROR|fatal|undefined|not found|No such file|Undefined symbols)' \
-                  | grep -avE '^##\[(group|endgroup)\]' \
+                  | grep -avE '^##\[(group|endgroup)\]|\[36;1m' \
                   | cut -c1-300 \
                   | awk '!seen[$0]++ { l[++n] = $0 }
                          END { for (i = 1; i <= n; i++) if (i <= 25 || i > n - 15) print l[i] }'; } || true

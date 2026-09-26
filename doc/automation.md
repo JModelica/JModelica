@@ -178,6 +178,10 @@ working on the same problem in parallel. Three guards prevent that:
    session starts. Jules opens pull requests under the account that owns the
    API key, so they are recognised by the task link in their description rather
    than by author.
+4. **Live-session check.** If a session this workflow started from the branch
+   is still running or waiting for an answer, no new one starts, even when the
+   branch has moved to a new commit. Without it, three merges into a red
+   master on 2026-09-26 each started another session on the same two jobs.
 
 The ledger for guards 1 and 2 is this workflow's own run history, and only runs
 whose handover step actually succeeded count. The handover job is named

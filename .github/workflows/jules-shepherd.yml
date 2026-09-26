@@ -12,7 +12,7 @@ name: Jules — shepherd sessions
 # to Jules, and Jules acts on pull request comments only from the person who
 # started the task.
 #
-# Every few hours, for each non-archived session of this repository that the
+# On every run, for each non-archived session of this repository that the
 # automation started - its title starts with `auto:`, or, for sessions from
 # before titles were set, its prompt opens the way every workflow prompt here
 # does. Sessions someone started by hand are left alone:
@@ -29,6 +29,8 @@ name: Jules — shepherd sessions
 #   started from a branch   archived, and its issue released for the next
 #   merged or deleted       sweep: a pull request against that base lands
 #   since                   nowhere.
+#   completed with no PR    asked once to open the pull request (or explain
+#                           why there is nothing to change).
 #   ended with no PR        the outcome is reported on the issue, and the
 #                           session archived. A failed session frees the issue
 #                           for the next sweep; a completed one - Jules found
@@ -38,9 +40,17 @@ name: Jules — shepherd sessions
 # Archiving is what marks a session as dealt with, so no state is kept here.
 # Set JULES_SHEPHERD_ENABLED to 'false' to pause it.
 
+# Hourly, and whenever CI finishes. GitHub delays scheduled runs heavily here:
+# on 2026-09-26 the 04:00 sweep started at 09:14 and neither the 09:30 nor the
+# 12:30 shepherd run started at all. A slot at minute 0 is the most congested,
+# so the minute is odd; and CI completing - on a Jules pull request, typically
+# - is the moment a relay is most useful anyway.
 on:
   schedule:
-    - cron: '30 */3 * * *'
+    - cron: '17 * * * *'
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
   workflow_dispatch:
     inputs:
       dry_run:
@@ -164,6 +174,7 @@ jobs:
           default=$(gh api "repos/${GH_REPO}" --jq .default_branch)
           echo "| Session | State | Action |" > summary.md
           echo "|---|---|---|" >> summary.md
+          : > questions.md
           echo "$(wc -l < sessions.jsonl) automation session(s) to follow up."
 
           # The list is read on descriptor 3 so that nothing in the loop body
@@ -287,6 +298,13 @@ jobs:
                 fi
               fi
 
+            # Completing without a pull request is not always completing with
+            # nothing: on 2026-09-26 the #24 session converted 13 files and
+            # stopped. Ask once to publish before treating it as a dead end.
+            elif [ "${state}" = "COMPLETED" ] && [ "$(sent "[shepherd:publish]")" -eq 0 ]; then
+              message "${name}" "[shepherd:publish] You finished without opening a pull request, so none of your work is visible to anyone. If you changed anything, open the pull request now, as your instructions describe, and state in it what is done and what is left. If you concluded that no change is warranted, say so in one short paragraph with the evidence; that is the answer a maintainer will read." || true
+              action="finished without a pull request; asked to publish"
+
             elif [ "${state}" = "FAILED" ] || [ "${state}" = "COMPLETED" ]; then
               reason=$(jq -rs '[.[] | .sessionFailed.reason // empty] | last // ""' acts.jsonl)
               if [ -n "${issue}" ]; then
@@ -311,6 +329,22 @@ jobs:
 
             printf '| [%s](%s) | %s | %s |\n' "${title//|/\\|}" "${url}" "${state}" "${action}" >> summary.md
             echo "  ${action}"
+
+            # What Jules last said, for sessions that are waiting on someone
+            # or ended with nothing: the question is otherwise visible only in
+            # the Jules web app, and the generic nudge cannot answer it.
+            if [ -n "${last_agent}" ] && { [ "${state}" = "AWAITING_USER_FEEDBACK" ] ||
+                 { [ "${state}" = "COMPLETED" ] && [ -z "${pr_url}" ]; }; }; then
+              echo "  last message: ${last_agent:0:500}"
+              {
+                echo "### [${title}](${url})"
+                echo
+                echo "${state}${issue:+, issue #${issue}}"
+                echo
+                prefix '> ' "${last_agent}"
+                echo
+              } >> questions.md
+            fi
           done 3< sessions.jsonl
 
           {
@@ -318,4 +352,10 @@ jobs:
             [ "${DRY_RUN}" = "true" ] && echo && echo "_Dry run: nothing was changed._"
             echo
             cat summary.md
+            if [ -s questions.md ]; then
+              echo
+              echo "## What Jules last said"
+              echo
+              cat questions.md
+            fi
           } >> "$GITHUB_STEP_SUMMARY"

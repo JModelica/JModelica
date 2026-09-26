@@ -23,9 +23,9 @@ name: Jules — branch maturation
 
 on:
   schedule:
-    # Weekly, Mondays at 05:00 UTC — an hour after the daily issue sweep so the
+    # Weekly, Mondays at 05:37 UTC — an hour after the daily issue sweep so the
     # two never contend for the same concurrent-session budget.
-    - cron: '0 5 * * 1'
+    - cron: '37 5 * * 1'
   workflow_dispatch:
     inputs:
       branches:
@@ -108,6 +108,20 @@ jobs:
             case " ${PROTECTED} " in
               *" ${branch} "*) continue ;;
             esac
+
+            # Branches with an owner of their own are not Jules's to mature,
+            # unless named explicitly. Dependabot rebases its branches itself
+            # (four sessions spent 2026-09-26 fighting rebases of them),
+            # claude/* are agent work branches, and a name ending in a long
+            # number is a Jules session's own branch.
+            if [ -z "${ONLY}" ]; then
+              case "${branch}" in
+                dependabot/*|claude/*) continue ;;
+              esac
+              if [[ "${branch}" =~ -[0-9]{15,}$ ]]; then
+                continue
+              fi
+            fi
 
             if ! git rev-parse --verify --quiet "origin/${branch}" >/dev/null; then
               echo "::warning::No such branch: ${branch}"

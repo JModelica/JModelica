@@ -13,10 +13,11 @@ into pull requests — and what a maintainer has to do by hand to switch that on
 | `docker.yml` | push, tag, pull request | Multi-architecture container images (`linux/amd64`, `linux/arm64`) to GHCR |
 | `release.yml` | tag `v*` or a tag starting with a digit, manual | Self-contained portable bundles per platform, attached to a GitHub release |
 | `jules-issue.yml` | `jules` label, `/jules` comment, manual | Hands one issue to Jules, which opens a pull request |
-| `jules-sweep.yml` | daily 04:00 UTC | Hands the oldest untouched issues to Jules, a few at a time |
-| `jules-branches.yml` | weekly Monday 05:00 UTC | Surveys every branch, opens draft pull requests, hands them to Jules to finish |
-| `jules-ci-fix.yml` | any workflow failing; daily 05:00 UTC | Hands the failure to Jules, which owns keeping the Actions tab green |
-| `jules-shepherd.yml` | every 3 hours | Follows up the sessions the others start: answers them, relays CI on their pull requests, reports the ones that end with nothing |
+| `jules-sweep.yml` | daily 04:11 UTC | Hands the oldest untouched issues to Jules, a few at a time |
+| `jules-branches.yml` | weekly Monday 05:37 UTC | Surveys every branch, opens draft pull requests, hands them to Jules to finish |
+| `jules-ci-fix.yml` | any workflow failing; daily 05:23 UTC | Hands the failure to Jules, which owns keeping the Actions tab green |
+| `jules-shepherd.yml` | hourly, and when CI finishes | Follows up the sessions the others start: answers them, relays CI on their pull requests, reports the ones that end with nothing |
+| `jules-message.yml` | manual | Sends one session a specific answer, or approves, archives or unarchives it |
 
 ## 2. Turning Jules on
 
@@ -130,13 +131,18 @@ start by hand are left alone:
 - a session that started from a branch since merged into the default branch,
   or deleted, is archived and its issue released for the next sweep: its pull
   request would target a dead base;
-- a session that ends without a pull request is reported on its issue. A failed
+- a session that completes without a pull request is first asked, once, to
+  open one or to explain why no change is warranted;
+- a session that still ends without a pull request is reported on its issue. A failed
   one releases the issue for the next sweep; one that completed — Jules decided
   nothing should change — gets `jules:stuck`, with Jules's last message quoted.
 
 Handled sessions are archived, which is how the shepherd knows not to handle
 them twice. The run summary lists every session and what was done about it,
-which makes it the quickest place to see what Jules is up to. Set
+which makes it the quickest place to see what Jules is up to. Under "What
+Jules last said" it quotes the last message of every session that is waiting
+or finished without a pull request; to answer one of those questions
+specifically, run `jules-message.yml` with the session id and the answer. Set
 `JULES_SHEPHERD_ENABLED` to `false` to pause it.
 
 Nothing is merged automatically. Jules opens pull requests; a human merges them.
@@ -202,6 +208,11 @@ gh variable set JULES_CI_FIX_RETRY_HOURS --body 48
 gh variable set JULES_CI_FIX_ENABLED --body false   # pause it entirely
 ```
 
+The prompt quotes the error lines each failing job printed, the first 25 and
+last 15 per job. Jules's VM runs Linux, so it cannot reproduce a macOS or
+Windows failure; without the errors it rebuilt on Linux, saw a clean build and
+stopped to ask.
+
 The prompt is explicit about what a fix may not be. Jules is told not to
 disable a test, add `continue-on-error`, lower a warning level, delete an
 assertion, drop a failing platform from the matrix, or relax the artifact
@@ -257,7 +268,10 @@ gh workflow run jules-branches.yml \
 ```
 
 `master` and `feature/modernization-checkpoint` are excluded by the `PROTECTED`
-list in the workflow.
+list in the workflow. A scheduled run also skips `dependabot/*` (Dependabot
+rebases its own branches), `claude/*`, and branches ending in a long number,
+which are Jules's own session branches; name one with the `branches` input to
+assess it anyway.
 
 #### One caveat worth knowing
 

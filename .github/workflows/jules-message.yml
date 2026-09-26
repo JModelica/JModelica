@@ -1,0 +1,88 @@
+name: Jules — message a session
+
+# Answers one Jules session by hand, through the API, from the Actions tab.
+#
+# jules-shepherd.yml sends every waiting session the same generic "decide and
+# finish". When a session asks something specific - its question is in the
+# shepherd's run summary under "What Jules last said" - this is how to give it
+# the specific answer without opening the Jules web app. Running a workflow
+# already requires write access to this repository.
+
+on:
+  workflow_dispatch:
+    inputs:
+      session:
+        description: 'Session id, or sessions/<id>'
+        required: true
+        type: string
+      action:
+        description: 'What to do'
+        required: true
+        default: message
+        type: choice
+        options: [message, approve-plan, archive, unarchive]
+      text:
+        description: 'The message (for action "message")'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Send
+        env:
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+          SESSION: ${{ inputs.session }}
+          ACTION: ${{ inputs.action }}
+          TEXT: ${{ inputs.text }}
+        run: |
+          set -euo pipefail
+          if [ -z "${JULES_API_KEY}" ]; then
+            echo "::error::Secret JULES_API_KEY is not set. See doc/automation.md." >&2
+            exit 1
+          fi
+
+          # Accept a bare id, sessions/<id>, or a jules.google.com URL.
+          id="${SESSION##*/}"
+          if ! [[ "${id}" =~ ^[0-9]+$ ]]; then
+            echo "::error::'${SESSION}' is not a session id." >&2
+            exit 1
+          fi
+
+          case "${ACTION}" in
+            message)
+              if [ -z "${TEXT}" ]; then
+                echo "::error::Action 'message' needs text." >&2
+                exit 1
+              fi
+              body=$(jq -n --arg p "${TEXT}" '{prompt: $p}')
+              verb=sendMessage ;;
+            approve-plan) body='{}' verb=approvePlan ;;
+            archive)      body='{}' verb=archive ;;
+            unarchive)    body='{}' verb=unarchive ;;
+          esac
+
+          status=$(curl -sS -m 60 -o response.json -w '%{http_code}' -X POST \
+                     -H 'Content-Type: application/json' \
+                     -H "X-Goog-Api-Key: ${JULES_API_KEY}" \
+                     -d "${body}" \
+                     "https://jules.googleapis.com/v1alpha/sessions/${id}:${verb}") || status=000
+          if [ "${status}" -lt 200 ] || [ "${status}" -ge 300 ]; then
+            echo "::error::Jules refused ${verb} on sessions/${id} (HTTP ${status})." >&2
+            jq -r '.error.message // .' response.json >&2 2>/dev/null || true
+            exit 1
+          fi
+
+          echo "${verb} sent to sessions/${id}."
+          {
+            echo "### ${verb} → [sessions/${id}](https://jules.google.com/session/${id})"
+            if [ "${ACTION}" = "message" ]; then
+              echo
+              printf '%s\n' "${TEXT}" | sed 's/^/> /'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

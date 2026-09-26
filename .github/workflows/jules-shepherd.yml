@@ -164,6 +164,7 @@ jobs:
           default=$(gh api "repos/${GH_REPO}" --jq .default_branch)
           echo "| Session | State | Action |" > summary.md
           echo "|---|---|---|" >> summary.md
+          : > questions.md
           echo "$(wc -l < sessions.jsonl) automation session(s) to follow up."
 
           # The list is read on descriptor 3 so that nothing in the loop body
@@ -311,6 +312,22 @@ jobs:
 
             printf '| [%s](%s) | %s | %s |\n' "${title//|/\\|}" "${url}" "${state}" "${action}" >> summary.md
             echo "  ${action}"
+
+            # What Jules last said, for sessions that are waiting on someone
+            # or ended with nothing: the question is otherwise visible only in
+            # the Jules web app, and the generic nudge cannot answer it.
+            if [ -n "${last_agent}" ] && { [ "${state}" = "AWAITING_USER_FEEDBACK" ] ||
+                 { [ "${state}" = "COMPLETED" ] && [ -z "${pr_url}" ]; }; }; then
+              echo "  last message: ${last_agent:0:500}"
+              {
+                echo "### [${title}](${url})"
+                echo
+                echo "${state}${issue:+, issue #${issue}}"
+                echo
+                prefix '> ' "${last_agent}"
+                echo
+              } >> questions.md
+            fi
           done 3< sessions.jsonl
 
           {
@@ -318,4 +335,10 @@ jobs:
             [ "${DRY_RUN}" = "true" ] && echo && echo "_Dry run: nothing was changed._"
             echo
             cat summary.md
+            if [ -s questions.md ]; then
+              echo
+              echo "## What Jules last said"
+              echo
+              cat questions.md
+            fi
           } >> "$GITHUB_STEP_SUMMARY"

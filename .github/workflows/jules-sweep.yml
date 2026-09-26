@@ -99,11 +99,6 @@ jobs:
           while IFS= read -r issue; do
             number=$(jq -r .number <<< "${issue}")
 
-            if ! jq -e '.labels | index("jules:queued")' <<< "${issue}" > /dev/null; then
-              jq -c '{number, title, attempt: 1}' <<< "${issue}" >> candidates.jsonl
-              continue
-            fi
-
             # An open pull request that names the issue means the work was
             # delivered and waits on review, not on Jules.
             if jq -e --arg n "${number}" '
@@ -113,7 +108,10 @@ jobs:
             fi
 
             # Every handover leaves a comment from this bot; they are the
-            # attempt ledger.
+            # attempt ledger. Read for every issue, not only queued ones: the
+            # shepherd releases an issue by removing `jules:queued` when its
+            # session fails, and counting only while the label is present
+            # restarted the count at 1 each time, so the cap never applied.
             gh api "repos/${GH_REPO}/issues/${number}/comments" --paginate \
               --jq '.[] | select(.user.login == "github-actions[bot]" and
                                  ((.body | startswith("Handed to [Jules]")) or
@@ -121,10 +119,13 @@ jobs:
                           .created_at' < /dev/null > handovers.txt
             attempts=$(wc -l < handovers.txt)
             last=$(sort handovers.txt | tail -n 1)
+            queued=$(jq -r 'if (.labels | index("jules:queued")) then "yes" else "" end' <<< "${issue}")
 
             if [ "${attempts}" -ge "${MAX_ATTEMPTS}" ]; then
               jq -c --argjson a "${attempts}" '{number, title, attempts: $a}' <<< "${issue}" >> stuck.jsonl
-            elif [ -z "${last}" ] || [[ "${last}" < "${cutoff}" ]]; then
+            elif [ -z "${queued}" ] || [ -z "${last}" ] || [[ "${last}" < "${cutoff}" ]]; then
+              # Unlabelled means new or released; queued waits out the grace
+              # period first.
               jq -c --argjson a "$((attempts + 1))" '{number, title, attempt: $a}' <<< "${issue}" >> candidates.jsonl
             fi
           done

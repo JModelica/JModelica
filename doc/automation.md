@@ -15,7 +15,8 @@ into pull requests — and what a maintainer has to do by hand to switch that on
 | `jules-issue.yml` | `jules` label, `/jules` comment, manual | Hands one issue to Jules, which opens a pull request |
 | `jules-sweep.yml` | daily 04:00 UTC | Hands the oldest untouched issues to Jules, a few at a time |
 | `jules-branches.yml` | weekly Monday 05:00 UTC | Surveys every branch, opens draft pull requests, hands them to Jules to finish |
-| `jules-ci-fix.yml` | any workflow failing | Hands the failure to Jules, which owns keeping the Actions tab green |
+| `jules-ci-fix.yml` | any workflow failing; daily 05:00 UTC | Hands the failure to Jules, which owns keeping the Actions tab green |
+| `jules-shepherd.yml` | every 3 hours | Follows up the sessions the others start: answers them, relays CI on their pull requests, reports the ones that end with nothing |
 
 ## 2. Turning Jules on
 
@@ -50,35 +51,33 @@ one in a workflow file, a comment, or an issue.
 
 ### Step 3 — verify the source name
 
-Google's own documentation disagrees with Google's own action about how a
-repository is addressed. The action builds `sources/github/{owner}/{repo}`,
-matching the API quickstart; the API reference instead shows
-`sources/github-{owner}-{repo}`. Check which one your account actually returns
-before trusting the automation:
+The workflows address the repository as `sources/github/{owner}/{repo}`, the
+form the API quickstart documents; the API reference instead shows
+`sources/github-{owner}-{repo}`. The first form is confirmed working here — the
+session for issue #24 on 2026-09-07 was created with it — but check what your
+account returns if handovers start failing:
 
 ```sh
 curl -s -H "x-goog-api-key: $JULES_API_KEY" \
   https://jules.googleapis.com/v1alpha/sources | jq -r '.sources[].name'
 ```
 
-If the result uses the hyphenated form, the action cannot address this
-repository and the workflows need a direct `curl` step against
-`POST /v1alpha/sessions` instead — which is all the action does anyway. The
-action is a thin composite wrapper around exactly one API call.
+`jules-preflight.yml` runs that check from the Actions tab. If the result uses
+the hyphenated form, change the `source` in `.github/actions/jules-session`.
 
-### Step 4 — set the starting branch
+### Step 4 — the starting branch
 
-Every Jules workflow reads this. Without it they default to
-`feature/modernization-checkpoint`, because `master` does not build and a fix
-based on it would have nowhere useful to land.
+Every Jules workflow starts from the repository's default branch, `master`,
+which carries the modernized build since `feature/modernization-checkpoint` was
+merged into it. To start somewhere else, set:
 
 ```sh
-gh variable set JULES_STARTING_BRANCH --body feature/modernization-checkpoint \
-  --repo JModelica/JModelica
+gh variable set JULES_STARTING_BRANCH --body some-branch --repo JModelica/JModelica
 ```
 
-The action's own default is `main`, which does not exist here. That is why the
-workflows always pass this explicitly.
+If this variable is still set to `feature/modernization-checkpoint` from the
+earlier setup, delete it (`gh variable delete JULES_STARTING_BRANCH`): that
+branch is frozen, and pull requests against it land nowhere.
 
 ### Step 5 — create the control labels
 
@@ -88,6 +87,8 @@ gh label create 'jules:queued' --description 'Already handed to Jules'  --color 
 gh label create 'jules:skip'   --description 'Never hand this to Jules' --color EEEEEE
 ```
 
+`jules:stuck` is created by the workflows the first time they need it.
+
 ## 3. Using it
 
 **One issue, on demand.** Add the `jules` label, or comment `/jules` on it —
@@ -96,9 +97,42 @@ users with write access can trigger it; the issue body becomes the prompt for an
 agent that writes code, so an untrusted trigger is an untrusted instruction.
 
 **The backlog, automatically.** `jules-sweep.yml` runs daily and picks up the
-oldest open issues that carry none of `jules:queued`, `jules:skip`, `wontfix`,
+oldest open issues that carry none of `jules:skip`, `jules:stuck`, `wontfix`,
 `duplicate` or `question`. Each becomes a Jules session; each session that
 produces a real change opens a pull request.
+
+A handover expires. An issue labelled `jules:queued` with no open pull request
+mentioning it is handed over again once its last handover is
+`JULES_REQUEUE_DAYS` old (default 7). After `JULES_MAX_ATTEMPTS` handovers
+(default 3) it gets `jules:stuck` and a comment asking a maintainer to decide.
+The attempts are counted from the handover comments on the issue. Before this,
+`jules:queued` was permanent: a session that stalled left its issue parked for
+good, and by September 2026 every open issue was parked and the sweep selected
+nothing each day.
+
+**Following the sessions up.** Jules pauses when it wants an answer or a plan
+approval, and a paused session nobody answers never finishes. Nor does Jules
+see CI on its own pull requests, and it only acts on pull request comments from
+the person who started the task. `jules-shepherd.yml` covers all of that
+through the API, for sessions whose title starts with `auto:`, the prefix every
+workflow here gives its sessions (sessions you start by hand are left alone):
+
+- a plan awaiting approval is approved;
+- a question is answered with "decide and finish; put anything that needs a
+  maintainer under *Needs a decision* in the pull request", at most
+  `JULES_SHEPHERD_MAX_NUDGES` times (default 3);
+- red CI on its open pull request is relayed to the session once per commit, at
+  most `JULES_SHEPHERD_MAX_RELAYS` times (default 5). Checks that also fail on
+  the base branch are named as not the pull request's, so Jules does not widen
+  the change to fix them;
+- a session that ends without a pull request is reported on its issue. A failed
+  one releases the issue for the next sweep; one that completed — Jules decided
+  nothing should change — gets `jules:stuck`, with Jules's last message quoted.
+
+Handled sessions are archived, which is how the shepherd knows not to handle
+them twice. The run summary lists every session and what was done about it,
+which makes it the quickest place to see what Jules is up to. Set
+`JULES_SHEPHERD_ENABLED` to `false` to pause it.
 
 Nothing is merged automatically. Jules opens pull requests; a human merges them.
 
@@ -128,25 +162,34 @@ currently expected to fail, so a naive "on failure" trigger would start a
 session on every push and drain the day's quota within the hour, most of them
 working on the same problem in parallel. Three guards prevent that:
 
-1. **Deduplication by commit.** A commit whose failure has already been handed
-   over is never handed over again, however many workflows it broke. This
-   workflow's own run history is the ledger, so no external state is needed.
-   The commit is read out of each run's `displayTitle`, which the workflow's
-   `run-name:` fills in. It cannot be read out of `headSha`: a run triggered by
-   `workflow_run` is attributed to the *default branch*, so `headSha` is always
-   master's tip and never the commit that broke.
+1. **Deduplication by commit.** A commit handed over within
+   `JULES_CI_FIX_RETRY_HOURS` (default 72) is not handed over again, however
+   many workflows it broke. After that, if it is still red, it is: one session
+   that came to nothing must not leave a branch red for good.
 2. **A daily budget.** At most `JULES_CI_FIX_DAILY_MAX` handovers per rolling
-   24 hours, default 3. It counts distinct *commits*, not runs: a run in which
-   guard 1 declines still concludes `success`, because the triage job did its
-   work and only `fix` was skipped, so counting runs would charge the budget for
-   sessions that were never started. Two failing workflows on one commit cost
-   one, which is what guard 1 enforces anyway.
-3. **Open-work check.** If Jules already has a pull request open *against the
-   branch that broke*, it is already working; no second session starts until
-   that lands. Open work on other branches does not block a handover.
+   24 hours, default 3, counted as distinct commits.
+3. **Open-work check.** If a Jules pull request against *the branch that broke*
+   was active within the retry window, Jules is already working; no second
+   session starts. Jules opens pull requests under the account that owns the
+   API key, so they are recognised by the task link in their description rather
+   than by author.
+
+The ledger for guards 1 and 2 is this workflow's own run history, and only runs
+whose handover step actually succeeded count. The handover job is named
+`Hand over <commit>`, which is how the ledger knows which commit a run handed
+over. An earlier version counted every run that was not skipped. A run whose
+guards *decline* still concludes `success`, so the declines filled the budget
+and then, for commit `22c5b14`, counted as that commit's handover: master was
+red from 2026-09-08 and no session was ever started for it.
+
+`workflow_run` only fires when CI runs, and CI only runs on a push, so a red
+branch nobody pushes to would never be looked at again. A daily scheduled run
+therefore checks the latest `CI` and `Container images` results on the default
+branch and goes through the same guards.
 
 ```sh
 gh variable set JULES_CI_FIX_DAILY_MAX --body 5
+gh variable set JULES_CI_FIX_RETRY_HOURS --body 48
 gh variable set JULES_CI_FIX_ENABLED --body false   # pause it entirely
 ```
 
@@ -246,15 +289,14 @@ Python 3.12, so only the project's own libraries need installing.
 
 ## 4. Security
 
-The Jules action is pinned by commit SHA, not by tag. It receives the API key,
-and a tag can be moved; a SHA cannot. Dependabot proposes updates weekly with
-the new version named in the comment.
-
-Note also that the README of `google-labs-code/jules-action` documents
-`uses: google-labs-code/jules-invoke@v1`. Neither part of that resolves: `v1`
-does not exist as a tag or a branch, and `jules-invoke` is the repository's
-former name, working only through GitHub's rename redirect. The pinned SHA
-`bff7875e` is tag `v1.0.0`.
+Sessions are created by `.github/actions/jules-session`, a local composite
+action, rather than by `google-labs-code/jules-action`. That action called curl
+without `--fail`, so a refused request printed an error and the step went green;
+it discarded the response, so the session could not be followed up; and it ran
+`actions/checkout` inside the caller's job, wiping its workspace. The local
+action sends the same payload, fails on an HTTP error, and returns the session
+name and URL. The API key reaches curl through a header read from the
+environment, never on a command line.
 
 Issue and comment text reaching an agent is treated as data, not instruction:
 the prompts fence it explicitly and tell the agent to ignore directives found

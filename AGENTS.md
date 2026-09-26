@@ -30,12 +30,12 @@ layer drives compilation and simulation.
 
 | Branch | State |
 |---|---|
-| `master` | **Historical.** The 2.14 tree as salvaged from Modelon, plus small fixes. Autotools + Ant + Python 2 + Java 8. It does not build on any currently supported toolchain. Do not try to "fix" master's autotools build unless an issue explicitly asks for it. |
-| `feature/modernization-checkpoint` | **Active development.** CMake + Gradle + Python 3 + Java 17/21. This is where build work belongs. |
+| `master` | **Active development.** CMake + Gradle + Python 3 + Java 17/21. `feature/modernization-checkpoint` was merged into it in `e13cd00`, and CI builds it on every push. This is where build work belongs. The legacy autotools/Ant files are still in the tree; do not try to "fix" them unless an issue explicitly asks for it. |
+| `feature/modernization-checkpoint` | **Merged, frozen.** Fully contained in `master`. Do not start new work from it or target pull requests at it. |
 
-**Unless an issue says otherwise, start from `feature/modernization-checkpoint`.**
-The repository variable `JULES_STARTING_BRANCH` controls what the automation
-passes as the starting branch; workflows read it rather than hard-coding a name.
+**Unless an issue says otherwise, start from `master`.**
+The repository variable `JULES_STARTING_BRANCH` overrides what the automation
+passes as the starting branch; unset, the workflows use the default branch.
 
 ## 3. Building
 
@@ -175,10 +175,11 @@ listed in §5. That check exists because of PR #21.
 
 ### A green CI run does not mean JModelica builds
 
-Read the run summary, not the tick. On `master` there is no CMake and no
-Gradle, so the compiler and runtime jobs do not run at all and the workflow can
-pass having compiled nothing. Every such run carries a warning annotation
-saying so, and the summary states how much was actually built.
+Read the run summary, not the tick. On a ref with no CMake and no Gradle (old
+branches from before the modernization merge) the compiler and runtime jobs do
+not run at all and the workflow can pass having compiled nothing. Every such
+run carries a warning annotation saying so, and the summary states how much was
+actually built.
 
 Two checks are deliberately tolerant of the existing backlog, and it matters
 that you understand the difference between tolerant and absent:

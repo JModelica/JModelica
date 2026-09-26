@@ -9,7 +9,8 @@ name: Jules — issue to pull request
 #
 # Jules works in its own VM, pushes a branch, and opens the pull request itself
 # through the Jules GitHub App — this workflow never writes to the repository,
-# which is why it only needs read permissions.
+# which is why it only needs read permissions. jules-shepherd.yml follows the
+# session up afterwards.
 #
 # Setup required before this can work (see doc/automation.md):
 #   - Install the Jules GitHub App and grant it this repository.
@@ -56,7 +57,20 @@ jobs:
        startsWith(github.event.comment.body, '/jules')) ||
       github.event_name == 'workflow_dispatch'
 
+    env:
+      # master carries the modernized build since e13cd00, which merged
+      # feature/modernization-checkpoint into it. Starting from the old branch
+      # produced pull requests against a base nobody builds any more.
+      STARTING_BRANCH: ${{ vars.JULES_STARTING_BRANCH || github.event.repository.default_branch || 'master' }}
+
     steps:
+      # Only for the local action below; the job reads nothing else from the
+      # tree.
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+
       # The issue text becomes the prompt for an agent that then writes code and
       # opens a pull request, so whoever triggers this is effectively directing
       # that agent. Require write access — not merely that the actor opened the
@@ -199,6 +213,15 @@ jobs:
           CI enforces the first two mechanically; a pull request that violates
           them will be rejected by the `meta` job before a human sees it.
 
+          ## Nobody is watching this session
+
+          A question asked here may not get an answer for days. Do not stop to
+          ask which approach to take or for permission. Pick the approach the
+          evidence supports, say in one line why, and carry it through. If a
+          choice genuinely needs a maintainer, finish the rest of the work and
+          put the question in the pull request description under a heading
+          "Needs a decision".
+
           ## Pull request
 
           Open one pull request. Title it for the fix, not for the process. In
@@ -218,22 +241,21 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Hand the task to Jules
-        # Pinned to the commit for tag v1.0.0. This action receives the Jules
-        # API key, so it is pinned by digest rather than by a mutable tag.
-        # Note: the README's `@v1` does not exist as a tag or branch.
-        uses: google-labs-code/jules-action@bff7875eaa123cac6742b7cfc51005b95ba4d566 # v1.0.0
+        id: jules
+        uses: ./.github/actions/jules-session
         with:
           prompt: ${{ steps.prompt.outputs.text }}
-          # The action defaults to 'main'; this repository's default branch is
-          # 'master', and active build work happens on the modernization branch.
-          starting_branch: ${{ vars.JULES_STARTING_BRANCH || 'feature/modernization-checkpoint' }}
-          jules_api_key: ${{ secrets.JULES_API_KEY }}
+          # The `auto:` prefix is what jules-shepherd.yml recognises as ours.
+          title: 'auto: Issue #${{ steps.issue.outputs.number }}: ${{ steps.issue.outputs.title }}'
+          starting_branch: ${{ env.STARTING_BRANCH }}
+          api_key: ${{ secrets.JULES_API_KEY }}
 
       - name: Mark the issue as queued
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
+          SESSION_URL: ${{ steps.jules.outputs.url }}
         run: |
           set -euo pipefail
           # The scheduled sweep uses this label to avoid handing the same issue
@@ -241,5 +263,5 @@ jobs:
           gh issue edit "${ISSUE_NUMBER}" --add-label "jules:queued" || \
             echo "::warning::Could not add the jules:queued label."
           gh issue comment "${ISSUE_NUMBER}" --body \
-            "Handed to [Jules](https://jules.google.com) from [this run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}), starting from \`${{ vars.JULES_STARTING_BRANCH || 'feature/modernization-checkpoint' }}\`. It will open a pull request here when it is done. Remove the \`jules:queued\` label to allow it to be picked up again." || \
+            "Handed to [Jules](${SESSION_URL}) from [this run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}), starting from \`${STARTING_BRANCH}\`. It will open a pull request here when it is done. If none appears, the scheduled sweep hands the issue over again after a few days. Remove the \`jules:queued\` label to allow it to be picked up now." || \
             echo "::warning::Could not comment on the issue."

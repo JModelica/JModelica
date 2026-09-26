@@ -1,0 +1,274 @@
+name: Jules — shepherd sessions
+
+# Follows up the sessions the other Jules workflows start, so that handing a
+# task over leads to a merged-ready pull request rather than a session nobody
+# looks at again.
+#
+# Why this exists: every other workflow here fires and forgets. On 2026-09-07
+# issue #24 was handed over, the session never produced a pull request, and
+# for sixteen days nothing noticed. Jules pauses when it wants an answer or a
+# plan approval, and a paused session that no one answers is a dead session.
+# Its pull requests went unrepaired too: CI failures are shown to people, not
+# to Jules, and Jules acts on pull request comments only from the person who
+# started the task.
+#
+# Every few hours, for each non-archived session of this repository whose
+# title starts with `auto:` (the prefix the workflows give their sessions, so
+# sessions someone is driving by hand are left alone):
+#
+#   AWAITING_PLAN_APPROVAL  the plan is approved.
+#   AWAITING_USER_FEEDBACK  Jules is told to decide for itself and finish, at
+#                           most JULES_SHEPHERD_MAX_NUDGES times (default 3).
+#   pull request open       red CI is relayed to the session, once per commit
+#                           and at most JULES_SHEPHERD_MAX_RELAYS times
+#                           (default 5). Checks that fail on the base branch
+#                           too are named as not the pull request's, so Jules
+#                           does not widen the change to fix them.
+#   pull request closed     the session is archived.
+#   ended with no PR        the outcome is reported on the issue, and the
+#                           session archived. A failed session frees the issue
+#                           for the next sweep; a completed one - Jules found
+#                           nothing to change - is labelled `jules:stuck` for a
+#                           maintainer to decide.
+#
+# Archiving is what marks a session as dealt with, so no state is kept here.
+# Set JULES_SHEPHERD_ENABLED to 'false' to pause it.
+
+on:
+  schedule:
+    - cron: '30 */3 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Report what would be done without doing it'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  checks: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: jules-shepherd
+  cancel-in-progress: false
+
+jobs:
+  shepherd:
+    if: vars.JULES_SHEPHERD_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the API key is configured
+        env:
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+        run: |
+          if [ -z "${JULES_API_KEY}" ]; then
+            echo "::error::Secret JULES_API_KEY is not set. See doc/automation.md." >&2
+            exit 1
+          fi
+
+      - name: Follow up the sessions
+        env:
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          DRY_RUN: ${{ inputs.dry_run && 'true' || 'false' }}
+          MAX_NUDGES: ${{ vars.JULES_SHEPHERD_MAX_NUDGES || '3' }}
+          MAX_RELAYS: ${{ vars.JULES_SHEPHERD_MAX_RELAYS || '5' }}
+          # Leave a freshly paused session alone for a while, in case someone
+          # is answering it in the Jules web app.
+          IDLE_MINUTES: ${{ vars.JULES_SHEPHERD_IDLE_MINUTES || '60' }}
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          base_url="https://jules.googleapis.com/v1alpha"
+
+          # jules METHOD PATH [BODY] - prints the response, returns 1 on an
+          # HTTP error. The key goes in a header from the environment.
+          jules() {
+            local args=(-sS -o "${tmp}/resp.json" -w '%{http_code}' -X "$1"
+                        -H "X-Goog-Api-Key: ${JULES_API_KEY}" "${base_url}/$2")
+            if [ -n "${3:-}" ]; then
+              args+=(-H 'Content-Type: application/json' -d "$3")
+            fi
+            local code
+            code=$(curl "${args[@]}") || code=000
+            if [ "${code}" -lt 200 ] || [ "${code}" -ge 300 ]; then
+              echo "::warning::Jules API $1 $2: HTTP ${code} $(jq -r '.error.message // empty' "${tmp}/resp.json" 2>/dev/null || true)"
+              return 1
+            fi
+            cat "${tmp}/resp.json"
+          }
+
+          # act DESCRIPTION METHOD PATH [BODY] - a write, skipped on a dry run.
+          act() {
+            echo "  -> $1"
+            if [ "${DRY_RUN}" = "true" ]; then
+              return 0
+            fi
+            jules "$2" "$3" "${4:-}" > /dev/null
+          }
+
+          # Every page of a list call, one JSON object per line.
+          list_all() { # PATH FIELD
+            local token="" sep="?"
+            case "$1" in *\?*) sep="&" ;; esac
+            while : ; do
+              jules GET "$1${sep}pageSize=100${token:+&pageToken=${token}}" > "${tmp}/page.json" || return 1
+              jq -c ".$2[]?" "${tmp}/page.json"
+              token=$(jq -r '.nextPageToken // empty' "${tmp}/page.json")
+              [ -n "${token}" ] || break
+            done
+          }
+
+          message() { # SESSION TEXT
+            act "message ${1}" POST "${1}:sendMessage" "$(jq -n --arg p "$2" '{prompt: $p}')"
+          }
+
+          comment_issue() { # NUMBER BODY
+            echo "  -> comment on #$1"
+            if [ "${DRY_RUN}" != "true" ]; then
+              gh issue comment "$1" --body "$2" > /dev/null || \
+                echo "::warning::Could not comment on #$1."
+            fi
+          }
+
+          prefix() { # PREFIX TEXT - prefix every line
+            local line
+            while IFS= read -r line; do printf '%s%s\n' "$1" "${line}"; done <<< "$2"
+          }
+
+          sent() { # MARKER - how many of our messages to this session carry it
+            jq -s --arg m "$1" '[.[] | .userMessaged.userMessage // "" | select(contains($m))] | length' acts.jsonl
+          }
+
+          list_all sessions sessions \
+            | jq -c --arg src "sources/github/${GH_REPO}" \
+                'select(.sourceContext.source == $src and ((.title // "") | startswith("auto:")))' \
+            > sessions.jsonl
+
+          now=$(date -u +%s)
+          echo "| Session | State | Action |" > summary.md
+          echo "|---|---|---|" >> summary.md
+          echo "$(wc -l < sessions.jsonl) automation session(s) to follow up."
+
+          # The list is read on descriptor 3 so that nothing in the loop body
+          # can swallow it by reading standard input.
+          while IFS= read -r s <&3; do
+            name=$(jq -r .name <<< "${s}")
+            state=$(jq -r .state <<< "${s}")
+            title=$(jq -r .title <<< "${s}")
+            url=$(jq -r '.url // ""' <<< "${s}")
+            pr_url=$(jq -r '[.outputs[]?.pullRequest.url // empty] | last // ""' <<< "${s}")
+            issue=$(sed -nE 's/^auto: Issue #([0-9]+):.*/\1/p' <<< "${title}")
+            updated=$(date -u -d "$(jq -r '.updateTime // .createTime' <<< "${s}")" +%s)
+            idle=$(( (now - updated) / 60 ))
+            action="waiting"
+            echo "${name} [${state}] ${title}"
+
+            list_all "${name}/activities" activities > acts.jsonl || : > acts.jsonl
+            last_agent=$(jq -rs '[.[] | select(.agentMessaged)] | sort_by(.createTime) | last | .agentMessaged.agentMessage // ""' acts.jsonl | head -c 3000)
+
+            # A paused session is answered first, pull request or not.
+            if [ "${state}" = "AWAITING_PLAN_APPROVAL" ]; then
+              act "approve plan" POST "${name}:approvePlan" '{}' || true
+              action="plan approved"
+
+            elif [ "${state}" = "AWAITING_USER_FEEDBACK" ]; then
+              nudges=$(sent "[shepherd:nudge]")
+              if [ "${idle}" -lt "${IDLE_MINUTES}" ]; then
+                action="waiting for an answer for ${idle} min; leaving it"
+              elif [ "${nudges}" -ge "${MAX_NUDGES}" ]; then
+                action="asked ${nudges} times already; needs a maintainer"
+                echo "::warning::${url} keeps asking for input. Last question: ${last_agent:0:300}"
+              else
+                message "${name}" "[shepherd:nudge] No one is monitoring this session, and this is the only answer your question will get: do not wait for a reply. Choose the option the evidence in the repository supports, say in one line why you chose it over the alternative, and carry the task through to a pull request. If something genuinely needs a maintainer's decision, finish everything else first and put the question in the pull request description under a heading \"Needs a decision\". AGENTS.md still applies." || true
+                action="told to decide and finish (nudge $((nudges + 1)) of ${MAX_NUDGES})"
+              fi
+
+            elif [ -n "${pr_url}" ]; then
+              gh pr view "${pr_url}" --json state,headRefOid,baseRefName,mergeable,statusCheckRollup \
+                > pr.json || echo '{"state": "UNREADABLE"}' > pr.json
+              pr_state=$(jq -r .state pr.json)
+              head=$(jq -r .headRefOid pr.json)
+              if [ "${pr_state}" = "UNREADABLE" ]; then
+                action="could not read ${pr_url}"
+              elif [ "${pr_state}" != "OPEN" ]; then
+                act "archive: pull request ${pr_state,,}" POST "${name}:archive" '{}' || true
+                action="pull request ${pr_state,,}; archived"
+              else
+                pending=$(jq '[.statusCheckRollup[] | select((.status // "COMPLETED") != "COMPLETED" or (.state // "") == "PENDING")] | length' pr.json)
+                jq -r '.statusCheckRollup[] |
+                       select((.conclusion // "") | IN("FAILURE", "TIMED_OUT", "STARTUP_FAILURE")) |
+                       .name // .context' pr.json | sort -u > failing.txt
+                jq -r '.statusCheckRollup[] | select((.state // "") | IN("FAILURE", "ERROR")) | .context' pr.json \
+                  | sort -u >> failing.txt
+                base=$(jq -r .baseRefName pr.json)
+                gh api "repos/${GH_REPO}/commits/${base}/check-runs" --paginate \
+                  --jq '.check_runs[] | select(.conclusion == "failure") | .name' \
+                  | sort -u > base_failing.txt || : > base_failing.txt
+                own=$(comm -23 <(sort -u failing.txt) base_failing.txt)
+                inherited=$(comm -12 <(sort -u failing.txt) base_failing.txt)
+                conflict=$(jq -r 'select(.mergeable == "CONFLICTING") | "yes"' pr.json)
+
+                if [ "${pending}" -gt 0 ]; then
+                  action="CI still running on ${head:0:8}"
+                elif [ -z "${own}" ] && [ -z "${conflict}" ]; then
+                  action="pull request green apart from base-branch failures; waiting on review"
+                elif [ "$(sent "[shepherd:pr ${head}]")" -gt 0 ]; then
+                  action="already told about ${head:0:8}; waiting for a push"
+                elif [ "$(sent "[shepherd:pr ")" -ge "${MAX_RELAYS}" ]; then
+                  action="relay limit reached; needs a maintainer"
+                  echo "::warning::${pr_url}: ${MAX_RELAYS} CI relays to ${name} without a green result."
+                else
+                  text="[shepherd:pr ${head}] Your pull request ${pr_url} needs more work at commit ${head}."$'\n\n'
+                  if [ -n "${own}" ]; then
+                    text+="These checks fail on it and pass on ${base}, so this change caused them:"$'\n'"$(prefix '- ' "${own}")"$'\n\n'
+                    text+="Reproduce each locally, fix the root cause, and push to the same branch."$'\n\n'
+                  fi
+                  if [ -n "${conflict}" ]; then
+                    text+="It conflicts with ${base}. Merge ${base} into the branch, resolve the conflict, and push."$'\n\n'
+                  fi
+                  if [ -n "${inherited}" ]; then
+                    text+="These also fail on ${base} itself and are not this pull request's to fix; leave them alone:"$'\n'"$(prefix '- ' "${inherited}")"$'\n\n'
+                  fi
+                  text+="AGENTS.md still applies: do not weaken CI to get green. Nobody is watching this session, so do not ask questions; decide, finish, and push."
+                  message "${name}" "${text}" || true
+                  action="relayed CI failures on ${head:0:8}"
+                fi
+              fi
+
+            elif [ "${state}" = "FAILED" ] || [ "${state}" = "COMPLETED" ]; then
+              reason=$(jq -rs '[.[] | .sessionFailed.reason // empty] | last // ""' acts.jsonl)
+              if [ -n "${issue}" ]; then
+                if [ "${state}" = "FAILED" ]; then
+                  comment_issue "${issue}" "The [Jules session](${url}) for this issue failed without a pull request${reason:+: ${reason}}. Releasing it for the next scheduled sweep."
+                  if [ "${DRY_RUN}" != "true" ]; then
+                    gh issue edit "${issue}" --remove-label "jules:queued" > /dev/null || true
+                  fi
+                else
+                  body="The [Jules session](${url}) for this issue finished without opening a pull request. Its last message:"$'\n\n'"$(prefix '> ' "${last_agent:-(none)}")"$'\n\n'"A maintainer needs to decide what happens next: close the issue, clarify it, or remove \`jules:stuck\` to let the sweep try again."
+                  comment_issue "${issue}" "${body}"
+                  if [ "${DRY_RUN}" != "true" ]; then
+                    gh label create "jules:stuck" --force --color B60205 \
+                      --description "Jules has not produced a pull request; needs a maintainer" > /dev/null || true
+                    gh issue edit "${issue}" --add-label "jules:stuck" > /dev/null || true
+                  fi
+                fi
+              fi
+              act "archive: ended without a pull request" POST "${name}:archive" '{}' || true
+              action="${state,,} without a pull request; reported and archived"
+            fi
+
+            printf '| [%s](%s) | %s | %s |\n' "${title//|/\\|}" "${url}" "${state}" "${action}" >> summary.md
+            echo "  ${action}"
+          done 3< sessions.jsonl
+
+          {
+            echo "## Jules sessions"
+            [ "${DRY_RUN}" = "true" ] && echo && echo "_Dry run: nothing was changed._"
+            echo
+            cat summary.md
+          } >> "$GITHUB_STEP_SUMMARY"

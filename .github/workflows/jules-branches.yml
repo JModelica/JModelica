@@ -272,7 +272,9 @@ jobs:
           git fetch --all --quiet
           {
             echo "Commits unique to this branch:"
-            git log --format='- %h %s' "origin/master..origin/${BRANCH}" | head -40
+            # --max-count, not `| head`: under pipefail, head closing the
+            # pipe early fails the step for any branch over 40 commits.
+            git log --max-count=40 --format='- %h %s' "origin/master..origin/${BRANCH}"
             echo
             echo "Files changed against master:"
             git diff --stat "origin/master...origin/${BRANCH}" | tail -60

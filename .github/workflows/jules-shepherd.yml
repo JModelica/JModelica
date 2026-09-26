@@ -12,7 +12,7 @@ name: Jules — shepherd sessions
 # to Jules, and Jules acts on pull request comments only from the person who
 # started the task.
 #
-# Every few hours, for each non-archived session of this repository that the
+# On every run, for each non-archived session of this repository that the
 # automation started - its title starts with `auto:`, or, for sessions from
 # before titles were set, its prompt opens the way every workflow prompt here
 # does. Sessions someone started by hand are left alone:
@@ -40,9 +40,17 @@ name: Jules — shepherd sessions
 # Archiving is what marks a session as dealt with, so no state is kept here.
 # Set JULES_SHEPHERD_ENABLED to 'false' to pause it.
 
+# Hourly, and whenever CI finishes. GitHub delays scheduled runs heavily here:
+# on 2026-09-26 the 04:00 sweep started at 09:14 and neither the 09:30 nor the
+# 12:30 shepherd run started at all. A slot at minute 0 is the most congested,
+# so the minute is odd; and CI completing - on a Jules pull request, typically
+# - is the moment a relay is most useful anyway.
 on:
   schedule:
-    - cron: '30 */3 * * *'
+    - cron: '17 * * * *'
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
   workflow_dispatch:
     inputs:
       dry_run:

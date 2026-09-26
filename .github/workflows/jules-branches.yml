@@ -23,9 +23,9 @@ name: Jules — branch maturation
 
 on:
   schedule:
-    # Weekly, Mondays at 05:00 UTC — an hour after the daily issue sweep so the
+    # Weekly, Mondays at 05:37 UTC — an hour after the daily issue sweep so the
     # two never contend for the same concurrent-session budget.
-    - cron: '0 5 * * 1'
+    - cron: '37 5 * * 1'
   workflow_dispatch:
     inputs:
       branches:

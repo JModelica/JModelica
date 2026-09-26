@@ -13,10 +13,10 @@ into pull requests — and what a maintainer has to do by hand to switch that on
 | `docker.yml` | push, tag, pull request | Multi-architecture container images (`linux/amd64`, `linux/arm64`) to GHCR |
 | `release.yml` | tag `v*` or a tag starting with a digit, manual | Self-contained portable bundles per platform, attached to a GitHub release |
 | `jules-issue.yml` | `jules` label, `/jules` comment, manual | Hands one issue to Jules, which opens a pull request |
-| `jules-sweep.yml` | daily 04:00 UTC | Hands the oldest untouched issues to Jules, a few at a time |
-| `jules-branches.yml` | weekly Monday 05:00 UTC | Surveys every branch, opens draft pull requests, hands them to Jules to finish |
-| `jules-ci-fix.yml` | any workflow failing; daily 05:00 UTC | Hands the failure to Jules, which owns keeping the Actions tab green |
-| `jules-shepherd.yml` | every 3 hours | Follows up the sessions the others start: answers them, relays CI on their pull requests, reports the ones that end with nothing |
+| `jules-sweep.yml` | daily 04:11 UTC | Hands the oldest untouched issues to Jules, a few at a time |
+| `jules-branches.yml` | weekly Monday 05:37 UTC | Surveys every branch, opens draft pull requests, hands them to Jules to finish |
+| `jules-ci-fix.yml` | any workflow failing; daily 05:23 UTC | Hands the failure to Jules, which owns keeping the Actions tab green |
+| `jules-shepherd.yml` | hourly, and when CI finishes | Follows up the sessions the others start: answers them, relays CI on their pull requests, reports the ones that end with nothing |
 | `jules-message.yml` | manual | Sends one session a specific answer, or approves, archives or unarchives it |
 
 ## 2. Turning Jules on

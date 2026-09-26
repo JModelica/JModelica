@@ -45,8 +45,8 @@ on:
     types: [completed]
     branches: [master, 'feature/**']
   schedule:
-    # 05:00 UTC daily, an hour after the issue sweep.
-    - cron: '0 5 * * *'
+    # 05:23 UTC daily, after the issue sweep; off the minute-0 rush.
+    - cron: '23 5 * * *'
   workflow_dispatch:
     inputs:
       run_id:

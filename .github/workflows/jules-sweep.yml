@@ -26,8 +26,8 @@ name: Jules — scheduled issue sweep
 
 on:
   schedule:
-    # 04:00 UTC daily, off-peak.
-    - cron: '0 4 * * *'
+    # 04:11 UTC daily, off-peak, and off the minute-0 rush.
+    - cron: '11 4 * * *'
   workflow_dispatch:
     inputs:
       batch:

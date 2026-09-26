@@ -72,8 +72,11 @@ int jmi_cvdense_compat(void *cvode_mem, int N) {
 int jmi_cvode_set_err_handler_fn_compat(void *cvode_mem, void (*ehfun)(int, const char*, const char*, char*, void*), void *eh_data) {
     #pragma GCC diagnostic push
     #pragma GCC diagnostic ignored "-Wpedantic"
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wpedantic"
     /* Cast to modern type if needed */
     CVodeSetErrHandlerFn(cvode_mem, (CVErrHandlerFn)ehfun, eh_data);
+    #pragma GCC diagnostic pop
     #pragma GCC diagnostic pop
     return 0;
 }

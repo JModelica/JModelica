@@ -316,15 +316,41 @@ jobs:
           RUN_ID: ${{ needs.triage.outputs.run_id }}
         run: |
           set -euo pipefail
-          # Job and step names only. Full logs run to megabytes and would swamp
-          # the prompt; Jules can reproduce the build itself, which is better
-          # evidence than a log it cannot re-run.
           gh api "repos/${GH_REPO}/actions/runs/${RUN_ID}/jobs" --paginate \
             --jq '.jobs[] | select(.conclusion == "failure") |
                   "- \(.name): failed at step \"" +
                   ([.steps[] | select(.conclusion == "failure") | .name] | join(", ")) +
                   "\""' \
             > failures.txt || true
+
+          # The error lines each failing job printed. Job names alone were not
+          # enough: Jules's VM is Linux, so a macOS or Windows failure cannot
+          # be reproduced there, and on 2026-09-26 a session reported that the
+          # build "completes successfully" and stopped to ask. Full logs run to
+          # megabytes, so only matching lines, deduplicated: the first 25, where
+          # the root cause usually is, and the last 15 of each job.
+          : > excerpts.txt
+          gh api "repos/${GH_REPO}/actions/runs/${RUN_ID}/jobs" --paginate \
+            --jq '.jobs[] | select(.conclusion == "failure") | "\(.id)\t\(.name)"' \
+            > failed_jobs.tsv || : > failed_jobs.tsv
+          while IFS=$'\t' read -r job_id job_name <&3; do
+            if ! gh api "repos/${GH_REPO}/actions/jobs/${job_id}/logs" > job.log 2>/dev/null; then
+              continue
+            fi
+            {
+              echo "### ${job_name}"
+              echo
+              echo '```'
+              { sed -E 's/^[0-9]{4}-[0-9-]+T[0-9:.]+Z //' job.log \
+                  | grep -aE '(error|Error|ERROR|fatal|undefined|not found|No such file|Undefined symbols)' \
+                  | grep -avE '^##\[(group|endgroup)\]' \
+                  | cut -c1-300 \
+                  | awk '!seen[$0]++ { l[++n] = $0 }
+                         END { for (i = 1; i <= n; i++) if (i <= 25 || i > n - 15) print l[i] }'; } || true
+              echo '```'
+              echo
+            } >> excerpts.txt
+          done 3< failed_jobs.tsv
 
           if [ ! -s failures.txt ]; then
             echo "No failing jobs found in run ${RUN_ID}."
@@ -362,6 +388,17 @@ jobs:
             echo "Failing jobs:"
             cat failures.txt
             echo
+            if [ -s excerpts.txt ]; then
+              echo "## What the failing jobs printed"
+              echo
+              echo "Error lines from each failing job's log, deduplicated."
+              echo "Your VM runs Linux: a macOS or Windows failure will not"
+              echo "reproduce there, and a Linux build that passes is not"
+              echo "evidence that there is nothing to fix. Work from these"
+              echo "errors; CI on your pull request tests the other platforms."
+              echo
+              cat excerpts.txt
+            fi
             echo "Read AGENTS.md before you change anything. Section 3 lists the"
             echo "known build blockers; section 7 explains what each CI job does."
             echo
@@ -371,8 +408,9 @@ jobs:
 
           ## How to work
 
-          1. Reproduce the failure. Run the same commands the failing job runs
-             and show the actual output. Do not theorise from the job name.
+          1. Reproduce the failure where you can: run the same commands the
+             failing job runs and show the output. For a platform your VM is
+             not, reason from the errors quoted above instead of stopping.
           2. Establish whether this is a *new* breakage or one of the known
              blockers in AGENTS.md section 3.
           3. Fix the root cause. If the fix is large, fix one layer completely

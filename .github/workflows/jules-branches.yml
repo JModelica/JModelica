@@ -1,0 +1,365 @@
+name: Jules — branch maturation
+
+# Gets every stale branch to a decision instead of leaving it to rot.
+#
+# The repository accumulated fifteen branches, most last touched in 2024, with
+# no record of which carried finished work and which were abandoned mid-thought.
+# This runs the whole set through one pipeline:
+#
+#   1. Survey     — how far ahead of master is each branch, and is there
+#                   already a pull request for it?
+#   2. Merged     — a branch with no unique commits is reported for deletion.
+#                   Reported, not deleted: removing a branch is irreversible
+#                   from here and is the owner's call.
+#   3. Open a PR  — every branch with unique work and no pull request gets a
+#                   draft one, so CI can judge it on evidence rather than on
+#                   anybody's recollection.
+#   4. Hand to Jules — the branch and its CI result go to Jules, which either
+#                   finishes the work and marks the pull request ready, or
+#                   reports what is still missing.
+#
+# "Mature enough to merge" is not decided by this workflow, and deliberately so.
+# CI produces the evidence, Jules does the work, a human merges.
+
+on:
+  schedule:
+    # Weekly, Mondays at 05:00 UTC — an hour after the daily issue sweep so the
+    # two never contend for the same concurrent-session budget.
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+    inputs:
+      branches:
+        description: 'Space-separated branches to process (default: all)'
+        required: false
+        type: string
+      open_prs:
+        description: 'Open draft pull requests for branches that have none'
+        required: false
+        default: true
+        type: boolean
+      hand_to_jules:
+        description: 'Hand branches to Jules for further development'
+        required: false
+        default: true
+        type: boolean
+      batch:
+        description: 'Maximum Jules sessions to start in this run'
+        required: false
+        default: '3'
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: jules-branches
+  cancel-in-progress: false
+
+env:
+  # Branches that must never be swept into a pull request.
+  PROTECTED: 'master feature/modernization-checkpoint'
+
+jobs:
+  survey:
+    name: Survey the branches
+    runs-on: ubuntu-latest
+    outputs:
+      tasks: ${{ steps.classify.outputs.tasks }}
+      count: ${{ steps.classify.outputs.count }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Every branch, with full history: ahead/behind counts are the whole
+          # point and a shallow clone cannot produce them.
+          fetch-depth: 0
+
+      - name: Classify
+        id: classify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ONLY: ${{ inputs.branches }}
+          BATCH: ${{ inputs.batch || '3' }}
+        run: |
+          # shellcheck disable=SC2016
+          # Single-quoted '$' throughout this script is deliberate: '$b', '$a'
+          # and the rest are jq variables bound by --arg, and '^HEAD$' is a
+          # regex anchor. None of them are shell expansions.
+          set -euo pipefail
+          git fetch --all --quiet
+
+          if [ -n "${ONLY}" ]; then
+            branches="${ONLY}"
+          else
+            branches=$(git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin \
+                       | grep -v '^HEAD$')
+          fi
+
+          # Branches that already have an open pull request are left alone.
+          gh pr list --state open --limit 200 --json headRefName \
+            --jq '.[].headRefName' > with_pr.txt || : > with_pr.txt
+
+          : > merged.md
+          : > active.md
+          echo '[]' > tasks.json
+
+          for branch in ${branches}; do
+            case " ${PROTECTED} " in
+              *" ${branch} "*) continue ;;
+            esac
+
+            if ! git rev-parse --verify --quiet "origin/${branch}" >/dev/null; then
+              echo "::warning::No such branch: ${branch}"
+              continue
+            fi
+
+            read -r behind ahead <<< "$(git rev-list --left-right --count \
+                                        "origin/master...origin/${branch}")"
+            files=$(git diff --name-only "origin/master...origin/${branch}" | wc -l)
+            last=$(git log -1 --format='%ad' --date=short "origin/${branch}")
+            subject=$(git log -1 --format='%s' "origin/${branch}")
+
+            if [ "${ahead}" -eq 0 ]; then
+              # Nothing here that master does not already have.
+              echo "| \`${branch}\` | ${last} | fully merged — safe to delete |" >> merged.md
+              continue
+            fi
+
+            has_pr=no
+            if grep -Fxq "${branch}" with_pr.txt; then
+              has_pr=yes
+            fi
+
+            echo "| \`${branch}\` | ${ahead} | ${behind} | ${files} | ${last} | ${has_pr} |" >> active.md
+
+            jq --arg b "${branch}" --arg s "${subject}" --arg l "${last}" \
+               --argjson a "${ahead}" --argjson bh "${behind}" \
+               --argjson f "${files}" --arg pr "${has_pr}" \
+               '. += [{branch: $b, ahead: $a, behind: $bh, files: $f,
+                       last: $l, subject: $s, has_pr: $pr}]' \
+               tasks.json > tasks.tmp && mv tasks.tmp tasks.json
+          done
+
+          # Smallest diffs first: they are the likeliest to be finishable, and
+          # an early merge shrinks the conflict surface for everything after it.
+          jq -c --argjson batch "${BATCH}" 'sort_by(.files) | .[0:$batch]' \
+            tasks.json > selected.json
+
+          {
+            echo "## Branch survey"
+            echo
+            if [ -s active.md ]; then
+              echo "### Branches with unique work"
+              echo
+              echo "| Branch | Ahead | Behind | Files | Last commit | Has PR |"
+              echo "|---|---:|---:|---:|---|---|"
+              cat active.md
+              echo
+            fi
+            if [ -s merged.md ]; then
+              echo "### Fully merged"
+              echo
+              echo "These have no commits that master lacks. Deleting them is"
+              echo "safe and is left to a maintainer — this workflow does not"
+              echo "delete branches."
+              echo
+              echo "| Branch | Last commit | Status |"
+              echo "|---|---|---|"
+              cat merged.md
+              echo
+              echo '```sh'
+              sed 's/^| `\([^`]*\)`.*/git push origin --delete \1/' merged.md
+              echo '```'
+              echo
+            fi
+            echo "Selected for this run: $(jq -r '[.[].branch] | join(", ") // "none"' selected.json)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          {
+            echo "tasks=$(jq -c . selected.json)"
+            echo "count=$(jq 'length' selected.json)"
+          } >> "$GITHUB_OUTPUT"
+
+  process:
+    name: ${{ matrix.task.branch }}
+    needs: survey
+    if: needs.survey.outputs.count != '0'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        task: ${{ fromJSON(needs.survey.outputs.tasks) }}
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Open a draft pull request
+        id: pr
+        if: matrix.task.has_pr == 'no' && (inputs.open_prs == null || inputs.open_prs)
+        env:
+          # A pull request opened with GITHUB_TOKEN does not trigger other
+          # workflows — GitHub suppresses that to stop recursion — so CI would
+          # never run on it. Setting AUTOMATION_TOKEN (a fine-grained PAT with
+          # contents:read and pull-requests:write) makes CI fire automatically.
+          GH_TOKEN: ${{ secrets.AUTOMATION_TOKEN || github.token }}
+          GH_REPO: ${{ github.repository }}
+          BRANCH: ${{ matrix.task.branch }}
+          AHEAD: ${{ matrix.task.ahead }}
+          BEHIND: ${{ matrix.task.behind }}
+          FILES: ${{ matrix.task.files }}
+          LAST: ${{ matrix.task.last }}
+          HAVE_PAT: ${{ secrets.AUTOMATION_TOKEN != '' }}
+        run: |
+          set -euo pipefail
+          {
+            echo "Opened automatically by the branch maturation workflow to get"
+            echo "this branch assessed on evidence rather than on memory."
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Commits ahead of master | ${AHEAD} |"
+            echo "| Commits behind master | ${BEHIND} |"
+            echo "| Files changed | ${FILES} |"
+            echo "| Last commit | ${LAST} |"
+            echo
+            echo "**Draft on purpose.** Nothing here is claimed to be ready."
+            echo "CI will now say whether it builds; that result, not this"
+            echo "description, is the evidence."
+            echo
+            echo "Next: Jules assesses the branch and either finishes the work"
+            echo "and marks this ready for review, or reports what is missing."
+            echo "See \`doc/automation.md\`."
+            if [ "${HAVE_PAT}" != "true" ]; then
+              echo
+              echo "> CI did not start on its own: this pull request was opened"
+              echo "> with \`GITHUB_TOKEN\`, and GitHub suppresses workflow runs"
+              echo "> triggered that way. Push a commit, or close and reopen this"
+              echo "> pull request, to run CI. Setting the \`AUTOMATION_TOKEN\`"
+              echo "> secret removes the need."
+            fi
+          } > body.md
+
+          gh pr create \
+            --base master \
+            --head "${BRANCH}" \
+            --title "Assess branch: ${BRANCH}" \
+            --body-file body.md \
+            --draft \
+            --label 'branch-maturation' \
+            || echo "::warning::Could not open a pull request for ${BRANCH}."
+
+      - name: Check the API key is configured
+        if: inputs.hand_to_jules == null || inputs.hand_to_jules
+        env:
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+        run: |
+          if [ -z "${JULES_API_KEY}" ]; then
+            echo "::error::Secret JULES_API_KEY is not set. See doc/automation.md." >&2
+            exit 1
+          fi
+
+      - name: Summarise the branch
+        id: detail
+        if: inputs.hand_to_jules == null || inputs.hand_to_jules
+        env:
+          BRANCH: ${{ matrix.task.branch }}
+        run: |
+          set -euo pipefail
+          git fetch --all --quiet
+          {
+            echo "Commits unique to this branch:"
+            git log --format='- %h %s' "origin/master..origin/${BRANCH}" | head -40
+            echo
+            echo "Files changed against master:"
+            git diff --stat "origin/master...origin/${BRANCH}" | tail -60
+          } > detail.txt
+          cat detail.txt
+
+      - name: Hand the branch to Jules
+        if: inputs.hand_to_jules == null || inputs.hand_to_jules
+        id: prompt
+        env:
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ matrix.task.branch }}
+          AHEAD: ${{ matrix.task.ahead }}
+          BEHIND: ${{ matrix.task.behind }}
+          SUBJECT: ${{ matrix.task.subject }}
+          LAST: ${{ matrix.task.last }}
+        run: |
+          set -euo pipefail
+          {
+            echo "You are working on ${REPO}, the community continuation of the"
+            echo "JModelica Modelica compiler and simulation platform."
+            echo
+            echo "Read AGENTS.md in the repository root first. It describes the"
+            echo "four layers of the system, how to build and test, and what must"
+            echo "never be committed."
+            echo
+            echo "## Task: bring the branch \`${BRANCH}\` to a decision"
+            echo
+            echo "It is ${AHEAD} commit(s) ahead of master and ${BEHIND} behind."
+            echo "Last touched ${LAST}: \"${SUBJECT}\"."
+            echo
+            cat detail.txt
+            echo
+            cat <<'GUIDANCE'
+          ## What to decide
+
+          Work out whether this branch is finished, unfinished, or obsolete.
+          Judge it by building it, not by reading the commit messages — several
+          of these branches are titled "temporary commit" and the titles say
+          nothing about the state of the code.
+
+          Then take exactly one of these paths.
+
+          **Finished.** It builds, its tests pass, and the change is coherent.
+          Rebase it onto master, resolve any conflicts, and mark the pull
+          request ready for review with a description explaining what it does
+          and what you verified.
+
+          **Unfinished but worth finishing.** Finish it: make it build, add the
+          missing tests, resolve the conflicts with master. Then mark the pull
+          request ready. If you cannot finish it in this session, push what you
+          have and say precisely what is left and what blocked you — a clear
+          handover is a good outcome, a silent partial one is not.
+
+          **Obsolete.** The work is already in master by another route, or it
+          targets a build system the project has moved off. Say so, with the
+          evidence: name the commit or the file that supersedes it. Do not open
+          a pull request and do not delete the branch — recommend closure and
+          leave the decision to a maintainer.
+
+          ## Constraints
+
+          - Do not force-push over other people's commits. If a rebase would
+            rewrite history that is not yours, say so and stop.
+          - Do not merge master into the branch to hide a conflict; rebase, or
+            explain why the conflict is substantive.
+          - Never commit build artifacts, and never commit a symlink pointing at
+            an absolute path. CI rejects both mechanically.
+          - No whitespace-only changes to files you are not otherwise editing.
+          - Report honestly. "This does not build and here is the error" is a
+            useful result. A pull request that claims to work and does not is
+            worse than no pull request.
+          GUIDANCE
+          } > prompt.txt
+
+          delimiter="EOF_$(openssl rand -hex 12)"
+          {
+            echo "text<<${delimiter}"
+            cat prompt.txt
+            echo "${delimiter}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Start the Jules session
+        if: inputs.hand_to_jules == null || inputs.hand_to_jules
+        uses: google-labs-code/jules-action@bff7875eaa123cac6742b7cfc51005b95ba4d566 # v1.0.0
+        with:
+          prompt: ${{ steps.prompt.outputs.text }}
+          # Start from the branch under assessment, not from the default branch.
+          starting_branch: ${{ matrix.task.branch }}
+          jules_api_key: ${{ secrets.JULES_API_KEY }}

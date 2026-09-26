@@ -1,10 +1,12 @@
-# Created by https://www.toptal.com/developers/gitignore/api/java,python,c,c++,macos,windows,linux,autotools,fortran
-# Edit at https://www.toptal.com/developers/gitignore?templates=java,python,c,c++,macos,windows,linux,autotools,fortran
-
-build/
+# Created by https://www.toptal.com/developers/gitignore/api/c,c++,fortran,python,cmake,autotools,windows,macos,linux,java
+# Edit at https://www.toptal.com/developers/gitignore?templates=c,c++,fortran,python,cmake,autotools,windows,macos,linux,java
 
 ### Autotools ###
 # http://www.gnu.org/software/automake
+
+m4/
+missing
+depcomp
 
 Makefile.in
 /ar-lib
@@ -131,6 +133,22 @@ dkms.conf
 *.lai
 
 # Executables
+
+### CMake ###
+CMakeLists.txt.user
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Testing
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps
+
+### CMake Patch ###
+# External projects
+*-prefix/
 
 ### Fortran ###
 # Prerequisites
@@ -417,4 +435,4 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
-# End of https://www.toptal.com/developers/gitignore/api/java,python,c,c++,macos,windows,linux,autotools,fortran
+# End of https://www.toptal.com/developers/gitignore/api/c,c++,fortran,python,cmake,autotools,windows,macos,linux,java

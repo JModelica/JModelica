@@ -18,7 +18,6 @@ Depending on your operating system, different procedures are required.
 The following tools need to be installed:
 
 - The gcc compiler suite
-  - on macOS install Autotools via `brew install autoconf automake libtool`
 - Subversion
 - Apache Ant
   - on Ubuntu `sudo apt install ant`
@@ -77,10 +76,6 @@ Run the configure script. It is recommended that you create a new
 directory for building the platform
 
 > cd JModelica
-> aclocal
-> autoupdate
-> autoconf
-> automake --add-missing
 > chmod +x ./configure
 > chmod +x ./run_java.sh
 > chmod +x ./config.sub

@@ -1,0 +1,357 @@
+name: CI
+
+# Honest CI for a project that does not currently build.
+#
+# `meta` is the gate. It is fast, it passes today, and it is the check that
+# branch protection should require: it enforces the rules in AGENTS.md that a
+# reviewer would otherwise have to enforce by hand.
+#
+# `compiler`, `runtime` and `python` attempt the real build on every supported
+# platform. They currently fail — Sundials 7.x removed DlsMat, JastAdd trips on
+# Java 17+, and parts of Python/src are still Python 2. Those failures are the
+# point: they are the modernization backlog, made visible and measurable. They
+# are deliberately NOT marked continue-on-error, because a build job that
+# reports success while the build is broken is worse than no CI at all.
+
+on:
+  push:
+    branches: [master, 'feature/**', 'fix/**', 'ci/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: '21'
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Which build systems exist on this ref?
+  #
+  # master still uses autotools and Ant; the CMake and Gradle migration lives on
+  # feature/modernization-checkpoint. Without this, the build jobs would run,
+  # find nothing to do, exit 0, and report a green tick for having built
+  # nothing — which is precisely the false signal this CI is written to avoid.
+  # Gating on it instead makes those jobs show up as *skipped*, which is both
+  # honest and visually distinct from success.
+  # ---------------------------------------------------------------------------
+  detect:
+    name: Detect build systems
+    runs-on: ubuntu-latest
+    outputs:
+      cmake: ${{ steps.check.outputs.cmake }}
+      gradle: ${{ steps.check.outputs.gradle }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: check
+        run: |
+          set -euo pipefail
+          cmake=false; gradle=false
+          [ -f CMakeLists.txt ] && cmake=true
+          [ -f Compiler/build.gradle ] && gradle=true
+          echo "cmake=${cmake}" >> "$GITHUB_OUTPUT"
+          echo "gradle=${gradle}" >> "$GITHUB_OUTPUT"
+          echo "CMake build: ${cmake}"
+          echo "Gradle build: ${gradle}"
+
+  # ---------------------------------------------------------------------------
+  # Fast, deterministic checks. This job must stay green.
+  # ---------------------------------------------------------------------------
+  meta:
+    name: Repository hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The artifact guard diffs against the merge base, which needs history.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Guard against build artifacts and unportable symlinks
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [ -n "${BASE_SHA:-}" ]; then
+            echo "Checking files added or modified against ${BASE_SHA}."
+            git diff --name-only --diff-filter=AM "${BASE_SHA}...HEAD" \
+              | python tools/check_no_artifacts.py --stdin
+          else
+            echo "Not a pull request; auditing the whole tree."
+            python tools/check_no_artifacts.py --all
+          fi
+
+      - name: Test the tools themselves
+        run: |
+          python -m pip install --quiet pytest
+          python -m pytest tools/ -q
+
+      - name: Lint the workflows
+        run: |
+          set -euo pipefail
+          # Pinned: actionlint is a linter, and a surprise upgrade turning a new
+          # rule on would fail unrelated pull requests.
+          version=1.7.7
+          curl -fsSL -o actionlint.tar.gz \
+            "https://github.com/rhysd/actionlint/releases/download/v${version}/actionlint_${version}_linux_amd64.tar.gz"
+          tar -xzf actionlint.tar.gz actionlint
+          ./actionlint -color
+
+      - name: Lint shell scripts
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          # Advisory: most of these scripts predate the project's move to git and
+          # fixing them is not what a build pull request is for.
+          find . -name '*.sh' -not -path './ThirdParty/*' -not -path './external/*' \
+            -print0 | xargs -0 -r shellcheck --severity=error || \
+            echo "::warning::shellcheck reported errors; see the log."
+
+      - name: Check Python syntax
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet ruff
+          # E9 = syntax errors, F63/F7/F82 = genuine bugs (undefined names and
+          # the like). Style is not policed; this repository has 15 years of it.
+          ruff check --select=E9,F63,F7,F82 --exclude=ThirdParty,external . || \
+            echo "::warning::ruff found problems in legacy Python; see the log."
+          # tools/ is new code and is held to the full default rule set.
+          ruff check tools/
+
+  # ---------------------------------------------------------------------------
+  # The Java compiler. Closest to green of the three build jobs.
+  # ---------------------------------------------------------------------------
+  compiler:
+    name: Compiler (Java) — ${{ matrix.os }}
+    needs: detect
+    if: needs.detect.outputs.gradle == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build
+        shell: bash
+        working-directory: Compiler
+        run: |
+          set -euo pipefail
+          chmod +x gradlew 2>/dev/null || true
+          ./gradlew --no-daemon --stacktrace build
+
+      - name: Upload the compiler jars
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compiler-${{ matrix.os }}
+          path: Compiler/build/libs/*.jar
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # The C runtime library. Blocked on the Sundials 7.x API removals.
+  # ---------------------------------------------------------------------------
+  runtime:
+    name: Runtime (C) — ${{ matrix.os }}
+    needs: detect
+    if: needs.detect.outputs.cmake == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            build-essential gfortran cmake ninja-build swig \
+            libsundials-dev libopenblas-dev liblapack-dev zlib1g-dev \
+            coinor-libipopt-dev
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update --quiet
+          # gcc is here for gfortran, which several ThirdParty solvers need.
+          brew install --quiet cmake ninja swig sundials openblas lapack gcc || true
+
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f vcpkg.json ]; then
+            echo "Manifest found; vcpkg will install from vcpkg.json during configure."
+          else
+            echo "::notice::No vcpkg.json on this branch, so Sundials and BLAS are"
+            echo "::notice::not available. Expect configure to fail."
+          fi
+
+      - name: Configure
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build build --config Release --parallel
+
+      - name: Test
+        shell: bash
+        run: |
+          set -euo pipefail
+          ctest --test-dir build --output-on-failure --no-tests=ignore
+
+      - name: Upload the runtime libraries
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-${{ matrix.os }}
+          path: |
+            build/**/*.so
+            build/**/*.dylib
+            build/**/*.dll
+            build/**/*.a
+            build/**/*.lib
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # The Python interface.
+  # ---------------------------------------------------------------------------
+  python:
+    name: Python — ${{ matrix.os }} / ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ['3.12']
+        include:
+          # Check the ends of the supported range on Linux only; doing the full
+          # cross product would triple the job count to little effect.
+          - os: ubuntu-latest
+            python: '3.10'
+          - os: ubuntu-latest
+            python: '3.13'
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Python 3 syntax, against the migration baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Much of Python/src is still Python 2, which is documented and
+          # tracked rather than surprising. A plain "does it all compile" check
+          # would be red on every pull request for reasons unrelated to the
+          # change, and a check that is always red is one everybody learns to
+          # ignore. This fails only on a *new* breakage, or on a baseline entry
+          # that has been fixed without being removed — so the list of
+          # remaining Python 2 files can only shrink.
+          python tools/check_python3_syntax.py \
+            Python/src/pymodelica Python/src/pyjmi
+
+  # ---------------------------------------------------------------------------
+  # A single place to read the state of the build.
+  # ---------------------------------------------------------------------------
+  summary:
+    name: Summary
+    if: always()
+    needs: [detect, meta, compiler, runtime, python]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report
+        env:
+          META: ${{ needs.meta.result }}
+          COMPILER: ${{ needs.compiler.result }}
+          RUNTIME: ${{ needs.runtime.result }}
+          PYTHON: ${{ needs.python.result }}
+        run: |
+          explain() {
+            case "$1" in
+              skipped) echo "not run — no such build system on this ref" ;;
+              success) echo "success" ;;
+              failure) echo "**failure**" ;;
+              *)       echo "$1" ;;
+            esac
+          }
+
+          # A green tick on this workflow must never be readable as "JModelica
+          # builds". On a ref with no CMake and no Gradle, no build ran at all,
+          # and a summary that did not say so plainly would be a false report
+          # dressed as a passing run. Emit a warning annotation as well as the
+          # table, so the claim is visible on the run page itself and not only
+          # to whoever expands the summary.
+          built=0
+          for result in "${COMPILER}" "${RUNTIME}"; do
+            [ "${result}" = "success" ] && built=$((built + 1))
+          done
+
+          {
+            echo "## What this run actually checked"
+            echo
+            echo "| Component | Result |"
+            echo "|---|---|"
+            echo "| Repository hygiene | $(explain "${META}") |"
+            echo "| Compiler (Java) | $(explain "${COMPILER}") |"
+            echo "| Runtime (C) | $(explain "${RUNTIME}") |"
+            echo "| Python 3 migration ratchet | $(explain "${PYTHON}") |"
+            echo
+            if [ "${built}" -eq 0 ]; then
+              echo "### ⚠ No build was performed"
+              echo
+              echo "**A passing result here does not mean JModelica builds.** It"
+              echo "means the checks that *can* run on this ref passed. Neither"
+              echo "the compiler nor the runtime library was compiled, because"
+              echo "this ref carries no CMake or Gradle build — master is still"
+              echo "autotools and Ant. Build work happens on"
+              echo "\`feature/modernization-checkpoint\`; see AGENTS.md section 3"
+              echo "for the outstanding blockers."
+            fi
+            echo
+            if [ "${META}" != "success" ]; then
+              echo "**Repository hygiene failed.** This is the gating check —"
+              echo "see AGENTS.md for what it enforces and why."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${built}" -eq 0 ]; then
+            echo "::warning::No build ran on this ref (no CMake or Gradle present). A green result here does NOT mean JModelica builds."
+          fi
+
+          # Only hygiene gates this job. The run as a whole is still red when a
+          # build job fails — which is what jules-ci-fix.yml reacts to — but
+          # keeping the gate narrow means a pull request that fixes the build is
+          # not blocked by the build being broken.
+          [ "${META}" = "success" ]

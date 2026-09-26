@@ -1,0 +1,14 @@
+# Review is requested automatically from these owners.
+#
+# This matters more than usual here: pull requests in this repository are
+# largely opened by automated agents, so the review request is the point at
+# which a human enters the loop at all.
+
+*                       @Foadsf
+
+# Automation and supply chain. A change here can alter what runs with the
+# repository's credentials, so it should never merge unreviewed.
+/.github/               @Foadsf
+/AGENTS.md              @Foadsf
+/tools/                 @Foadsf
+/Dockerfile             @Foadsf

@@ -1,0 +1,38 @@
+version: 2
+
+updates:
+  # Actions are pinned by commit SHA in this repository (the Jules action
+  # receives an API key, so a mutable tag is not acceptable there). Dependabot
+  # understands SHA pins and will bump them with the new version in the comment,
+  # which is exactly the review-then-update loop we want.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # One pull request for routine action bumps rather than six.
+      actions:
+        patterns: ['*']
+        update-types: [minor, patch]
+    labels:
+      - dependencies
+      - jules:skip
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+      - jules:skip
+
+  - package-ecosystem: gradle
+    directory: /Compiler
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - jules:skip

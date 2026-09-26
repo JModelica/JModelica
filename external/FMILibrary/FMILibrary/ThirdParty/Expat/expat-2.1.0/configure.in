@@ -49,13 +49,7 @@ LIBCURRENT=7
 LIBREVISION=0
 LIBAGE=6
 
-if [[ "$(uname)" == "Darwin" ]]; then
-    # echo "This is macOS."
-else
-    AC_CONFIG_HEADER(expat_config.h)
-fi
-
-
+AC_CONFIG_HEADER(expat_config.h)
 
 sinclude(conftools/ac_c_bigendian_cross.m4)
 
@@ -87,14 +81,7 @@ if test "$GCC" = yes ; then
 fi
 
 dnl Checks for header files.
-if [[ "$(uname)" == "Darwin" ]]; then
-    # echo "This is macOS."
-else
-    AC_HEADER_STDC
-fi
-
-
-
+AC_HEADER_STDC
 
 dnl Checks for typedefs, structures, and compiler characteristics.
 

@@ -4,7 +4,7 @@ name: Jules — keep Actions green
 # the failure to Jules to diagnose and fix.
 #
 # The hard part is not triggering — it is triggering *once*, and then again
-# when the first attempt came to nothing. Three guards:
+# when the first attempt came to nothing. Four guards:
 #
 #   1. Deduplication by commit. A commit handed over in the last
 #      JULES_CI_FIX_RETRY_HOURS (default 72) is not handed over again, however
@@ -13,6 +13,9 @@ name: Jules — keep Actions green
 #      commits) per rolling day, default 3.
 #   3. Open-work check. If a Jules pull request against the branch was active
 #      within the retry window, Jules is already working; no second session.
+#   4. Live-session check. If a session this workflow started from the branch
+#      is still running or waiting, the failure is already being worked, even
+#      though the branch has moved on to a new commit.
 #
 # The ledger for 1 and 2 is this workflow's own run history, but only runs in
 # which the handover step really succeeded. Counting every run that was not
@@ -168,6 +171,7 @@ jobs:
           FORCE: ${{ inputs.force }}
           DAILY_MAX: ${{ vars.JULES_CI_FIX_DAILY_MAX || '3' }}
           RETRY_HOURS: ${{ vars.JULES_CI_FIX_RETRY_HOURS || '72' }}
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
         run: |
           set -euo pipefail
 
@@ -245,6 +249,38 @@ jobs:
             if [ "${open}" -gt 0 ]; then
               proceed=false
               reason="Jules has ${open} active pull request(s) against ${BRANCH}; let them land first"
+            fi
+          fi
+
+          # --- Guard 4: is a Jules session already on this branch's CI? ------
+          # Guard 1 is per commit, and a red branch gets new commits: on
+          # 2026-09-26 three merges to master in half an hour each started
+          # another session on the same two failing jobs. Any live session
+          # this workflow started from the branch - its prompt opens with the
+          # failure line below - means the failure is already being worked.
+          # An unreachable API does not block a handover.
+          if [ "${proceed}" = "true" ]; then
+            : > sessions.jsonl
+            token=""
+            for _ in 1 2 3 4 5; do
+              curl -sS -f -m 60 -H "X-Goog-Api-Key: ${JULES_API_KEY}" \
+                "https://jules.googleapis.com/v1alpha/sessions?pageSize=100${token:+&pageToken=${token}}" \
+                > page.json || { echo "::warning::Could not list Jules sessions; guard 4 skipped."; break; }
+              jq -c '.sessions[]?' page.json >> sessions.jsonl
+              token=$(jq -r '.nextPageToken // empty' page.json)
+              [ -n "${token}" ] || break
+            done
+            live=$(jq -s --arg src "sources/github/${GH_REPO}" --arg branch "${BRANCH}" \
+                     --arg lead "workflow for ${GH_REPO} failed on branch ${BRANCH}." '
+                     [ .[] | select(.sourceContext.source == $src and
+                                    .sourceContext.githubRepoContext.startingBranch == $branch and
+                                    ((.prompt // "") | split("\n")[0] | endswith($lead)) and
+                                    (.state | IN("QUEUED", "PLANNING", "IN_PROGRESS", "PAUSED",
+                                                 "AWAITING_PLAN_APPROVAL", "AWAITING_USER_FEEDBACK")))
+                           | .name ] | length' sessions.jsonl)
+            if [ "${live}" -gt 0 ]; then
+              proceed=false
+              reason="${live} Jules session(s) are already working on ${BRANCH}'s CI"
             fi
           fi
 

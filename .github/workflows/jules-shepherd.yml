@@ -177,9 +177,14 @@ jobs:
             pr_url=$(jq -r '[.outputs[]?.pullRequest.url // empty] | last // ""' <<< "${s}")
             # From the title, or from the prompt of a session started before
             # titles were set.
-            issue=$( { sed -nE 's/^auto: Issue #([0-9]+):.*/\1/p' <<< "${title}"
-                       jq -r '.prompt // ""' <<< "${s}" | sed -nE 's/^## Task: resolve issue #([0-9]+)$/\1/p'
-                     } | head -n 1)
+            # No `| head` anywhere in this loop: under pipefail a reader that
+            # stops early kills its writer with SIGPIPE, and set -e the job.
+            issue=$(sed -nE 's/^auto: Issue #([0-9]+):.*/\1/p' <<< "${title}")
+            if [ -z "${issue}" ]; then
+              issue=$(jq -r '.prompt // ""' <<< "${s}" \
+                        | sed -nE 's/^## Task: resolve issue #([0-9]+)$/\1/p')
+              issue="${issue%%$'\n'*}"
+            fi
             updated=$(date -u -d "$(jq -r '.updateTime // .createTime' <<< "${s}")" +%s)
             idle=$(( (now - updated) / 60 ))
             action="waiting"
@@ -200,7 +205,8 @@ jobs:
             fi
 
             list_all "${name}/activities" activities > acts.jsonl || : > acts.jsonl
-            last_agent=$(jq -rs '[.[] | select(.agentMessaged)] | sort_by(.createTime) | last | .agentMessaged.agentMessage // ""' acts.jsonl | head -c 3000)
+            last_agent=$(jq -rs '[.[] | select(.agentMessaged)] | sort_by(.createTime) | last | .agentMessaged.agentMessage // ""' acts.jsonl)
+            last_agent="${last_agent:0:3000}"
 
             if [ -n "${obsolete}" ] && [ -z "${pr_url}" ]; then
               if [ -n "${issue}" ]; then

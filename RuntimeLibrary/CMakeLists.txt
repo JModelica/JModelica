@@ -35,7 +35,7 @@ if(NOT MINPACK_HOME)
     set(MINPACK_HOME ${TOP_SRC}/ThirdParty/Minpack/cminpack-1.3.2/)
     message(STATUS "MINPACK_HOME was not defined, using ${MINPACK_HOME}")
 endif()
-include_directories(${MINPACK_HOME})
+include_directories(SYSTEM ${MINPACK_HOME})
 
 # Get the JModelica install directory
 if(CMAKE_INSTALL_DIR)
@@ -68,7 +68,7 @@ endif()
 
 #Including Sundials.
 message(STATUS SUNDIALS_HOME=${SUNDIALS_HOME})
-include_directories(${SUNDIALS_HOME}/include)
+include_directories(SYSTEM ${SUNDIALS_HOME}/include)
 
 set(RuntimeLibrary_BUILD ${SimulationRuntime_BINARY_DIR})
 

@@ -39,15 +39,15 @@ void jmi_set_current(jmi_t* jmi);
 /**
  * \brief Get the current jmi struct.
  */
-jmi_t* jmi_get_current();
+jmi_t* jmi_get_current(void);
 
 /**
  * \brief Check if the current jmi struct is set.
  */
-int jmi_current_is_set();
+int jmi_current_is_set(void);
 
 /**
- * \brief Prepare try buffer for calling jmi_try()
+ * \brief Prepare try buffer for calling jmi_try(void)
  * \returns Try depth to be submitted to jmi_try and jmi_finalize_try
  */
 int jmi_prepare_try(jmi_t* jmi);
@@ -65,7 +65,7 @@ void jmi_finalize_try(jmi_t* jmi, int depth);
 /**
  * \brief Throw exception.
  */
-void jmi_throw();
+void jmi_throw(void);
 
 
 /**
@@ -74,12 +74,12 @@ void jmi_throw();
 void jmi_global_log(int warning, const char* name, const char* attr, const char* value);
 
 /**
- * \brief Allocate memory with user-supplied function, if any. Otherwise use calloc().
+ * \brief Allocate memory with user-supplied function, if any. Otherwise use calloc(void).
  */
 void* jmi_global_calloc(size_t n, size_t s);
 
 
-/* For use as arguments to jmi_assert_failed(). */
+/* For use as arguments to jmi_assert_failed(void). */
 #define JMI_ASSERT_ERROR   0
 #define JMI_ASSERT_WARNING 1
 

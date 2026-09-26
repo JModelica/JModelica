@@ -69,7 +69,7 @@ runs:
 
         # The key travels in a header from the environment, never on the
         # command line.
-        status=$(curl -sS -o "${work}/response.json" -w '%{http_code}' \
+        status=$(curl -sS -m 60 -o "${work}/response.json" -w '%{http_code}' \
                    -X POST 'https://jules.googleapis.com/v1alpha/sessions' \
                    -H 'Content-Type: application/json' \
                    -H "X-Goog-Api-Key: ${JULES_API_KEY}" \

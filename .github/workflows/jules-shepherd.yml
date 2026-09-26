@@ -26,6 +26,9 @@ name: Jules — shepherd sessions
 #                           too are named as not the pull request's, so Jules
 #                           does not widen the change to fix them.
 #   pull request closed     the session is archived.
+#   started from a branch   archived, and its issue released for the next
+#   merged or deleted       sweep: a pull request against that base lands
+#   since                   nowhere.
 #   ended with no PR        the outcome is reported on the issue, and the
 #                           session archived. A failed session frees the issue
 #                           for the next sweep; a completed one - Jules found
@@ -60,6 +63,7 @@ jobs:
   shepherd:
     if: vars.JULES_SHEPHERD_ENABLED != 'false'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Check the API key is configured
         env:
@@ -89,7 +93,7 @@ jobs:
           # jules METHOD PATH [BODY] - prints the response, returns 1 on an
           # HTTP error. The key goes in a header from the environment.
           jules() {
-            local args=(-sS -o "${tmp}/resp.json" -w '%{http_code}' -X "$1"
+            local args=(-sS -m 60 -o "${tmp}/resp.json" -w '%{http_code}' -X "$1"
                         -H "X-Goog-Api-Key: ${JULES_API_KEY}" "${base_url}/$2")
             if [ -n "${3:-}" ]; then
               args+=(-H 'Content-Type: application/json' -d "$3")
@@ -113,15 +117,18 @@ jobs:
           }
 
           # Every page of a list call, one JSON object per line.
+          # Capped, so a page token that never runs out cannot hang the job.
           list_all() { # PATH FIELD
-            local token="" sep="?"
+            local token="" sep="?" pages=0
             case "$1" in *\?*) sep="&" ;; esac
-            while : ; do
+            while [ "${pages}" -lt 20 ]; do
               jules GET "$1${sep}pageSize=100${token:+&pageToken=${token}}" > "${tmp}/page.json" || return 1
               jq -c ".$2[]?" "${tmp}/page.json"
+              pages=$((pages + 1))
               token=$(jq -r '.nextPageToken // empty' "${tmp}/page.json")
-              [ -n "${token}" ] || break
+              [ -n "${token}" ] || return 0
             done
+            echo "::warning::$1: stopped after ${pages} pages." >&2
           }
 
           message() { # SESSION TEXT
@@ -154,6 +161,7 @@ jobs:
             > sessions.jsonl
 
           now=$(date -u +%s)
+          default=$(gh api "repos/${GH_REPO}" --jq .default_branch)
           echo "| Session | State | Action |" > summary.md
           echo "|---|---|---|" >> summary.md
           echo "$(wc -l < sessions.jsonl) automation session(s) to follow up."
@@ -163,7 +171,8 @@ jobs:
           while IFS= read -r s <&3; do
             name=$(jq -r .name <<< "${s}")
             state=$(jq -r .state <<< "${s}")
-            title=$(jq -r '.title // "(untitled)"' <<< "${s}")
+            # Untitled sessions get their prompt as a title; keep one line.
+            title=$(jq -r '(.title // "(untitled)") | split("\n")[0] | .[0:100]' <<< "${s}")
             url=$(jq -r '.url // ""' <<< "${s}")
             pr_url=$(jq -r '[.outputs[]?.pullRequest.url // empty] | last // ""' <<< "${s}")
             # From the title, or from the prompt of a session started before
@@ -176,11 +185,35 @@ jobs:
             action="waiting"
             echo "${name} [${state}] ${title}"
 
+            # A session started from a branch that has since been merged into
+            # the default branch, or deleted, can only produce a pull request
+            # against a dead base. feature/modernization-checkpoint left
+            # several such sessions waiting for an answer.
+            branch=$(jq -r '.sourceContext.githubRepoContext.startingBranch // ""' <<< "${s}")
+            obsolete=""
+            if [ -n "${branch}" ] && [ "${branch}" != "${default}" ]; then
+              if cmp=$(gh api "repos/${GH_REPO}/compare/${default}...${branch}" --jq .status 2>&1 < /dev/null); then
+                case "${cmp}" in behind|identical) obsolete="merged into ${default}" ;; esac
+              elif grep -q "HTTP 404" <<< "${cmp}"; then
+                obsolete="deleted"
+              fi
+            fi
+
             list_all "${name}/activities" activities > acts.jsonl || : > acts.jsonl
             last_agent=$(jq -rs '[.[] | select(.agentMessaged)] | sort_by(.createTime) | last | .agentMessaged.agentMessage // ""' acts.jsonl | head -c 3000)
 
+            if [ -n "${obsolete}" ] && [ -z "${pr_url}" ]; then
+              if [ -n "${issue}" ]; then
+                comment_issue "${issue}" "The [Jules session](${url}) for this issue started from \`${branch}\`, which has since been ${obsolete}. Archived it and released the issue, so the next scheduled sweep hands it over again from \`${default}\`."
+                if [ "${DRY_RUN}" != "true" ]; then
+                  gh issue edit "${issue}" --remove-label "jules:queued" > /dev/null || true
+                fi
+              fi
+              act "archive: ${branch} ${obsolete}" POST "${name}:archive" '{}' || true
+              action="started from ${branch}, since ${obsolete}; archived"
+
             # A paused session is answered first, pull request or not.
-            if [ "${state}" = "AWAITING_PLAN_APPROVAL" ]; then
+            elif [ "${state}" = "AWAITING_PLAN_APPROVAL" ]; then
               act "approve plan" POST "${name}:approvePlan" '{}' || true
               action="plan approved"
 

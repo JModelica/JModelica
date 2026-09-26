@@ -127,6 +127,9 @@ start by hand are left alone:
   most `JULES_SHEPHERD_MAX_RELAYS` times (default 5). Checks that also fail on
   the base branch are named as not the pull request's, so Jules does not widen
   the change to fix them;
+- a session that started from a branch since merged into the default branch,
+  or deleted, is archived and its issue released for the next sweep: its pull
+  request would target a dead base;
 - a session that ends without a pull request is reported on its issue. A failed
   one releases the issue for the next sweep; one that completed — Jules decided
   nothing should change — gets `jules:stuck`, with Jules's last message quoted.

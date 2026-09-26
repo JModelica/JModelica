@@ -114,8 +114,10 @@ nothing each day.
 approval, and a paused session nobody answers never finishes. Nor does Jules
 see CI on its own pull requests, and it only acts on pull request comments from
 the person who started the task. `jules-shepherd.yml` covers all of that
-through the API, for sessions whose title starts with `auto:`, the prefix every
-workflow here gives its sessions (sessions you start by hand are left alone):
+through the API, for sessions the automation started: those whose title starts
+with `auto:`, the prefix every workflow here gives its sessions, and older
+untitled ones whose prompt opens the way the workflow prompts do. Sessions you
+start by hand are left alone:
 
 - a plan awaiting approval is approved;
 - a question is answered with "decide and finish; put anything that needs a

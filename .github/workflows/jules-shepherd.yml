@@ -12,9 +12,10 @@ name: Jules — shepherd sessions
 # to Jules, and Jules acts on pull request comments only from the person who
 # started the task.
 #
-# Every few hours, for each non-archived session of this repository whose
-# title starts with `auto:` (the prefix the workflows give their sessions, so
-# sessions someone is driving by hand are left alone):
+# Every few hours, for each non-archived session of this repository that the
+# automation started - its title starts with `auto:`, or, for sessions from
+# before titles were set, its prompt opens the way every workflow prompt here
+# does. Sessions someone started by hand are left alone:
 #
 #   AWAITING_PLAN_APPROVAL  the plan is approved.
 #   AWAITING_USER_FEEDBACK  Jules is told to decide for itself and finish, at
@@ -145,8 +146,11 @@ jobs:
           }
 
           list_all sessions sessions \
-            | jq -c --arg src "sources/github/${GH_REPO}" \
-                'select(.sourceContext.source == $src and ((.title // "") | startswith("auto:")))' \
+            | jq -c --arg src "sources/github/${GH_REPO}" --arg repo "${GH_REPO}" '
+                select(.sourceContext.source == $src and
+                       (((.title // "") | startswith("auto:")) or
+                        ((.prompt // "") | startswith("You are working on \($repo), the community continuation")) or
+                        ((.prompt // "") | test("^The \"[^\"]+\" workflow for \($repo) failed on branch"))))' \
             > sessions.jsonl
 
           now=$(date -u +%s)
@@ -159,10 +163,14 @@ jobs:
           while IFS= read -r s <&3; do
             name=$(jq -r .name <<< "${s}")
             state=$(jq -r .state <<< "${s}")
-            title=$(jq -r .title <<< "${s}")
+            title=$(jq -r '.title // "(untitled)"' <<< "${s}")
             url=$(jq -r '.url // ""' <<< "${s}")
             pr_url=$(jq -r '[.outputs[]?.pullRequest.url // empty] | last // ""' <<< "${s}")
-            issue=$(sed -nE 's/^auto: Issue #([0-9]+):.*/\1/p' <<< "${title}")
+            # From the title, or from the prompt of a session started before
+            # titles were set.
+            issue=$( { sed -nE 's/^auto: Issue #([0-9]+):.*/\1/p' <<< "${title}"
+                       jq -r '.prompt // ""' <<< "${s}" | sed -nE 's/^## Task: resolve issue #([0-9]+)$/\1/p'
+                     } | head -n 1)
             updated=$(date -u -d "$(jq -r '.updateTime // .createTime' <<< "${s}")" +%s)
             idle=$(( (now - updated) / 60 ))
             action="waiting"

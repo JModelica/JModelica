@@ -28,10 +28,10 @@
 #include "jmi_me.h"
 
 /* Inquire version numbers of header files */
-const char* fmi1_me_get_model_types_platform() {
+const char* fmi1_me_get_model_types_platform(void) {
     return fmiModelTypesPlatform;
 }
-const char* fmi1_me_get_version() {
+const char* fmi1_me_get_version(void) {
     return fmiVersion;
 }
 

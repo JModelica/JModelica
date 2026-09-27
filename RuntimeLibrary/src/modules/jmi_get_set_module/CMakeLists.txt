@@ -7,7 +7,7 @@ add_library(jmi_get_set_default SHARED
             ${JMIGetSetSource})
 
 if(NOT MSVC)
-    set_target_properties(jmi_get_set_default PROPERTIES COMPILE_FLAGS "-Wall -g -std=c89 -pedantic -Werror -O2")
+    set_target_properties(jmi_get_set_default PROPERTIES COMPILE_FLAGS "-Wall -g -std=c11 -pedantic -Werror -O2")
 endif()
 
 #Install the library
@@ -15,3 +15,4 @@ install(TARGETS jmi_get_set_default
     RUNTIME DESTINATION "${RTLIB_LIB_DIR}"
     LIBRARY DESTINATION "${RTLIB_LIB_DIR}"
     ARCHIVE DESTINATION "${RTLIB_LIB_DIR}")
+target_link_libraries(jmi_get_set_default jmi)

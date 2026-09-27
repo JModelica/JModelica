@@ -23,6 +23,15 @@
 
 #include "jmi_brent_solver.h"
 #include "jmi_block_solver_impl.h"
+
+#ifndef BIG_REAL
+#ifdef SUN_BIG_REAL
+#define BIG_REAL SUN_BIG_REAL
+#else
+#define BIG_REAL 1.0e300
+#endif
+#endif
+
 #include "jmi_block_log.h"
 
 #include "jmi_brent_search.h"

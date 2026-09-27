@@ -31,11 +31,11 @@ int fmi1_cs_root_fcn(jmi_real_t t, jmi_real_t *x, jmi_real_t *root, jmi_ode_size
 int fmi1_cs_rhs_fcn(jmi_real_t t, jmi_real_t *x, jmi_real_t *rhs, jmi_ode_sizes_t sizes, void* problem_data);
 jmi_ode_status_t fmi1_cs_event_update(jmi_ode_problem_t* problem);
 
-const char* fmi1_cs_get_types_platform() {
+const char* fmi1_cs_get_types_platform(void) {
     return fmiPlatform;
 }
 
-const char* fmi1_cs_get_version() {
+const char* fmi1_cs_get_version(void) {
     return fmi1_me_get_version();
 }
 

@@ -10,17 +10,20 @@
 #endif
 #else
 /* Fallback if __has_include is not available (e.g. old GCC), assume header exists if version >= 2.7.0 */
-/* For safety, we can try including it. If it fails on very old Sundials, this might be an issue.
-   But we are targeting modern stack. */
 #include <sundials/sundials_version.h>
 #endif
 
-#if SUNDIALS_VERSION_MAJOR >= 7
+#if SUNDIALS_VERSION_MAJOR >= 6
 /* Define realtype if missing (Sundials 7.x might use sunrealtype) */
 typedef double realtype;
 
 /* Define DlsMat for compatibility with newer Sundials versions (which removed it) */
-#ifndef JMI_SUNDIALS_COMPAT_DLSMAT
+#if !defined(JMI_SUNDIALS_COMPAT_DLSMAT)
+
+#if SUNDIALS_VERSION_MAJOR == 6
+#include <sundials/sundials_direct.h>
+typedef SUNDlsMat DlsMat;
+#elif SUNDIALS_VERSION_MAJOR >= 7
 #define JMI_SUNDIALS_COMPAT_DLSMAT
 #pragma message "Defining DlsMat manually"
 
@@ -28,21 +31,6 @@ typedef double realtype;
  * ==================================================================
  * Type definitions
  * ==================================================================
- */
-
-/*
- * -----------------------------------------------------------------
- * Type : DlsMat
- * -----------------------------------------------------------------
- * The type DlsMat is defined to be a pointer to a structure
- * with various sizes, a data field, and an array of pointers to
- * the columns which defines a dense matrix for use in direct
- * linear solvers. The M and N fields indicates the number of
- * rows and columns, respectively. The data field is a one
- * dimensional array used for component storage. The cols
- * field stores the pointers in data for the beginning of each
- * column.
- * -----------------------------------------------------------------
  */
 
 typedef struct _DlsMat {
@@ -58,16 +46,13 @@ typedef struct _DlsMat {
 /* Data types for the DlsMat type */
 #define SUNDIALS_DENSE 1
 #define SUNDIALS_BAND  2
+#endif
 
 #endif /* JMI_SUNDIALS_COMPAT_DLSMAT */
 #else
 #include <sundials/sundials_direct.h>
 /* Ensure DlsMat is defined properly if not done by sundials_direct.h (unlikely for < 7) */
 #endif
-
-
-
-
 
 /* Legacy Constants removed in Sundials 7.x */
 #ifndef CV_ADAMS
@@ -113,14 +98,11 @@ extern SUNContext jmi_sundials_ctx;
 
 /* N_Vector wrapper */
 #include <nvector/nvector_serial.h>
-/* #define N_VNew_Serial(N) N_VNew_Serial(N, jmi_sundials_ctx) */
-/* Use explicit context passing in source code instead of macro injection */
 #endif
 
 #if SUNDIALS_VERSION_MAJOR >= 6
 #ifndef JMI_COMPAT_IMPL
 /* Define N_Vector accessors (Sundials 7.x compatibility) */
-/* Force definition to ensure we use the macro version */
 #ifdef N_VGetArrayPointer
 #undef N_VGetArrayPointer
 #endif
@@ -140,7 +122,12 @@ int jmi_cvdense_compat(void *cvode_mem, int N);
 #define CVDense jmi_cvdense_compat
 
 /* CVodeSetErrHandlerFn wrapper */
-int jmi_cvode_set_err_handler_fn_compat(void *cvode_mem, void (*ehfun)(int, const char*, const char*, char*, void*), void *eh_data);
+#if SUNDIALS_VERSION_MAJOR >= 7
+typedef SUNErrHandlerFn CVErrHandlerFnCompat;
+#else
+typedef void (*CVErrHandlerFnCompat)(int error_code, const char *module, const char *function, char *msg, void *eh_data);
+#endif
+int jmi_cvode_set_err_handler_fn_compat(void *cvode_mem, CVErrHandlerFnCompat ehfun, void *eh_data);
 #define CVodeSetErrHandlerFn jmi_cvode_set_err_handler_fn_compat
 #endif /* JMI_COMPAT_IMPL */
 

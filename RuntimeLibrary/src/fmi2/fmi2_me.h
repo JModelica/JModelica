@@ -75,14 +75,14 @@ struct fmi2_me_t {
  * 
  * @return The identifier of platform types compiled for.
  */
-const char* fmi2_get_types_platform();
+const char* fmi2_get_types_platform(void);
 
 /**
  * \brief Returns the FMI version of the header file.
  * 
  * @return The FMI version of fmiFunctions.h.
  */
-const char* fmi2_get_version();
+const char* fmi2_get_version(void);
 
 /**
  * \brief Sets the logging settings.

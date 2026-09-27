@@ -35,7 +35,13 @@
  */
 #include <nvector/nvector_serial.h>
 
+#include "jmi_sundials_compat.h"
+#if SUNDIALS_VERSION_MAJOR < 7
 #include <sundials/sundials_dense.h>
+#else
+#include <sunmatrix/sunmatrix_dense.h>
+#include <sunlinsol/sunlinsol_dense.h>
+#endif
 
 #include <kinsol/kinsol.h>
 

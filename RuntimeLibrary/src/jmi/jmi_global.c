@@ -107,7 +107,7 @@ pthread_key_t jmi_tls_handle;
  *
  * Used to set up thread-specific storage.
  */
-__attribute__((constructor)) static void jmi_init_tls() {
+__attribute__((constructor)) static void jmi_init_tls(void) {
     /* TODO: Handle failure. */
     pthread_key_create(&jmi_tls_handle, NULL);
 }
@@ -117,7 +117,7 @@ __attribute__((constructor)) static void jmi_init_tls() {
  *
  * Used to free thread-specific storage.
  */
-__attribute__((destructor)) static void jmi_free_tls() {
+__attribute__((destructor)) static void jmi_free_tls(void) {
     pthread_key_delete(jmi_tls_handle);
 }
 
@@ -144,7 +144,7 @@ void jmi_set_current(jmi_t* jmi) {
 /**
  * \brief Get the current jmi struct.
  */
-jmi_t* jmi_get_current() {
+jmi_t* jmi_get_current(void) {
     jmi_t* res = (jmi_t*) jmi_tls_get_value(jmi_tls_handle);
     if (res == NULL)
         fprintf(stderr, "jmi_get_current(): current is NULL\n");
@@ -154,7 +154,7 @@ jmi_t* jmi_get_current() {
 /**
  * \brief Check if the current jmi struct is set.
  */
-int jmi_current_is_set() {
+int jmi_current_is_set(void) {
     return jmi_tls_get_value(jmi_tls_handle) != NULL;
 }
 
@@ -194,7 +194,7 @@ void jmi_finalize_try(jmi_t* jmi, int depth) {
 /**
  * \brief Set up for exception handling.
  */
-void jmi_throw() {
+void jmi_throw(void) {
     jmi_t* jmi;
 
     jmi = jmi_get_current();

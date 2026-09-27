@@ -22,7 +22,8 @@ typedef double realtype;
 
 #if SUNDIALS_VERSION_MAJOR == 6
 #include <sundials/sundials_direct.h>
-typedef SUNDlsMat DlsMat;
+/* Do not redefine DlsMat or _DlsMat, just use what sundials_direct.h provides */
+
 #elif SUNDIALS_VERSION_MAJOR >= 7
 #define JMI_SUNDIALS_COMPAT_DLSMAT
 #pragma message "Defining DlsMat manually"

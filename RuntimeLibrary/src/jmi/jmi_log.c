@@ -336,7 +336,7 @@ static void emit(log_t *log) {
 
 /** \brief Add indentation to the current line if it is empty.
  *  Should be called before adding something to the start of a line with a
- *  buffer*() function, either directly or by invoking set_category().
+ *  buffer*(void) function, either directly or by invoking set_category(void).
  */
 static void indent_line(log_t *log) {
     buf_t *buf = bufof(log);
@@ -355,7 +355,7 @@ static INLINE frame_t *topof(log_t *log) { return log->frames + log->topindex; }
 static INLINE BOOL can_pop(log_t *log)   { return log->topindex > 0; } /* always keep one frame */
 
 /** \brief Set the current logging category; emit a log message if it was changed.
-  * Also calls indent_line().
+  * Also calls indent_line(void).
   */
 static void set_category(log_t *log, category_t c) {
     frame_t *top;
@@ -445,7 +445,7 @@ static void create_log_file_if_needed(log_t *log) {
         }
         /* TODO: 
            create_log_file_if_needed need to be called several times since the options are
-           updated in fmiInitialize() and at that point copy_log_to_file_flag might be set.
+           updated in fmiInitialize(void) and at that point copy_log_to_file_flag might be set.
 
            Just to make this safer: if fopen fails - print a message on stderr and
            clear the option.
@@ -463,7 +463,7 @@ static void create_log_file_if_needed(log_t *log) {
     }
 }
 
-char* jmi_log_get_build_date() {
+char* jmi_log_get_build_date(void) {
     return __DATE__ " " __TIME__;
 }
 

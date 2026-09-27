@@ -400,7 +400,7 @@ jmi_t* fmi1_me_get_jmi_t(fmiComponent c);
  * 
  * @return The set of compatible platforms.
  */
-const char* fmi1_me_get_model_types_platform();
+const char* fmi1_me_get_model_types_platform(void);
 
 /** Logging functions that are specific for fmi1_me, are used from jmi_log.c via callbacks */
 void fmi1_me_emit_log(jmi_callbacks_t* jmi_callbacks, jmi_log_category_t category, jmi_log_category_t severest_category, char* message);
@@ -419,7 +419,7 @@ fmiStatus fmi1_me_extract_debug_info(fmiComponent c);
  * 
  * @return The version of fmiModelFunctions.h.
  */
-const char* fmi1_me_get_version();
+const char* fmi1_me_get_version(void);
 
 /**
  * \brief Turns on or off debugging.

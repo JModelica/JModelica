@@ -853,6 +853,7 @@ int jmi_ode_unsolved_block_dir_der(jmi_t *jmi, jmi_block_residual_t *current_blo
     int INFO;
     int n_x;
     int ef = 0;
+    (void)ef;
 
     INFO = 0;
     n_x = current_block->n;
@@ -938,6 +939,7 @@ int jmi_kinsol_solver_evaluate_jacobian(jmi_block_residual_t* block, jmi_real_t*
     int i,j;
     int n_x;
     int ef = 0;
+    (void)ef;
     n_x = block->n;
 
     /* TODO: for nested blocks it is necessary to cache jacobians (since dF leads to jac

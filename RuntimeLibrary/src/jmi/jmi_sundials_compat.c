@@ -8,13 +8,13 @@
 /* Global SUNContext */
 SUNContext jmi_sundials_ctx = NULL;
 
-void jmi_sundials_init_context() {
+void jmi_sundials_init_context(void) {
     if (jmi_sundials_ctx == NULL) {
         SUNContext_Create(NULL, &jmi_sundials_ctx);
     }
 }
 
-void jmi_sundials_free_context() {
+void jmi_sundials_free_context(void) {
     if (jmi_sundials_ctx != NULL) {
         SUNContext_Free(&jmi_sundials_ctx);
         jmi_sundials_ctx = NULL;
@@ -63,15 +63,18 @@ int jmi_cvdense_compat(void *cvode_mem, int N) {
 }
 
 /* Wrapper for CVodeSetErrHandlerFn */
-/* Legacy signature: int CVodeSetErrHandlerFn(void *cvode_mem, CVErrHandlerFn ehfun, void *eh_data); */
-/* Modern: int CVodeSetErrHandlerFn(void *cvode_mem, CVErrHandlerFn ehfun, void *eh_data); 
-   Wait, if it exists, why did it fail?
-   Maybe implicit declaration because of header?
-   Let's define a wrapper anyway to be safe.
-*/
-int jmi_cvode_set_err_handler_fn_compat(void *cvode_mem, void (*ehfun)(int, const char*, const char*, char*, void*), void *eh_data) {
-    /* Cast to modern type if needed */
+#if SUNDIALS_VERSION_MAJOR >= 7
+typedef SUNErrHandlerFn CVErrHandlerFnCompat;
+int jmi_cvode_set_err_handler_fn_compat(void *cvode_mem, CVErrHandlerFnCompat ehfun, void *eh_data) {
+    SUNContext_PushErrHandler(jmi_sundials_ctx, ehfun, eh_data);
+    return 0;
+}
+#else
+typedef void (*CVErrHandlerFnCompat)(int error_code, const char *module, const char *function, char *msg, void *eh_data);
+int jmi_cvode_set_err_handler_fn_compat(void *cvode_mem, CVErrHandlerFnCompat ehfun, void *eh_data) {
     CVodeSetErrHandlerFn(cvode_mem, (CVErrHandlerFn)ehfun, eh_data);
     return 0;
 }
+#endif
+
 #endif

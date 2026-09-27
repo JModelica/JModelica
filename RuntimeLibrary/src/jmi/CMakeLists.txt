@@ -174,7 +174,7 @@ add_definitions(-DJMI_INCLUDE_MINPACK)
 # linux/arm64 container build. Gate them on the processor rather than dropping
 # them, because 32-bit x86 still needs them.
 if(NOT MSVC)
-    set(JMI_C_FLAGS "-Wall -g -std=c89 -pedantic -Werror -Wno-long-long -O2")
+    set(JMI_C_FLAGS "-Wall -g -std=c11 -pedantic -Werror -Wno-long-long -O2")
     if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(i.86|x86|x86_64|amd64|AMD64)$")
         set(JMI_C_FLAGS "${JMI_C_FLAGS} -msse2 -mfpmath=sse")
     else()
@@ -241,11 +241,11 @@ endif()
 OPTION(BUILD_MSL_EXTERNAL_LIBS "Build the MSL external libraries" ON)
 if (${BUILD_MSL_EXTERNAL_LIBS})
     #Build ModelicaExternalC library
-    include_directories(${MSLCSOURCES})
-    include_directories(${MSLCSOURCES}/zlib)
+    include_directories(SYSTEM ${MSLCSOURCES})
+    include_directories(SYSTEM ${MSLCSOURCES}/zlib)
     add_library(ModelicaExternalC SHARED ${MODELICAEXTERNALCSources})
     if(NOT MSVC)
-        set_target_properties(ModelicaExternalC PROPERTIES COMPILE_FLAGS "-Wall -g -std=c89 -pedantic")
+        set_target_properties(ModelicaExternalC PROPERTIES COMPILE_FLAGS "-Wall -g -std=c11 -pedantic")
     endif()
 
     #Build ModelicaStandardTables library
@@ -284,3 +284,11 @@ if (${BUILD_MSL_EXTERNAL_LIBS})
         FILES_MATCHING PATTERN "*.h")
 endif()
 
+
+
+
+target_link_libraries(ModelicaExternalC jmi)
+target_link_libraries(ModelicaStandardTables ModelicaExternalC ModelicaMatIO)
+target_link_libraries(ModelicaMatIO zlib ModelicaExternalC)
+target_link_libraries(ModelicaStandardTables ModelicaExternalC ModelicaMatIO jmi)
+target_link_libraries(ModelicaStandardTables jmi)

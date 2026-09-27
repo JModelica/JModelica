@@ -89,9 +89,9 @@ int jmi_new_block_solver(jmi_block_solver_t** block_solver_ptr,
     block_solver->f_scale = N_VNew_Serial(n, jmi_sundials_ctx);
     block_solver->scale_update_time = -1.0;
     if(n>0) {
-        block_solver->J = SUNDlsMat_NewDenseMat(n ,n);
-        SUNDlsMat_SetToZero(block_solver->J);
-        block_solver->J_scale = SUNDlsMat_NewDenseMat(n ,n);
+        block_solver->J = (DlsMat)SUNDlsMat_NewDenseMat(n ,n);
+        SUNDlsMat_SetToZero((SUNDlsMat)block_solver->J);
+        block_solver->J_scale = (DlsMat)SUNDlsMat_NewDenseMat(n ,n);
     }
 
     block_solver->res = (jmi_real_t*)calloc(n,sizeof(jmi_real_t));
@@ -245,8 +245,8 @@ void jmi_delete_block_solver(jmi_block_solver_t** block_solver_ptr) {
 
     N_VDestroy_Serial(block_solver->f_scale);
     if(block_solver->n > 0) {
-        SUNDlsMat_DestroyMat(block_solver->J);
-        SUNDlsMat_DestroyMat(block_solver->J_scale);
+        SUNDlsMat_DestroyMat((SUNDlsMat)block_solver->J);
+        SUNDlsMat_DestroyMat((SUNDlsMat)block_solver->J_scale);
     }
 
     free(block_solver->res);
@@ -755,7 +755,7 @@ void jmi_block_solver_init_default_options(jmi_block_solver_options_t* bsop) {
     bsop->time_events_epsilon = JMI_ALMOST_EPS;
     bsop->step_limit_factor = 10; /** < \brief Step limiting factor */
     bsop->regularization_tolerance = -1;
-    bsop->use_newton_for_brent = 0; 
+    bsop->use_newton_for_brent = 0;
 
     bsop->active_bounds_threshold = 0; /** < \brief Threshold for when at active bound. */
 
@@ -979,7 +979,7 @@ void jmi_setup_f_residual_scaling(jmi_block_solver_t *block) {
     jmi_block_solver_options_t* bsop = block->options;
     int i, N = block->n;
     realtype* dummy = 0;
-    
+
     /* Read manual scaling from annotations and propagated nominal values for
      * residuals and put them in residual_nominal & scale_ptr*/
     if (bsop->residual_equation_scaling_mode == jmi_residual_scaling_manual ||
@@ -1004,7 +1004,7 @@ void jmi_setup_f_residual_scaling(jmi_block_solver_t *block) {
             }
         }
     }
-    
+
     block->F(block->problem_data,dummy, block->residual_heuristic_nominal, JMI_BLOCK_EQUATION_NOMINAL_AUTO);
     block->F(block->problem_data,dummy, block->residual_heuristic_nominal, JMI_BLOCK_EQUATION_NOMINAL);
     for (i = 0; i < N; i++) {

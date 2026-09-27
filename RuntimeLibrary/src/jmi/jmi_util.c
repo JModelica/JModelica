@@ -439,10 +439,10 @@ int jmi_find_parent_dir(char* path, const char* dir) {
 
 union jmi_func_cast {
     void* x;
-    char* (*y)();
+    char* (*y)(void);
 };
 
-void* jmi_func_to_voidp(char* (*y)()) {
+void* jmi_func_to_voidp(char* (*y)(void)) {
     union jmi_func_cast jfc;
     assert(sizeof(jfc.x)==sizeof(jfc.y));
     jfc.y = y;
@@ -465,7 +465,7 @@ char* jmi_locate_resources(void* (*allocateMemory)(size_t nobj, size_t size)) {
         GetModuleFileName((HINSTANCE)&__ImageBase, path, MAX_PATH);
     #else
         Dl_info info;
-        dladdr(jmi_func_to_voidp(jmi_locate_resources), &info);
+        dladdr(jmi_func_to_voidp((char* (*)(void))jmi_locate_resources), &info);
         resolved = realpath(info.dli_fname, path);
         if (!resolved)
             return NULL;

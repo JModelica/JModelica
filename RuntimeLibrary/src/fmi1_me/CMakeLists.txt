@@ -34,7 +34,7 @@ set(FMI_MESources
 #Build fmi_me library
 add_library(fmi1_me STATIC ${FMI_MESources})
 if(NOT MSVC)
-    set_target_properties(fmi1_me PROPERTIES COMPILE_FLAGS "-Wall -g -std=c89 -pedantic -Werror -O2")
+    set_target_properties(fmi1_me PROPERTIES COMPILE_FLAGS "-Wall -g -std=c11 -pedantic -Werror -O2")
 endif()
 
 #Install the libraries

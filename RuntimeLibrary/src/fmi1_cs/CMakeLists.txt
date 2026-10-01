@@ -32,7 +32,7 @@ set(FMI_CSSources
 #Build fmi_cs library
 add_library(fmi1_cs STATIC ${FMI_CSSources})
 if(NOT MSVC)
-    set_target_properties(fmi1_cs PROPERTIES COMPILE_FLAGS "-Wall -g -std=c89 -pedantic -Werror -O2")
+    set_target_properties(fmi1_cs PROPERTIES COMPILE_FLAGS "-Wall -g -std=c11 -pedantic -Werror -O2")
 endif()
 
 #Install the libraries

@@ -98,7 +98,7 @@ CXX = g++
 CC = gcc
 
 # C Compiler options
-CFLAGS = -std=c89 -pedantic -fPIC -msse2 -mfpmath=sse
+CFLAGS = -std=c11 -pedantic -fPIC -msse2 -mfpmath=sse
 
 SHARED_LDFLAGS = -dynamiclib -Wl,-rpath,@loader_path/ -pthread
 

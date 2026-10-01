@@ -57,11 +57,25 @@ typedef struct _DlsMat {
   long int ldata;
   double **cols;
 } *DlsMat;
+typedef struct _DlsMat *SUNDlsMat;
+#define _SUNDIALS_DIRECT_H_
 #endif
 
 /* Data types for the DlsMat type */
 #define SUNDIALS_DENSE 1
 #define SUNDIALS_BAND  2
+
+/* Compatibility for BIG_REAL removed in Sundials 7.x */
+#ifndef BIG_REAL
+#if defined(SUNDIALS_DOUBLE_PRECISION)
+#include <float.h>
+#define BIG_REAL DBL_MAX
+#elif defined(SUNDIALS_SINGLE_PRECISION)
+#define BIG_REAL FLT_MAX
+#else
+#define BIG_REAL LDBL_MAX
+#endif
+#endif
 
 #endif /* JMI_SUNDIALS_COMPAT_DLSMAT */
 #else

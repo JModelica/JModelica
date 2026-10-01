@@ -28,11 +28,11 @@
 #include <math.h>
 
 #include <sundials/sundials_math.h>
-#include <sundials/sundials_direct.h>
+#include "jmi_sundials_compat.h"
 #include <nvector/nvector_serial.h>
 /* #include <kinsol/kinsol_direct.h> */ /* Removed in Sundials 7, might need to check for < 7 */
 /* #include <kinsol/kinsol_impl.h> */   /* Internal header, dangerous to include */
-#include <sundials/sundials_dense.h>
+
 
 #if SUNDIALS_VERSION_MAJOR < 7
 #include <kinsol/kinsol_direct.h>

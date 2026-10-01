@@ -22,7 +22,7 @@ typedef double realtype;
 /* Define DlsMat for compatibility with newer Sundials versions (which removed it) */
 #ifndef JMI_SUNDIALS_COMPAT_DLSMAT
 #define JMI_SUNDIALS_COMPAT_DLSMAT
-#pragma message "Defining DlsMat manually"
+
 
 /*
  * ==================================================================
@@ -45,6 +45,9 @@ typedef double realtype;
  * -----------------------------------------------------------------
  */
 
+#if !defined(_SUNDIALS_DIRECT_H) && !defined(_SUNDIALS_DIRECT_H_) && !defined(SUNDIALS_DIRECT_H) && !defined(SUNDIALS_DIRECT_H_)
+#define _SUNDIALS_DIRECT_H
+#define SUNDIALS_DIRECT_H
 typedef struct _DlsMat {
   int type;
   long int M;
@@ -54,17 +57,44 @@ typedef struct _DlsMat {
   long int ldata;
   double **cols;
 } *DlsMat;
+typedef struct _DlsMat *SUNDlsMat;
+#define _SUNDIALS_DIRECT_H_
+#endif
 
 /* Data types for the DlsMat type */
 #define SUNDIALS_DENSE 1
 #define SUNDIALS_BAND  2
 
+/* Compatibility for BIG_REAL removed in Sundials 7.x */
+#ifndef BIG_REAL
+#if defined(SUNDIALS_DOUBLE_PRECISION)
+#include <float.h>
+#define BIG_REAL DBL_MAX
+#elif defined(SUNDIALS_SINGLE_PRECISION)
+#define BIG_REAL FLT_MAX
+#else
+#define BIG_REAL LDBL_MAX
+#endif
+#endif
+
 #endif /* JMI_SUNDIALS_COMPAT_DLSMAT */
+
 #else
 #include <sundials/sundials_direct.h>
+#include <sundials/sundials_dense.h>
 /* Ensure DlsMat is defined properly if not done by sundials_direct.h (unlikely for < 7) */
 #endif
 
+#if SUNDIALS_VERSION_MAJOR < 6
+#define SUNDlsMat_DenseCopy DenseCopy
+#define SUNDlsMat_DenseGETRF DenseGETRF
+#define SUNDlsMat_DenseGETRS DenseGETRS
+#define SUNDlsMat_SetToZero DenseZero
+#define SUNDlsMat_DensePOTRF DensePOTRF
+#define SUNDlsMat_DensePOTRS DensePOTRS
+#define SUNDlsMat_DenseGEQRF DenseGEQRF
+#define SUNDlsMat_DenseORMQR DenseORMQR
+#endif
 
 
 
@@ -104,8 +134,8 @@ extern "C" {
 
 #if SUNDIALS_VERSION_MAJOR >= 6
 /* Initialize/Free global SUNContext */
-void jmi_sundials_init_context();
-void jmi_sundials_free_context();
+void jmi_sundials_init_context(void);
+void jmi_sundials_free_context(void);
 
 /* Global SUNContext (needed for macros) */
 #include <sundials/sundials_context.h>

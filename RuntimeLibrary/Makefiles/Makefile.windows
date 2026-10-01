@@ -127,7 +127,7 @@ EXT_OPTION =
 CXXFLAGS = $(PLATFORM_FLAG) $(EXT_OPTION) 
 
 # C Compiler options
-CFLAGS = $(PLATFORM_FLAG) $(EXT_OPTION) -std=c89 -pedantic -msse2 -mfpmath=sse
+CFLAGS = $(PLATFORM_FLAG) $(EXT_OPTION) -std=c11 -pedantic -msse2 -mfpmath=sse
 
 SHARED_LDFLAGS = $(PLATFORM_FLAG) -shared
 

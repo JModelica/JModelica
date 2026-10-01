@@ -102,7 +102,7 @@ jmi_block_solver_status_t update_discrete_variables(switch_state_t *sw, int* non
     return jmi_block_solver_status_success;
 }
 
-int main() {
+int main(void) {
     jmi_block_solver_t* block_solver;
     jmi_block_solver_options_t options;
     jmi_block_solver_callbacks_t solver_callbacks;

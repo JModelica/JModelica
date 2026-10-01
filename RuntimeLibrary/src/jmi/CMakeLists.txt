@@ -174,7 +174,7 @@ add_definitions(-DJMI_INCLUDE_MINPACK)
 # linux/arm64 container build. Gate them on the processor rather than dropping
 # them, because 32-bit x86 still needs them.
 if(NOT MSVC)
-    set(JMI_C_FLAGS "-Wall -g -std=c89 -pedantic -Werror -Wno-long-long -O2")
+    set(JMI_C_FLAGS "-Wall -g -std=c11 -pedantic -Werror -Wno-long-long -O2")
     if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(i.86|x86|x86_64|amd64|AMD64)$")
         set(JMI_C_FLAGS "${JMI_C_FLAGS} -msse2 -mfpmath=sse")
     else()
@@ -245,24 +245,27 @@ if (${BUILD_MSL_EXTERNAL_LIBS})
     include_directories(${MSLCSOURCES}/zlib)
     add_library(ModelicaExternalC SHARED ${MODELICAEXTERNALCSources})
     if(NOT MSVC)
-        set_target_properties(ModelicaExternalC PROPERTIES COMPILE_FLAGS "-Wall -g -std=c89 -pedantic")
+        set_target_properties(ModelicaExternalC PROPERTIES COMPILE_FLAGS "-Wall -g -std=c11 -pedantic")
     endif()
 
     #Build ModelicaStandardTables library
     add_definitions("-DDUMMY_FUNCTION_USERTAB -DHAVE_ZLIB")
     add_library(ModelicaStandardTables SHARED ${MSLCSOURCES}/ModelicaStandardTables.c)
+    target_link_libraries(ModelicaStandardTables ModelicaMatIO zlib)
     if(NOT MSVC)
         set_target_properties(ModelicaStandardTables PROPERTIES COMPILE_FLAGS "-Wall -g")
     endif()
 
     #Build ModelicaIO library
     add_library(ModelicaIO SHARED ${MSLCSOURCES}/ModelicaIO.c)
+    target_link_libraries(ModelicaIO ModelicaMatIO zlib)
     if(NOT MSVC)
         set_target_properties(ModelicaIO PROPERTIES COMPILE_FLAGS "-Wall -g")
     endif()
 
     #Build ModelicaMatIO library
     add_library(ModelicaMatIO SHARED ${MSLCSOURCES}/ModelicaMatIO.c)
+    target_link_libraries(ModelicaMatIO zlib)
     if(NOT MSVC)
         set_target_properties(ModelicaMatIO PROPERTIES COMPILE_FLAGS "-Wall -g")
     endif()

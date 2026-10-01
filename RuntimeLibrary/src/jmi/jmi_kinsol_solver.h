@@ -35,7 +35,7 @@
  */
 #include <nvector/nvector_serial.h>
 
-#include <sundials/sundials_dense.h>
+#include "jmi_sundials_compat.h"
 
 #include <kinsol/kinsol.h>
 

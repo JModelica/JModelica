@@ -132,10 +132,10 @@ jmi_matrix_sparse_csc_t *jmi_linear_solver_create_sparse_matrix(jmi_int_t rows, 
 void jmi_linear_solver_delete_sparse_matrix(jmi_matrix_sparse_csc_t *A);
 
 typedef struct jmi_jacobian_quadrant {
-    void  (*dim)();
-    void  (*col)();
-    void  (*row)();
-    void  (*eval)();
+    void  (*dim)(void);
+    void  (*col)(void);
+    void  (*row)(void);
+    void  (*eval)(void);
 } jmi_jacobian_quadrant_t;
 
 typedef struct jmi_jacobian_quadrants {

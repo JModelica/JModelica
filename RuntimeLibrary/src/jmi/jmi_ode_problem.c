@@ -53,7 +53,7 @@ static jmi_ode_status_t default_event_update(jmi_ode_problem_t* problem) {
     return JMI_ODE_OK;
 }
 
-jmi_ode_callbacks_t jmi_ode_problem_default_callbacks() {
+jmi_ode_callbacks_t jmi_ode_problem_default_callbacks(void) {
     jmi_ode_callbacks_t cb;
     
     cb.rhs_func = default_rhs_fcn;

@@ -463,7 +463,7 @@ static void create_log_file_if_needed(log_t *log) {
     }
 }
 
-char* jmi_log_get_build_date() {
+char* jmi_log_get_build_date(void) {
     return __DATE__ " " __TIME__;
 }
 

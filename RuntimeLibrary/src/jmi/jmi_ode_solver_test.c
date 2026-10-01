@@ -49,7 +49,7 @@ static void jmi_free_default_callbacks(jmi_callbacks_t* cb) {
     free(cb);
 }
 
-static jmi_callbacks_t* jmi_get_default_callbacks() {
+static jmi_callbacks_t* jmi_get_default_callbacks(void) {
     jmi_callbacks_t* cb = (jmi_callbacks_t*)calloc(1, sizeof(jmi_callbacks_t));
     
     cb->log_options.logging_on_flag = 1;
@@ -74,7 +74,7 @@ int simple_rhs(jmi_real_t t, jmi_real_t* y, jmi_real_t* rhs, jmi_ode_sizes_t siz
     return 0;
 }
 
-static void test_ode_solver_basic() {
+static void test_ode_solver_basic(void) {
     jmi_ode_sizes_t sizes;
     jmi_ode_callbacks_t ode_callbacks = jmi_ode_problem_default_callbacks();
     jmi_ode_solver_options_t ode_options = jmi_ode_solver_default_options();
@@ -113,7 +113,7 @@ static void test_ode_solver_basic() {
     jmi_free_default_callbacks(cb);
 }
 
-main() {
+main(void) {
     test_ode_solver_basic();
 
     return EXIT_SUCCESS;

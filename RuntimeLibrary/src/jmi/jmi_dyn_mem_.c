@@ -27,6 +27,6 @@
  * constant evaluation.
  */
 
-jmi_dynamic_function_memory_t* jmi_dynamic_function_memory() {
+jmi_dynamic_function_memory_t* jmi_dynamic_function_memory(void) {
     return jmi_get_current()->dyn_fcn_mem;
 }

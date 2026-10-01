@@ -8,13 +8,13 @@
 /* Global SUNContext */
 SUNContext jmi_sundials_ctx = NULL;
 
-void jmi_sundials_init_context() {
+void jmi_sundials_init_context(void) {
     if (jmi_sundials_ctx == NULL) {
         SUNContext_Create(NULL, &jmi_sundials_ctx);
     }
 }
 
-void jmi_sundials_free_context() {
+void jmi_sundials_free_context(void) {
     if (jmi_sundials_ctx != NULL) {
         SUNContext_Free(&jmi_sundials_ctx);
         jmi_sundials_ctx = NULL;

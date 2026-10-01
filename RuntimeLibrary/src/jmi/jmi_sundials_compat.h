@@ -22,7 +22,7 @@ typedef double realtype;
 /* Define DlsMat for compatibility with newer Sundials versions (which removed it) */
 #ifndef JMI_SUNDIALS_COMPAT_DLSMAT
 #define JMI_SUNDIALS_COMPAT_DLSMAT
-#pragma message "Defining DlsMat manually"
+
 
 /*
  * ==================================================================
@@ -45,6 +45,9 @@ typedef double realtype;
  * -----------------------------------------------------------------
  */
 
+#if !defined(_SUNDIALS_DIRECT_H) && !defined(_SUNDIALS_DIRECT_H_) && !defined(SUNDIALS_DIRECT_H) && !defined(SUNDIALS_DIRECT_H_)
+#define _SUNDIALS_DIRECT_H
+#define SUNDIALS_DIRECT_H
 typedef struct _DlsMat {
   int type;
   long int M;
@@ -54,6 +57,7 @@ typedef struct _DlsMat {
   long int ldata;
   double **cols;
 } *DlsMat;
+#endif
 
 /* Data types for the DlsMat type */
 #define SUNDIALS_DENSE 1

@@ -251,18 +251,21 @@ if (${BUILD_MSL_EXTERNAL_LIBS})
     #Build ModelicaStandardTables library
     add_definitions("-DDUMMY_FUNCTION_USERTAB -DHAVE_ZLIB")
     add_library(ModelicaStandardTables SHARED ${MSLCSOURCES}/ModelicaStandardTables.c)
+    target_link_libraries(ModelicaStandardTables ModelicaMatIO zlib)
     if(NOT MSVC)
         set_target_properties(ModelicaStandardTables PROPERTIES COMPILE_FLAGS "-Wall -g")
     endif()
 
     #Build ModelicaIO library
     add_library(ModelicaIO SHARED ${MSLCSOURCES}/ModelicaIO.c)
+    target_link_libraries(ModelicaIO ModelicaMatIO zlib)
     if(NOT MSVC)
         set_target_properties(ModelicaIO PROPERTIES COMPILE_FLAGS "-Wall -g")
     endif()
 
     #Build ModelicaMatIO library
     add_library(ModelicaMatIO SHARED ${MSLCSOURCES}/ModelicaMatIO.c)
+    target_link_libraries(ModelicaMatIO zlib)
     if(NOT MSVC)
         set_target_properties(ModelicaMatIO PROPERTIES COMPILE_FLAGS "-Wall -g")
     endif()

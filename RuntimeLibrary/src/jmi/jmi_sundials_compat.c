@@ -71,7 +71,11 @@ int jmi_cvdense_compat(void *cvode_mem, int N) {
 */
 int jmi_cvode_set_err_handler_fn_compat(void *cvode_mem, void (*ehfun)(int, const char*, const char*, char*, void*), void *eh_data) {
     /* Cast to modern type if needed */
+#if SUNDIALS_VERSION_MAJOR >= 7
+    CVodeSetErrHandlerFn(cvode_mem, (SUNErrHandlerFn)ehfun, eh_data);
+#else
     CVodeSetErrHandlerFn(cvode_mem, (CVErrHandlerFn)ehfun, eh_data);
+#endif
     return 0;
 }
 #endif

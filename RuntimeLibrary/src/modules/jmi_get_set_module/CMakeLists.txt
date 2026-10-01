@@ -6,6 +6,8 @@ set(JMIGetSetSource
 add_library(jmi_get_set_default SHARED
             ${JMIGetSetSource})
 
+target_link_libraries(jmi_get_set_default jmi)
+
 if(NOT MSVC)
     set_target_properties(jmi_get_set_default PROPERTIES COMPILE_FLAGS "-Wall -g -std=c89 -pedantic -Werror -O2")
 endif()

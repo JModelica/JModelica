@@ -78,11 +78,23 @@ typedef struct _DlsMat *SUNDlsMat;
 #endif
 
 #endif /* JMI_SUNDIALS_COMPAT_DLSMAT */
+
 #else
 #include <sundials/sundials_direct.h>
+#include <sundials/sundials_dense.h>
 /* Ensure DlsMat is defined properly if not done by sundials_direct.h (unlikely for < 7) */
 #endif
 
+#if SUNDIALS_VERSION_MAJOR < 6
+#define SUNDlsMat_DenseCopy DenseCopy
+#define SUNDlsMat_DenseGETRF DenseGETRF
+#define SUNDlsMat_DenseGETRS DenseGETRS
+#define SUNDlsMat_SetToZero DenseZero
+#define SUNDlsMat_DensePOTRF DensePOTRF
+#define SUNDlsMat_DensePOTRS DensePOTRS
+#define SUNDlsMat_DenseGEQRF DenseGEQRF
+#define SUNDlsMat_DenseORMQR DenseORMQR
+#endif
 
 
 

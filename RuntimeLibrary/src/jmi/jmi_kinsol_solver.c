@@ -25,9 +25,10 @@
 /* #include <sundials/sundials_direct.h> */
 #include "jmi_sundials_compat.h"
 #include <nvector/nvector_serial.h>
+#include "jmi_sundials_compat.h"
 /* #include <kinsol/kinsol_direct.h> */
 #include <kinsol/kinsol_impl.h>
-#include <sundials/sundials_dense.h>
+
 
 #include "jmi_kinsol_solver.h"
 #include "jmi_block_solver_impl.h"

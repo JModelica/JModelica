@@ -20,6 +20,12 @@
 
 #include <stdio.h>
 #include "zlib.h"
+
+#ifdef _WIN32
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
 #ifdef STDC
 #  include <string.h>
 #  include <stdlib.h>

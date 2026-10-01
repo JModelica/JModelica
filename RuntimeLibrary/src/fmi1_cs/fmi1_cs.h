@@ -60,14 +60,14 @@ struct fmi1_cs_t {
  * 
  * @return The set of compatible platforms.
  */
-const char* fmi1_cs_get_types_platform();
+const char* fmi1_cs_get_types_platform(void);
 
 /**
  * \brief Returns the version of the header file.
  * 
  * @return The version of fmiModelFunctions.h.
  */
-const char* fmi1_cs_get_version();
+const char* fmi1_cs_get_version(void);
 
 /**
  * \brief Performs a time-step.

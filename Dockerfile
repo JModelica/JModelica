@@ -28,13 +28,13 @@
 # Taking the JDK from Temurin rather than from backports keeps the version
 # explicit and identical to the one the CI runners use, and Temurin publishes
 # both linux/amd64 and linux/arm64, which this image needs.
-FROM eclipse-temurin:21-jdk AS jdk
+FROM eclipse-temurin:25-jdk AS jdk
 
 # And the matching JRE for the runtime stage. The compiler jars are class file
 # version 65; a Java 17 runtime refuses to load them, so shipping bookworm's
 # openjdk-17-jre would have produced an image that builds and then cannot run
 # its own compiler.
-FROM eclipse-temurin:21-jre AS jre
+FROM eclipse-temurin:25-jre AS jre
 
 # --- Stage 1: build ---------------------------------------------------------
 FROM debian:bookworm-slim AS build

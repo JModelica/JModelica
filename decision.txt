@@ -1,0 +1,1 @@
+Obsolete. The commit titled 'Add an is_prime function' (dbc9e62) actually contains no code for it, only a GitHub workflow file, and the rest of the branch attempts to fix an autotools-based CI setup which the project has already moved away from.

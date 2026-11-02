@@ -327,9 +327,10 @@ aspect SourceTraversal {
             NOT_ERROR_NODE_CRITERIA);
 
 
-    public interface SrcModificationOrRedeclareElement {
+    public interface SrcModificationOrRedeclareElement extends SrcAnnotatable {
         public InstModification newInstModification();
         public boolean hasRedeclare();
+        public SrcComponentDecl componentRedeclareDecl();
     }
 
     SrcModification  implements SrcModificationOrRedeclareElement;

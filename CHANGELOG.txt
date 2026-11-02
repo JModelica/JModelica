@@ -1,3 +1,13 @@
+2025-11-27: Modernization Checkpoint
+----------------------------------
+*   [BREAKING] Migrated entire codebase from Python 2.7 to Python 3.
+*   [BREAKING] Upgraded Java compiler from Java 1.7 to Java 17.
+*   [BREAKING] Replaced Autotools/Ant build system with CMake and Gradle.
+*   [NEW] Added Gradle build configuration for Compiler (JastAdd/Beaver/JFlex).
+*   [NEW] Added CMake configuration for RuntimeLibrary (JMI/FMI).
+*   [WIP] Implementing compatibility layer for Sundials 7.x (replacing Sundials 2.x).
+*   [WIP] Migrating Python C extensions to SWIG/Python 3.
+
 ================= Unreleased ==================
 # Change ; Minor ; Compiler ; #5815
 FilterableIterator now adheres to the contract of Iterator and properly supports "null" elements in the parent iterator.

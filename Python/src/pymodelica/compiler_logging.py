@@ -287,7 +287,7 @@ class CompilerLogHandler:
         given by the compiler process.
         """
         if (self.loggerThread is None):
-            print "Invalid call order!"
+            print("Invalid call order!")
         self.loggerThread.join()
         problems = self.loggerThread.result.problems
         name = self.loggerThread.result.name

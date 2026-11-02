@@ -1,0 +1,509 @@
+name: Jules — keep Actions green
+
+# Jules owns the health of the Actions tab. When a workflow goes red, this hands
+# the failure to Jules to diagnose and fix.
+#
+# The hard part is not triggering — it is triggering *once*, and then again
+# when the first attempt came to nothing. Four guards:
+#
+#   1. Deduplication by commit. A commit handed over in the last
+#      JULES_CI_FIX_RETRY_HOURS (default 72) is not handed over again, however
+#      many workflows fail on it. After that, if it is still red, it is.
+#   2. A daily budget. At most JULES_CI_FIX_DAILY_MAX handovers (distinct
+#      commits) per rolling day, default 3.
+#   3. Open-work check. If a Jules pull request against the branch was active
+#      within the retry window, Jules is already working; no second session.
+#   4. Live-session check. If a session this workflow started from the branch
+#      is still running or waiting, the failure is already being worked, even
+#      though the branch has moved on to a new commit.
+#
+# The ledger for 1 and 2 is this workflow's own run history, but only runs in
+# which the handover step really succeeded. Counting every run that was not
+# "skipped" deadlocked master: a run that *declined* still concludes "success",
+# so on 2026-09-08 the budget filled with declines, and the decline for
+# 22c5b14 then counted as that commit's handover. master stayed red for two
+# weeks and no session was ever started for it.
+#
+# The daily schedule is what makes the retry reachable. workflow_run only fires
+# when CI runs, and CI only runs on a push, so a red branch nobody pushes to was
+# never looked at again. The scheduled run checks the latest CI and Container
+# images results on the default branch.
+#
+# Set JULES_CI_FIX_ENABLED to 'false' to pause this entirely.
+
+# The run title carries the commit under investigation, for people reading the
+# Actions tab. The ledger no longer reads it: the handover job's name carries
+# the commit instead, which also works for scheduled runs, whose commit is not
+# known until the triage job has looked it up.
+run-name: >-
+  Jules — keep Actions green
+  (${{ github.event.workflow_run.head_sha || inputs.run_id || 'scheduled check' }})
+
+on:
+  workflow_run:
+    workflows: ['CI', 'Container images', 'Release']
+    types: [completed]
+    branches: [master, 'feature/**']
+  schedule:
+    # 05:23 UTC daily, after the issue sweep; off the minute-0 rush.
+    - cron: '23 5 * * *'
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Workflow run ID to investigate'
+        required: true
+        type: string
+      force:
+        description: 'Ignore the deduplication and budget guards'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+# One group for the whole workflow. The guards read the ledger and then write
+# to it by handing over; two runs interleaving there could both see "not yet
+# handed over". Runs take seconds, so serialising them costs nothing.
+concurrency:
+  group: jules-ci-fix
+  cancel-in-progress: false
+
+jobs:
+  triage:
+    if: >-
+      vars.JULES_CI_FIX_ENABLED != 'false' &&
+      (github.event_name != 'workflow_run' ||
+       github.event.workflow_run.conclusion == 'failure')
+    runs-on: ubuntu-latest
+    outputs:
+      proceed: ${{ steps.guards.outputs.proceed }}
+      run_id: ${{ steps.run.outputs.run_id }}
+      sha: ${{ steps.run.outputs.sha }}
+      branch: ${{ steps.run.outputs.branch }}
+      workflow: ${{ steps.run.outputs.workflow }}
+      run_url: ${{ steps.run.outputs.run_url }}
+    steps:
+      - name: Check the API key is configured
+        env:
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+        run: |
+          if [ -z "${JULES_API_KEY}" ]; then
+            echo "::error::Secret JULES_API_KEY is not set. See doc/automation.md." >&2
+            exit 1
+          fi
+
+      - name: Resolve the failing run
+        id: run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          EV_RUN_ID: ${{ github.event.workflow_run.id }}
+          EV_SHA: ${{ github.event.workflow_run.head_sha }}
+          EV_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          EV_WORKFLOW: ${{ github.event.workflow_run.name }}
+          EV_URL: ${{ github.event.workflow_run.html_url }}
+          INPUT_RUN_ID: ${{ inputs.run_id }}
+        run: |
+          set -euo pipefail
+          case "${EVENT}" in
+            workflow_run)
+              run_id="${EV_RUN_ID}" sha="${EV_SHA}" branch="${EV_BRANCH}"
+              workflow="${EV_WORKFLOW}" url="${EV_URL}"
+              ;;
+            workflow_dispatch)
+              gh api "repos/${GH_REPO}/actions/runs/${INPUT_RUN_ID}" > run.json
+              run_id="${INPUT_RUN_ID}"
+              sha=$(jq -r .head_sha run.json)
+              branch=$(jq -r .head_branch run.json)
+              workflow=$(jq -r .name run.json)
+              url=$(jq -r .html_url run.json)
+              ;;
+            schedule)
+              # The latest *completed* run of each watched workflow on the
+              # default branch; the first red one is the one to hand over.
+              default=$(gh api "repos/${GH_REPO}" --jq .default_branch)
+              run_id=""
+              for wf in ci.yml docker.yml; do
+                gh run list --workflow "${wf}" --branch "${default}" \
+                  --status completed --limit 1 \
+                  --json databaseId,conclusion,headSha,headBranch,workflowName,url \
+                  --jq '.[0] // empty' > latest.json
+                [ -s latest.json ] || continue
+                echo "${wf} on ${default}: $(jq -r .conclusion latest.json) at $(jq -r .headSha latest.json)"
+                if [ "$(jq -r .conclusion latest.json)" = "failure" ]; then
+                  run_id=$(jq -r .databaseId latest.json)
+                  sha=$(jq -r .headSha latest.json)
+                  branch=$(jq -r .headBranch latest.json)
+                  workflow=$(jq -r .workflowName latest.json)
+                  url=$(jq -r .url latest.json)
+                  break
+                fi
+              done
+              if [ -z "${run_id}" ]; then
+                echo "::notice::Nothing is red on ${default}."
+                echo "found=false" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              ;;
+          esac
+          echo "Investigating ${workflow} run ${run_id} on ${branch} at ${sha}."
+          {
+            echo "found=true"
+            echo "run_id=${run_id}"
+            echo "sha=${sha}"
+            echo "branch=${branch}"
+            echo "workflow=${workflow}"
+            echo "run_url=${url}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Apply the guards
+        id: guards
+        if: steps.run.outputs.found == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ steps.run.outputs.sha }}
+          BRANCH: ${{ steps.run.outputs.branch }}
+          FORCE: ${{ inputs.force }}
+          DAILY_MAX: ${{ vars.JULES_CI_FIX_DAILY_MAX || '3' }}
+          RETRY_HOURS: ${{ vars.JULES_CI_FIX_RETRY_HOURS || '72' }}
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ "${FORCE}" = "true" ]; then
+            echo "Guards bypassed by request."
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          proceed=true
+          reason=""
+
+          # --- The ledger -----------------------------------------------------
+          # One line per real handover: "<commit> <time>". A run counts only if
+          # its "Hand over <commit>" job ran the handover step to success,
+          # whatever the run's overall conclusion says: a declined run concludes
+          # "success" with no such step, and a run that handed over and then
+          # failed in a later step concludes "failure" with one.
+          window=$(( RETRY_HOURS > 24 ? RETRY_HOURS : 24 ))
+          since=$(date -u -d "${window} hours ago" +%Y-%m-%dT%H:%M:%SZ)
+          gh run list --workflow jules-ci-fix.yml --limit 100 \
+            --json databaseId,createdAt,conclusion \
+            --jq ".[] | select(.createdAt > \"${since}\" and
+                               .databaseId != ${GITHUB_RUN_ID} and
+                               .conclusion != null and
+                               .conclusion != \"skipped\") |
+                        \"\(.databaseId) \(.createdAt)\"" |
+          while read -r id created; do
+            gh api "repos/${GH_REPO}/actions/runs/${id}/jobs" \
+              --jq '.jobs[] | select(.name | startswith("Hand over ")) |
+                    select(any(.steps[]?; .name == "Hand the failure to Jules" and
+                                          .conclusion == "success")) |
+                    .name | ltrimstr("Hand over ")' < /dev/null |
+            while read -r handed; do
+              echo "${handed} ${created}"
+            done
+          done > ledger.txt
+          echo "Handovers in the last ${window}h:"
+          sed 's/^/  /' ledger.txt
+
+          # --- Guard 1: has this commit been handed over recently? -----------
+          retry_since=$(date -u -d "${RETRY_HOURS} hours ago" +%Y-%m-%dT%H:%M:%SZ)
+          if awk -v sha="${SHA}" -v t="${retry_since}" \
+               '$1 == sha && $2 > t { found = 1 } END { exit !found }' ledger.txt; then
+            proceed=false
+            reason="commit ${SHA:0:8} was handed to Jules within the last ${RETRY_HOURS}h"
+          fi
+
+          # --- Guard 2: the daily budget --------------------------------------
+          # Counts distinct commits, so two failing workflows on one commit
+          # cost one.
+          if [ "${proceed}" = "true" ]; then
+            day_since=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+            today=$(awk -v t="${day_since}" '$2 > t { print $1 }' ledger.txt | sort -u | wc -l)
+            echo "Commits handed over in the last 24h: ${today} (max ${DAILY_MAX})"
+            if [ "${today}" -ge "${DAILY_MAX}" ]; then
+              proceed=false
+              reason="daily budget of ${DAILY_MAX} handovers is spent"
+            fi
+          fi
+
+          # --- Guard 3: is Jules already working on this branch? --------------
+          # Jules opens its pull requests under the account of the person who
+          # owns the API key, not as google-labs-jules[bot]; matching on the
+          # author alone never fired. Its descriptions always link the task.
+          # Only pull requests active within the retry window count, so one
+          # abandoned pull request cannot block the branch for good.
+          if [ "${proceed}" = "true" ]; then
+            open=$(gh pr list --state open --base "${BRANCH}" --limit 100 \
+                     --json author,body,updatedAt \
+                     --jq "[.[] | select(.updatedAt > \"${retry_since}\") |
+                                  select((.author.login | test(\"jules\"; \"i\")) or
+                                         ((.body // \"\") | test(\"jules\\\\.google\\\\.com/(task|session)/\")))]
+                           | length")
+            if [ "${open}" -gt 0 ]; then
+              proceed=false
+              reason="Jules has ${open} active pull request(s) against ${BRANCH}; let them land first"
+            fi
+          fi
+
+          # --- Guard 4: is a Jules session already on this branch's CI? ------
+          # Guard 1 is per commit, and a red branch gets new commits: on
+          # 2026-09-26 three merges to master in half an hour each started
+          # another session on the same two failing jobs. Any live session
+          # this workflow started from the branch - its prompt opens with the
+          # failure line below - means the failure is already being worked.
+          # An unreachable API does not block a handover.
+          if [ "${proceed}" = "true" ]; then
+            : > sessions.jsonl
+            token=""
+            for _ in 1 2 3 4 5; do
+              curl -sS -f -m 60 -H "X-Goog-Api-Key: ${JULES_API_KEY}" \
+                "https://jules.googleapis.com/v1alpha/sessions?pageSize=100${token:+&pageToken=${token}}" \
+                > page.json || { echo "::warning::Could not list Jules sessions; guard 4 skipped."; break; }
+              jq -c '.sessions[]?' page.json >> sessions.jsonl
+              token=$(jq -r '.nextPageToken // empty' page.json)
+              [ -n "${token}" ] || break
+            done
+            live=$(jq -s --arg src "sources/github/${GH_REPO}" --arg branch "${BRANCH}" \
+                     --arg lead "workflow for ${GH_REPO} failed on branch ${BRANCH}." '
+                     [ .[] | select(.sourceContext.source == $src and
+                                    .sourceContext.githubRepoContext.startingBranch == $branch and
+                                    ((.prompt // "") | split("\n")[0] | endswith($lead)) and
+                                    (.state | IN("QUEUED", "PLANNING", "IN_PROGRESS", "PAUSED",
+                                                 "AWAITING_PLAN_APPROVAL", "AWAITING_USER_FEEDBACK")))
+                           | .name ] | length' sessions.jsonl)
+            if [ "${live}" -gt 0 ]; then
+              proceed=false
+              reason="${live} Jules session(s) are already working on ${BRANCH}'s CI"
+            fi
+          fi
+
+          if [ "${proceed}" = "true" ]; then
+            echo "Proceeding."
+          else
+            echo "::notice::Not handing this failure over: ${reason}."
+            {
+              echo "### Skipped"
+              echo
+              echo "Not handed to Jules: ${reason}."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "proceed=${proceed}" >> "$GITHUB_OUTPUT"
+
+  fix:
+    # The commit in the job name is the ledger entry the guards read back.
+    name: Hand over ${{ needs.triage.outputs.sha }}
+    needs: triage
+    if: needs.triage.outputs.proceed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+
+      - name: Collect the failing jobs
+        id: failures
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ needs.triage.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GH_REPO}/actions/runs/${RUN_ID}/jobs" --paginate \
+            --jq '.jobs[] | select(.conclusion == "failure") |
+                  "- \(.name): failed at step \"" +
+                  ([.steps[] | select(.conclusion == "failure") | .name] | join(", ")) +
+                  "\""' \
+            > failures.txt || true
+
+          # The error lines each failing job printed. Job names alone were not
+          # enough: Jules's VM is Linux, so a macOS or Windows failure cannot
+          # be reproduced there, and on 2026-09-26 a session reported that the
+          # build "completes successfully" and stopped to ask. Full logs run to
+          # megabytes, so only matching lines, deduplicated: the first 25, where
+          # the root cause usually is, and the last 15 of each job.
+          : > excerpts.txt
+          gh api "repos/${GH_REPO}/actions/runs/${RUN_ID}/jobs" --paginate \
+            --jq '.jobs[] | select(.conclusion == "failure") | "\(.id)\t\(.name)"' \
+            > failed_jobs.tsv || : > failed_jobs.tsv
+          while IFS=$'\t' read -r job_id job_name <&3; do
+            if ! gh api "repos/${GH_REPO}/actions/jobs/${job_id}/logs" > job.log 2>/dev/null; then
+              continue
+            fi
+            {
+              echo "### ${job_name}"
+              echo
+              echo '```'
+              { sed -E 's/^[0-9]{4}-[0-9-]+T[0-9:.]+Z //' job.log \
+                  | grep -aE '(error|Error|ERROR|fatal|undefined|not found|No such file|Undefined symbols)' \
+                  | grep -avE '^##\[(group|endgroup)\]|\[36;1m' \
+                  | cut -c1-300 \
+                  | awk '!seen[$0]++ { l[++n] = $0 }
+                         END { for (i = 1; i <= n; i++) if (i <= 25 || i > n - 15) print l[i] }'; } || true
+              echo '```'
+              echo
+            } >> excerpts.txt
+          done 3< failed_jobs.tsv
+
+          if [ ! -s failures.txt ]; then
+            echo "No failing jobs found in run ${RUN_ID}."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          else
+            cat failures.txt
+            {
+              echo "found=true"
+              # Carried as an output as well as in failures.txt, so the
+              # summary step does not depend on the workspace.
+              delimiter="EOF_$(openssl rand -hex 12)"
+              echo "list<<${delimiter}"
+              cat failures.txt
+              echo "${delimiter}"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Assemble the prompt
+        id: prompt
+        if: steps.failures.outputs.found == 'true'
+        env:
+          REPO: ${{ github.repository }}
+          WORKFLOW: ${{ needs.triage.outputs.workflow }}
+          BRANCH: ${{ needs.triage.outputs.branch }}
+          SHA: ${{ needs.triage.outputs.sha }}
+          RUN_URL: ${{ needs.triage.outputs.run_url }}
+        run: |
+          set -euo pipefail
+          {
+            echo "The \"${WORKFLOW}\" workflow for ${REPO} failed on branch ${BRANCH}."
+            echo
+            echo "Commit: ${SHA}"
+            echo "Run: ${RUN_URL}"
+            echo
+            echo "Failing jobs:"
+            cat failures.txt
+            echo
+            if [ -s excerpts.txt ]; then
+              echo "## What the failing jobs printed"
+              echo
+              echo "Error lines from each failing job's log, deduplicated."
+              echo "Your VM runs Linux: a macOS or Windows failure will not"
+              echo "reproduce there, and a Linux build that passes is not"
+              echo "evidence that there is nothing to fix. Work from these"
+              echo "errors; CI on your pull request tests the other platforms."
+              echo
+              cat excerpts.txt
+            fi
+            echo "Read AGENTS.md before you change anything. Section 3 lists the"
+            echo "known build blockers; section 7 explains what each CI job does."
+            echo
+            cat <<'GUIDANCE'
+          You are responsible for the health of this repository's Actions tab.
+          The goal is a green build that means something — not a green tick.
+
+          ## How to work
+
+          1. Reproduce the failure where you can: run the same commands the
+             failing job runs and show the output. For a platform your VM is
+             not, reason from the errors quoted above instead of stopping.
+          2. Establish whether this is a *new* breakage or one of the known
+             blockers in AGENTS.md section 3.
+          3. Fix the root cause. If the fix is large, fix one layer completely
+             rather than half-fixing three.
+          4. Re-run the build and the tests, and report the real result.
+
+          ## What is not allowed
+
+          Do not make CI green by weakening it. Specifically, do not:
+
+          - disable, skip or delete a failing test
+          - add `continue-on-error` to a job or step
+          - lower a compiler warning level, or remove `-Werror`
+          - loosen or delete an assertion
+          - narrow the platform matrix to drop a platform that fails
+          - relax the `meta` job's artifact guard so a rejected file passes
+
+          Any of those turns a real signal into a false one, which is worse than
+          the red build you started with. If the honest answer is that this
+          cannot be fixed in one session, say so, push what you have, and state
+          exactly what is left. A clear handover is a good outcome.
+
+          ## If the failure is in the hygiene job
+
+          `meta` is the gate and it is expected to pass. If it is red, something
+          in the change genuinely violates AGENTS.md section 5 — a build
+          artifact, an absolute symlink, a lint error in `tools/`. Fix the
+          offending file. Do not edit `tools/check_no_artifacts.py` to stop it
+          reporting, unless you have established that the rule itself is wrong,
+          in which case add a regression test proving the new behaviour is
+          correct.
+
+          ## This session is unattended
+
+          Nothing started this run but a failing build, and no one is watching
+          the session waiting to answer you. A question asked here does not get
+          a reply — it ends the session with the work half done and the branch
+          no better than it was. So do not ask which approach to take, and do
+          not ask for permission or confirmation.
+
+          Decide instead. Pick the approach the evidence supports, say in one
+          line why you picked it over the alternative, and carry it through. If
+          a choice genuinely needs a maintainer — it changes the licence, it
+          deletes someone's branch, it needs a credential you do not have — do
+          the rest of the work first, then write the question into the pull
+          request description under a heading "Needs a decision", where a human
+          will actually see it.
+
+          ## Pull request
+
+          Open one pull request with the fix. Explain the root cause, the fix,
+          and how you verified it. State plainly anything you could not verify.
+          Push it even when the work is incomplete: a branch with two of five
+          jobs fixed and an honest account of the other three is worth more
+          than an unpushed session.
+          GUIDANCE
+          } > prompt.txt
+
+          delimiter="EOF_$(openssl rand -hex 12)"
+          {
+            echo "text<<${delimiter}"
+            cat prompt.txt
+            echo "${delimiter}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Hand the failure to Jules
+        id: jules
+        if: steps.failures.outputs.found == 'true'
+        uses: ./.github/actions/jules-session
+        with:
+          prompt: ${{ steps.prompt.outputs.text }}
+          # The `auto:` prefix is what jules-shepherd.yml recognises as ours.
+          title: 'auto: ${{ needs.triage.outputs.workflow }} failed on ${{ needs.triage.outputs.branch }} at ${{ needs.triage.outputs.sha }}'
+          # Fix it on the branch that broke, not on the default branch.
+          starting_branch: ${{ needs.triage.outputs.branch }}
+          api_key: ${{ secrets.JULES_API_KEY }}
+
+      - name: Record the handover
+        if: steps.failures.outputs.found == 'true'
+        env:
+          BRANCH: ${{ needs.triage.outputs.branch }}
+          RUN_URL: ${{ needs.triage.outputs.run_url }}
+          FAILURES: ${{ steps.failures.outputs.list }}
+          SESSION_URL: ${{ steps.jules.outputs.url }}
+        run: |
+          {
+            echo "### Handed to Jules"
+            echo
+            echo "Session: ${SESSION_URL}"
+            echo
+            echo "Branch: \`${BRANCH}\`"
+            echo
+            echo "Failing run: ${RUN_URL}"
+            echo
+            printf '%s\n' "${FAILURES}"
+          } >> "$GITHUB_STEP_SUMMARY"

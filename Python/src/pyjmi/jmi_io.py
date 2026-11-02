@@ -591,13 +591,13 @@ class ResultWriterDymolaSensitivity(ResultWriter):
         
         #Write the point
         str_text = (" %.14E" % data[0])
-        for j in xrange(self._nvariables_without_sens-1):
+        for j in range(self._nvariables_without_sens-1):
             if rescale:
                 str_text = str_text + (" %.14E" %(data[1+j]*sc[j+n_parameters]))
             else:
                 str_text = str_text + (" %.14E" % data[1+j])
 
-        for j in xrange(self._nvariables_total-self._nvariables_without_sens):
+        for j in range(self._nvariables_total-self._nvariables_without_sens):
             if rescale:
                 str_text = str_text + (" %.14E" %(data[j+self._nvariables_without_sens]*sens_sc[j]))
             else:

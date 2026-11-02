@@ -64,7 +64,7 @@ class ModelicaCompiler(object):
             types (float, boolean, string, integer or list).
         """
         # set compiler options
-        for key, value in compiler_options.iteritems():
+        for key, value in compiler_options.items():
             if isinstance(value, bool):
                 self.set_boolean_option(key, value)
             elif isinstance(value, basestring):

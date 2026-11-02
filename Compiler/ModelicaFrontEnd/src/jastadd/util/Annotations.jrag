@@ -1998,7 +1998,7 @@ aspect AnnotationAPI {
     eq  InstClassDecl.getChild().elementModification() = getSrcClassDecl();
     eq  InstNode.getChild().elementModification() = null;
 
-    SrcModificationOrRedeclareElement extends SrcAnnotatable;
+    // SrcModificationOrRedeclareElement extends SrcAnnotatable;
     SrcClassDecl implements SrcAnnotatable;
 
     public interface SrcAnnotatable {

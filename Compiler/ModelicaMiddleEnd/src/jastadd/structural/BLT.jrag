@@ -149,8 +149,11 @@ aspect BLT{
         interface BLTBlockCreator<E extends AbstractEq<E,V>, V extends AbstractVar<E,V>> {
             AbstractEquationBlock computeBlock(SCCBlock<E, V> component, BlockProducer producer, StepUtil stepUtil);
         }
-        private static ArrayList<BLTBlockCreator> BLTBlockCreators = new ArrayList<>();
+        private static java.util.ArrayList<BLTBlockCreator> BLTBlockCreators;
         public static BLTBlockCreator addBLTBlockCreator(BLTBlockCreator c) {
+            if (BLTBlockCreators == null) {
+                BLTBlockCreators = new java.util.ArrayList<BLTBlockCreator>();
+            }
             BLTBlockCreators.add(c);
             return c;
         }
@@ -163,10 +166,12 @@ aspect BLT{
          * a real or mixed equation block is created.
          */
         public static <E extends AbstractEq<E, V>, V extends AbstractVar<E, V>> AbstractEquationBlock createEquationBlock(SCCBlock<E, V> component, BlockProducer producer, StepUtil stepUtil, boolean isInitial) {
-            for (BLTBlockCreator c : BLTBlockCreators) {
-                AbstractEquationBlock res = c.computeBlock(component, producer, stepUtil);
-                if (res != null) {
-                    return res;
+            if (BLTBlockCreators != null) {
+                for (BLTBlockCreator c : BLTBlockCreators) {
+                    AbstractEquationBlock res = c.computeBlock(component, producer, stepUtil);
+                    if (res != null) {
+                        return res;
+                    }
                 }
             }
             

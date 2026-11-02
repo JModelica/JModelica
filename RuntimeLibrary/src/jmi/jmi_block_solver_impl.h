@@ -24,9 +24,9 @@
 
 #ifndef _JMI_BLOCK_SOLVER_IMPL_H
 #define _JMI_BLOCK_SOLVER_IMPL_H
+#include "jmi_sundials_compat.h"
 #include "jmi_block_solver.h"
 #include <nvector/nvector_serial.h>
-#include <sundials/sundials_direct.h>
 
 /**
     \brief Main data structure used in the block solver.

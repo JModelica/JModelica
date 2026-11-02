@@ -27,6 +27,7 @@
 
 #include "jmi_ode_solver.h"
 #include "jmi_ode_problem.h"
+#include "jmi_sundials_compat.h"
 #include <nvector/nvector_serial.h>
 
 typedef struct jmi_ode_cvode_t jmi_ode_cvode_t;

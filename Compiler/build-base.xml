@@ -28,8 +28,8 @@
 
     <dirname property="base.dir" file="${ant.file.base}"/>
 
-    <property name="java_version" value="1.7"/>
-    <property name="java_compiler" value="javac${java_version}"/>
+    <property name="java_version" value="17"/>
+    <property name="java_compiler" value="javac"/>
 
     <fail unless="target" message="Property 'target' not set. Should point to build directory where this ant file will generate intermediate files and build outputs. For builds in eclipse we normally use ${workspace_loc:&lt;project&gt;/tools/eclipse/antbuild}."/>
     <echo>build-base.xml: running in ${target}</echo>

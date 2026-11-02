@@ -19,7 +19,8 @@
 
 #include <string.h>
 #include <cvode/cvode.h>             /* main integrator header file */
-#include <cvode/cvode_dense.h>       /* use CVDENSE linear solver */
+/* #include <cvode/cvode_dense.h> */      /* use CVDENSE linear solver */
+#include "jmi_sundials_compat.h"
 #include <nvector/nvector_serial.h>  /* serial N_Vector types, fct. and macros */
 #include <sundials/sundials_types.h> /* definition of realtype */
 #include <sundials/sundials_math.h>  /* contains the macros ABS, SQR, and EXP*/
@@ -198,9 +199,9 @@ int jmi_ode_cvode_new(jmi_ode_cvode_t** integrator_ptr, jmi_ode_solver_t* solver
     integrator->rtol = solver->rel_tol;
     
     if (problem->sizes.states > 0) {
-        integrator->atol = N_VNew_Serial(problem->sizes.states);
+        integrator->atol = N_VNew_Serial(problem->sizes.states, jmi_sundials_ctx);
     } else {
-        integrator->atol = N_VNew_Serial(1);
+        integrator->atol = N_VNew_Serial(1, jmi_sundials_ctx);
     }
     atol_nv = NV_DATA_S(integrator->atol);
     
@@ -220,11 +221,11 @@ int jmi_ode_cvode_new(jmi_ode_cvode_t** integrator_ptr, jmi_ode_solver_t* solver
 
     /* Get the default values for the time and states */
     if (problem->sizes.states > 0) {
-        integrator->y_work = N_VNew_Serial(problem->sizes.states);
+        integrator->y_work = N_VNew_Serial(problem->sizes.states, jmi_sundials_ctx);
         y = NV_DATA_S(integrator->y_work);
 		memcpy (y, problem->states, problem->sizes.states*sizeof(jmi_real_t));
     }else{
-        integrator->y_work = N_VNew_Serial(1);
+        integrator->y_work = N_VNew_Serial(1, jmi_sundials_ctx);
         y = NV_DATA_S(integrator->y_work);
         y[0] = 0.0;
     }

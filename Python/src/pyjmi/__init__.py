@@ -26,21 +26,11 @@ __version__=''
 import os
 import logging
 
+f = None
 try:
-    _p = os.environ['JMODELICA_HOME']
-    if not os.path.exists(_p):
-        raise IOError
-except (KeyError, IOError):
-    raise EnvironmentError('The environment variable JMODELICA_HOME is not set \
-or points to a non-existing location.')
-    
-# set version
-f= None
-try:
-    _fpath=os.path.join(os.environ['JMODELICA_HOME'],'version.txt')
-    f = open(_fpath)
+    f = open(os.path.join(os.environ['JMODELICA_HOME'],'version.txt'), 'r')
     __version__=f.readline().strip()
-except IOError:
+except (IOError, KeyError):
     logging.warning('Version file not found. Environment may be corrupt.')
 finally:
     if f is not None:
@@ -48,7 +38,7 @@ finally:
 
 try:
     _f = os.path.join(os.environ['JMODELICA_HOME'],'startup.py')
-    execfile(_f)
+    exec(open(_f).read())
 except IOError:
     logging.warning('Startup script ''%s'' not found. Environment may be corrupt'
                   % _f)
@@ -56,10 +46,13 @@ except IOError:
 
 import numpy as N
 
-import pyjmi
+# import pyjmi # Circular import?
 
 int = N.int32
 N.int = N.int32
+
+# Expose load_fmu from pymodelica which handles loading
+from pymodelica import load_fmu
 
 try:
     ipopt_present = pyjmi.environ['IPOPT_HOME']

@@ -18,7 +18,7 @@
 # NOTE: CMake 2.8.6 is required since this is the version used in development.
 # The script is KNOWN NOT TO WORK WITH 2.8.3 and below (ExternalProject 
 # interface changes). CMake 2.8.4 and 2.8.5 are not tested.
-cmake_minimum_required (VERSION 2.8.6 FATAL_ERROR)
+cmake_minimum_required (VERSION 3.20 FATAL_ERROR)
 
 set(FMI_CSSources
 

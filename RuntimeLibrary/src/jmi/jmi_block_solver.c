@@ -30,9 +30,13 @@
 #include <sundials/sundials_math.h>
 #include <sundials/sundials_direct.h>
 #include <nvector/nvector_serial.h>
-#include <kinsol/kinsol_direct.h>
-#include <kinsol/kinsol_impl.h>
+/* #include <kinsol/kinsol_direct.h> */ /* Removed in Sundials 7, might need to check for < 7 */
+/* #include <kinsol/kinsol_impl.h> */   /* Internal header, dangerous to include */
 #include <sundials/sundials_dense.h>
+
+#if SUNDIALS_VERSION_MAJOR < 7
+#include <kinsol/kinsol_direct.h>
+#endif
 
 #include "jmi_log.h"
 #include "jmi_simple_newton.h"
@@ -81,12 +85,13 @@ int jmi_new_block_solver(jmi_block_solver_t** block_solver_ptr,
 
     block_solver->dx=(jmi_real_t*)calloc(n,sizeof(jmi_real_t));;                /**< \brief Work vector for the seed vector */
 
-    block_solver->f_scale = N_VNew_Serial(n);
+    jmi_sundials_init_context();
+    block_solver->f_scale = N_VNew_Serial(n, jmi_sundials_ctx);
     block_solver->scale_update_time = -1.0;
     if(n>0) {
-        block_solver->J = NewDenseMat(n ,n);
-        SetToZero(block_solver->J);
-        block_solver->J_scale = NewDenseMat(n ,n);
+        block_solver->J = SUNDlsMat_NewDenseMat(n ,n);
+        SUNDlsMat_SetToZero(block_solver->J);
+        block_solver->J_scale = SUNDlsMat_NewDenseMat(n ,n);
     }
 
     block_solver->res = (jmi_real_t*)calloc(n,sizeof(jmi_real_t));
@@ -240,8 +245,8 @@ void jmi_delete_block_solver(jmi_block_solver_t** block_solver_ptr) {
 
     N_VDestroy_Serial(block_solver->f_scale);
     if(block_solver->n > 0) {
-        DestroyMat(block_solver->J);
-        DestroyMat(block_solver->J_scale);
+        SUNDlsMat_DestroyMat(block_solver->J);
+        SUNDlsMat_DestroyMat(block_solver->J_scale);
     }
 
     free(block_solver->res);
